@@ -1,0 +1,443 @@
+/* ─── Framer Design System ──────────────────────────────────────────────────── */
+
+:root {
+  /* ── Brand & Accent ── */
+  --color-ink:             #ffffff;
+  --color-ink-muted:       #999999;
+  --color-accent-blue:     #0099ff;
+  --color-success:         #3ecf5f;
+
+  /* ── Surface / Canvas ── */
+  --color-canvas:          #111110;
+  --color-surface-1:       #1c1c1a;
+  --color-surface-2:       #252523;
+  --color-hairline:        rgba(255,255,255,0.10);
+  --color-hairline-soft:   rgba(255,255,255,0.06);
+  --color-inverse-canvas:  #ffffff;
+
+  /* ── Gradient Spotlight Card Stops ── */
+  --gradient-violet:  linear-gradient(135deg, #3b1fa8 0%, #6b35d9 45%, #9b6bff 100%);
+  --gradient-magenta: linear-gradient(135deg, #8b1a6b 0%, #c73599 50%, #f06bbf 100%);
+  --gradient-orange:  linear-gradient(135deg, #7c2d12 0%, #c2410c 45%, #fb923c 100%);
+  --gradient-coral:   linear-gradient(135deg, #7f1d1d 0%, #be185d 50%, #f472b6 100%);
+
+  /* ── Border Radius Scale ── */
+  --radius-xs:    4px;
+  --radius-sm:    6px;
+  --radius-md:    10px;
+  --radius-lg:    15px;
+  --radius-xl:    20px;
+  --radius-xxl:   30px;
+  --radius-pill:  100px;
+  --radius-full:  9999px;
+
+  /* ── Spacing (5px base) ── */
+  --space-hair:     1px;
+  --space-xxs:      4px;
+  --space-xs:       8px;
+  --space-sm:       12px;
+  --space-md:       15px;
+  --space-lg:       20px;
+  --space-xl:       30px;
+  --space-xxl:      40px;
+  --space-section:  96px;
+
+  /* ── Shadow / Elevation ── */
+  --shadow-level-1: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-level-2: 0 0.5px 0 0 rgba(255,255,255,0.10) inset,
+                    0 10px 30px rgba(0,0,0,0.35);
+  --shadow-focus:   0 0 0 1px rgba(0,153,255,0.50);
+
+  /* ── Font ── */
+  --font-display:  'Mona Sans', 'Inter', system-ui, sans-serif;
+  --font-body:     'Inter Variable', 'Inter', system-ui, sans-serif;
+  --font-mono:     'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Legacy compat for Radix/shadcn tokens that still exist in the codebase */
+  --background:           var(--color-canvas);
+  --foreground:           var(--color-ink);
+  --card:                 var(--color-surface-1);
+  --card-foreground:      var(--color-ink);
+  --popover:              var(--color-surface-2);
+  --popover-foreground:   var(--color-ink);
+  --primary:              var(--color-inverse-canvas);
+  --primary-foreground:   var(--color-canvas);
+  --secondary:            var(--color-surface-1);
+  --secondary-foreground: var(--color-ink);
+  --muted:                var(--color-surface-1);
+  --muted-foreground:     var(--color-ink-muted);
+  --accent:               var(--color-accent-blue);
+  --accent-foreground:    var(--color-ink);
+  --destructive:          #e5484d;
+  --destructive-foreground: #ffffff;
+  --border:               var(--color-hairline);
+  --input:                var(--color-surface-1);
+  --input-background:     var(--color-surface-1);
+  --switch-background:    var(--color-surface-2);
+  --ring:                 rgba(0,153,255,0.50);
+  --radius:               var(--radius-xl);
+  --font-size:            16px;
+}
+
+/* ── Tailwind v4 theme wiring ───────────────────────────────────────────────── */
+@theme inline {
+  --color-background:          var(--background);
+  --color-foreground:          var(--foreground);
+  --color-card:                var(--card);
+  --color-card-foreground:     var(--card-foreground);
+  --color-popover:             var(--popover);
+  --color-popover-foreground:  var(--popover-foreground);
+  --color-primary:             var(--primary);
+  --color-primary-foreground:  var(--primary-foreground);
+  --color-secondary:           var(--secondary);
+  --color-secondary-foreground:var(--secondary-foreground);
+  --color-muted:               var(--muted);
+  --color-muted-foreground:    var(--muted-foreground);
+  --color-accent:              var(--accent);
+  --color-accent-foreground:   var(--accent-foreground);
+  --color-destructive:         var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border:              var(--border);
+  --color-input:               var(--input);
+  --color-input-background:    var(--input-background);
+  --color-switch-background:   var(--switch-background);
+  --color-ring:                var(--ring);
+  --radius-sm:                 var(--radius-md);
+  --radius-md:                 var(--radius-xl);
+  --radius-lg:                 var(--radius-xxl);
+  --radius-xl:                 var(--radius-pill);
+}
+
+/* ── Base Layer ─────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    font-size: 16px;
+    scroll-behavior: smooth;
+    background: var(--color-canvas);
+    color: var(--color-ink);
+  }
+
+  body {
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.30;
+    letter-spacing: -0.15px;
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    overflow-x: hidden;
+    /* Inter Variable OpenType character variants — brand voice */
+    font-feature-settings: "cv01" on, "cv05" on, "cv09" on, "cv11" on,
+                           "ss03" on, "ss07" on, "dlig" on;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  a {
+    color: var(--color-accent-blue);
+    text-decoration: none;
+    transition: opacity 0.15s;
+  }
+  a:hover { opacity: 0.75; }
+
+  ::selection {
+    background: rgba(0,153,255,0.25);
+    color: var(--color-ink);
+  }
+
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+}
+
+/* ── Typography Utilities ───────────────────────────────────────────────────── */
+@layer utilities {
+  /* Display scale — Mona Sans (GT Walsheim substitute), weight 500 */
+  .type-display-xxl {
+    font-family: var(--font-display);
+    font-size: clamp(52px, 8vw, 110px);
+    font-weight: 500;
+    line-height: 0.85;
+    letter-spacing: -5.5px;
+    color: var(--color-ink);
+  }
+  .type-display-xl {
+    font-family: var(--font-display);
+    font-size: clamp(40px, 6vw, 85px);
+    font-weight: 500;
+    line-height: 0.95;
+    letter-spacing: -4.25px;
+    color: var(--color-ink);
+  }
+  .type-display-lg {
+    font-family: var(--font-display);
+    font-size: clamp(30px, 4.5vw, 62px);
+    font-weight: 500;
+    line-height: 1.00;
+    letter-spacing: -3.1px;
+    color: var(--color-ink);
+  }
+  .type-display-md {
+    font-family: var(--font-display);
+    font-size: clamp(22px, 2.5vw, 32px);
+    font-weight: 500;
+    line-height: 1.13;
+    letter-spacing: -1.0px;
+    color: var(--color-ink);
+  }
+  .type-headline {
+    font-family: var(--font-body);
+    font-size: clamp(18px, 2vw, 22px);
+    font-weight: 700;
+    line-height: 1.20;
+    letter-spacing: -0.8px;
+    color: var(--color-ink);
+  }
+  .type-subhead {
+    font-family: var(--font-body);
+    font-size: 24px;
+    font-weight: 400;
+    line-height: 1.30;
+    letter-spacing: -0.01px;
+    color: var(--color-ink-muted);
+  }
+  .type-body-lg {
+    font-family: var(--font-body);
+    font-size: 18px;
+    font-weight: 400;
+    line-height: 1.30;
+    letter-spacing: -0.18px;
+    color: var(--color-ink-muted);
+  }
+  .type-body {
+    font-family: var(--font-body);
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 1.30;
+    letter-spacing: -0.15px;
+  }
+  .type-body-sm {
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.40;
+    letter-spacing: -0.14px;
+  }
+  .type-caption {
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.20;
+    letter-spacing: -0.13px;
+    color: var(--color-ink-muted);
+  }
+  .type-micro {
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.20;
+    letter-spacing: -0.12px;
+    color: var(--color-ink-muted);
+  }
+  .type-button {
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.0;
+    letter-spacing: -0.14px;
+  }
+
+  /* ── Surface utilities ── */
+  .surface-0 { background: var(--color-canvas); }
+  .surface-1 { background: var(--color-surface-1); }
+  .surface-2 { background: var(--color-surface-2); }
+
+  /* ── Button primitives ── */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--color-inverse-canvas);
+    color: var(--color-canvas);
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.14px;
+    padding: 10px 15px;
+    border-radius: var(--radius-pill);
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: transform 0.12s ease, opacity 0.12s ease;
+    min-height: 44px;
+  }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-primary:active { transform: scale(0.97); }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--color-surface-1);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.14px;
+    padding: 10px 15px;
+    border-radius: var(--radius-pill);
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease;
+    min-height: 44px;
+  }
+  .btn-secondary:hover { background: var(--color-surface-2); }
+
+  .btn-translucent {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--color-surface-2);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.14px;
+    padding: 8px 14px;
+    border-radius: var(--radius-xxl);
+    border: none;
+    cursor: pointer;
+    min-height: 40px;
+  }
+
+  .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: var(--color-surface-1);
+    color: var(--color-ink);
+    border: none;
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-icon:hover { background: var(--color-surface-2); }
+
+  /* ── Gradient Spotlight Cards ── */
+  .spotlight {
+    border-radius: var(--radius-xxl);
+    padding: var(--space-xl);
+    position: relative;
+    overflow: hidden;
+  }
+  .spotlight-violet  { background: var(--gradient-violet); }
+  .spotlight-magenta { background: var(--gradient-magenta); }
+  .spotlight-orange  { background: var(--gradient-orange); }
+  .spotlight-coral   { background: var(--gradient-coral); }
+
+  /* ── Card primitives ── */
+  .card {
+    background: var(--color-surface-1);
+    border-radius: var(--radius-xl);
+    border: none;
+  }
+  .card-elevated {
+    background: var(--color-surface-1);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-level-2);
+  }
+  .card-featured {
+    background: var(--color-surface-2);
+    border-radius: var(--radius-xl);
+  }
+
+  /* ── Form inputs ── */
+  .input-base {
+    background: var(--color-surface-1);
+    color: var(--color-ink);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.30;
+    letter-spacing: -0.15px;
+    outline: none;
+    width: 100%;
+    transition: box-shadow 0.15s;
+  }
+  .input-base::placeholder { color: var(--color-ink-muted); }
+  .input-base:focus { box-shadow: var(--shadow-focus); border-color: transparent; }
+
+  /* ── Hairline dividers ── */
+  .divider       { border-top: 1px solid var(--color-hairline); }
+  .divider-soft  { border-top: 1px solid var(--color-hairline-soft); }
+
+  /* ── Eyebrow pill ── */
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--color-surface-1);
+    color: var(--color-ink-muted);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: -0.13px;
+    padding: 5px 12px;
+    border-radius: var(--radius-pill);
+  }
+
+  /* ── Animations ── */
+  .animate-fadeIn {
+    animation: fadeIn 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-fadeUp {
+    animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animation-delay-1 { animation-delay: 0.1s; }
+  .animation-delay-2 { animation-delay: 0.2s; }
+  .animation-delay-3 { animation-delay: 0.3s; }
+  .animation-delay-4 { animation-delay: 0.4s; }
+  .animation-delay-8 { animation-delay: 0.8s; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Legacy classes — kept for smooth migration; map to new tokens ── */
+  .glass        { background: var(--color-surface-1); }
+  .glass-strong { background: var(--color-surface-2); }
+  .glass-hover  { transition: background 0.15s; }
+  .glass-hover:hover { background: var(--color-surface-2); }
+  .gradient-text {
+    background: linear-gradient(135deg, #ffffff 0%, #999999 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar       { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--color-canvas); }
+  ::-webkit-scrollbar-thumb { background: var(--color-surface-2); border-radius: 3px; }
+}

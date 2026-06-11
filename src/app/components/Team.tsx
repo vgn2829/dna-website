@@ -1,0 +1,99 @@
+import { useState } from 'react';
+import { motion } from 'motion/react';
+import { Instagram, Linkedin, Mail } from 'lucide-react';
+
+const ACCENTS = ['#007AFF', '#BF5AF2', '#FF375F', '#FF9500', '#34C759', '#00D4FF'];
+
+interface Member { name: string; role: string; social: { instagram?: string; linkedin?: string; email?: string } }
+
+const COORDINATORS: Member[] = [
+  { name: 'Arjun Sharma', role: 'Club Coordinator', social: { instagram: '#', linkedin: '#', email: 'arjun@iitk.ac.in' } },
+  { name: 'Meera Patel',  role: 'Club Coordinator', social: { instagram: '#', linkedin: '#', email: 'meera@iitk.ac.in' } },
+];
+const SECRETARIES: Member[] = [
+  { name: 'Rahul Verma',    role: 'Design Secretary',    social: { instagram: '#', linkedin: '#', email: 'rahul@iitk.ac.in' } },
+  { name: 'Priya Singh',    role: 'Animation Secretary', social: { instagram: '#', linkedin: '#', email: 'priya@iitk.ac.in' } },
+  { name: 'Karan Malhotra', role: 'Events Secretary',    social: { instagram: '#', linkedin: '#', email: 'karan@iitk.ac.in' } },
+  { name: 'Anjali Reddy',   role: 'Media Secretary',     social: { instagram: '#', linkedin: '#', email: 'anjali@iitk.ac.in' } },
+];
+
+function MemberCard({ member, index, large = false }: { member: Member; index: number; large?: boolean }) {
+  const accent = ACCENTS[index % ACCENTS.length];
+  return (
+    <motion.div
+      className="card"
+      style={{ overflow: 'hidden', cursor: 'pointer' }}
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ delay: index * 0.05, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+      whileHover={{ y: -4 }}
+    >
+      {/* Avatar area — surface-2 tile with subtle accent tint */}
+      <div style={{ height: large ? 280 : 220, background: 'var(--color-surface-2)', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(circle at 50% 40%, ${accent}1a 0%, transparent 70%)` }} />
+        <div style={{ width: 80, height: 80, borderRadius: 'var(--radius-full)', background: 'var(--color-surface-1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--color-hairline)', position: 'relative', zIndex: 1 }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 500, color: 'var(--color-ink)' }}>{member.name[0]}</span>
+        </div>
+      </div>
+
+      {/* Card body */}
+      <div style={{ padding: '20px 20px 24px', textAlign: 'center' }}>
+        <h3 className="type-display-md" style={{ fontSize: large ? 22 : 18, marginBottom: 4 }}>{member.name}</h3>
+        <p className="type-caption" style={{ marginBottom: 16 }}>{member.role}</p>
+
+        {/* Social links — icon circles */}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+          {member.social.instagram && (
+            <a href={member.social.instagram} className="btn-icon" aria-label="Instagram"><Instagram size={15} /></a>
+          )}
+          {member.social.linkedin && (
+            <a href={member.social.linkedin} className="btn-icon" aria-label="LinkedIn"><Linkedin size={15} /></a>
+          )}
+          {member.social.email && (
+            <a href={`mailto:${member.social.email}`} className="btn-icon" aria-label="Email"><Mail size={15} /></a>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+export function Team() {
+  return (
+    <section id="team" style={{ background: 'var(--color-canvas)', padding: '96px 24px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+
+        {/* Section header */}
+        <motion.div
+          style={{ marginBottom: 64 }}
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <h2 className="type-display-lg" style={{ marginBottom: 12 }}>
+            Meet Our <span style={{ color: 'var(--color-ink-muted)' }}>Team</span>
+          </h2>
+          <p className="type-body-lg">The creative minds driving innovation and fostering design excellence at IIT Kanpur</p>
+        </motion.div>
+
+        {/* Coordinators — 2-up */}
+        <div style={{ marginBottom: 48 }}>
+          <p className="type-headline" style={{ marginBottom: 24 }}>Coordinators</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, maxWidth: 720 }}>
+            {COORDINATORS.map((m, i) => <MemberCard key={m.name} member={m} index={i} large />)}
+          </div>
+        </div>
+
+        {/* Secretaries — 4-up */}
+        <div>
+          <p className="type-headline" style={{ marginBottom: 24 }}>Secretaries</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+            {SECRETARIES.map((m, i) => <MemberCard key={m.name} member={m} index={i + COORDINATORS.length} />)}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
