@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLocation, useNavigate } from 'react-router';
-import { LogOut, Menu, X } from 'lucide-react';
+import { LogOut, Menu, Moon, Sun, X } from 'lucide-react';
 import { useStudent } from '../context/StudentContext';
+import { useTheme } from '../context/ThemeContext';
 
 const NAV_LINKS = [
   { label: 'Home',     path: '/' },
@@ -16,6 +17,7 @@ export function Navigation() {
   const location = useLocation();
   const navigate = useNavigate();
   const { studentSession, openRollModal, logout } = useStudent();
+  const { theme, toggle } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -35,7 +37,7 @@ export function Navigation() {
       <header
         className="fixed top-0 left-0 right-0 z-[200] h-14 transition-all"
         style={{
-          background: scrolled ? 'rgba(17,17,16,0.94)' : 'var(--color-canvas)',
+          background: scrolled ? 'var(--color-nav-blur-bg)' : 'var(--color-canvas)',
           backdropFilter: scrolled ? 'blur(12px)' : 'none',
           borderBottom: `1px solid ${scrolled ? 'var(--color-hairline-soft)' : 'transparent'}`,
         }}
@@ -152,6 +154,16 @@ export function Navigation() {
                 Admin
               </button>
             </div>
+
+            {/* Theme toggle — all breakpoints */}
+            <button
+              onClick={toggle}
+              className="btn-icon"
+              style={{ width: 34, height: 34 }}
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
 
             {/* Mobile: hamburger */}
             <button

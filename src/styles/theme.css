@@ -15,6 +15,9 @@
   --color-hairline-soft:   rgba(255,255,255,0.06);
   --color-inverse-canvas:  #ffffff;
 
+  /* ── Nav blur background (themed) ── */
+  --color-nav-blur-bg:     rgba(17,17,16,0.94);
+
   /* ── Gradient Spotlight Card Stops ── */
   --gradient-violet:  linear-gradient(135deg, #3b1fa8 0%, #6b35d9 45%, #9b6bff 100%);
   --gradient-magenta: linear-gradient(135deg, #8b1a6b 0%, #c73599 50%, #f06bbf 100%);
@@ -77,6 +80,22 @@
   --ring:                 rgba(0,153,255,0.50);
   --radius:               var(--radius-xl);
   --font-size:            16px;
+}
+
+/* ── Light theme overrides ──────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --color-ink:             #111110;
+  --color-ink-muted:       #555550;
+  --color-canvas:          #ffffff;
+  --color-surface-1:       #f5f5f5;
+  --color-surface-2:       #ebebeb;
+  --color-hairline:        rgba(0,0,0,0.10);
+  --color-hairline-soft:   rgba(0,0,0,0.06);
+  --color-inverse-canvas:  #111110;
+  --color-nav-blur-bg:     rgba(255,255,255,0.94);
+  --shadow-level-1: 0 1px 3px rgba(0,0,0,0.10);
+  --shadow-level-2: 0 0.5px 0 0 rgba(0,0,0,0.06) inset,
+                    0 10px 30px rgba(0,0,0,0.12);
 }
 
 /* ── Tailwind v4 theme wiring ───────────────────────────────────────────────── */
@@ -431,6 +450,12 @@
   .glass-hover:hover { background: var(--color-surface-2); }
   .gradient-text {
     background: linear-gradient(135deg, #ffffff 0%, #999999 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  [data-theme="light"] .gradient-text {
+    background: linear-gradient(135deg, #111110 0%, #555550 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
