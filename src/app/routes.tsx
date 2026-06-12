@@ -1,3 +1,4 @@
+// PALETTE_STUDIO_FEATURE — remove the /palette route and nav link to disable
 import { createBrowserRouter } from 'react-router';
 import { Root } from './components/Root';
 import { HomePage } from './pages/HomePage';
@@ -7,6 +8,7 @@ import { EventsPage } from './pages/EventsPage';
 import { TeamPage } from './pages/TeamPage';
 import { AcademyPage } from './pages/AcademyPage';
 import { AdminPage } from './pages/AdminPage';
+import { PalettePage } from './pages/PalettePage'; // PALETTE_STUDIO_FEATURE
 
 export const router = createBrowserRouter([
   {
@@ -19,6 +21,7 @@ export const router = createBrowserRouter([
       { path: 'gallery', Component: GalleryPage },
       { path: 'events', Component: EventsPage },
       { path: 'team', Component: TeamPage },
+      { path: 'palette', Component: PalettePage }, // PALETTE_STUDIO_FEATURE
       { path: 'admin', Component: AdminPage },
     ],
   },

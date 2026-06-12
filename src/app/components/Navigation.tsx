@@ -5,12 +5,14 @@ import { LogOut, Menu, Moon, Sun, X } from 'lucide-react';
 import { useStudent } from '../context/StudentContext';
 import { useTheme } from '../context/ThemeContext';
 
+// PALETTE_STUDIO_FEATURE — remove the Palette entry below to disable
 const NAV_LINKS = [
   { label: 'Home',     path: '/' },
   { label: 'Academy',  path: '/academy' },
   { label: 'Gallery',  path: '/gallery' },
   { label: 'Events',   path: '/events' },
   { label: 'Team',     path: '/team' },
+  { label: 'Palette',  path: '/palette' }, // PALETTE_STUDIO_FEATURE
 ];
 
 export function Navigation() {
