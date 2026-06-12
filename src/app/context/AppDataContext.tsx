@@ -22,7 +22,7 @@ export interface ClubEvent {
   content: string; capacity: number; registeredCount: number; isRegistered: boolean;
 }
 
-export interface VideoResource { id: string; title: string; ytId: string; difficulty: 'Beginner' | 'Intermediate' | 'Advanced'; duration: string; }
+export interface VideoResource { id: string; title: string; ytId: string; difficulty: 'Beginner' | 'Intermediate' | 'Advanced'; duration: string; sequence: number; }
 export interface QuizQuestion  { q: string; options: string[]; ans: number; }
 
 export interface Domain {
@@ -55,10 +55,11 @@ interface AppDataContextValue {
   addEvent:   (event: Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered'>) => void;
   deleteEvent:(id: string) => void;
   // Domains / videos
-  addDomain:    (domain: { title: string; fullName: string; icon: string; tagline: string; description: string; color: string }) => Promise<void>;
-  deleteDomain: (id: string) => void;
-  addVideo:     (domainId: string, video: Omit<VideoResource, 'id'> & { ytUrl: string }) => void;
-  deleteVideo:  (domainId: string, videoId: string) => void;
+  addDomain:          (domain: { title: string; fullName: string; icon: string; tagline: string; description: string; color: string }) => Promise<void>;
+  deleteDomain:       (id: string) => void;
+  addVideo:           (domainId: string, video: Omit<VideoResource, 'id' | 'sequence'> & { ytUrl: string; sequence?: number }) => void;
+  deleteVideo:        (domainId: string, videoId: string) => void;
+  updateVideoSequence:(domainId: string, videoId: string, sequence: number) => Promise<void>;
   // Team
   addTeamMember:    (formData: FormData) => Promise<void>;
   updateTeamMember: (id: number, formData: FormData) => Promise<void>;
@@ -157,13 +158,15 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     api.domains.delete(id).then(() => setDomains(prev => { const next = { ...prev }; delete next[id]; return next; })).catch(console.error);
   }, []);
 
-  const addVideo = useCallback((domainId: string, video: Omit<VideoResource, 'id'> & { ytUrl: string }) => {
-    const { ytUrl, ...rest } = video;
+  const addVideo = useCallback((domainId: string, video: Omit<VideoResource, 'id' | 'sequence'> & { ytUrl: string; sequence?: number }) => {
+    const { ytUrl, ytId: _ytId, ...rest } = video;
     api.domains.addVideo(domainId, { ...rest, ytUrl })
       .then(newVid => setDomains(prev => {
         const d = prev[domainId];
         if (!d) return prev;
-        return { ...prev, [domainId]: { ...d, videos: [...d.videos, newVid as VideoResource] } };
+        const videos = [...d.videos, newVid as VideoResource]
+          .sort((a, b) => a.sequence - b.sequence);
+        return { ...prev, [domainId]: { ...d, videos } };
       }))
       .catch(console.error);
   }, []);
@@ -178,6 +181,18 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       .catch(console.error);
   }, []);
 
+  const updateVideoSequence = useCallback(async (domainId: string, videoId: string, sequence: number) => {
+    await api.domains.patchVideoSequence(domainId, videoId, sequence);
+    setDomains(prev => {
+      const d = prev[domainId];
+      if (!d) return prev;
+      const videos = d.videos
+        .map(v => v.id === videoId ? { ...v, sequence } : v)
+        .sort((a, b) => a.sequence - b.sequence);
+      return { ...prev, [domainId]: { ...d, videos } };
+    });
+  }, []);
+
   const addTeamMember = useCallback(async (formData: FormData) => {
     const m = await api.team.add(formData);
     setTeam(prev => [...prev, m as TeamMember].sort((a, b) => a.displayOrder - b.displayOrder));
@@ -185,7 +200,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   const updateTeamMember = useCallback(async (id: number, formData: FormData) => {
     const m = await api.team.update(id, formData);
-    setTeam(prev => prev.map(t => t.id !== id ? t : m as TeamMember));
+    setTeam(prev => prev.map(t => t.id !== id ? t : m as TeamMember).sort((a, b) => a.displayOrder - b.displayOrder));
   }, []);
 
   const deleteTeamMember = useCallback((id: number) => {
@@ -197,7 +212,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       domains, artworks, events, team, loading, error,
       likeArtwork, addComment, uploadArtwork, deleteArtwork,
       rsvpEvent, addEvent, deleteEvent,
-      addDomain, deleteDomain, addVideo, deleteVideo,
+      addDomain, deleteDomain, addVideo, deleteVideo, updateVideoSequence,
       addTeamMember, updateTeamMember, deleteTeamMember,
     }}>
       {children}

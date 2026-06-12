@@ -1,6 +1,22 @@
 import { pool } from './client';
 
 export async function initSchema(): Promise<void> {
+  // Migration: add sequence column + back-fill by insertion order per domain.
+  // ALTER TABLE … ADD COLUMN IF NOT EXISTS is idempotent on re-runs.
+  // The WHERE sequence = 0 guard makes the UPDATE idempotent too.
+  await pool.query(`
+    ALTER TABLE videos ADD COLUMN IF NOT EXISTS sequence INTEGER NOT NULL DEFAULT 0;
+
+    UPDATE videos v
+    SET sequence = sub.rn
+    FROM (
+      SELECT id,
+             ROW_NUMBER() OVER (PARTITION BY domain_id ORDER BY created_at ASC) AS rn
+      FROM videos
+    ) sub
+    WHERE v.id = sub.id AND v.sequence = 0;
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS admin_config (
       key   TEXT PRIMARY KEY,

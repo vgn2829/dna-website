@@ -1,15 +1,22 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import rateLimit from 'express-rate-limit';
 import { query } from '../db/client';
 
 export const studentsRouter = Router();
+
+const sessionLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many session requests — try again in 5 minutes' },
+});
 
 const sessionSchema = z.object({
   rollNumber: z.string().regex(/^[0-9]{2}[a-zA-Z0-9]{4,6}$/i, 'Invalid IITK roll number').transform(s => s.trim().toUpperCase()),
 });
 
-studentsRouter.post('/sessions', async (req, res) => {
+studentsRouter.post('/sessions', sessionLimiter, async (req, res) => {
   const parsed = sessionSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid roll number' }); return; }
 

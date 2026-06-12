@@ -25,7 +25,7 @@ export function createApp() {
         cb(err as Error);
       }
     },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Roll-Number'],
   }));
 
@@ -33,7 +33,11 @@ export function createApp() {
   // Content-Disposition: attachment forces a download so uploaded PDFs / HTML
   // cannot execute script in this origin.
   app.use('/uploads',
-    (_req, res, next) => { res.setHeader('Content-Disposition', 'attachment'); next(); },
+    (_req, res, next) => {
+      res.setHeader('Content-Disposition', 'attachment');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      next();
+    },
     express.static(path.join(__dirname, '../uploads'))
   );
 

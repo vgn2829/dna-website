@@ -261,19 +261,19 @@ export function GalleryPage() {
                   onClick={() => setSelectedId(art.id)}>
                   <div className={`${aspect} relative`}>
                     <MediaThumbnail art={art} aspect={aspect} />
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4"
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4"
                       style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.15) 60%, transparent 100%)' }}>
                       <p className="type-body-sm font-semibold text-white leading-tight mb-0.5">{art.title}</p>
                       <p className="type-micro" style={{ color: 'rgba(255,255,255,0.55)' }}>{art.artist}</p>
                     </div>
                     <button onClick={e => handleLike(e, art.id)}
-                      className="absolute top-3 right-3 relative flex items-center gap-1 px-2.5 py-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity type-micro"
+                      className="absolute top-3 right-3 relative flex items-center gap-1 px-2.5 py-1.5 rounded-full opacity-0 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity type-micro"
                       style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', backdropFilter: 'blur(4px)' }}>
                       <LikeBurst active={hasBurst} />
                       <Heart size={11} fill={art.likedByUser ? '#ff4d6d' : 'none'} style={{ color: art.likedByUser ? '#ff4d6d' : '#fff' }} />
                       {art.likes}
                     </button>
-                    <div className="absolute bottom-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity type-micro px-2 py-0.5 rounded-full"
+                    <div className="absolute bottom-3 left-3 opacity-0 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity type-micro px-2 py-0.5 rounded-full"
                       style={{ background: `${domainColor}30`, color: domainColor, backdropFilter: 'blur(4px)' }}>
                       {art.domain}
                     </div>

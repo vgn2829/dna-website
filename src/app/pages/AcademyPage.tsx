@@ -317,7 +317,7 @@ export function AcademyPage() {
             {/* Quiz */}
             <AnimatePresence mode="wait">
               <motion.div key={activeDomainId} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-                {domain?.quizzes && (
+                {domain?.quizzes && domain.quizzes.length > 0 && (
                   <QuizCard
                     domainId={activeDomainId}
                     questions={domain.quizzes}

@@ -57,10 +57,12 @@ export const api = {
     create: (domain: { title: string; fullName: string; icon: string; tagline: string; description: string; color: string }) =>
       request<unknown>('POST', '/domains', { body: domain, admin: true }),
     delete: (id: string) => request<void>('DELETE', `/domains/${id}`, { admin: true }),
-    addVideo: (domainId: string, video: { title: string; ytUrl: string; difficulty: string; duration: string }) =>
+    addVideo: (domainId: string, video: { title: string; ytUrl: string; difficulty: string; duration: string; sequence?: number }) =>
       request<unknown>('POST', `/domains/${domainId}/videos`, { body: video, admin: true }),
     deleteVideo: (domainId: string, videoId: string) =>
       request<void>('DELETE', `/domains/${domainId}/videos/${videoId}`, { admin: true }),
+    patchVideoSequence: (domainId: string, videoId: string, sequence: number) =>
+      request<unknown>('PATCH', `/domains/${domainId}/videos/${videoId}`, { body: { sequence }, admin: true }),
   },
   artworks: {
     list:    (roll?: string) => request<unknown[]>('GET', '/artworks', { roll }),

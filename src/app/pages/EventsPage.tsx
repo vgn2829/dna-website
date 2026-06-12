@@ -145,7 +145,7 @@ function EventCard({ event, view, delay, onRSVP }: {
           >
             {event.isRegistered ? (
               <span className="btn-secondary w-full flex items-center justify-center gap-2" style={{ color: '#3ecf5f', background: 'rgba(62,207,95,0.10)' }}>
-                <CheckCircle2 size={14} /> Registered
+                <CheckCircle2 size={14} /> Reserved ✓
               </span>
             ) : (
               <span className="btn-primary w-full flex items-center justify-center gap-2">

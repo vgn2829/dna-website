@@ -55,11 +55,12 @@ export function Navigation() {
         >
           {/* ── Left: Wordmark ── */}
           <div className="flex items-center">
-            <button
-              onClick={() => navigate('/')}
-              style={{ fontFamily: 'var(--font-display)', fontWeight: 600, letterSpacing: '-0.5px', color: 'var(--color-ink)', fontSize: 15 }}
-            >
-              IITK DnA
+            <button onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', padding: 0, background: 'none', border: 'none' }}>
+              <img
+                src="/logo.png"
+                alt="DnA Club IIT Kanpur"
+                className="h-9 w-auto object-contain"
+              />
             </button>
           </div>
 

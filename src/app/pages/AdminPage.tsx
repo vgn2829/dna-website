@@ -18,8 +18,8 @@ function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
       const { token } = await api.auth.adminLogin(pw);
       setAdminToken(token);
       onSuccess();
-    } catch {
-      setError('Incorrect password');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Incorrect password');
       setShake(true);
       setTimeout(() => setShake(false), 450);
     } finally { setLoading(false); }
@@ -56,10 +56,12 @@ type Tab = 'academy' | 'gallery' | 'team' | 'events';
 
 // ── Academy tab ──────────────────────────────────────────────────────────────
 function AcademyTab() {
-  const { domains, addDomain, deleteDomain, addVideo, deleteVideo } = useAppData();
+  const { domains, addDomain, deleteDomain, addVideo, deleteVideo, updateVideoSequence } = useAppData();
   const domainKeys = Object.keys(domains);
   const [activeDomain, setActiveDomain] = useState(domainKeys[0] ?? '');
   const [showNewDomain, setShowNewDomain] = useState(false);
+  const [pendingSeq, setPendingSeq] = useState<Record<string, string>>({});
+  const [seqErrors, setSeqErrors] = useState<Record<string, string>>({});
 
   // New domain form
   const [dTitle, setDTitle] = useState('');
@@ -85,12 +87,15 @@ function AcademyTab() {
   const [vUrl, setVUrl] = useState('');
   const [vDiff, setVDiff] = useState<'Beginner' | 'Intermediate' | 'Advanced'>('Intermediate');
   const [vDur, setVDur] = useState('');
+  const [vSeq, setVSeq] = useState('');
 
   const handleAddVideo = (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!activeDomain) return;
-    addVideo(activeDomain, { title: vTitle, ytUrl: vUrl, ytId: '', difficulty: vDiff, duration: vDur || '15 mins' });
-    setVTitle(''); setVUrl(''); setVDur('');
+    const seqParsed = parseInt(vSeq, 10);
+    const seq = vSeq && seqParsed >= 1 ? seqParsed : undefined;
+    addVideo(activeDomain, { title: vTitle, ytUrl: vUrl, ytId: '', difficulty: vDiff, duration: vDur || '15 mins', sequence: seq });
+    setVTitle(''); setVUrl(''); setVDur(''); setVSeq('');
   };
 
   const domain = domains[activeDomain];
@@ -110,11 +115,11 @@ function AcademyTab() {
           {showNewDomain && (
             <motion.form key="new-domain" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} onSubmit={handleAddDomain}
               className="space-y-3 mb-4 pb-4" style={{ borderBottom: '1px solid var(--color-hairline-soft)' }}>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><label className="type-micro block mb-1">Title *</label><input required value={dTitle} onChange={e => setDTitle(e.target.value)} placeholder="Motion Design" className="input-base" /></div>
                 <div><label className="type-micro block mb-1">Full Name</label><input value={dFullName} onChange={e => setDFullName(e.target.value)} placeholder="Motion Design & Animation" className="input-base" /></div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><label className="type-micro block mb-1">Icon class</label><input value={dIcon} onChange={e => setDIcon(e.target.value)} placeholder="fa-video" className="input-base" /></div>
                 <div><label className="type-micro block mb-1">Color</label><input type="color" value={dColor} onChange={e => setDColor(e.target.value)} className="input-base h-10" /></div>
               </div>
@@ -133,7 +138,7 @@ function AcademyTab() {
         <div className="flex flex-wrap gap-2">
           {domainKeys.map(k => (
             <div key={k} className="flex items-center gap-1">
-              <button onClick={() => setActiveDomain(k)} className="type-body-sm px-3 py-1.5 rounded-full transition-all"
+              <button onClick={() => { setActiveDomain(k); setPendingSeq({}); setSeqErrors({}); }} className="type-body-sm px-3 py-1.5 rounded-full transition-all"
                 style={activeDomain === k ? { background: 'var(--color-surface-2)', color: 'var(--color-ink)' } : { background: 'var(--color-surface-1)', color: 'var(--color-ink-muted)' }}>
                 {domains[k].title}
               </button>
@@ -154,7 +159,7 @@ function AcademyTab() {
             <form onSubmit={handleAddVideo} className="space-y-3">
               <div><label className="type-micro block mb-1">Title *</label><input required value={vTitle} onChange={e => setVTitle(e.target.value)} placeholder="Tutorial title" className="input-base" /></div>
               <div><label className="type-micro block mb-1">YouTube URL or ID *</label><input required value={vUrl} onChange={e => setVUrl(e.target.value)} placeholder="https://youtu.be/… or 11-char ID" className="input-base" /></div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><label className="type-micro block mb-1">Difficulty</label>
                   <select value={vDiff} onChange={e => setVDiff(e.target.value as 'Beginner' | 'Intermediate' | 'Advanced')} className="input-base">
                     {['Beginner','Intermediate','Advanced'].map(d => <option key={d}>{d}</option>)}
@@ -162,6 +167,7 @@ function AcademyTab() {
                 </div>
                 <div><label className="type-micro block mb-1">Duration</label><input value={vDur} onChange={e => setVDur(e.target.value)} placeholder="15 mins" className="input-base" /></div>
               </div>
+              <div><label className="type-micro block mb-1">Sequence <span style={{ color: 'var(--color-ink-muted)' }}>(blank = append to end)</span></label><input type="number" min={1} value={vSeq} onChange={e => setVSeq(e.target.value)} placeholder="auto" className="input-base" /></div>
               <button type="submit" className="btn-primary w-full justify-center">Add Video</button>
             </form>
           </div>
@@ -169,21 +175,48 @@ function AcademyTab() {
           {/* Video list */}
           <div className="lg:col-span-3 space-y-2">
             {domain.videos.length === 0 && <p className="type-caption text-center py-8" style={{ color: 'var(--color-ink-muted)' }}>No videos yet</p>}
-            {domain.videos.map(v => (
-              <div key={v.id} className="card p-3 flex items-center gap-3" style={{ borderRadius: 'var(--radius-lg)' }}>
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'var(--color-surface-2)' }}>
-                  <Video size={12} style={{ color: 'var(--color-ink-muted)' }} />
+            {domain.videos.map(v => {
+              const saveSeq = async () => {
+                setSeqErrors(p => { const n = { ...p }; delete n[v.id]; return n; });
+                const raw = pendingSeq[v.id];
+                if (raw === undefined) return;
+                const val = parseInt(raw, 10);
+                try {
+                  if (!isNaN(val) && val >= 1 && val !== v.sequence) {
+                    await updateVideoSequence(activeDomain, v.id, val);
+                  }
+                  setPendingSeq(p => { const n = { ...p }; delete n[v.id]; return n; });
+                } catch {
+                  setSeqErrors(p => ({ ...p, [v.id]: 'Save failed' }));
+                }
+              };
+              return (
+                <div key={v.id} className="card p-3 flex items-center gap-3" style={{ borderRadius: 'var(--radius-lg)' }}>
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'var(--color-surface-2)' }}>
+                    <Video size={12} style={{ color: 'var(--color-ink-muted)' }} />
+                  </div>
+                  <input
+                    type="number" min={1}
+                    value={pendingSeq[v.id] ?? String(v.sequence)}
+                    onChange={e => setPendingSeq(p => ({ ...p, [v.id]: e.target.value }))}
+                    onBlur={saveSeq}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveSeq(); } }}
+                    className="w-10 text-center shrink-0 rounded-lg type-micro"
+                    style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)', border: 'none', outline: 'none', padding: '4px 2px' }}
+                    title="Sequence — Enter or blur to save"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="type-body-sm truncate">{v.title}</p>
+                    <p className="type-micro">{v.difficulty} · {v.duration}</p>
+                    {seqErrors[v.id] && <p className="type-micro" style={{ color: '#e5484d' }}>{seqErrors[v.id]}</p>}
+                  </div>
+                  <a href={`https://youtube.com/watch?v=${v.ytId}`} target="_blank" rel="noreferrer" className="type-micro shrink-0" style={{ color: 'var(--color-accent-blue)' }}>↗</a>
+                  <button onClick={() => deleteVideo(activeDomain, v.id)} className="btn-icon shrink-0" style={{ color: '#e5484d', width: 28, height: 28, background: 'transparent' }}>
+                    <Trash2 size={12} />
+                  </button>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="type-body-sm truncate">{v.title}</p>
-                  <p className="type-micro">{v.difficulty} · {v.duration}</p>
-                </div>
-                <a href={`https://youtube.com/watch?v=${v.ytId}`} target="_blank" rel="noreferrer" className="type-micro shrink-0" style={{ color: 'var(--color-accent-blue)' }}>↗</a>
-                <button onClick={() => deleteVideo(activeDomain, v.id)} className="btn-icon shrink-0" style={{ color: '#e5484d', width: 28, height: 28, background: 'transparent' }}>
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -338,13 +371,13 @@ function TeamTab() {
         <form onSubmit={handleAdd} className="space-y-3">
           <div><label className="type-micro block mb-1">Name *</label><input required value={tName} onChange={e => setTName(e.target.value)} className="input-base" /></div>
           <div><label className="type-micro block mb-1">Designation *</label><input required value={tDesig} onChange={e => setTDesig(e.target.value)} placeholder="Club Coordinator" className="input-base" /></div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className="type-micro block mb-1">Year/Dept</label><input value={tYear} onChange={e => setTYear(e.target.value)} placeholder="Y3 · CSE" className="input-base" /></div>
             <div><label className="type-micro block mb-1">Color</label><input type="color" value={tColor} onChange={e => setTColor(e.target.value)} className="input-base h-10" /></div>
           </div>
           <div><label className="type-micro block mb-1">Bio</label><textarea value={tBio} onChange={e => setTBio(e.target.value)} rows={2} className="input-base resize-none" /></div>
           <div><label className="type-micro block mb-1">Email</label><input type="email" value={tEmail} onChange={e => setTEmail(e.target.value)} className="input-base" /></div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className="type-micro block mb-1">Instagram URL</label><input value={tIG} onChange={e => setTIG(e.target.value)} placeholder="#" className="input-base" /></div>
             <div><label className="type-micro block mb-1">LinkedIn URL</label><input value={tLI} onChange={e => setTLI(e.target.value)} placeholder="#" className="input-base" /></div>
           </div>
@@ -403,7 +436,7 @@ function EventsTab() {
         <p className="type-headline flex items-center gap-2"><Plus size={14} /> Schedule Event</p>
         <form onSubmit={handleAdd} className="space-y-3">
           <div><label className="type-micro block mb-1">Title *</label><input required value={eTitle} onChange={e => setETitle(e.target.value)} className="input-base" /></div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className="type-micro block mb-1">Date</label><input type="date" required value={eDate} onChange={e => setEDate(e.target.value)} className="input-base" /></div>
             <div><label className="type-micro block mb-1">Time</label><input required value={eTime} onChange={e => setETime(e.target.value)} placeholder="6–8 PM" className="input-base" /></div>
           </div>
@@ -462,7 +495,7 @@ export function AdminPage() {
           </button>
         </motion.div>
 
-        <div className="flex gap-2 mb-8">
+        <div className="flex flex-wrap gap-2 mb-8">
           {TABS.map(t => {
             const Icon = t.icon;
             return (

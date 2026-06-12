@@ -7,13 +7,15 @@ import { requireAdmin } from '../middleware/adminAuth';
 export const domainsRouter = Router();
 
 type DomainRow = { id: string; title: string; full_name: string; icon: string; tagline: string; description: string; color: string; display_order: number };
-type VideoRow  = { id: string; domain_id: string; title: string; yt_id: string; difficulty: string; duration: string };
+type VideoRow  = { id: string; domain_id: string; title: string; yt_id: string; difficulty: string; duration: string; sequence: number };
 type QuizRow   = { id: number; domain_id: string; question: string; options: string; answer_index: number };
 
 domainsRouter.get('/', async (_req, res) => {
-  const domains = await query<DomainRow>('SELECT * FROM domains ORDER BY display_order ASC, created_at ASC');
-  const videos  = await query<VideoRow>('SELECT * FROM videos ORDER BY created_at ASC');
-  const quizzes = await query<QuizRow>('SELECT * FROM quiz_questions ORDER BY id ASC');
+  const [domains, videos, quizzes] = await Promise.all([
+    query<DomainRow>('SELECT * FROM domains ORDER BY display_order ASC, created_at ASC'),
+    query<VideoRow>('SELECT * FROM videos ORDER BY sequence ASC, created_at ASC'),
+    query<QuizRow>('SELECT * FROM quiz_questions ORDER BY id ASC'),
+  ]);
 
   const result: Record<string, object> = {};
   for (const d of domains) {
@@ -21,7 +23,7 @@ domainsRouter.get('/', async (_req, res) => {
       id: d.id, title: d.title, fullName: d.full_name, icon: d.icon,
       tagline: d.tagline, description: d.description, color: d.color,
       videos: videos.filter(v => v.domain_id === d.id)
-        .map(v => ({ id: v.id, title: v.title, ytId: v.yt_id, difficulty: v.difficulty, duration: v.duration })),
+        .map(v => ({ id: v.id, title: v.title, ytId: v.yt_id, difficulty: v.difficulty, duration: v.duration, sequence: v.sequence })),
       quizzes: quizzes.filter(q => q.domain_id === d.id)
         .map(q => {
           let options: string[] = [];
@@ -40,11 +42,12 @@ function slugify(name: string): string {
 async function uniqueSlug(base: string): Promise<string> {
   let slug = base;
   let n = 2;
-  for (;;) {
+  for (let attempt = 0; attempt < 20; attempt++) {
     const rows = await query('SELECT 1 FROM domains WHERE id=$1', [slug]);
     if (rows.length === 0) return slug;
     slug = `${base}-${n++}`;
   }
+  throw new Error(`Could not generate a unique slug for base "${base}" after 20 attempts`);
 }
 
 const domainCreateSchema = z.object({
@@ -94,6 +97,7 @@ const videoSchema = z.object({
   ytUrl:      z.string().min(1),
   difficulty: z.enum(['Beginner', 'Intermediate', 'Advanced']),
   duration:   z.string().min(1).max(20),
+  sequence:   z.coerce.number().int().min(1).optional(),
 });
 
 domainsRouter.post('/:id/videos', requireAdmin, async (req, res) => {
@@ -111,17 +115,41 @@ domainsRouter.post('/:id/videos', requireAdmin, async (req, res) => {
     return;
   }
 
-  const { title, difficulty, duration } = parsed.data;
+  const { title, difficulty, duration, sequence: rawSeq } = parsed.data;
+
+  let seq: number;
+  if (rawSeq !== undefined) {
+    seq = rawSeq;
+  } else {
+    const maxRow = await query<{ max: string }>('SELECT COALESCE(MAX(sequence),0)+1 AS max FROM videos WHERE domain_id=$1', [req.params.id]);
+    seq = Number(maxRow[0].max);
+  }
+
   const id = `${req.params.id}-${uuidv4().slice(0, 8)}`;
   await query(
-    'INSERT INTO videos(id,domain_id,title,yt_id,difficulty,duration) VALUES($1,$2,$3,$4,$5,$6)',
-    [id, req.params.id, title, ytId, difficulty, duration]
+    'INSERT INTO videos(id,domain_id,title,yt_id,difficulty,duration,sequence) VALUES($1,$2,$3,$4,$5,$6,$7)',
+    [id, req.params.id, title, ytId, difficulty, duration, seq]
   );
-  res.status(201).json({ id, title, ytId, difficulty, duration });
+  res.status(201).json({ id, title, ytId, difficulty, duration, sequence: seq });
 });
 
 domainsRouter.delete('/:id/videos/:videoId', requireAdmin, async (req, res) => {
   const result = await pool.query('DELETE FROM videos WHERE id=$1 AND domain_id=$2', [req.params.videoId, req.params.id]);
   if (result.rowCount === 0) { res.status(404).json({ error: 'Video not found' }); return; }
   res.status(204).end();
+});
+
+const seqPatchSchema = z.object({ sequence: z.coerce.number().int().min(1) });
+
+domainsRouter.patch('/:id/videos/:videoId', requireAdmin, async (req, res) => {
+  const parsed = seqPatchSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+
+  const result = await pool.query(
+    'UPDATE videos SET sequence=$1 WHERE id=$2 AND domain_id=$3 RETURNING *',
+    [parsed.data.sequence, req.params.videoId, req.params.id]
+  );
+  if (result.rowCount === 0) { res.status(404).json({ error: 'Video not found' }); return; }
+  const v = result.rows[0] as VideoRow;
+  res.json({ id: v.id, title: v.title, ytId: v.yt_id, difficulty: v.difficulty, duration: v.duration, sequence: v.sequence });
 });
