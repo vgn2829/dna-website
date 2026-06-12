@@ -1,24 +1,12 @@
-import { useState } from 'react';
+import React from 'react';
 import { motion } from 'motion/react';
-import { Instagram, Linkedin, Mail } from 'lucide-react';
+import { Instagram, Linkedin, Mail, Loader2 } from 'lucide-react';
+import { useAppData, type TeamMember } from '../context/AppDataContext';
 
 const ACCENTS = ['#007AFF', '#BF5AF2', '#FF375F', '#FF9500', '#34C759', '#00D4FF'];
 
-interface Member { name: string; role: string; social: { instagram?: string; linkedin?: string; email?: string } }
-
-const COORDINATORS: Member[] = [
-  { name: 'Arjun Sharma', role: 'Club Coordinator', social: { instagram: '#', linkedin: '#', email: 'arjun@iitk.ac.in' } },
-  { name: 'Meera Patel',  role: 'Club Coordinator', social: { instagram: '#', linkedin: '#', email: 'meera@iitk.ac.in' } },
-];
-const SECRETARIES: Member[] = [
-  { name: 'Rahul Verma',    role: 'Design Secretary',    social: { instagram: '#', linkedin: '#', email: 'rahul@iitk.ac.in' } },
-  { name: 'Priya Singh',    role: 'Animation Secretary', social: { instagram: '#', linkedin: '#', email: 'priya@iitk.ac.in' } },
-  { name: 'Karan Malhotra', role: 'Events Secretary',    social: { instagram: '#', linkedin: '#', email: 'karan@iitk.ac.in' } },
-  { name: 'Anjali Reddy',   role: 'Media Secretary',     social: { instagram: '#', linkedin: '#', email: 'anjali@iitk.ac.in' } },
-];
-
-function MemberCard({ member, index, large = false }: { member: Member; index: number; large?: boolean }) {
-  const accent = ACCENTS[index % ACCENTS.length];
+function MemberCard({ member, index, large = false }: { member: TeamMember; index: number; large?: boolean }) {
+  const accent = member.color || ACCENTS[index % ACCENTS.length];
   return (
     <motion.div
       className="card"
@@ -29,20 +17,22 @@ function MemberCard({ member, index, large = false }: { member: Member; index: n
       transition={{ delay: index * 0.05, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
       whileHover={{ y: -4 }}
     >
-      {/* Avatar area — surface-2 tile with subtle accent tint */}
       <div style={{ height: large ? 280 : 220, background: 'var(--color-surface-2)', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(circle at 50% 40%, ${accent}1a 0%, transparent 70%)` }} />
-        <div style={{ width: 80, height: 80, borderRadius: 'var(--radius-full)', background: 'var(--color-surface-1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--color-hairline)', position: 'relative', zIndex: 1 }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 500, color: 'var(--color-ink)' }}>{member.name[0]}</span>
-        </div>
+        {member.photoUrl ? (
+          <img src={member.photoUrl} alt={member.name}
+            style={{ width: 80, height: 80, borderRadius: 'var(--radius-full)', objectFit: 'cover', position: 'relative', zIndex: 1 }} />
+        ) : (
+          <div style={{ width: 80, height: 80, borderRadius: 'var(--radius-full)', background: 'var(--color-surface-1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--color-hairline)', position: 'relative', zIndex: 1 }}>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 500, color: 'var(--color-ink)' }}>{member.name[0]}</span>
+          </div>
+        )}
       </div>
 
-      {/* Card body */}
       <div style={{ padding: '20px 20px 24px', textAlign: 'center' }}>
         <h3 className="type-display-md" style={{ fontSize: large ? 22 : 18, marginBottom: 4 }}>{member.name}</h3>
-        <p className="type-caption" style={{ marginBottom: 16 }}>{member.role}</p>
+        <p className="type-caption" style={{ marginBottom: 16 }}>{member.designation}</p>
 
-        {/* Social links — icon circles */}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
           {member.social.instagram && (
             <a href={member.social.instagram} className="btn-icon" aria-label="Instagram"><Instagram size={15} /></a>
@@ -60,11 +50,23 @@ function MemberCard({ member, index, large = false }: { member: Member; index: n
 }
 
 export function Team() {
+  const { team, loading } = useAppData();
+  const coordinators = team.filter(m => m.designation.toLowerCase().includes('coordinator'));
+
+  if (loading) {
+    return (
+      <section id="team" style={{ background: 'var(--color-canvas)', padding: '96px 24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <Loader2 size={32} className="animate-spin" style={{ color: 'var(--color-ink-muted)' }} />
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section id="team" style={{ background: 'var(--color-canvas)', padding: '96px 24px' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
 
-        {/* Section header */}
         <motion.div
           style={{ marginBottom: 64 }}
           initial={{ opacity: 0, y: 24 }}
@@ -78,19 +80,10 @@ export function Team() {
           <p className="type-body-lg">The creative minds driving innovation and fostering design excellence at IIT Kanpur</p>
         </motion.div>
 
-        {/* Coordinators — 2-up */}
-        <div style={{ marginBottom: 48 }}>
+        <div>
           <p className="type-headline" style={{ marginBottom: 24 }}>Coordinators</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, maxWidth: 720 }}>
-            {COORDINATORS.map((m, i) => <MemberCard key={m.name} member={m} index={i} large />)}
-          </div>
-        </div>
-
-        {/* Secretaries — 4-up */}
-        <div>
-          <p className="type-headline" style={{ marginBottom: 24 }}>Secretaries</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
-            {SECRETARIES.map((m, i) => <MemberCard key={m.name} member={m} index={i + COORDINATORS.length} />)}
+            {coordinators.map((m, i) => <MemberCard key={m.id} member={m} index={i} large />)}
           </div>
         </div>
       </div>

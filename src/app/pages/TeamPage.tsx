@@ -73,10 +73,11 @@ export function TeamPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const toggle = (id: string) => setExpandedId(prev => prev === id ? null : id);
 
-  const faculty    = team.filter(m => m.designation === 'Faculty Advisor');
-  const coords     = team.filter(m => m.designation === 'Club Coordinator');
-  const secs       = team.filter(m => m.designation.includes('Secretary'));
-  const rest       = team.filter(m => !['Faculty Advisor','Club Coordinator'].includes(m.designation) && !m.designation.includes('Secretary'));
+  const d = (m: TeamMember) => m.designation.toLowerCase();
+  const faculty = team.filter(m => d(m).includes('faculty') || d(m).includes('advisor'));
+  const coords  = team.filter(m => d(m).includes('coordinator'));
+  const secs    = team.filter(m => d(m).includes('secretary'));
+  const rest    = team.filter(m => !d(m).includes('coordinator') && !d(m).includes('secretary') && !d(m).includes('faculty') && !d(m).includes('advisor'));
 
   if (loading) {
     return (
@@ -109,7 +110,7 @@ export function TeamPage() {
 
         {faculty.length > 0 && (
           <div className="mb-16">
-            <div className="flex items-center gap-3 mb-8"><Sparkles size={18} className="text-yellow-400" /><h2 className="text-2xl font-bold">Faculty Advisor</h2></div>
+            <div className="flex items-center gap-3 mb-8"><Sparkles size={18} className="text-yellow-400" /><h2 className="text-2xl font-bold">Faculty / Advisors</h2></div>
             <div className="max-w-sm"><MemberCard member={faculty[0]} large expanded={expandedId === `m-${faculty[0].id}`} onToggle={() => toggle(`m-${faculty[0].id}`)} /></div>
           </div>
         )}
