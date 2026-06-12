@@ -64,7 +64,20 @@ export function Navigation() {
             </button>
           </div>
 
-          {/* ── Centre: Nav links (desktop only) ── */}
+          {/* ── Centre: Nav links (desktop) / DnA brand text (mobile) ── */}
+          <div className="flex items-center justify-center">
+          <span
+            className="md:hidden"
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 18,
+              fontWeight: 700,
+              color: 'var(--color-ink)',
+              letterSpacing: '-0.5px',
+            }}
+          >
+            DnA
+          </span>
           <nav className="hidden md:flex items-center gap-0.5">
             {NAV_LINKS.map(link => {
               const active = isActive(link.path);
@@ -95,6 +108,7 @@ export function Navigation() {
               );
             })}
           </nav>
+          </div>
 
           {/* ── Right: Session + CTA (desktop) / Hamburger (mobile) ── */}
           <div className="flex items-center justify-end gap-2">
