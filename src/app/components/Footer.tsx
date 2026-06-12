@@ -24,7 +24,7 @@ const COLS = [
 ];
 
 const SOCIAL = [
-  { icon: Instagram, href: '#', label: 'Instagram' },
+  { icon: Instagram, href: 'https://www.instagram.com/dnaiitk/', label: 'Instagram' },
   { icon: Linkedin,  href: '#', label: 'LinkedIn' },
   { icon: Youtube,   href: '#', label: 'YouTube' },
   { icon: Mail,      href: '#', label: 'Email' },
@@ -53,7 +53,7 @@ export function Footer() {
               IITK DnA
             </p>
             <p className="type-caption mb-6" style={{ maxWidth: 200 }}>
-              IIT Kanpur's premier community for digital creators and visual artists.
+              IIT Kanpur's community for digital and animation
             </p>
             <div className="flex gap-2">
               {SOCIAL.map(s => {
@@ -108,12 +108,12 @@ export function Footer() {
             </p>
             <ul className="space-y-2.5">
               <li>
-                <a href="mailto:dna@iitk.ac.in" className="type-caption" style={{ color: 'var(--color-accent-blue)' }}>
-                  dna@iitk.ac.in
+                <a href="mailto:designandanimationclub.iitk@gmail.com" className="type-caption" style={{ color: 'var(--color-accent-blue)' }}>
+                  designandanimationclub.iitk@gmail.com
                 </a>
               </li>
               <li>
-                <p className="type-caption">IIT Kanpur, UP 208016</p>
+                <p className="type-caption">Room No. 210, Indian Institute of Technology Kanpur, Kalyanpur, Kanpur, Uttar Pradesh 208016</p>
               </li>
             </ul>
           </div>
