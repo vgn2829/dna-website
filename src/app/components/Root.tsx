@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router';
 import { Navigation } from './Navigation';
 import { Footer } from './Footer';
 import { RollModal } from './RollModal';
+import { BackToTop } from './BackToTop';
 import { StudentProvider } from '../context/StudentContext';
 import { AppDataProvider } from '../context/AppDataContext';
 
@@ -26,6 +27,7 @@ export function Root() {
           </main>
 
           <Footer />
+          <BackToTop />
         </div>
       </AppDataProvider>
     </StudentProvider>
