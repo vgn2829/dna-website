@@ -505,166 +505,246 @@ export default function PaletteStudio() {
 
   return (
     <div style={s.wrap}>
-      {/* Header */}
-      <div style={s.header}>
-        <div>
-          <div style={s.logo}>Color Intelligence Engine</div>
-          <div style={s.title}>Palette Studio</div>
-        </div>
-        <div style={{ flex: 1 }} />
-        <div style={s.pill}>
-          <span style={s.pillLabel}>Seed</span>
-          <input
-            type="color" value={seed}
-            onChange={(e) => setSeed(e.target.value)}
-            style={s.colorInput}
-          />
-          <input
-            type="text" value={seed}
-            onChange={(e) => { if (/^#[0-9A-Fa-f]{0,6}$/.test(e.target.value)) setSeed(e.target.value); }}
-            style={s.textInput}
-          />
-        </div>
-        <button onClick={() => setDarkMode((d) => !d)} style={s.btn}>
-          {darkMode ? "⬤ Dark" : "○ Light"}
-        </button>
-        <button onClick={generate} disabled={loading} style={{ ...s.btn, ...s.btnPrimary, opacity: loading ? 0.5 : 1 }}>
-          {loading ? "Generating…" : "Generate"}
-        </button>
-        {palette && (
-          <button onClick={exportCSS} style={s.btn}>
-            {copied === "css" ? "✓ Copied!" : "Export CSS"}
-          </button>
-        )}
-      </div>
 
-      {/* Harmony bar */}
-      <div style={s.hbar}>
-        <span style={s.hbarLabel}>Harmony</span>
-        {Object.entries(HARMONY_MODES).map(([key, mode]) => (
+      {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
+      <header style={s.toolbar}>
+        <div style={s.toolbarBrand}>
+          <span style={s.eyebrow}>Color Intelligence Engine</span>
+          <span style={s.pageTitle}>Palette Studio</span>
+        </div>
+
+        <div style={s.toolbarControls}>
+          {/* Seed input — color picker + hex field grouped as one pill */}
+          <label style={s.seedGroup} aria-label="Seed color">
+            <span style={s.seedLabel}>Seed</span>
+            <input
+              type="color"
+              value={seed}
+              onChange={(e) => setSeed(e.target.value)}
+              style={s.colorInput}
+              aria-label="Pick seed color"
+            />
+            <span style={s.seedDivider} aria-hidden="true" />
+            <input
+              type="text"
+              value={seed}
+              onChange={(e) => {
+                if (/^#[0-9A-Fa-f]{0,6}$/.test(e.target.value)) setSeed(e.target.value);
+              }}
+              style={s.hexInput}
+              aria-label="Hex value"
+              spellCheck={false}
+              maxLength={7}
+            />
+          </label>
+
+          {/* Dark / light toggle */}
           <button
-            key={key}
-            onClick={() => setHarmony(key)}
-            style={{ ...s.hbtn, ...(harmony === key ? s.hbtnActive : {}) }}
+            onClick={() => setDarkMode((d) => !d)}
+            style={s.modeBtn}
+            aria-label={`Switch to ${darkMode ? "light" : "dark"} mode`}
           >
-            {mode.label}
+            {darkMode ? "Dark" : "Light"}
           </button>
-        ))}
-        <span style={s.hbarDesc}>→ {HARMONY_MODES[harmony]?.description}</span>
+
+          {/* Generate — primary CTA */}
+          <button
+            onClick={generate}
+            disabled={loading}
+            style={{ ...s.generateBtn, opacity: loading ? 0.6 : 1 }}
+            aria-live="polite"
+          >
+            {loading ? "Generating…" : "Generate"}
+          </button>
+
+          {/* Export CSS */}
+          {palette && (
+            <button onClick={exportCSS} style={s.exportBtn}>
+              {copied === "css" ? "✓ Copied!" : "Export CSS"}
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* ── Harmony selector ────────────────────────────────────────────────── */}
+      <div style={s.harmonyBar}>
+        <span style={s.harmonyLabel} aria-hidden="true">Harmony</span>
+        <div style={s.harmonySegment} role="group" aria-label="Harmony mode">
+          {Object.entries(HARMONY_MODES).map(([key, mode]) => (
+            <button
+              key={key}
+              onClick={() => setHarmony(key)}
+              aria-pressed={harmony === key}
+              style={{ ...s.harmonyBtn, ...(harmony === key ? s.harmonyBtnActive : {}) }}
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
+        <span style={s.harmonyDesc}>{HARMONY_MODES[harmony]?.description}</span>
       </div>
 
-      {/* Tabs */}
+      {/* ── Output tabs ─────────────────────────────────────────────────────── */}
       {palette && (
-        <div style={s.tabBar}>
-          {["palette", "accessibility", "colorblind"].map((t2) => (
+        <div style={s.tabBar} role="tablist">
+          {[
+            { id: "palette",       label: "Palette"       },
+            { id: "accessibility", label: "Accessibility"  },
+            { id: "colorblind",    label: "Color Blind"    },
+          ].map((t2) => (
             <button
-              key={t2}
-              onClick={() => setTab(t2)}
-              style={{ ...s.tab, ...(tab === t2 ? s.tabActive : {}) }}
+              key={t2.id}
+              role="tab"
+              aria-selected={tab === t2.id}
+              onClick={() => setTab(t2.id)}
+              style={{ ...s.tab, ...(tab === t2.id ? s.tabActive : {}) }}
             >
-              {t2 === "colorblind" ? "Color Blind" : t2.charAt(0).toUpperCase() + t2.slice(1)}
+              {t2.label}
             </button>
           ))}
         </div>
       )}
 
-      <div style={s.content}>
+      {/* ── Content ─────────────────────────────────────────────────────────── */}
+      <main style={s.content}>
+
         {/* Empty state */}
         {!palette && (
           <div style={s.empty}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>◈</div>
-            <div style={s.emptyTitle}>Pick a seed color and hit Generate</div>
-            <div style={s.emptySub}>
-              OKLCH · contrast-seeking lightness · chroma preservation · 5 harmony modes · WCAG + APCA · per-slot locking
-            </div>
+            <div style={s.emptyIcon} aria-hidden="true">◈</div>
+            <p style={s.emptyTitle}>Pick a seed color and hit Generate</p>
+            <p style={s.emptySub}>
+              OKLCH · contrast-seeking lightness · 5 harmony modes · WCAG + APCA · per-slot locking
+            </p>
           </div>
         )}
 
-        {/* Palette tab */}
+        {/* ── Palette tab ───────────────────────────────────────────────────── */}
         {palette && tab === "palette" && (
           <div>
+
+            {/* Score bar */}
             {fitness && (
               <div style={s.scoreBar}>
-                <div>
-                  <div style={s.scoreLabel}>Quality Score</div>
-                  <div style={{ ...s.scoreNum, color: SCORE_COLOR(fitness.score) }}>
+                <div style={s.scoreBlock}>
+                  <span style={s.scoreLabel}>Quality Score</span>
+                  <span style={{ ...s.scoreNum, color: SCORE_COLOR(fitness.score) }}>
                     {fitness.score}
-                    <span style={{ fontSize: 12, fontWeight: 400, color: "var(--color-ink-muted)" }}>/100</span>
-                  </div>
+                    <span style={s.scoreOutOf}>/100</span>
+                  </span>
                 </div>
+
                 <div style={s.scoreDivider} />
+
                 <div style={s.pairGrid}>
                   {Object.entries(fitness.pairs).slice(0, 6).map(([name, data]) => {
                     const g = GRADE(data.cr);
                     return (
-                      <div key={name}>
-                        <div style={s.pairName}>{name}</div>
-                        <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-                          <span style={{ fontSize: 10, fontWeight: 800, color: g.color }}>{g.label}</span>
-                          <span style={{ fontSize: 9, fontFamily: "monospace", color: "var(--color-ink-muted)" }}>{data.cr}</span>
-                        </div>
+                      <div key={name} style={s.pairItem}>
+                        <span style={s.pairName}>{name}</span>
+                        <span style={s.pairRow}>
+                          <span style={{ ...s.gradeChip, color: g.color, background: g.color + "22" }}>
+                            {g.label}
+                          </span>
+                          <span style={s.pairRatio}>{data.cr}</span>
+                        </span>
                       </div>
                     );
                   })}
                 </div>
-                <div style={{ marginLeft: "auto", fontSize: 9, color: "var(--color-ink-muted)" }}>
-                  ΔE <span style={{ color: "var(--color-ink)", fontWeight: 700 }}>{fitness.dScore}%</span>
+
+                <div style={s.deltaBox}>
+                  <span style={s.deltaLabel}>ΔE</span>
+                  <span style={{ ...s.deltaVal, color: SCORE_COLOR(fitness.dScore) }}>
+                    {fitness.dScore}%
+                  </span>
                 </div>
               </div>
             )}
 
+            {/* Swatch groups */}
             {["base", "brand", "semantic"].map((group) => (
-              <div key={group} style={{ marginBottom: 20 }}>
-                <div style={s.groupLabel}>{GROUP_LABELS[group]}</div>
+              <section key={group} style={s.swatchSection}>
+                <h2 style={s.groupLabel}>{GROUP_LABELS[group]}</h2>
                 <div style={s.swatchGrid}>
                   {ROLES.filter((r) => r.group === group).map((role) => {
                     const hex = palette[role.key];
                     const lum = wcagLuminance(hexToRgb(hex));
-                    const labelColor = lum > 0.28 ? "#0a0a18" : "#f0f0ff";
+                    const onColor = lum > 0.28 ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.85)";
                     const isLocked = !!locked[role.key];
                     return (
                       <div
                         key={role.key}
-                        onClick={() => copyColor(hex)}
                         style={{
                           ...s.swatch,
-                          border: isLocked ? "1px solid #a16207" : "1px solid var(--color-hairline)",
+                          outline: isLocked
+                            ? "2px solid #a16207"
+                            : "1px solid var(--color-hairline)",
+                          outlineOffset: isLocked ? 2 : 0,
                         }}
-                        onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-2px)")}
-                        onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "translateY(-2px)";
+                          e.currentTarget.style.boxShadow = "var(--shadow-level-1)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "none";
+                          e.currentTarget.style.boxShadow = "none";
+                        }}
                       >
-                        <div style={{ ...s.swatchColor, background: hex }}>
-                          <span style={{ fontSize: 8, fontFamily: "monospace", color: labelColor, opacity: 0.75 }}>
+                        {/* Color area — click to copy */}
+                        <button
+                          onClick={() => copyColor(hex)}
+                          aria-label={`Copy ${role.label} ${hex}`}
+                          style={{ ...s.swatchColor, background: hex }}
+                        >
+                          <span style={{ ...s.swatchHex, color: onColor }}>
                             {copied === hex ? "✓ Copied" : hex}
                           </span>
-                        </div>
+                        </button>
+
+                        {/* Footer row */}
                         <div style={s.swatchFoot}>
                           <span style={s.swatchName}>{role.label}</span>
                           <button
-                            onClick={(e) => { e.stopPropagation(); toggleLock(role.key); }}
+                            onClick={() => toggleLock(role.key)}
                             aria-label={`${isLocked ? "Unlock" : "Lock"} ${role.label}`}
-                            style={{ ...s.lockBtn, color: isLocked ? "#a16207" : "var(--color-ink-muted)" }}
+                            style={{
+                              ...s.lockBtn,
+                              color: isLocked ? "#a16207" : "var(--color-ink-muted)",
+                            }}
                           >
-                            <i className={isLocked ? "ti ti-lock" : "ti ti-lock-open"} aria-hidden="true" />
+                            <i
+                              className={isLocked ? "ti ti-lock" : "ti ti-lock-open"}
+                              aria-hidden="true"
+                            />
                           </button>
                         </div>
                       </div>
                     );
                   })}
                 </div>
-              </div>
+              </section>
             ))}
 
+            {/* Lock hint */}
             {lockedCount > 0 && (
               <div style={s.lockHint}>
-                <i className="ti ti-lock" style={{ fontSize: 11, verticalAlign: -1, marginRight: 3, color: "#a16207" }} aria-hidden="true" />
-                {lockedCount} color{lockedCount > 1 ? "s" : ""} locked — regenerating preserves {lockedCount > 1 ? "them" : "it"}.
-                <button onClick={() => setLocked({})} style={s.clearBtn}>Clear all</button>
+                <i
+                  className="ti ti-lock"
+                  style={{ fontSize: 12, color: "#a16207", flexShrink: 0 }}
+                  aria-hidden="true"
+                />
+                {lockedCount} color{lockedCount > 1 ? "s" : ""} locked — regenerating preserves{" "}
+                {lockedCount > 1 ? "them" : "it"}.
+                <button onClick={() => setLocked({})} style={s.clearBtn}>
+                  Clear all
+                </button>
               </div>
             )}
 
+            {/* Preview */}
             <hr style={s.previewDivider} />
-            <div style={s.previewSectionLabel}>Preview</div>
+            <h2 style={s.previewLabel}>Preview</h2>
             <Preview palette={palette} />
           </div>
         )}
@@ -676,7 +756,7 @@ export default function PaletteStudio() {
         {palette && tab === "colorblind" && cbData && (
           <ColorBlindTab palette={palette} cbData={cbData} />
         )}
-      </div>
+      </main>
     </div>
   );
 }
@@ -688,6 +768,7 @@ export default function PaletteStudio() {
 function Preview({ palette: p }) {
   return (
     <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+      {/* Dashboard card */}
       <div style={{ background: p.bg, border: `1px solid ${p.border}`, borderRadius: 14, padding: 22, width: 400, flexShrink: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
           <div>
@@ -697,8 +778,12 @@ function Preview({ palette: p }) {
           <div style={{ background: p.primary, color: p.primaryFg, padding: "6px 12px", borderRadius: 7, fontSize: 10, fontWeight: 700 }}>+ New</div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 13 }}>
-          {[{ label: "Active", val: "12", col: p.primary }, { label: "Done", val: "48", col: p.success },
-            { label: "Pending", val: "6", col: p.warning }, { label: "Issues", val: "2", col: p.error }].map((stat) => (
+          {[
+            { label: "Active",  val: "12", col: p.primary },
+            { label: "Done",    val: "48", col: p.success },
+            { label: "Pending", val: "6",  col: p.warning },
+            { label: "Issues",  val: "2",  col: p.error   },
+          ].map((stat) => (
             <div key={stat.label} style={{ background: p.surface, border: `1px solid ${p.border}`, borderRadius: 8, padding: "9px 11px" }}>
               <div style={{ color: p.textMuted, fontSize: 8, textTransform: "uppercase", letterSpacing: ".1em", opacity: .5, marginBottom: 2 }}>{stat.label}</div>
               <div style={{ color: stat.col, fontSize: 18, fontWeight: 800 }}>{stat.val}</div>
@@ -707,9 +792,11 @@ function Preview({ palette: p }) {
         </div>
         <div style={{ background: p.surfaceElevated, border: `1px solid ${p.border}`, borderRadius: 8, padding: "10px 12px", marginBottom: 12 }}>
           <div style={{ color: p.text, fontSize: 11, fontWeight: 600, marginBottom: 7 }}>Recent Activity</div>
-          {[{ msg: "Deploy to production succeeded", type: "success" },
-            { msg: "PR #42 awaiting review", type: "warning" },
-            { msg: "2 tests failing on main", type: "error" }].map((a, i) => {
+          {[
+            { msg: "Deploy to production succeeded", type: "success" },
+            { msg: "PR #42 awaiting review",         type: "warning" },
+            { msg: "2 tests failing on main",        type: "error"   },
+          ].map((a, i) => {
             const dotColor = a.type === "success" ? p.success : a.type === "warning" ? p.warning : p.error;
             return (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 7, padding: "3px 0", borderTop: i > 0 ? `1px solid ${p.border}` : "none" }}>
@@ -720,14 +807,19 @@ function Preview({ palette: p }) {
           })}
         </div>
         <div style={{ display: "flex", gap: 7 }}>
-          {[{ bg: p.primary, fg: p.primaryFg, label: "Primary" },
-            { bg: p.secondary, fg: p.bg, label: "Secondary" },
-            { bg: p.accent, fg: p.bg, label: "Accent" }].map((b) => (
-            <div key={b.label} style={{ flex: 1, background: b.bg, color: b.fg, padding: 8, borderRadius: 7, fontSize: 10, fontWeight: 700, textAlign: "center" }}>{b.label}</div>
+          {[
+            { bg: p.primary,   fg: p.primaryFg, label: "Primary"   },
+            { bg: p.secondary, fg: p.bg,         label: "Secondary" },
+            { bg: p.accent,    fg: p.bg,         label: "Accent"    },
+          ].map((b) => (
+            <div key={b.label} style={{ flex: 1, background: b.bg, color: b.fg, padding: 8, borderRadius: 7, fontSize: 10, fontWeight: 700, textAlign: "center" }}>
+              {b.label}
+            </div>
           ))}
         </div>
       </div>
 
+      {/* Typography + semantic cards */}
       <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minWidth: 260 }}>
         <div style={{ background: p.bg, border: `1px solid ${p.border}`, borderRadius: 14, padding: 22 }}>
           <div style={{ color: p.textMuted, fontSize: 9, letterSpacing: ".16em", textTransform: "uppercase", marginBottom: 10 }}>Typography</div>
@@ -736,19 +828,23 @@ function Preview({ palette: p }) {
           <div style={{ color: p.text, fontSize: 11, lineHeight: 1.75, marginBottom: 6 }}>Body text renders cleanly with sufficient contrast for extended reading.</div>
           <div style={{ color: p.textMuted, fontSize: 10, lineHeight: 1.65 }}>Muted helper text for metadata and secondary content.</div>
           <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-            {[{ bg: p.primary, fg: p.primaryFg, label: "Primary" },
-              { bg: p.secondary, fg: p.bg, label: "Secondary" },
-              { bg: p.accent, fg: p.bg, label: "Accent" }].map((t) => (
+            {[
+              { bg: p.primary,   fg: p.primaryFg, label: "Primary"   },
+              { bg: p.secondary, fg: p.bg,         label: "Secondary" },
+              { bg: p.accent,    fg: p.bg,         label: "Accent"    },
+            ].map((t) => (
               <div key={t.label} style={{ background: t.bg, color: t.fg, padding: "3px 10px", borderRadius: 20, fontSize: 9, fontWeight: 700 }}>{t.label}</div>
             ))}
           </div>
         </div>
         <div style={{ background: p.bg, border: `1px solid ${p.border}`, borderRadius: 14, padding: 22 }}>
           <div style={{ color: p.textMuted, fontSize: 9, letterSpacing: ".16em", textTransform: "uppercase", marginBottom: 10 }}>Semantic States</div>
-          {[{ label: "Success", color: p.success, bg: p.successBg, msg: "Deploy completed"    },
-            { label: "Warning", color: p.warning, bg: p.warningBg, msg: "Session expires soon" },
-            { label: "Error",   color: p.error,   bg: p.errorBg,   msg: "Connection failed"    },
-            { label: "Info",    color: p.info,    bg: p.infoBg,    msg: "New version available" }].map((sem) => (
+          {[
+            { label: "Success", color: p.success, bg: p.successBg, msg: "Deploy completed"     },
+            { label: "Warning", color: p.warning, bg: p.warningBg, msg: "Session expires soon"  },
+            { label: "Error",   color: p.error,   bg: p.errorBg,   msg: "Connection failed"     },
+            { label: "Info",    color: p.info,    bg: p.infoBg,    msg: "New version available" },
+          ].map((sem) => (
             <div key={sem.label} style={{ background: sem.bg, border: `1px solid ${sem.color}40`, borderRadius: 7, padding: "8px 10px", marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: sem.color, flexShrink: 0 }} />
               <span style={{ color: sem.color, fontSize: 9, fontWeight: 700, marginRight: 5 }}>{sem.label}</span>
@@ -769,29 +865,55 @@ function AccessibilityTab({ palette, fitness }) {
     ErrorBg: "errorBg", WarningBg: "warningBg",
   };
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(270px, 1fr))", gap: 8 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 10 }}>
       {Object.entries(fitness.pairs).map(([name, data]) => {
-        const parts = name.split(" / ");
-        const fgHex = palette[keyMap[parts[0]]] || palette.text;
-        const bgHex = palette[keyMap[parts[1]]] || palette.bg;
-        const g = GRADE(data.cr);
-        const ap = parseFloat(data.apca);
+        const parts  = name.split(" / ");
+        const fgHex  = palette[keyMap[parts[0]]] || palette.text;
+        const bgHex  = palette[keyMap[parts[1]]] || palette.bg;
+        const g      = GRADE(data.cr);
+        const ap     = parseFloat(data.apca);
         const apColor = ap >= 75 ? "#22c55e" : ap >= 60 ? "#eab308" : "#ef4444";
         return (
-          <div key={name} style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-hairline)", borderRadius: "var(--radius-md)", overflow: "hidden" }}>
-            <div style={{ background: bgHex, padding: "12px 16px", minHeight: 50, display: "flex", alignItems: "center" }}>
-              <span style={{ color: fgHex, fontSize: 13, fontWeight: 500 }}>The quick brown fox jumps</span>
+          <div
+            key={name}
+            style={{
+              background: "var(--color-surface-1)",
+              border: "1px solid var(--color-hairline)",
+              borderRadius: "var(--radius-md)",
+              overflow: "hidden",
+            }}
+          >
+            {/* Live text preview on actual palette background */}
+            <div style={{ background: bgHex, padding: "14px 16px", minHeight: 56, display: "flex", alignItems: "center" }}>
+              <span style={{ color: fgHex, fontSize: 13, fontWeight: 500, fontFamily: "var(--font-body)" }}>
+                The quick brown fox jumps
+              </span>
             </div>
-            <div style={{ padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            {/* Metadata row */}
+            <div style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
               <div>
-                <div style={{ fontSize: 10, color: "var(--color-ink-muted)", marginBottom: 2 }}>{name}</div>
-                <div style={{ fontSize: 9, color: "var(--color-ink-muted)" }}>
-                  APCA <span style={{ color: apColor, fontWeight: 700 }}>{data.apca} Lc</span>
+                <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-ink)", marginBottom: 3 }}>{name}</div>
+                <div style={{ fontSize: 10, color: "var(--color-ink-muted)" }}>
+                  APCA{" "}
+                  <span style={{ color: apColor, fontWeight: 700 }}>{data.apca} Lc</span>
                 </div>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: g.color, background: g.color + "20", padding: "2px 7px", borderRadius: 5 }}>{g.label}</span>
-                <span style={{ fontSize: 9, fontFamily: "monospace", color: "var(--color-ink-muted)" }}>{data.cr}:1</span>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: g.color,
+                    background: g.color + "22",
+                    padding: "2px 8px",
+                    borderRadius: "var(--radius-xs)",
+                  }}
+                >
+                  {g.label}
+                </span>
+                <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--color-ink-muted)" }}>
+                  {data.cr}:1
+                </span>
               </div>
             </div>
           </div>
@@ -803,34 +925,65 @@ function AccessibilityTab({ palette, fitness }) {
 
 function ColorBlindTab({ palette, cbData }) {
   const names = {
-    protanopia: "Protanopia (Red-blind)",
+    protanopia:   "Protanopia (Red-blind)",
     deuteranopia: "Deuteranopia (Green-blind)",
-    tritanopia: "Tritanopia (Blue-blind)",
+    tritanopia:   "Tritanopia (Blue-blind)",
   };
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 12 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
       {Object.entries(cbData).map(([type, data]) => {
         const tCR = parseFloat(data.textBgCR), pCR = parseFloat(data.primaryBgCR);
         const tG = GRADE(tCR), pG = GRADE(pCR);
         return (
-          <div key={type} style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-hairline)", borderRadius: "var(--radius-md)", overflow: "hidden" }}>
+          <div
+            key={type}
+            style={{
+              background: "var(--color-surface-1)",
+              border: "1px solid var(--color-hairline)",
+              borderRadius: "var(--radius-md)",
+              overflow: "hidden",
+            }}
+          >
+            {/* Card header */}
             <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--color-hairline)" }}>
-              <div style={{ fontSize: 9, color: "var(--color-ink-muted)", textTransform: "uppercase", letterSpacing: ".12em", marginBottom: 2 }}>Simulation</div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-ink)" }}>{names[type]}</div>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--color-ink-muted)", marginBottom: 3 }}>
+                Simulation
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>
+                {names[type]}
+              </div>
             </div>
-            <div style={{ padding: 12 }}>
-              <div style={{ display: "flex", height: 32, borderRadius: 6, overflow: "hidden", marginBottom: 10 }}>
+            {/* Simulated color strip */}
+            <div style={{ padding: "12px 14px" }}>
+              <div style={{ display: "flex", height: 36, borderRadius: "var(--radius-sm)", overflow: "hidden", marginBottom: 12 }}>
                 {["bg", "surface", "primary", "secondary", "accent", "text"].map((k) => {
                   const sim = simulateCB(hexToRgb(palette[k]), type);
                   return <div key={k} style={{ flex: 1, background: rgbToHex(sim) }} />;
                 })}
               </div>
-              {[{ label: "Text on BG", cr: data.textBgCR, g: tG }, { label: "Primary on BG", cr: data.primaryBgCR, g: pG }].map((row) => (
-                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-                  <span style={{ fontSize: 10, color: "var(--color-ink-muted)" }}>{row.label}</span>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <span style={{ fontSize: 9, fontFamily: "monospace", color: "var(--color-ink-muted)" }}>{row.cr}:1</span>
-                    <span style={{ fontSize: 10, fontWeight: 800, color: row.g.color }}>{row.g.label}</span>
+              {/* Contrast rows */}
+              {[
+                { label: "Text on BG",    cr: data.textBgCR,    g: tG },
+                { label: "Primary on BG", cr: data.primaryBgCR, g: pG },
+              ].map((row) => (
+                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 6 }}>
+                  <span style={{ fontSize: 11, color: "var(--color-ink-muted)" }}>{row.label}</span>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--color-ink-muted)" }}>
+                      {row.cr}:1
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: row.g.color,
+                        background: row.g.color + "22",
+                        padding: "2px 7px",
+                        borderRadius: "var(--radius-xs)",
+                      }}
+                    >
+                      {row.g.label}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -847,43 +1000,473 @@ function ColorBlindTab({ palette, cbData }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const styles = {
-  wrap:         { fontFamily: "var(--font-body)", background: "var(--color-canvas)", minHeight: "100vh", color: "var(--color-ink)", fontSize: 13 },
-  header:       { borderBottom: "1px solid var(--color-hairline)", padding: "16px 22px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" },
-  logo:         { fontSize: 10, letterSpacing: ".16em", color: "var(--color-ink-muted)", fontWeight: 700, textTransform: "uppercase" },
-  title:        { fontSize: 18, fontWeight: 800, letterSpacing: "-.025em", color: "var(--color-ink)", fontFamily: "var(--font-display)", marginTop: 2 },
-  pill:         { background: "var(--color-surface-1)", border: "1px solid var(--color-hairline)", borderRadius: "var(--radius-md)", padding: "6px 11px", display: "flex", alignItems: "center", gap: 7 },
-  pillLabel:    { fontSize: 10, color: "var(--color-ink-muted)" },
-  colorInput:   { width: 26, height: 26, border: "none", background: "none", cursor: "pointer", borderRadius: 5 },
-  textInput:    { background: "none", border: "1px solid var(--color-hairline)", borderRadius: "var(--radius-sm)", padding: "3px 7px", color: "var(--color-ink)", fontSize: 11, fontFamily: "var(--font-mono)", width: 76 },
-  btn:          { background: "var(--color-surface-1)", color: "var(--color-ink-muted)", border: "1px solid var(--color-hairline)", borderRadius: "var(--radius-md)", padding: "7px 14px", fontSize: 11, cursor: "pointer", fontWeight: 600 },
-  btnPrimary:   { background: "var(--color-inverse-canvas)", color: "var(--color-canvas)", borderColor: "transparent" },
-  hbar:         { borderBottom: "1px solid var(--color-hairline)", padding: "8px 22px", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" },
-  hbarLabel:    { fontSize: 9, color: "var(--color-ink-muted)", letterSpacing: ".16em", textTransform: "uppercase", fontWeight: 700, marginRight: 4 },
-  hbtn:         { background: "none", border: "1px solid var(--color-hairline)", borderRadius: "var(--radius-sm)", padding: "4px 10px", fontSize: 10, cursor: "pointer", color: "var(--color-ink-muted)", fontWeight: 600 },
-  hbtnActive:   { background: "var(--color-surface-2)", color: "var(--color-ink)", borderColor: "var(--color-hairline)" },
-  hbarDesc:     { fontSize: 9, color: "var(--color-ink-muted)", marginLeft: 4 },
-  tabBar:       { borderBottom: "1px solid var(--color-hairline)", padding: "0 22px", display: "flex" },
-  tab:          { background: "none", border: "none", borderBottom: "2px solid transparent", color: "var(--color-ink-muted)", padding: "11px 16px", fontSize: 11, cursor: "pointer", fontWeight: 600 },
-  tabActive:    { color: "var(--color-ink)", borderBottomColor: "var(--color-ink)" },
-  content:      { padding: 22 },
-  empty:        { textAlign: "center", padding: "60px 24px", color: "var(--color-ink-muted)" },
-  emptyTitle:   { fontSize: 14, fontWeight: 600, color: "var(--color-ink)", marginBottom: 5 },
-  emptySub:     { fontSize: 11, lineHeight: 1.7, maxWidth: 400, margin: "0 auto" },
-  scoreBar:     { background: "var(--color-surface-1)", border: "1px solid var(--color-hairline)", borderRadius: "var(--radius-md)", padding: "14px 18px", marginBottom: 20, display: "flex", gap: 22, alignItems: "center", flexWrap: "wrap" },
-  scoreLabel:   { fontSize: 9, color: "var(--color-ink-muted)", letterSpacing: ".14em", textTransform: "uppercase", marginBottom: 3 },
-  scoreNum:     { fontSize: 30, fontWeight: 900, lineHeight: 1 },
-  scoreDivider: { width: 1, height: 38, background: "var(--color-hairline)" },
-  pairGrid:     { display: "flex", gap: 14, flexWrap: "wrap" },
-  pairName:     { fontSize: 9, color: "var(--color-ink-muted)", letterSpacing: ".07em", marginBottom: 2 },
-  groupLabel:   { fontSize: 9, letterSpacing: ".16em", color: "var(--color-ink-muted)", textTransform: "uppercase", fontWeight: 700, marginBottom: 8 },
-  swatchGrid:   { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(132px, 1fr))", gap: 7, marginBottom: 22 },
-  swatch:       { borderRadius: "var(--radius-md)", overflow: "hidden", cursor: "pointer", transition: "transform .1s" },
-  swatchColor:  { height: 62, display: "flex", alignItems: "flex-end", padding: "5px 8px" },
-  swatchFoot:   { background: "var(--color-surface-1)", padding: "5px 8px", display: "flex", justifyContent: "space-between", alignItems: "center" },
-  swatchName:   { fontSize: 9, color: "var(--color-ink-muted)", lineHeight: 1.2 },
-  lockBtn:      { background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1, display: "flex", alignItems: "center", fontSize: 13 },
-  lockHint:     { fontSize: 10, color: "var(--color-ink-muted)", marginTop: 4 },
-  clearBtn:     { background: "none", border: "none", color: "var(--color-ink)", cursor: "pointer", fontSize: 10, marginLeft: 6 },
-  previewDivider:      { border: "none", borderTop: "1px solid var(--color-hairline)", margin: "28px 0 24px" },
-  previewSectionLabel: { fontSize: 9, letterSpacing: ".16em", color: "var(--color-ink-muted)", textTransform: "uppercase", fontWeight: 700, marginBottom: 16 },
+  // ── Page shell ──────────────────────────────────────────────────────────────
+  wrap: {
+    fontFamily: "var(--font-body)",
+    background: "var(--color-canvas)",
+    minHeight: "100vh",
+    color: "var(--color-ink)",
+  },
+
+  // ── Toolbar ─────────────────────────────────────────────────────────────────
+  toolbar: {
+    position: "sticky",
+    top: 56,           // clears the site nav (h-14 = 56 px)
+    zIndex: 100,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    padding: "12px 24px",
+    background: "var(--color-canvas)",
+    borderBottom: "1px solid var(--color-hairline)",
+  },
+  toolbarBrand: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  eyebrow: {
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: ".12em",
+    textTransform: "uppercase",
+    color: "var(--color-ink-muted)",
+    lineHeight: 1,
+  },
+  pageTitle: {
+    fontFamily: "var(--font-display)",
+    fontSize: 20,
+    fontWeight: 600,
+    letterSpacing: "-0.5px",
+    color: "var(--color-ink)",
+    lineHeight: 1.15,
+  },
+  toolbarControls: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+
+  // ── Seed input group ────────────────────────────────────────────────────────
+  seedGroup: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    background: "var(--color-surface-1)",
+    border: "1px solid var(--color-hairline)",
+    borderRadius: "var(--radius-pill)",
+    padding: "5px 12px 5px 8px",
+    cursor: "default",
+  },
+  seedLabel: {
+    fontSize: 11,
+    fontWeight: 500,
+    color: "var(--color-ink-muted)",
+    userSelect: "none",
+    letterSpacing: ".04em",
+    lineHeight: 1,
+  },
+  colorInput: {
+    width: 22,
+    height: 22,
+    padding: 0,
+    border: "none",
+    background: "none",
+    cursor: "pointer",
+    borderRadius: "var(--radius-xs)",
+    outline: "none",
+    flexShrink: 0,
+  },
+  seedDivider: {
+    display: "inline-block",
+    width: 1,
+    height: 14,
+    background: "var(--color-hairline)",
+    flexShrink: 0,
+  },
+  hexInput: {
+    background: "none",
+    border: "none",
+    outline: "none",
+    color: "var(--color-ink)",
+    fontSize: 12,
+    fontFamily: "var(--font-mono)",
+    width: 68,
+    letterSpacing: ".04em",
+    padding: 0,
+    lineHeight: 1,
+  },
+
+  // ── Toolbar buttons ─────────────────────────────────────────────────────────
+  modeBtn: {
+    background: "var(--color-surface-1)",
+    color: "var(--color-ink-muted)",
+    border: "1px solid var(--color-hairline)",
+    borderRadius: "var(--radius-pill)",
+    padding: "7px 16px",
+    fontSize: 12,
+    fontWeight: 500,
+    fontFamily: "var(--font-body)",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    lineHeight: 1,
+  },
+  generateBtn: {
+    background: "var(--color-inverse-canvas)",
+    color: "var(--color-canvas)",
+    border: "none",
+    borderRadius: "var(--radius-pill)",
+    padding: "9px 22px",
+    fontSize: 13,
+    fontWeight: 600,
+    fontFamily: "var(--font-body)",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    lineHeight: 1,
+    letterSpacing: "-0.1px",
+  },
+  exportBtn: {
+    background: "var(--color-surface-1)",
+    color: "var(--color-ink-muted)",
+    border: "1px solid var(--color-hairline)",
+    borderRadius: "var(--radius-pill)",
+    padding: "7px 16px",
+    fontSize: 12,
+    fontWeight: 500,
+    fontFamily: "var(--font-body)",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    lineHeight: 1,
+  },
+
+  // ── Harmony bar ─────────────────────────────────────────────────────────────
+  harmonyBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "10px 24px",
+    borderBottom: "1px solid var(--color-hairline)",
+    flexWrap: "wrap",
+  },
+  harmonyLabel: {
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: ".10em",
+    textTransform: "uppercase",
+    color: "var(--color-ink-muted)",
+    flexShrink: 0,
+    lineHeight: 1,
+  },
+  harmonySegment: {
+    display: "flex",
+    background: "var(--color-surface-1)",
+    borderRadius: "var(--radius-pill)",
+    padding: 3,
+    gap: 2,
+  },
+  harmonyBtn: {
+    background: "none",
+    border: "none",
+    borderRadius: "var(--radius-pill)",
+    padding: "5px 13px",
+    fontSize: 12,
+    fontWeight: 500,
+    fontFamily: "var(--font-body)",
+    color: "var(--color-ink-muted)",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    lineHeight: 1,
+    transition: "background .12s, color .12s",
+  },
+  harmonyBtnActive: {
+    background: "var(--color-surface-2)",
+    color: "var(--color-ink)",
+  },
+  harmonyDesc: {
+    fontSize: 11,
+    color: "var(--color-ink-muted)",
+    fontStyle: "italic",
+    lineHeight: 1,
+  },
+
+  // ── Tab bar ─────────────────────────────────────────────────────────────────
+  tabBar: {
+    display: "flex",
+    padding: "0 24px",
+    borderBottom: "1px solid var(--color-hairline)",
+  },
+  tab: {
+    background: "none",
+    border: "none",
+    borderBottom: "2px solid transparent",
+    padding: "12px 18px",
+    fontSize: 13,
+    fontWeight: 500,
+    fontFamily: "var(--font-body)",
+    color: "var(--color-ink-muted)",
+    cursor: "pointer",
+    lineHeight: 1,
+    transition: "color .12s, border-color .12s",
+  },
+  tabActive: {
+    color: "var(--color-ink)",
+    borderBottomColor: "var(--color-ink)",
+  },
+
+  // ── Content ─────────────────────────────────────────────────────────────────
+  content: {
+    padding: "24px",
+    maxWidth: 1200,
+    margin: "0 auto",
+  },
+
+  // ── Empty state ─────────────────────────────────────────────────────────────
+  empty: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "96px 24px",
+    textAlign: "center",
+    gap: 10,
+  },
+  emptyIcon: {
+    fontSize: 40,
+    color: "var(--color-ink-muted)",
+    opacity: 0.35,
+    lineHeight: 1,
+    marginBottom: 6,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: 600,
+    letterSpacing: "-0.3px",
+    color: "var(--color-ink)",
+    fontFamily: "var(--font-display)",
+    margin: 0,
+  },
+  emptySub: {
+    fontSize: 13,
+    color: "var(--color-ink-muted)",
+    lineHeight: 1.65,
+    maxWidth: 380,
+    margin: 0,
+  },
+
+  // ── Score bar ────────────────────────────────────────────────────────────────
+  scoreBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: 20,
+    flexWrap: "wrap",
+    background: "var(--color-surface-1)",
+    border: "1px solid var(--color-hairline)",
+    borderRadius: "var(--radius-lg)",
+    padding: "16px 20px",
+    marginBottom: 28,
+  },
+  scoreBlock: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    minWidth: 80,
+  },
+  scoreLabel: {
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: ".12em",
+    textTransform: "uppercase",
+    color: "var(--color-ink-muted)",
+    lineHeight: 1,
+  },
+  scoreNum: {
+    fontSize: 38,
+    fontWeight: 800,
+    lineHeight: 1,
+    fontFamily: "var(--font-display)",
+    letterSpacing: "-1.5px",
+  },
+  scoreOutOf: {
+    fontSize: 15,
+    fontWeight: 400,
+    color: "var(--color-ink-muted)",
+    marginLeft: 2,
+    letterSpacing: 0,
+  },
+  scoreDivider: {
+    width: 1,
+    alignSelf: "stretch",
+    background: "var(--color-hairline)",
+    flexShrink: 0,
+  },
+  pairGrid: {
+    display: "flex",
+    gap: 16,
+    flexWrap: "wrap",
+    flex: 1,
+  },
+  pairItem: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 5,
+  },
+  pairName: {
+    fontSize: 10,
+    color: "var(--color-ink-muted)",
+    letterSpacing: ".04em",
+    whiteSpace: "nowrap",
+    lineHeight: 1,
+  },
+  pairRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+  },
+  gradeChip: {
+    fontSize: 10,
+    fontWeight: 700,
+    padding: "2px 6px",
+    borderRadius: "var(--radius-xs)",
+    letterSpacing: ".02em",
+    lineHeight: 1.4,
+  },
+  pairRatio: {
+    fontSize: 10,
+    fontFamily: "var(--font-mono)",
+    color: "var(--color-ink-muted)",
+    lineHeight: 1,
+  },
+  deltaBox: {
+    marginLeft: "auto",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  deltaLabel: {
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: ".12em",
+    textTransform: "uppercase",
+    color: "var(--color-ink-muted)",
+    lineHeight: 1,
+  },
+  deltaVal: {
+    fontSize: 24,
+    fontWeight: 800,
+    lineHeight: 1,
+    fontFamily: "var(--font-display)",
+    letterSpacing: "-0.5px",
+  },
+
+  // ── Swatch groups ────────────────────────────────────────────────────────────
+  swatchSection: {
+    marginBottom: 28,
+  },
+  groupLabel: {
+    display: "block",
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: ".12em",
+    textTransform: "uppercase",
+    color: "var(--color-ink-muted)",
+    marginBottom: 12,
+    lineHeight: 1,
+  },
+  swatchGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+    gap: 8,
+  },
+  swatch: {
+    borderRadius: "var(--radius-md)",
+    overflow: "hidden",
+    background: "var(--color-surface-1)",
+    transition: "transform .12s, box-shadow .12s",
+  },
+  swatchColor: {
+    display: "flex",
+    alignItems: "flex-end",
+    padding: "8px 10px",
+    height: 88,
+    width: "100%",
+    border: "none",
+    cursor: "pointer",
+    textAlign: "left",
+  },
+  swatchHex: {
+    fontSize: 9,
+    fontFamily: "var(--font-mono)",
+    letterSpacing: ".06em",
+    textTransform: "uppercase",
+    lineHeight: 1,
+  },
+  swatchFoot: {
+    background: "var(--color-surface-1)",
+    padding: "7px 10px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 4,
+  },
+  swatchName: {
+    fontSize: 11,
+    fontWeight: 500,
+    color: "var(--color-ink-muted)",
+    lineHeight: 1.2,
+  },
+  lockBtn: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: "2px 4px",
+    lineHeight: 1,
+    display: "flex",
+    alignItems: "center",
+    fontSize: 14,
+    borderRadius: "var(--radius-xs)",
+    flexShrink: 0,
+  },
+
+  // ── Lock hint ────────────────────────────────────────────────────────────────
+  lockHint: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12,
+    color: "var(--color-ink-muted)",
+    marginTop: 4,
+    marginBottom: 20,
+  },
+  clearBtn: {
+    background: "none",
+    border: "none",
+    color: "var(--color-ink)",
+    cursor: "pointer",
+    fontSize: 12,
+    fontFamily: "var(--font-body)",
+    padding: 0,
+    textDecoration: "underline",
+    textUnderlineOffset: "2px",
+  },
+
+  // ── Preview section ─────────────────────────────────────────────────────────
+  previewDivider: {
+    border: "none",
+    borderTop: "1px solid var(--color-hairline)",
+    margin: "28px 0 24px",
+  },
+  previewLabel: {
+    display: "block",
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: ".12em",
+    textTransform: "uppercase",
+    color: "var(--color-ink-muted)",
+    marginBottom: 16,
+    lineHeight: 1,
+  },
 };
