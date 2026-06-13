@@ -589,7 +589,7 @@ export default function PaletteStudio() {
                   <div style={s.scoreLabel}>Quality Score</div>
                   <div style={{ ...s.scoreNum, color: SCORE_COLOR(fitness.score) }}>
                     {fitness.score}
-                    <span style={{ fontSize: 12, fontWeight: 400, color: "#252545" }}>/100</span>
+                    <span style={{ fontSize: 12, fontWeight: 400, color: "var(--color-ink-muted)" }}>/100</span>
                   </div>
                 </div>
                 <div style={s.scoreDivider} />
@@ -601,14 +601,14 @@ export default function PaletteStudio() {
                         <div style={s.pairName}>{name}</div>
                         <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
                           <span style={{ fontSize: 10, fontWeight: 800, color: g.color }}>{g.label}</span>
-                          <span style={{ fontSize: 9, fontFamily: "monospace", color: "#2e2e4e" }}>{data.cr}</span>
+                          <span style={{ fontSize: 9, fontFamily: "monospace", color: "var(--color-ink-muted)" }}>{data.cr}</span>
                         </div>
                       </div>
                     );
                   })}
                 </div>
-                <div style={{ marginLeft: "auto", fontSize: 9, color: "#252545" }}>
-                  ΔE <span style={{ color: "#a5b4fc", fontWeight: 700 }}>{fitness.dScore}%</span>
+                <div style={{ marginLeft: "auto", fontSize: 9, color: "var(--color-ink-muted)" }}>
+                  ΔE <span style={{ color: "var(--color-ink)", fontWeight: 700 }}>{fitness.dScore}%</span>
                 </div>
               </div>
             )}
@@ -628,7 +628,7 @@ export default function PaletteStudio() {
                         onClick={() => copyColor(hex)}
                         style={{
                           ...s.swatch,
-                          border: isLocked ? "1px solid #a16207" : "1px solid #15152a",
+                          border: isLocked ? "1px solid #a16207" : "1px solid var(--color-hairline)",
                         }}
                         onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-2px)")}
                         onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
@@ -643,7 +643,7 @@ export default function PaletteStudio() {
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleLock(role.key); }}
                             aria-label={`${isLocked ? "Unlock" : "Lock"} ${role.label}`}
-                            style={{ ...s.lockBtn, color: isLocked ? "#a16207" : "#2e2e50" }}
+                            style={{ ...s.lockBtn, color: isLocked ? "#a16207" : "var(--color-ink-muted)" }}
                           >
                             <i className={isLocked ? "ti ti-lock" : "ti ti-lock-open"} aria-hidden="true" />
                           </button>
@@ -778,20 +778,20 @@ function AccessibilityTab({ palette, fitness }) {
         const ap = parseFloat(data.apca);
         const apColor = ap >= 75 ? "#22c55e" : ap >= 60 ? "#eab308" : "#ef4444";
         return (
-          <div key={name} style={{ background: "#0f0f1e", border: "1px solid #15152a", borderRadius: 10, overflow: "hidden" }}>
+          <div key={name} style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-hairline)", borderRadius: "var(--radius-md)", overflow: "hidden" }}>
             <div style={{ background: bgHex, padding: "12px 16px", minHeight: 50, display: "flex", alignItems: "center" }}>
               <span style={{ color: fgHex, fontSize: 13, fontWeight: 500 }}>The quick brown fox jumps</span>
             </div>
             <div style={{ padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
-                <div style={{ fontSize: 10, color: "#303058", marginBottom: 2 }}>{name}</div>
-                <div style={{ fontSize: 9, color: "#252545" }}>
+                <div style={{ fontSize: 10, color: "var(--color-ink-muted)", marginBottom: 2 }}>{name}</div>
+                <div style={{ fontSize: 9, color: "var(--color-ink-muted)" }}>
                   APCA <span style={{ color: apColor, fontWeight: 700 }}>{data.apca} Lc</span>
                 </div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
                 <span style={{ fontSize: 11, fontWeight: 800, color: g.color, background: g.color + "20", padding: "2px 7px", borderRadius: 5 }}>{g.label}</span>
-                <span style={{ fontSize: 9, fontFamily: "monospace", color: "#252545" }}>{data.cr}:1</span>
+                <span style={{ fontSize: 9, fontFamily: "monospace", color: "var(--color-ink-muted)" }}>{data.cr}:1</span>
               </div>
             </div>
           </div>
@@ -813,10 +813,10 @@ function ColorBlindTab({ palette, cbData }) {
         const tCR = parseFloat(data.textBgCR), pCR = parseFloat(data.primaryBgCR);
         const tG = GRADE(tCR), pG = GRADE(pCR);
         return (
-          <div key={type} style={{ background: "#0f0f1e", border: "1px solid #15152a", borderRadius: 10, overflow: "hidden" }}>
-            <div style={{ padding: "12px 16px", borderBottom: "1px solid #15152a" }}>
-              <div style={{ fontSize: 9, color: "#303058", textTransform: "uppercase", letterSpacing: ".12em", marginBottom: 2 }}>Simulation</div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#a0a0c8" }}>{names[type]}</div>
+          <div key={type} style={{ background: "var(--color-surface-1)", border: "1px solid var(--color-hairline)", borderRadius: "var(--radius-md)", overflow: "hidden" }}>
+            <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--color-hairline)" }}>
+              <div style={{ fontSize: 9, color: "var(--color-ink-muted)", textTransform: "uppercase", letterSpacing: ".12em", marginBottom: 2 }}>Simulation</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-ink)" }}>{names[type]}</div>
             </div>
             <div style={{ padding: 12 }}>
               <div style={{ display: "flex", height: 32, borderRadius: 6, overflow: "hidden", marginBottom: 10 }}>
@@ -827,9 +827,9 @@ function ColorBlindTab({ palette, cbData }) {
               </div>
               {[{ label: "Text on BG", cr: data.textBgCR, g: tG }, { label: "Primary on BG", cr: data.primaryBgCR, g: pG }].map((row) => (
                 <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-                  <span style={{ fontSize: 10, color: "#303058" }}>{row.label}</span>
+                  <span style={{ fontSize: 10, color: "var(--color-ink-muted)" }}>{row.label}</span>
                   <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <span style={{ fontSize: 9, fontFamily: "monospace", color: "#252545" }}>{row.cr}:1</span>
+                    <span style={{ fontSize: 9, fontFamily: "monospace", color: "var(--color-ink-muted)" }}>{row.cr}:1</span>
                     <span style={{ fontSize: 10, fontWeight: 800, color: row.g.color }}>{row.g.label}</span>
                   </div>
                 </div>
@@ -847,43 +847,43 @@ function ColorBlindTab({ palette, cbData }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const styles = {
-  wrap:         { fontFamily: "'Inter', system-ui, sans-serif", background: "#080810", minHeight: "100vh", color: "#ddddf0", fontSize: 13 },
-  header:       { borderBottom: "1px solid #15152a", padding: "16px 22px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" },
-  logo:         { fontSize: 10, letterSpacing: ".16em", color: "#3a3a5e", fontWeight: 700, textTransform: "uppercase" },
-  title:        { fontSize: 18, fontWeight: 800, letterSpacing: "-.025em", color: "#f0f0ff", marginTop: 2 },
-  pill:         { background: "#0f0f1e", border: "1px solid #1e1e32", borderRadius: 9, padding: "6px 11px", display: "flex", alignItems: "center", gap: 7 },
-  pillLabel:    { fontSize: 10, color: "#444466" },
+  wrap:         { fontFamily: "var(--font-body)", background: "var(--color-canvas)", minHeight: "100vh", color: "var(--color-ink)", fontSize: 13 },
+  header:       { borderBottom: "1px solid var(--color-hairline)", padding: "16px 22px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" },
+  logo:         { fontSize: 10, letterSpacing: ".16em", color: "var(--color-ink-muted)", fontWeight: 700, textTransform: "uppercase" },
+  title:        { fontSize: 18, fontWeight: 800, letterSpacing: "-.025em", color: "var(--color-ink)", fontFamily: "var(--font-display)", marginTop: 2 },
+  pill:         { background: "var(--color-surface-1)", border: "1px solid var(--color-hairline)", borderRadius: "var(--radius-md)", padding: "6px 11px", display: "flex", alignItems: "center", gap: 7 },
+  pillLabel:    { fontSize: 10, color: "var(--color-ink-muted)" },
   colorInput:   { width: 26, height: 26, border: "none", background: "none", cursor: "pointer", borderRadius: 5 },
-  textInput:    { background: "none", border: "1px solid #1e1e32", borderRadius: 6, padding: "3px 7px", color: "#d0d0f0", fontSize: 11, fontFamily: "monospace", width: 76 },
-  btn:          { background: "#0f0f1e", color: "#6060a0", border: "1px solid #1e1e32", borderRadius: 8, padding: "7px 14px", fontSize: 11, cursor: "pointer", fontWeight: 600 },
-  btnPrimary:   { background: "#5254d0", color: "#fff", borderColor: "transparent" },
-  hbar:         { borderBottom: "1px solid #15152a", padding: "8px 22px", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" },
-  hbarLabel:    { fontSize: 9, color: "#2e2e4e", letterSpacing: ".16em", textTransform: "uppercase", fontWeight: 700, marginRight: 4 },
-  hbtn:         { background: "none", border: "1px solid #15152a", borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", color: "#383868", fontWeight: 600 },
-  hbtnActive:   { background: "#1a1a30", color: "#a5b4fc", borderColor: "#5254d0" },
-  hbarDesc:     { fontSize: 9, color: "#252545", marginLeft: 4 },
-  tabBar:       { borderBottom: "1px solid #15152a", padding: "0 22px", display: "flex" },
-  tab:          { background: "none", border: "none", borderBottom: "2px solid transparent", color: "#353560", padding: "11px 16px", fontSize: 11, cursor: "pointer", fontWeight: 600 },
-  tabActive:    { color: "#a5b4fc", borderBottomColor: "#5254d0" },
+  textInput:    { background: "none", border: "1px solid var(--color-hairline)", borderRadius: "var(--radius-sm)", padding: "3px 7px", color: "var(--color-ink)", fontSize: 11, fontFamily: "var(--font-mono)", width: 76 },
+  btn:          { background: "var(--color-surface-1)", color: "var(--color-ink-muted)", border: "1px solid var(--color-hairline)", borderRadius: "var(--radius-md)", padding: "7px 14px", fontSize: 11, cursor: "pointer", fontWeight: 600 },
+  btnPrimary:   { background: "var(--color-inverse-canvas)", color: "var(--color-canvas)", borderColor: "transparent" },
+  hbar:         { borderBottom: "1px solid var(--color-hairline)", padding: "8px 22px", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" },
+  hbarLabel:    { fontSize: 9, color: "var(--color-ink-muted)", letterSpacing: ".16em", textTransform: "uppercase", fontWeight: 700, marginRight: 4 },
+  hbtn:         { background: "none", border: "1px solid var(--color-hairline)", borderRadius: "var(--radius-sm)", padding: "4px 10px", fontSize: 10, cursor: "pointer", color: "var(--color-ink-muted)", fontWeight: 600 },
+  hbtnActive:   { background: "var(--color-surface-2)", color: "var(--color-ink)", borderColor: "var(--color-hairline)" },
+  hbarDesc:     { fontSize: 9, color: "var(--color-ink-muted)", marginLeft: 4 },
+  tabBar:       { borderBottom: "1px solid var(--color-hairline)", padding: "0 22px", display: "flex" },
+  tab:          { background: "none", border: "none", borderBottom: "2px solid transparent", color: "var(--color-ink-muted)", padding: "11px 16px", fontSize: 11, cursor: "pointer", fontWeight: 600 },
+  tabActive:    { color: "var(--color-ink)", borderBottomColor: "var(--color-ink)" },
   content:      { padding: 22 },
-  empty:        { textAlign: "center", padding: "60px 24px", color: "#252545" },
-  emptyTitle:   { fontSize: 14, fontWeight: 600, color: "#303058", marginBottom: 5 },
+  empty:        { textAlign: "center", padding: "60px 24px", color: "var(--color-ink-muted)" },
+  emptyTitle:   { fontSize: 14, fontWeight: 600, color: "var(--color-ink)", marginBottom: 5 },
   emptySub:     { fontSize: 11, lineHeight: 1.7, maxWidth: 400, margin: "0 auto" },
-  scoreBar:     { background: "#0f0f1e", border: "1px solid #15152a", borderRadius: 10, padding: "14px 18px", marginBottom: 20, display: "flex", gap: 22, alignItems: "center", flexWrap: "wrap" },
-  scoreLabel:   { fontSize: 9, color: "#353560", letterSpacing: ".14em", textTransform: "uppercase", marginBottom: 3 },
+  scoreBar:     { background: "var(--color-surface-1)", border: "1px solid var(--color-hairline)", borderRadius: "var(--radius-md)", padding: "14px 18px", marginBottom: 20, display: "flex", gap: 22, alignItems: "center", flexWrap: "wrap" },
+  scoreLabel:   { fontSize: 9, color: "var(--color-ink-muted)", letterSpacing: ".14em", textTransform: "uppercase", marginBottom: 3 },
   scoreNum:     { fontSize: 30, fontWeight: 900, lineHeight: 1 },
-  scoreDivider: { width: 1, height: 38, background: "#15152a" },
+  scoreDivider: { width: 1, height: 38, background: "var(--color-hairline)" },
   pairGrid:     { display: "flex", gap: 14, flexWrap: "wrap" },
-  pairName:     { fontSize: 9, color: "#353560", letterSpacing: ".07em", marginBottom: 2 },
-  groupLabel:   { fontSize: 9, letterSpacing: ".16em", color: "#252545", textTransform: "uppercase", fontWeight: 700, marginBottom: 8 },
+  pairName:     { fontSize: 9, color: "var(--color-ink-muted)", letterSpacing: ".07em", marginBottom: 2 },
+  groupLabel:   { fontSize: 9, letterSpacing: ".16em", color: "var(--color-ink-muted)", textTransform: "uppercase", fontWeight: 700, marginBottom: 8 },
   swatchGrid:   { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(132px, 1fr))", gap: 7, marginBottom: 22 },
-  swatch:       { borderRadius: 9, overflow: "hidden", cursor: "pointer", transition: "transform .1s" },
+  swatch:       { borderRadius: "var(--radius-md)", overflow: "hidden", cursor: "pointer", transition: "transform .1s" },
   swatchColor:  { height: 62, display: "flex", alignItems: "flex-end", padding: "5px 8px" },
-  swatchFoot:   { background: "#0f0f1e", padding: "5px 8px", display: "flex", justifyContent: "space-between", alignItems: "center" },
-  swatchName:   { fontSize: 9, color: "#4a4a6e", lineHeight: 1.2 },
+  swatchFoot:   { background: "var(--color-surface-1)", padding: "5px 8px", display: "flex", justifyContent: "space-between", alignItems: "center" },
+  swatchName:   { fontSize: 9, color: "var(--color-ink-muted)", lineHeight: 1.2 },
   lockBtn:      { background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1, display: "flex", alignItems: "center", fontSize: 13 },
-  lockHint:     { fontSize: 10, color: "#3a3a3a", marginTop: 4 },
-  clearBtn:     { background: "none", border: "none", color: "#5254d0", cursor: "pointer", fontSize: 10, marginLeft: 6 },
-  previewDivider:      { border: "none", borderTop: "1px solid #15152a", margin: "28px 0 24px" },
-  previewSectionLabel: { fontSize: 9, letterSpacing: ".16em", color: "#252545", textTransform: "uppercase", fontWeight: 700, marginBottom: 16 },
+  lockHint:     { fontSize: 10, color: "var(--color-ink-muted)", marginTop: 4 },
+  clearBtn:     { background: "none", border: "none", color: "var(--color-ink)", cursor: "pointer", fontSize: 10, marginLeft: 6 },
+  previewDivider:      { border: "none", borderTop: "1px solid var(--color-hairline)", margin: "28px 0 24px" },
+  previewSectionLabel: { fontSize: 9, letterSpacing: ".16em", color: "var(--color-ink-muted)", textTransform: "uppercase", fontWeight: 700, marginBottom: 16 },
 };

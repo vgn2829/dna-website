@@ -12,7 +12,7 @@ export function PalettePage() {
   }, []);
 
   return (
-    <div style={{ paddingTop: '56px' }}>
+    <div style={{ background: 'var(--color-canvas)', minHeight: '100vh', paddingTop: '56px' }}>
       <PaletteStudio />
     </div>
   );
