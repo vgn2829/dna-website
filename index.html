@@ -21,9 +21,14 @@
     </style>
     <script>
       (function () {
-        var t = localStorage.getItem('dna-theme') || 'dark';
-        document.documentElement.setAttribute('data-theme', t);
-        document.documentElement.style.background = t === 'light' ? '#ffffff' : '#111110';
+        try {
+          var t = localStorage.getItem('dna-theme') || 'dark';
+          document.documentElement.setAttribute('data-theme', t);
+          document.documentElement.style.background = t === 'light' ? '#ffffff' : '#111110';
+        } catch (_) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.style.background = '#111110';
+        }
       })();
     </script>
   </head>

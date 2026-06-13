@@ -14,7 +14,8 @@ async function seed() {
   }
 
   // Admin password
-  const pw = process.env.ADMIN_PASSWORD ?? 'admin123';
+  const pw = process.env.ADMIN_PASSWORD;
+  if (!pw) throw new Error('ADMIN_PASSWORD environment variable is not set — refusing to seed with a default password');
   const hash = await bcrypt.hash(pw, 12);
   await query('INSERT INTO admin_config(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value', ['admin_password_hash', hash]);
 

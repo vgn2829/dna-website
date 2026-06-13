@@ -2,6 +2,14 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { api } from '../lib/api';
 import { useStudent } from './StudentContext';
 
+function onAdminErr(err: unknown): void {
+  if (err instanceof Error && err.message === 'SESSION_EXPIRED') {
+    window.location.href = '/admin';
+  } else {
+    console.error(err);
+  }
+}
+
 export interface ArtworkComment { id: string; sender: string; text: string; date: string; }
 
 export interface Artwork {
@@ -114,7 +122,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     if (!roll) return;
     api.artworks.addComment(artworkId, roll, sender, text)
       .then(comment => setArtworks(prev => prev.map(a => a.id !== artworkId ? a : { ...a, comments: [...a.comments, comment] })))
-      .catch(console.error);
+      .catch(onAdminErr);
   }, [roll]);
 
   const uploadArtwork = useCallback(async (formData: FormData) => {
@@ -123,7 +131,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteArtwork = useCallback((id: string) => {
-    api.artworks.delete(id).then(() => setArtworks(prev => prev.filter(a => a.id !== id))).catch(console.error);
+    api.artworks.delete(id).then(() => setArtworks(prev => prev.filter(a => a.id !== id))).catch(onAdminErr);
   }, []);
 
   const rsvpEvent = useCallback((id: string) => {
@@ -142,11 +150,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, [roll]);
 
   const addEvent = useCallback((event: Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered'>) => {
-    api.events.add(event).then(e => setEvents(prev => [e as ClubEvent, ...prev])).catch(console.error);
+    api.events.add(event).then(e => setEvents(prev => [e as ClubEvent, ...prev])).catch(onAdminErr);
   }, []);
 
   const deleteEvent = useCallback((id: string) => {
-    api.events.delete(id).then(() => setEvents(prev => prev.filter(e => e.id !== id))).catch(console.error);
+    api.events.delete(id).then(() => setEvents(prev => prev.filter(e => e.id !== id))).catch(onAdminErr);
   }, []);
 
   const addDomain = useCallback(async (domain: Parameters<AppDataContextValue['addDomain']>[0]) => {
@@ -155,7 +163,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteDomain = useCallback((id: string) => {
-    api.domains.delete(id).then(() => setDomains(prev => { const next = { ...prev }; delete next[id]; return next; })).catch(console.error);
+    api.domains.delete(id).then(() => setDomains(prev => { const next = { ...prev }; delete next[id]; return next; })).catch(onAdminErr);
   }, []);
 
   const addVideo = useCallback((domainId: string, video: Omit<VideoResource, 'id' | 'sequence'> & { ytUrl: string; sequence?: number }) => {
@@ -168,7 +176,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           .sort((a, b) => a.sequence - b.sequence);
         return { ...prev, [domainId]: { ...d, videos } };
       }))
-      .catch(console.error);
+      .catch(onAdminErr);
   }, []);
 
   const deleteVideo = useCallback((domainId: string, videoId: string) => {
@@ -178,7 +186,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         if (!d) return prev;
         return { ...prev, [domainId]: { ...d, videos: d.videos.filter(v => v.id !== videoId) } };
       }))
-      .catch(console.error);
+      .catch(onAdminErr);
   }, []);
 
   const updateVideoSequence = useCallback(async (domainId: string, videoId: string, sequence: number) => {
@@ -204,7 +212,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteTeamMember = useCallback((id: number) => {
-    api.team.delete(id).then(() => setTeam(prev => prev.filter(t => t.id !== id))).catch(console.error);
+    api.team.delete(id).then(() => setTeam(prev => prev.filter(t => t.id !== id))).catch(onAdminErr);
   }, []);
 
   return (

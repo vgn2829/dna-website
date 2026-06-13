@@ -6,6 +6,9 @@ import { query } from '../db/client';
 
 export const studentsRouter = Router();
 
+const VALID_ID  = /^[a-zA-Z0-9_-]{1,100}$/;
+const ROLL_RE   = /^[0-9]{2}[a-zA-Z0-9]{4,6}$/i;
+
 const sessionLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 10,
@@ -68,6 +71,8 @@ function ownerGuard(req: Parameters<Parameters<typeof studentsRouter.post>[1]>[0
 studentsRouter.post('/:roll/progress/videos/:videoId', async (req, res) => {
   if (!ownerGuard(req, res)) return;
   const roll = req.params.roll.trim().toUpperCase();
+  if (!ROLL_RE.test(roll)) { res.status(400).json({ error: 'Invalid roll number format' }); return; }
+  if (!VALID_ID.test(req.params.videoId)) { res.status(400).json({ error: 'Invalid video ID' }); return; }
   const exists = await query('SELECT 1 FROM student_sessions WHERE roll_number=$1', [roll]);
   if (exists.length === 0) { res.status(404).json({ error: 'Student not found' }); return; }
   await query(
@@ -80,6 +85,8 @@ studentsRouter.post('/:roll/progress/videos/:videoId', async (req, res) => {
 studentsRouter.delete('/:roll/progress/videos/:videoId', async (req, res) => {
   if (!ownerGuard(req, res)) return;
   const roll = req.params.roll.trim().toUpperCase();
+  if (!ROLL_RE.test(roll)) { res.status(400).json({ error: 'Invalid roll number format' }); return; }
+  if (!VALID_ID.test(req.params.videoId)) { res.status(400).json({ error: 'Invalid video ID' }); return; }
   await query('DELETE FROM student_watched_videos WHERE roll_number=$1 AND video_id=$2', [roll, req.params.videoId]);
   res.status(204).end();
 });
@@ -87,6 +94,8 @@ studentsRouter.delete('/:roll/progress/videos/:videoId', async (req, res) => {
 studentsRouter.post('/:roll/progress/quizzes/:domainId', async (req, res) => {
   if (!ownerGuard(req, res)) return;
   const roll = req.params.roll.trim().toUpperCase();
+  if (!ROLL_RE.test(roll)) { res.status(400).json({ error: 'Invalid roll number format' }); return; }
+  if (!VALID_ID.test(req.params.domainId)) { res.status(400).json({ error: 'Invalid domain ID' }); return; }
   const exists = await query('SELECT 1 FROM student_sessions WHERE roll_number=$1', [roll]);
   if (exists.length === 0) { res.status(404).json({ error: 'Student not found' }); return; }
   await query(

@@ -25,7 +25,7 @@ export function BackToTop() {
             position: 'fixed',
             bottom: 28,
             right: 24,
-            zIndex: 300,
+            zIndex: 190,
             width: 40,
             height: 40,
             borderRadius: '50%',

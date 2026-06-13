@@ -21,6 +21,7 @@ async function request<T>(
   });
   if (res.status === 204) return undefined as T;
   const data = await res.json() as T | { error: unknown };
+  if (res.status === 401 && opts.admin) { clearAdminToken(); throw new Error('SESSION_EXPIRED'); }
   if (!res.ok) throw new Error(String((data as { error: unknown }).error ?? res.statusText));
   return data as T;
 }

@@ -199,11 +199,28 @@ function MediaThumbnail({ art, aspect }: { art: Artwork; aspect: string }) {
 }
 
 export function GalleryPage() {
-  const { artworks, likeArtwork, domains } = useAppData();
+  const { artworks, likeArtwork, domains, loading, error } = useAppData();
   const domainTitles = ['All', ...Object.values(domains).map(d => d.title)];
   const [filter, setFilter] = useState('All');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [burstIds, setBurstIds] = useState<Set<string>>(new Set());
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: '6rem' }}>
+        <div style={{ color: 'var(--color-ink-muted)', fontSize: 14 }}>Loading gallery…</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, paddingTop: '6rem' }}>
+        <div style={{ color: 'var(--color-ink)', fontSize: 16, fontWeight: 600 }}>Could not load gallery</div>
+        <div style={{ color: 'var(--color-ink-muted)', fontSize: 13 }}>Please check your connection and try again.</div>
+      </div>
+    );
+  }
 
   const filtered = filter === 'All' ? artworks : artworks.filter(a => a.domain === filter);
 

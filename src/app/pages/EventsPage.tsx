@@ -160,10 +160,27 @@ function EventCard({ event, view, delay, onRSVP }: {
 }
 
 export function EventsPage() {
-  const { events, rsvpEvent } = useAppData();
+  const { events, rsvpEvent, loading, error } = useAppData();
   const { studentSession, openRollModal } = useStudent();
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('all');
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: '5rem' }}>
+        <div style={{ color: 'var(--color-ink-muted)', fontSize: 14 }}>Loading events…</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, paddingTop: '5rem' }}>
+        <div style={{ color: 'var(--color-ink)', fontSize: 16, fontWeight: 600 }}>Could not load events</div>
+        <div style={{ color: 'var(--color-ink-muted)', fontSize: 13 }}>Please check your connection and try again.</div>
+      </div>
+    );
+  }
 
   const filtered = events.filter(e => {
     if (filter === 'all') return true;

@@ -88,14 +88,17 @@ function AcademyTab() {
   const [vDiff, setVDiff] = useState<'Beginner' | 'Intermediate' | 'Advanced'>('Intermediate');
   const [vDur, setVDur] = useState('');
   const [vSeq, setVSeq] = useState('');
+  const [addingVideo, setAddingVideo] = useState(false);
 
   const handleAddVideo = (e: React.SyntheticEvent) => {
     e.preventDefault();
-    if (!activeDomain) return;
+    if (!activeDomain || addingVideo) return;
     const seqParsed = parseInt(vSeq, 10);
     const seq = vSeq && seqParsed >= 1 ? seqParsed : undefined;
+    setAddingVideo(true);
     addVideo(activeDomain, { title: vTitle, ytUrl: vUrl, ytId: '', difficulty: vDiff, duration: vDur || '15 mins', sequence: seq });
     setVTitle(''); setVUrl(''); setVDur(''); setVSeq('');
+    setTimeout(() => setAddingVideo(false), 600);
   };
 
   const domain = domains[activeDomain];
@@ -116,15 +119,15 @@ function AcademyTab() {
             <motion.form key="new-domain" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} onSubmit={handleAddDomain}
               className="space-y-3 mb-4 pb-4" style={{ borderBottom: '1px solid var(--color-hairline-soft)' }}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="type-micro block mb-1">Title *</label><input required value={dTitle} onChange={e => setDTitle(e.target.value)} placeholder="Motion Design" className="input-base" /></div>
-                <div><label className="type-micro block mb-1">Full Name</label><input value={dFullName} onChange={e => setDFullName(e.target.value)} placeholder="Motion Design & Animation" className="input-base" /></div>
+                <div><label className="type-micro block mb-1">Title *</label><input required value={dTitle} onChange={e => setDTitle(e.target.value)} placeholder="Motion Design" className="input-base" maxLength={100} /></div>
+                <div><label className="type-micro block mb-1">Full Name</label><input value={dFullName} onChange={e => setDFullName(e.target.value)} placeholder="Motion Design & Animation" className="input-base" maxLength={100} /></div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><label className="type-micro block mb-1">Icon class</label><input value={dIcon} onChange={e => setDIcon(e.target.value)} placeholder="fa-video" className="input-base" /></div>
                 <div><label className="type-micro block mb-1">Color</label><input type="color" value={dColor} onChange={e => setDColor(e.target.value)} className="input-base h-10" /></div>
               </div>
-              <div><label className="type-micro block mb-1">Tagline</label><input value={dTagline} onChange={e => setDTagline(e.target.value)} placeholder="Short tagline…" className="input-base" /></div>
-              <div><label className="type-micro block mb-1">Description</label><textarea value={dDesc} onChange={e => setDDesc(e.target.value)} rows={2} className="input-base resize-none" /></div>
+              <div><label className="type-micro block mb-1">Tagline</label><input value={dTagline} onChange={e => setDTagline(e.target.value)} placeholder="Short tagline…" className="input-base" maxLength={200} /></div>
+              <div><label className="type-micro block mb-1">Description</label><textarea value={dDesc} onChange={e => setDDesc(e.target.value)} rows={2} className="input-base resize-none" maxLength={1000} /></div>
               <div className="flex gap-2">
                 <button type="submit" disabled={dLoading} className="btn-primary flex items-center gap-2">
                   {dLoading ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Create Domain
@@ -157,8 +160,8 @@ function AcademyTab() {
           <div className="lg:col-span-2 card p-5 space-y-3">
             <p className="type-headline flex items-center gap-2"><Plus size={14} /> Add Video to {domain.title}</p>
             <form onSubmit={handleAddVideo} className="space-y-3">
-              <div><label className="type-micro block mb-1">Title *</label><input required value={vTitle} onChange={e => setVTitle(e.target.value)} placeholder="Tutorial title" className="input-base" /></div>
-              <div><label className="type-micro block mb-1">YouTube URL or ID *</label><input required value={vUrl} onChange={e => setVUrl(e.target.value)} placeholder="https://youtu.be/… or 11-char ID" className="input-base" /></div>
+              <div><label className="type-micro block mb-1">Title *</label><input required value={vTitle} onChange={e => setVTitle(e.target.value)} placeholder="Tutorial title" className="input-base" maxLength={200} /></div>
+              <div><label className="type-micro block mb-1">YouTube URL or ID *</label><input required value={vUrl} onChange={e => setVUrl(e.target.value)} placeholder="https://youtu.be/… or 11-char ID" className="input-base" maxLength={200} /></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><label className="type-micro block mb-1">Difficulty</label>
                   <select value={vDiff} onChange={e => setVDiff(e.target.value as 'Beginner' | 'Intermediate' | 'Advanced')} className="input-base">
@@ -168,7 +171,9 @@ function AcademyTab() {
                 <div><label className="type-micro block mb-1">Duration</label><input value={vDur} onChange={e => setVDur(e.target.value)} placeholder="15 mins" className="input-base" /></div>
               </div>
               <div><label className="type-micro block mb-1">Sequence <span style={{ color: 'var(--color-ink-muted)' }}>(blank = append to end)</span></label><input type="number" min={1} value={vSeq} onChange={e => setVSeq(e.target.value)} placeholder="auto" className="input-base" /></div>
-              <button type="submit" className="btn-primary w-full justify-center">Add Video</button>
+              <button type="submit" disabled={addingVideo} className="btn-primary w-full justify-center" style={{ opacity: addingVideo ? 0.5 : 1 }}>
+                {addingVideo ? <><Loader2 size={13} className="animate-spin mr-2" />Adding…</> : 'Add Video'}
+              </button>
             </form>
           </div>
 
@@ -287,8 +292,8 @@ function GalleryTab() {
               )}
             </div>
           </div>
-          <div><label className="type-micro block mb-1">Title *</label><input required value={aTitle} onChange={e => setATitle(e.target.value)} placeholder="Artwork title" className="input-base" /></div>
-          <div><label className="type-micro block mb-1">Artist *</label><input required value={aArtist} onChange={e => setAArtist(e.target.value)} placeholder="Name (Year)" className="input-base" /></div>
+          <div><label className="type-micro block mb-1">Title *</label><input required value={aTitle} onChange={e => setATitle(e.target.value)} placeholder="Artwork title" className="input-base" maxLength={200} /></div>
+          <div><label className="type-micro block mb-1">Artist *</label><input required value={aArtist} onChange={e => setAArtist(e.target.value)} placeholder="Name (Year)" className="input-base" maxLength={200} /></div>
           <div>
             <label className="type-micro block mb-1">Domain</label>
             <select value={aDomain} onChange={e => setADomain(e.target.value)} className="input-base">
@@ -369,17 +374,17 @@ function TeamTab() {
       <div className="lg:col-span-2 card p-5 space-y-3">
         <p className="type-headline flex items-center gap-2"><Plus size={14} /> Add Member</p>
         <form onSubmit={handleAdd} className="space-y-3">
-          <div><label className="type-micro block mb-1">Name *</label><input required value={tName} onChange={e => setTName(e.target.value)} className="input-base" /></div>
-          <div><label className="type-micro block mb-1">Designation *</label><input required value={tDesig} onChange={e => setTDesig(e.target.value)} placeholder="Club Coordinator" className="input-base" /></div>
+          <div><label className="type-micro block mb-1">Name *</label><input required value={tName} onChange={e => setTName(e.target.value)} className="input-base" maxLength={100} /></div>
+          <div><label className="type-micro block mb-1">Designation *</label><input required value={tDesig} onChange={e => setTDesig(e.target.value)} placeholder="Club Coordinator" className="input-base" maxLength={100} /></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className="type-micro block mb-1">Year/Dept</label><input value={tYear} onChange={e => setTYear(e.target.value)} placeholder="Y3 · CSE" className="input-base" /></div>
             <div><label className="type-micro block mb-1">Color</label><input type="color" value={tColor} onChange={e => setTColor(e.target.value)} className="input-base h-10" /></div>
           </div>
-          <div><label className="type-micro block mb-1">Bio</label><textarea value={tBio} onChange={e => setTBio(e.target.value)} rows={2} className="input-base resize-none" /></div>
-          <div><label className="type-micro block mb-1">Email</label><input type="email" value={tEmail} onChange={e => setTEmail(e.target.value)} className="input-base" /></div>
+          <div><label className="type-micro block mb-1">Bio</label><textarea value={tBio} onChange={e => setTBio(e.target.value)} rows={2} className="input-base resize-none" maxLength={500} /></div>
+          <div><label className="type-micro block mb-1">Email</label><input type="email" value={tEmail} onChange={e => setTEmail(e.target.value)} className="input-base" maxLength={200} /></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="type-micro block mb-1">Instagram URL</label><input value={tIG} onChange={e => setTIG(e.target.value)} placeholder="#" className="input-base" /></div>
-            <div><label className="type-micro block mb-1">LinkedIn URL</label><input value={tLI} onChange={e => setTLI(e.target.value)} placeholder="#" className="input-base" /></div>
+            <div><label className="type-micro block mb-1">Instagram URL</label><input value={tIG} onChange={e => setTIG(e.target.value)} placeholder="#" className="input-base" maxLength={200} /></div>
+            <div><label className="type-micro block mb-1">LinkedIn URL</label><input value={tLI} onChange={e => setTLI(e.target.value)} placeholder="#" className="input-base" maxLength={200} /></div>
           </div>
           <div><label className="type-micro block mb-1">Display order</label><input type="number" value={tOrder} onChange={e => setTOrder(e.target.value)} className="input-base" /></div>
           <div>
@@ -423,11 +428,15 @@ function EventsTab() {
   const [eLocation, setELocation] = useState('');
   const [eContent, setEContent] = useState('');
   const [eCapacity, setECapacity] = useState('100');
+  const [addingEvent, setAddingEvent] = useState(false);
 
   const handleAdd = (e: React.SyntheticEvent) => {
     e.preventDefault();
+    if (addingEvent) return;
+    setAddingEvent(true);
     addEvent({ title: eTitle, date: eDate, time: eTime, location: eLocation, content: eContent, capacity: Number(eCapacity) || 100 });
     setETitle(''); setEDate(''); setETime(''); setELocation(''); setEContent('');
+    setTimeout(() => setAddingEvent(false), 600);
   };
 
   return (
@@ -435,15 +444,17 @@ function EventsTab() {
       <div className="lg:col-span-2 card p-5 space-y-3">
         <p className="type-headline flex items-center gap-2"><Plus size={14} /> Schedule Event</p>
         <form onSubmit={handleAdd} className="space-y-3">
-          <div><label className="type-micro block mb-1">Title *</label><input required value={eTitle} onChange={e => setETitle(e.target.value)} className="input-base" /></div>
+          <div><label className="type-micro block mb-1">Title *</label><input required value={eTitle} onChange={e => setETitle(e.target.value)} className="input-base" maxLength={200} /></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className="type-micro block mb-1">Date</label><input type="date" required value={eDate} onChange={e => setEDate(e.target.value)} className="input-base" /></div>
             <div><label className="type-micro block mb-1">Time</label><input required value={eTime} onChange={e => setETime(e.target.value)} placeholder="6–8 PM" className="input-base" /></div>
           </div>
-          <div><label className="type-micro block mb-1">Location *</label><input required value={eLocation} onChange={e => setELocation(e.target.value)} className="input-base" /></div>
-          <div><label className="type-micro block mb-1">Description *</label><textarea required value={eContent} onChange={e => setEContent(e.target.value)} rows={3} className="input-base resize-none" /></div>
+          <div><label className="type-micro block mb-1">Location *</label><input required value={eLocation} onChange={e => setELocation(e.target.value)} className="input-base" maxLength={200} /></div>
+          <div><label className="type-micro block mb-1">Description *</label><textarea required value={eContent} onChange={e => setEContent(e.target.value)} rows={3} className="input-base resize-none" maxLength={2000} /></div>
           <div><label className="type-micro block mb-1">Capacity</label><input type="number" value={eCapacity} onChange={e => setECapacity(e.target.value)} className="input-base" /></div>
-          <button type="submit" className="btn-primary w-full justify-center">Schedule Event</button>
+          <button type="submit" disabled={addingEvent} className="btn-primary w-full justify-center" style={{ opacity: addingEvent ? 0.5 : 1 }}>
+            {addingEvent ? <><Loader2 size={13} className="animate-spin mr-2" />Scheduling…</> : 'Schedule Event'}
+          </button>
         </form>
       </div>
       <div className="lg:col-span-3 space-y-2">

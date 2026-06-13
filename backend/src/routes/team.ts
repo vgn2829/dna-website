@@ -60,8 +60,8 @@ const memberSchema = z.object({
   bio:             z.string().max(500).optional(),
   color:           z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#007AFF'),
   displayOrder:    z.coerce.number().int().default(0),
-  socialInstagram: z.string().max(200).optional(),
-  socialLinkedin:  z.string().max(200).optional(),
+  socialInstagram: z.string().url().max(200).optional().or(z.literal('')),
+  socialLinkedin:  z.string().url().max(200).optional().or(z.literal('')),
   socialEmail:     z.string().email().max(200).optional().or(z.literal('')),
 });
 

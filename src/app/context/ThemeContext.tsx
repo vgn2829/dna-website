@@ -8,13 +8,17 @@ const ThemeContext = createContext<{ theme: Theme; toggle: () => void }>({
 });
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem('dna-theme') as Theme) ?? 'dark'
-  );
+  const [theme, setTheme] = useState<Theme>(() => {
+    try {
+      const stored = localStorage.getItem('dna-theme');
+      if (stored === 'light' || stored === 'dark') return stored;
+    } catch (_) {}
+    return 'dark';
+  });
 
   useLayoutEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('dna-theme', theme);
+    try { localStorage.setItem('dna-theme', theme); } catch (_) {}
   }, [theme]);
 
   const toggle = () => setTheme(t => (t === 'dark' ? 'light' : 'dark'));

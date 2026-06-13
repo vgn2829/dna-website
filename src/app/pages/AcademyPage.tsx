@@ -113,8 +113,25 @@ function QuizCard({ domainId, questions, onComplete }: {
 
 export function AcademyPage() {
   const { studentSession, studentProgress, openRollModal, markVideoWatched, unmarkVideoWatched, completeQuiz, totalXP } = useStudent();
-  const { domains } = useAppData();
+  const { domains, loading, error } = useAppData();
   const domainKeys = Object.keys(domains);
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: '5rem' }}>
+        <div style={{ color: 'var(--color-ink-muted)', fontSize: 14 }}>Loading academy…</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, paddingTop: '5rem' }}>
+        <div style={{ color: 'var(--color-ink)', fontSize: 16, fontWeight: 600 }}>Could not load academy</div>
+        <div style={{ color: 'var(--color-ink-muted)', fontSize: 13 }}>Please check your connection and try again.</div>
+      </div>
+    );
+  }
   const [activeDomainId, setActiveDomainId] = useState(domainKeys[0] ?? 'uiux');
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
 

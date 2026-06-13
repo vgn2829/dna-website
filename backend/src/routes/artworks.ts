@@ -2,11 +2,15 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import { pool, query } from '../db/client';
 import { requireAdmin } from '../middleware/adminAuth';
 import { getStorage } from '../storage';
 
 export const artworksRouter = Router();
+
+const commentLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: 'Too many requests, please slow down.' } });
+const likeLimiter    = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Too many requests, please slow down.' } });
 
 const MAX_BYTES = 52_428_800; // 50 MB
 
@@ -146,7 +150,7 @@ artworksRouter.delete('/:id', requireAdmin, async (req, res) => {
   res.status(204).end();
 });
 
-artworksRouter.post('/:id/like', async (req, res) => {
+artworksRouter.post('/:id/like', likeLimiter, async (req, res) => {
   const roll = (req.headers['x-roll-number'] as string | undefined)?.trim().toUpperCase();
   if (!roll) { res.status(401).json({ error: 'Roll number required' }); return; }
 
@@ -183,7 +187,7 @@ const commentSchema = z.object({
   text:   z.string().min(1).max(1000),
 });
 
-artworksRouter.post('/:id/comments', async (req, res) => {
+artworksRouter.post('/:id/comments', commentLimiter, async (req, res) => {
   const roll = (req.headers['x-roll-number'] as string | undefined)?.trim().toUpperCase();
   if (!roll) { res.status(401).json({ error: 'Roll number required' }); return; }
 

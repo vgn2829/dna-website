@@ -1,10 +1,13 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import rateLimit from 'express-rate-limit';
 import { pool, query } from '../db/client';
 import { requireAdmin } from '../middleware/adminAuth';
 
 export const eventsRouter = Router();
+
+const rsvpLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, message: { error: 'Too many requests, please slow down.' } });
 
 type EventRow = {
   id: string; title: string; date: string; time: string;
@@ -60,7 +63,7 @@ eventsRouter.delete('/:id', requireAdmin, async (req, res) => {
   res.status(204).end();
 });
 
-eventsRouter.post('/:id/rsvp', async (req, res) => {
+eventsRouter.post('/:id/rsvp', rsvpLimiter, async (req, res) => {
   const roll = (req.headers['x-roll-number'] as string | undefined)?.trim().toUpperCase();
   if (!roll) { res.status(401).json({ error: 'Roll number required' }); return; }
 
