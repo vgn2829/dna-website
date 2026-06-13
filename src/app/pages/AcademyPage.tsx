@@ -115,6 +115,8 @@ export function AcademyPage() {
   const { studentSession, studentProgress, openRollModal, markVideoWatched, unmarkVideoWatched, completeQuiz, totalXP } = useStudent();
   const { domains, loading, error } = useAppData();
   const domainKeys = Object.keys(domains);
+  const [activeDomainId, setActiveDomainId] = useState(domainKeys[0] ?? 'uiux');
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
 
   if (loading) {
     return (
@@ -132,8 +134,6 @@ export function AcademyPage() {
       </div>
     );
   }
-  const [activeDomainId, setActiveDomainId] = useState(domainKeys[0] ?? 'uiux');
-  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
 
   const DOMAIN_COLORS: Record<string, string> = {
     uiux: '#007AFF', photoshop: '#BF5AF2', illustrator: '#FF9F0A', animation: '#e5484d',

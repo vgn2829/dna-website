@@ -205,6 +205,16 @@ export function GalleryPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [burstIds, setBurstIds] = useState<Set<string>>(new Set());
 
+  const handleLike = useCallback((e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const art = artworks.find(a => a.id === id);
+    if (art && !art.likedByUser) {
+      setBurstIds(s => new Set(s).add(id));
+      setTimeout(() => setBurstIds(s => { const n = new Set(s); n.delete(id); return n; }), 500);
+    }
+    likeArtwork(id);
+  }, [likeArtwork, artworks]);
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: '6rem' }}>
@@ -223,16 +233,6 @@ export function GalleryPage() {
   }
 
   const filtered = filter === 'All' ? artworks : artworks.filter(a => a.domain === filter);
-
-  const handleLike = useCallback((e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    const art = artworks.find(a => a.id === id);
-    if (art && !art.likedByUser) {
-      setBurstIds(s => new Set(s).add(id));
-      setTimeout(() => setBurstIds(s => { const n = new Set(s); n.delete(id); return n; }), 500);
-    }
-    likeArtwork(id);
-  }, [likeArtwork, artworks]);
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-canvas)', paddingTop: '6rem', paddingBottom: '5rem' }}>
