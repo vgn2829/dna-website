@@ -402,6 +402,103 @@ export function analyzeCB(palette) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// VISUAL PALETTE ENGINE
+// ─────────────────────────────────────────────────────────────────────────────
+
+function simpleColorName(hex) {
+  const { L, C, H } = rgbToOKLCH(hexToRgb(hex));
+  if (C < 0.04) {
+    if (L > 0.90) return "White";
+    if (L > 0.70) return "Light Gray";
+    if (L > 0.45) return "Gray";
+    if (L > 0.22) return "Dark Gray";
+    return "Black";
+  }
+  const satWord   = C > 0.22 ? "" : C > 0.12 ? "Muted " : "Faint ";
+  const lightWord = L > 0.80 ? "Light " : L < 0.28 ? "Deep " : L < 0.42 ? "Dark " : "";
+  const hue =
+    H < 18 || H >= 345 ? "Red"    :
+    H < 45             ? "Orange" :
+    H < 70             ? "Amber"  :
+    H < 100            ? "Yellow" :
+    H < 150            ? "Green"  :
+    H < 190            ? "Teal"   :
+    H < 230            ? "Cyan"   :
+    H < 260            ? "Blue"   :
+    H < 295            ? "Violet" :
+    H < 330            ? "Pink"   : "Rose";
+  return (lightWord + satWord + hue).trim();
+}
+
+function jitter(value, amount = 0.04, min = 0, max = 1) {
+  return Math.max(min, Math.min(max, value + (Math.random() - 0.5) * amount));
+}
+
+export function deriveVisualPalette(seedHex, harmonyKey = "complementary", paletteMode = "visual") {
+  const { L, C, H } = rgbToOKLCH(hexToRgb(seedHex));
+
+  const harmony = HARMONY_MODES[harmonyKey] || HARMONY_MODES.complementary;
+  const { secondary: H2, accent: H3 } = harmony.getHues(H);
+
+  // Softened harmony angles — break rigid geometry
+  const H2soft = (H2 + (Math.random() - 0.5) * 25 + 360) % 360;
+  const H3soft = (H3 + (Math.random() - 0.5) * 20 + 360) % 360;
+
+  // Adaptive chroma cap — yellow-green stays clean, blue-purple gets headroom
+  const chromaCap =
+    H >= 60 && H <= 110  ? 0.28 :
+    H >= 240 && H <= 280 ? 0.42 : 0.38;
+
+  // Temperature-skewed neutrals — warm seed → cool slate, cool seed → warm amber
+  const isWarmSeed = (H >= 0 && H <= 100) || H >= 300;
+  const neutralH = isWarmSeed ? 250 : 70;
+
+  const profiles = {
+    visual: [
+      { L,                                        C,                                              H       },
+      { L: jitter(Math.min(L+0.15,0.85), 0.05),  C: jitter(C*0.75, 0.03, 0, chromaCap),         H: H2soft },
+      { L: jitter(Math.max(L-0.15,0.15), 0.05),  C: jitter(C*0.6,  0.03, 0, chromaCap),         H       },
+      { L: jitter(L,                     0.05),  C: jitter(C*0.9,  0.03, 0, chromaCap),          H: H3soft },
+      { L: jitter(Math.min(L+0.28,0.93), 0.05),  C: jitter(C*0.25, 0.03, 0, chromaCap),         H: H2soft },
+    ],
+    poster: [
+      { L: jitter(0.52, 0.05), C: jitter(Math.min(C*1.3, chromaCap), 0.03, 0, chromaCap), H       },
+      { L: jitter(0.60, 0.05), C: jitter(Math.min(C*1.1, chromaCap), 0.03, 0, chromaCap), H: H2soft },
+      { L: jitter(0.42, 0.05), C: jitter(Math.min(C*1.2, chromaCap), 0.03, 0, chromaCap), H: H3soft },
+      { L: jitter(0.15, 0.05), C: jitter(0.015, 0.03, 0, 0.06),                           H       },
+      { L: jitter(0.95, 0.05), C: jitter(0.008, 0.03, 0, 0.04),                           H       },
+    ],
+    luxury: [
+      { L: jitter(0.12, 0.05), C: jitter(0.015,                  0.03, 0, 0.06),          H: neutralH },
+      { L: jitter(0.28, 0.05), C: jitter(Math.min(C*0.5,  0.14), 0.03, 0, chromaCap),    H       },
+      { L: jitter(0.48, 0.05), C: jitter(Math.min(C*0.35, 0.10), 0.03, 0, chromaCap),    H       },
+      { L: jitter(0.72, 0.05), C: jitter(0.018,                  0.03, 0, 0.06),          H: neutralH },
+      { L: jitter(0.88, 0.05), C: jitter(0.012,                  0.03, 0, 0.05),          H: neutralH },
+    ],
+    minimal: [
+      { L: jitter(0.97, 0.05), C: jitter(0.004,                  0.02, 0, 0.03),          H: neutralH },
+      { L: jitter(0.88, 0.05), C: jitter(0.007,                  0.02, 0, 0.04),          H: neutralH },
+      { L: jitter(0.68, 0.05), C: jitter(0.010,                  0.02, 0, 0.05),          H: neutralH },
+      { L: jitter(0.32, 0.05), C: jitter(0.012,                  0.02, 0, 0.05),          H: neutralH },
+      { L: jitter(L,    0.05), C: jitter(Math.min(C*0.7, 0.20),  0.03, 0, chromaCap),    H       },
+    ],
+    cyberpunk: [
+      { L: jitter(0.07, 0.04), C: jitter(0.008,                     0.02, 0, 0.04),       H       },
+      { L: jitter(0.11, 0.04), C: jitter(0.012,                     0.02, 0, 0.05),       H       },
+      { L: jitter(0.72, 0.05), C: jitter(Math.min(C*1.4, chromaCap), 0.03, 0, chromaCap), H       },
+      { L: jitter(0.68, 0.05), C: jitter(Math.min(C*1.3, chromaCap), 0.03, 0, chromaCap), H: H2soft },
+      { L: jitter(0.65, 0.05), C: jitter(Math.min(C*1.2, chromaCap), 0.03, 0, chromaCap), H: H3soft },
+    ],
+  };
+
+  const swatchDefs = profiles[paletteMode] || profiles.visual;
+  return swatchDefs.map((p, i) => {
+    const hex = oklchToHex(gamutMap({ L: p.L, C: p.C, H: p.H }));
+    return { index: i, hex, name: simpleColorName(hex) };
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // UI HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -455,9 +552,11 @@ export default function PaletteStudio() {
   const [fitness, setFitness]   = useState(null);
   const [cbData, setCbData]     = useState(null);
   const [loading, setLoading]   = useState(false);
-  const [tab, setTab]           = useState("palette");
-  const [copied, setCopied]     = useState("");
-  const [locked, setLocked]     = useState({});
+  const [tab, setTab]               = useState("palette");
+  const [copied, setCopied]         = useState("");
+  const [locked, setLocked]         = useState({});
+  const [visualMode, setVisualMode] = useState("visual");
+  const [visualPalette, setVisualPalette] = useState(null);
 
   const generate = useCallback(() => {
     setLoading(true);
@@ -467,12 +566,30 @@ export default function PaletteStudio() {
         setPalette(p);
         setFitness(scorePalette(p));
         setCbData(analyzeCB(p));
+        setVisualPalette(deriveVisualPalette(seed, harmony, visualMode));
       } catch (e) {
         console.error(e);
       }
       setLoading(false);
     }, 30);
-  }, [seed, darkMode, harmony, locked]);
+  }, [seed, darkMode, harmony, locked, visualMode]);
+
+  const rerollVisual = useCallback(() => {
+    try {
+      setVisualPalette(deriveVisualPalette(seed, harmony, visualMode));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [seed, harmony, visualMode]);
+
+  const changeVisualMode = useCallback((mode) => {
+    setVisualMode(mode);
+    try {
+      setVisualPalette(deriveVisualPalette(seed, harmony, mode));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [seed, harmony]);
 
   const toggleLock = (key) => {
     if (!palette) return;
@@ -591,6 +708,7 @@ export default function PaletteStudio() {
             { id: "palette",       label: "Palette"       },
             { id: "accessibility", label: "Accessibility"  },
             { id: "colorblind",    label: "Color Blind"    },
+            { id: "mood",          label: "Mood"           },
           ].map((t2) => (
             <button
               key={t2.id}
@@ -755,6 +873,15 @@ export default function PaletteStudio() {
 
         {palette && tab === "colorblind" && cbData && (
           <ColorBlindTab palette={palette} cbData={cbData} />
+        )}
+
+        {palette && tab === "mood" && (
+          <MoodTab
+            palette={visualPalette}
+            visualMode={visualMode}
+            onChangeMode={changeVisualMode}
+            onReroll={rerollVisual}
+          />
         )}
       </main>
     </div>
@@ -991,6 +1118,85 @@ function ColorBlindTab({ palette, cbData }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+const VISUAL_MODES = [
+  { id: "visual",    label: "Visual"    },
+  { id: "poster",    label: "Poster"    },
+  { id: "luxury",    label: "Luxury"    },
+  { id: "minimal",   label: "Minimal"   },
+  { id: "cyberpunk", label: "Cyberpunk" },
+];
+
+const VISUAL_MODE_DESCRIPTIONS = {
+  visual:    "Tonal range built around the seed",
+  poster:    "High-chroma mid-tones with neutrals",
+  luxury:    "Restrained depth with tinted neutrals",
+  minimal:   "Near-achromatic — one colour accent",
+  cyberpunk: "Near-black darks with neon highlights",
+};
+
+function MoodTab({ palette, visualMode, onChangeMode, onReroll }) {
+  const s = styles;
+  return (
+    <div>
+      {/* Mode selector row */}
+      <div style={s.moodBar}>
+        <div style={s.harmonySegment} role="group" aria-label="Visual palette mood">
+          {VISUAL_MODES.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => onChangeMode(m.id)}
+              aria-pressed={visualMode === m.id}
+              style={{ ...s.harmonyBtn, ...(visualMode === m.id ? s.harmonyBtnActive : {}) }}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <span style={s.harmonyDesc}>{VISUAL_MODE_DESCRIPTIONS[visualMode]}</span>
+        <button onClick={onReroll} style={s.rerollBtn} aria-label="Re-roll visual palette">
+          <i className="ti ti-refresh" aria-hidden="true" style={{ fontSize: 13 }} />
+          Re-roll
+        </button>
+      </div>
+
+      {/* Swatch strip */}
+      {palette ? (
+        <div style={s.moodGrid}>
+          {palette.map((swatch) => {
+            const lum = wcagLuminance(hexToRgb(swatch.hex));
+            const onColor = lum > 0.28 ? "rgba(0,0,0,0.72)" : "rgba(255,255,255,0.85)";
+            return (
+              <button
+                key={swatch.index}
+                onClick={() => navigator.clipboard.writeText(swatch.hex).catch(() => {})}
+                aria-label={`Copy ${swatch.name} ${swatch.hex}`}
+                style={{ ...s.moodSwatch, background: swatch.hex }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-3px)";
+                  e.currentTarget.style.boxShadow = "var(--shadow-level-2)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "none";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+              >
+                <div style={{ ...s.moodSwatchInner, color: onColor }}>
+                  <span style={s.moodSwatchName}>{swatch.name}</span>
+                  <span style={s.moodSwatchHex}>{swatch.hex}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={s.empty}>
+          <p style={s.emptySub}>Hit Generate to build a mood palette.</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1468,5 +1674,68 @@ const styles = {
     color: "var(--color-ink-muted)",
     marginBottom: 16,
     lineHeight: 1,
+  },
+
+  // ── Mood tab ─────────────────────────────────────────────────────────────────
+  moodBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 20,
+    flexWrap: "wrap",
+  },
+  rerollBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    background: "var(--color-surface-1)",
+    color: "var(--color-ink-muted)",
+    border: "1px solid var(--color-hairline)",
+    borderRadius: "var(--radius-pill)",
+    padding: "6px 14px",
+    fontSize: 12,
+    fontWeight: 500,
+    fontFamily: "var(--font-body)",
+    cursor: "pointer",
+    lineHeight: 1,
+    whiteSpace: "nowrap",
+    marginLeft: "auto",
+  },
+  moodGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+    gap: 8,
+  },
+  moodSwatch: {
+    border: "1px solid var(--color-hairline)",
+    borderRadius: "var(--radius-md)",
+    cursor: "pointer",
+    padding: 0,
+    position: "relative",
+    minHeight: 200,
+    display: "block",
+    transition: "transform .12s, box-shadow .12s",
+  },
+  moodSwatchInner: {
+    position: "absolute",
+    bottom: 12,
+    left: 12,
+    right: 12,
+    display: "flex",
+    flexDirection: "column",
+    gap: 3,
+  },
+  moodSwatchName: {
+    fontSize: 12,
+    fontWeight: 600,
+    lineHeight: 1.2,
+  },
+  moodSwatchHex: {
+    fontSize: 9,
+    fontFamily: "var(--font-mono)",
+    letterSpacing: ".06em",
+    textTransform: "uppercase",
+    lineHeight: 1,
+    opacity: 0.85,
   },
 };
