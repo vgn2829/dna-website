@@ -67,9 +67,9 @@ export function GalleryPreview() {
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
         >
           <h2 className="type-display-lg" style={{ marginBottom: 12 }}>
-            Artwork <span style={{ color: 'var(--color-ink-muted)' }}>Gallery</span>
+            Featured <span style={{ color: 'var(--color-ink-muted)' }}>Artworks</span>
           </h2>
-          <p className="type-body-lg">Explore stunning creations from our talented community</p>
+          <p className="type-body-lg">Showcasing creativity from our talented members</p>
         </motion.div>
 
         <div style={{ marginBottom: 48 }}>
