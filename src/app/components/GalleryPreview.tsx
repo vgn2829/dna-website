@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router';
@@ -39,21 +38,7 @@ export function GalleryPreview() {
   const navigate = useNavigate();
   const { artworks, loading } = useAppData();
 
-  const featured = artworks.filter(a => a.featured);
-  const count = featured.length;
-
-  let gridStyle: CSSProperties = { display: 'grid', gap: 16 };
-  if (count === 0) {
-    gridStyle = {};
-  } else if (count <= 2) {
-    gridStyle = { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 16 };
-  } else if (count <= 4) {
-    gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 };
-  } else if (count <= 6) {
-    gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 };
-  } else {
-    gridStyle = { display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 8 };
-  }
+  const nonFeatured = artworks.filter(a => !a.featured);
 
   return (
     <section id="gallery" style={{ background: 'var(--color-canvas)', padding: '96px 24px' }}>
@@ -67,23 +52,19 @@ export function GalleryPreview() {
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
         >
           <h2 className="type-display-lg" style={{ marginBottom: 12 }}>
-            Featured <span style={{ color: 'var(--color-ink-muted)' }}>Artworks</span>
+            Artwork <span style={{ color: 'var(--color-ink-muted)' }}>Gallery</span>
           </h2>
-          <p className="type-body-lg">Showcasing creativity from our talented members</p>
+          <p className="type-body-lg">Explore stunning creations from our talented community</p>
         </motion.div>
 
         <div style={{ marginBottom: 48 }}>
           {loading ? (
             <p className="type-caption text-center" style={{ color: 'var(--color-ink-muted)', padding: '48px 0' }}>Loading…</p>
-          ) : count === 0 ? (
-            <p className="type-caption text-center" style={{ color: 'var(--color-ink-muted)', padding: '48px 0' }}>No featured artworks yet</p>
+          ) : nonFeatured.length === 0 ? (
+            <p className="type-caption text-center" style={{ color: 'var(--color-ink-muted)', padding: '48px 0' }}>No artworks yet</p>
           ) : (
-            <div style={gridStyle}>
-              {featured.map((a, i) => (
-                <div key={a.id} style={count <= 2 ? { flex: '0 0 min(340px, 100%)' } : count >= 7 ? { flex: '0 0 280px' } : undefined}>
-                  <ArtworkCard a={a} i={i} />
-                </div>
-              ))}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+              {nonFeatured.map((a, i) => <ArtworkCard key={a.id} a={a} i={i} />)}
             </div>
           )}
         </div>
