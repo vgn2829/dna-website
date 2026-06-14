@@ -34,7 +34,7 @@ function ZoomImage({ src, alt, onAspectRatio }: { src: string; alt: string; onAs
   const last = useRef({ x: 0, y: 0 });
   return (
     <div
-      style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', background: 'var(--color-canvas)', cursor: scale > 1 ? 'grab' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', background: 'var(--color-canvas)', cursor: scale > 1 ? 'grab' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'inherit' }}
       onMouseDown={e => { dragging.current = true; last.current = { x: e.clientX, y: e.clientY }; }}
       onMouseMove={e => { if (!dragging.current) return; setPos(p => ({ x: p.x + e.clientX - last.current.x, y: p.y + e.clientY - last.current.y })); last.current = { x: e.clientX, y: e.clientY }; }}
       onMouseUp={() => { dragging.current = false; }}>
@@ -65,6 +65,7 @@ function ZoomImage({ src, alt, onAspectRatio }: { src: string; alt: string; onAs
             userSelect: 'none',
             transform: `scale(${scale}) translate(${pos.x / scale}px, ${pos.y / scale}px)`,
             transition: dragging.current ? 'none' : 'transform 0.2s',
+            borderRadius: 'inherit',
           }}
         />
       )}
@@ -161,7 +162,7 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
         </div>
 
         {/* Image */}
-        <div style={{ width: '100%', height: 'min(60vw, 55vh)', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <div style={{ width: '100%', height: 'min(60vw, 55vh)', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0' }}>
           <MediaViewer artwork={artwork} onAspectRatio={setAspectRatio} />
         </div>
 
@@ -240,7 +241,7 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
         style={{ width: '100%', maxWidth: 1024, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'row', background: 'var(--color-surface-1)', borderRadius: 'var(--radius-xxl)', boxShadow: 'var(--shadow-level-2)' }}
       >
         {/* Media panel */}
-        <div style={{ width: imagePanelWidth, flexShrink: 0, background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, minHeight: 0, maxHeight: '90vh' }}>
+        <div style={{ width: imagePanelWidth, flexShrink: 0, background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, minHeight: 0, maxHeight: '90vh', borderRadius: 'var(--radius-xl) 0 0 var(--radius-xl)', overflow: 'hidden' }}>
           <MediaViewer artwork={artwork} onAspectRatio={setAspectRatio} />
         </div>
 
