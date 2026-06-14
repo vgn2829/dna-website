@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
 import { useAppData } from '../context/AppDataContext';
@@ -8,6 +9,22 @@ export function FeaturedMarquee() {
   const featured = artworks.filter(a => a.featured);
   const count = featured.length;
   const cardWidth = count >= 7 ? 220 : count >= 3 ? 260 : 300;
+
+  const useMarquee = count >= 3;
+  const duration = count <= 4 ? 20 : count <= 8 ? 30 : 40;
+  const items = useMarquee ? [...featured, ...featured] : featured;
+
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes marquee {
+        0%   { transform: translateX(0); }
+        100% { transform: translateX(-50%); }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
 
   return (
     <section style={{ background: 'var(--color-canvas)', padding: '96px 0', overflow: 'hidden', position: 'relative' }}>
@@ -24,63 +41,64 @@ export function FeaturedMarquee() {
         </p>
       ) : (
         <div style={{ position: 'relative' }}>
-          <div style={{
-            display: 'flex',
-            gap: 16,
-            overflowX: 'auto',
-            paddingLeft: 24,
-            paddingRight: 24,
-            paddingBottom: 8,
-            scrollbarWidth: 'none',
-            justifyContent: count <= 2 ? 'center' : undefined,
-          }}>
-            {featured.map((a, i) => (
-              <motion.div
-                key={a.id}
-                onClick={() => navigate('/gallery')}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.05, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                whileHover={{ y: -4 }}
-                style={{
-                  flexShrink: 0,
-                  width: cardWidth,
-                  height: 380,
-                  borderRadius: 'var(--radius-xl)',
-                  background: 'var(--color-surface-1)',
-                  overflow: 'hidden',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'flex-end',
-                  position: 'relative',
-                }}
-              >
-                {a.mediaType === 'image' && a.mediaUrl && (
-                  <img
-                    src={a.mediaUrl}
-                    alt={a.title}
-                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                )}
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 60%)', pointerEvents: 'none' }} />
-                <span className="type-caption" style={{
-                  position: 'absolute', top: 12, right: 12,
-                  background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)',
-                  padding: '3px 10px', borderRadius: 'var(--radius-pill)', color: '#fff', zIndex: 1,
-                }}>
-                  {a.domain}
-                </span>
-                <div style={{ position: 'relative', zIndex: 1, padding: 24 }}>
-                  <h3 className="type-display-md" style={{ color: '#fff', marginBottom: 4 }}>{a.title}</h3>
-                  <p className="type-caption" style={{ color: 'rgba(255,255,255,0.65)' }}>by {a.artist}</p>
-                </div>
-              </motion.div>
-            ))}
+          <div style={{ overflow: 'hidden', width: '100%' }}>
+            <div
+              style={{
+                display: 'flex',
+                gap: 16,
+                paddingLeft: 24,
+                width: 'max-content',
+                ...(useMarquee
+                  ? { animation: `marquee ${duration}s linear infinite` }
+                  : { justifyContent: 'center' }),
+              }}
+              onMouseEnter={e => { if (useMarquee) e.currentTarget.style.animationPlayState = 'paused'; }}
+              onMouseLeave={e => { if (useMarquee) e.currentTarget.style.animationPlayState = 'running'; }}
+            >
+              {items.map((a, i) => (
+                <motion.div
+                  key={`${a.id}-${i}`}
+                  onClick={() => navigate('/gallery')}
+                  whileHover={{ y: -4 }}
+                  style={{
+                    flexShrink: 0,
+                    width: cardWidth,
+                    height: 380,
+                    borderRadius: 'var(--radius-xl)',
+                    background: 'var(--color-surface-1)',
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'flex-end',
+                    position: 'relative',
+                  }}
+                >
+                  {a.mediaType === 'image' && a.mediaUrl && (
+                    <img
+                      src={a.mediaUrl}
+                      alt={a.title}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  )}
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 60%)', pointerEvents: 'none' }} />
+                  <span className="type-caption" style={{
+                    position: 'absolute', top: 12, right: 12,
+                    background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)',
+                    padding: '3px 10px', borderRadius: 'var(--radius-pill)', color: '#fff', zIndex: 1,
+                  }}>
+                    {a.domain}
+                  </span>
+                  <div style={{ position: 'relative', zIndex: 1, padding: 24 }}>
+                    <h3 className="type-display-md" style={{ color: '#fff', marginBottom: 4 }}>{a.title}</h3>
+                    <p className="type-caption" style={{ color: 'rgba(255,255,255,0.65)' }}>by {a.artist}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
           </div>
-          <div style={{ position: 'absolute', top: 0, bottom: 8, left: 0, width: 64, background: 'linear-gradient(to right, var(--color-canvas), transparent)', pointerEvents: 'none' }} />
-          <div style={{ position: 'absolute', top: 0, bottom: 8, right: 0, width: 64, background: 'linear-gradient(to left, var(--color-canvas), transparent)', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: 80, background: 'linear-gradient(to right, var(--color-canvas), transparent)', pointerEvents: 'none', zIndex: 1 }} />
+          <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: 80, background: 'linear-gradient(to left, var(--color-canvas), transparent)', pointerEvents: 'none', zIndex: 1 }} />
         </div>
       )}
     </section>
