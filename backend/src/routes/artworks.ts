@@ -23,7 +23,7 @@ type ArtworkRow = {
   id: string; title: string; artist: string; domain: string;
   image_url: string | null; media_type: string; storage_path: string | null;
   original_filename: string | null; mime_type: string | null; file_size: number | null;
-  likes: number;
+  likes: number; featured: boolean;
 };
 type CommentRow = { id: string; sender: string; text: string; created_at: string };
 
@@ -59,6 +59,7 @@ function formatArtwork(row: ArtworkRow, likedByUser: boolean, comments: CommentR
     originalFilename: row.original_filename,
     likes: row.likes,
     likedByUser,
+    featured: row.featured ?? false,
     comments: comments.map(c => ({ id: c.id, sender: c.sender, text: c.text, date: relativeTime(c.created_at) })),
   };
 }
@@ -148,6 +149,66 @@ artworksRouter.delete('/:id', requireAdmin, async (req, res) => {
 
   await pool.query('DELETE FROM artworks WHERE id=$1', [req.params.id]);
   res.status(204).end();
+});
+
+artworksRouter.patch('/:id/featured', requireAdmin, async (req, res) => {
+  const featured = req.body.featured;
+  if (typeof featured !== 'boolean') { res.status(400).json({ error: 'featured must be a boolean' }); return; }
+  const result = await pool.query(
+    'UPDATE artworks SET featured=$1 WHERE id=$2 RETURNING id, featured',
+    [featured, req.params.id]
+  );
+  if (result.rowCount === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
+  const row = result.rows[0] as { id: string; featured: boolean };
+  res.json({ id: row.id, featured: row.featured });
+});
+
+artworksRouter.put('/:id', requireAdmin, upload.single('file'), async (req, res) => {
+  const existing = await query<ArtworkRow>('SELECT * FROM artworks WHERE id=$1', [req.params.id]);
+  if (existing.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
+
+  const { title, artist, domain, featured: featuredStr } = req.body as Record<string, string>;
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  let i = 1;
+
+  if (title !== undefined) { sets.push(`title = $${i++}`); vals.push(title); }
+  if (artist !== undefined) { sets.push(`artist = $${i++}`); vals.push(artist); }
+  if (domain !== undefined) { sets.push(`domain = $${i++}`); vals.push(domain); }
+  if (featuredStr !== undefined) { sets.push(`featured = $${i++}`); vals.push(featuredStr === 'true'); }
+
+  if (req.file) {
+    const file = req.file;
+    const ext = file.originalname.split('.').pop()?.toLowerCase() ?? '';
+    const spec = ALLOWED_EXT[ext];
+    if (!spec) { res.status(400).json({ error: 'Unsupported file type' }); return; }
+    if (!spec.check(file.buffer)) { res.status(400).json({ error: 'File content does not match extension' }); return; }
+
+    const safeExt = ext === 'jpeg' ? 'jpg' : ext;
+    const storagePath = `gallery/${uuidv4()}.${safeExt}`;
+    await getStorage().upload(storagePath, file.buffer, spec.mime);
+
+    if (existing[0].storage_path) {
+      await getStorage().delete(existing[0].storage_path).catch(() => {});
+    }
+
+    sets.push(`storage_path = $${i++}`); vals.push(storagePath);
+    sets.push(`media_type = $${i++}`); vals.push(spec.mediaType);
+    sets.push(`original_filename = $${i++}`); vals.push(file.originalname);
+    sets.push(`mime_type = $${i++}`); vals.push(spec.mime);
+    sets.push(`file_size = $${i++}`); vals.push(file.size);
+  }
+
+  if (sets.length === 0) { res.status(400).json({ error: 'Nothing to update' }); return; }
+  vals.push(req.params.id);
+  await pool.query(`UPDATE artworks SET ${sets.join(', ')} WHERE id = $${i}`, vals);
+
+  const allComments = await query<CommentRow & { artwork_id: string }>(
+    'SELECT id, artwork_id, sender, text, created_at FROM artwork_comments WHERE artwork_id=$1 ORDER BY created_at ASC',
+    [req.params.id]
+  );
+  const rows = await query<ArtworkRow>('SELECT * FROM artworks WHERE id=$1', [req.params.id]);
+  res.json(formatArtwork(rows[0], false, allComments));
 });
 
 artworksRouter.post('/:id/like', likeLimiter, async (req, res) => {

@@ -22,6 +22,7 @@ export interface Artwork {
   originalFilename?: string | null;
   likes: number;
   likedByUser: boolean;
+  featured: boolean;
   comments: ArtworkComment[];
 }
 
@@ -54,18 +55,23 @@ interface AppDataContextValue {
   loading:  boolean;
   error:    string | null;
   // Artwork
-  likeArtwork:   (id: string) => void;
-  addComment:    (artworkId: string, sender: string, text: string) => void;
-  uploadArtwork: (formData: FormData) => Promise<void>;
-  deleteArtwork: (id: string) => void;
+  likeArtwork:    (id: string) => void;
+  addComment:     (artworkId: string, sender: string, text: string) => void;
+  uploadArtwork:  (formData: FormData) => Promise<void>;
+  updateArtwork:  (id: string, formData: FormData) => Promise<void>;
+  deleteArtwork:  (id: string) => void;
+  toggleFeatured: (id: string, featured: boolean) => void;
   // Events
-  rsvpEvent:  (id: string) => void;
-  addEvent:   (event: Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered'>) => void;
-  deleteEvent:(id: string) => void;
+  rsvpEvent:   (id: string) => void;
+  addEvent:    (event: Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered'>) => void;
+  updateEvent: (id: string, data: Partial<Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered'>>) => Promise<void>;
+  deleteEvent: (id: string) => void;
   // Domains / videos
   addDomain:          (domain: { title: string; fullName: string; icon: string; tagline: string; description: string; color: string }) => Promise<void>;
+  updateDomain:       (id: string, data: Partial<{ title: string; fullName: string; icon: string; tagline: string; description: string; color: string }>) => Promise<void>;
   deleteDomain:       (id: string) => void;
   addVideo:           (domainId: string, video: Omit<VideoResource, 'id' | 'sequence'> & { ytUrl: string; sequence?: number }) => void;
+  updateVideo:        (domainId: string, videoId: string, data: Partial<Omit<VideoResource, 'id'> & { ytUrl: string }>) => Promise<void>;
   deleteVideo:        (domainId: string, videoId: string) => void;
   updateVideoSequence:(domainId: string, videoId: string, sequence: number) => Promise<void>;
   // Team
@@ -130,9 +136,22 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setArtworks(prev => [newArt as Artwork, ...prev]);
   }, []);
 
+  const updateArtwork = useCallback(async (id: string, formData: FormData) => {
+    const updated = await api.artworks.update(id, formData);
+    setArtworks(prev => prev.map(a => a.id !== id ? a : updated as Artwork));
+  }, []);
+
   const deleteArtwork = useCallback((id: string) => {
     api.artworks.delete(id).then(() => setArtworks(prev => prev.filter(a => a.id !== id))).catch(onAdminErr);
   }, []);
+
+  const toggleFeatured = useCallback((id: string, featured: boolean) => {
+    const prev_artworks = artworks;
+    setArtworks(prev => prev.map(a => a.id !== id ? a : { ...a, featured }));
+    api.artworks.toggleFeatured(id, featured)
+      .then(({ featured: confirmed }) => setArtworks(prev => prev.map(a => a.id !== id ? a : { ...a, featured: confirmed })))
+      .catch(err => { setArtworks(prev_artworks); onAdminErr(err); });
+  }, [artworks]);
 
   const rsvpEvent = useCallback((id: string) => {
     if (!roll) return;
@@ -153,6 +172,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     api.events.add(event).then(e => setEvents(prev => [e as ClubEvent, ...prev])).catch(onAdminErr);
   }, []);
 
+  const updateEvent = useCallback(async (id: string, data: Partial<Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered'>>) => {
+    const updated = await api.events.update(id, data);
+    setEvents(prev => prev.map(e => e.id !== id ? e : updated as ClubEvent));
+  }, []);
+
   const deleteEvent = useCallback((id: string) => {
     api.events.delete(id).then(() => setEvents(prev => prev.filter(e => e.id !== id))).catch(onAdminErr);
   }, []);
@@ -160,6 +184,15 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const addDomain = useCallback(async (domain: Parameters<AppDataContextValue['addDomain']>[0]) => {
     const newDomain = await api.domains.create(domain);
     setDomains(prev => ({ ...prev, [(newDomain as Domain).id]: newDomain as Domain }));
+  }, []);
+
+  const updateDomain = useCallback(async (id: string, data: Partial<{ title: string; fullName: string; icon: string; tagline: string; description: string; color: string }>) => {
+    const updated = await api.domains.update(id, data);
+    setDomains(prev => {
+      const existing = prev[id];
+      if (!existing) return prev;
+      return { ...prev, [id]: { ...existing, ...(updated as Domain) } };
+    });
   }, []);
 
   const deleteDomain = useCallback((id: string) => {
@@ -177,6 +210,18 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         return { ...prev, [domainId]: { ...d, videos } };
       }))
       .catch(onAdminErr);
+  }, []);
+
+  const updateVideo = useCallback(async (domainId: string, videoId: string, data: Partial<Omit<VideoResource, 'id'> & { ytUrl: string }>) => {
+    const updated = await api.domains.updateVideo(domainId, videoId, data);
+    setDomains(prev => {
+      const d = prev[domainId];
+      if (!d) return prev;
+      const videos = d.videos
+        .map(v => v.id === videoId ? { ...v, ...(updated as VideoResource) } : v)
+        .sort((a, b) => a.sequence - b.sequence);
+      return { ...prev, [domainId]: { ...d, videos } };
+    });
   }, []);
 
   const deleteVideo = useCallback((domainId: string, videoId: string) => {
@@ -218,9 +263,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppDataContext.Provider value={{
       domains, artworks, events, team, loading, error,
-      likeArtwork, addComment, uploadArtwork, deleteArtwork,
-      rsvpEvent, addEvent, deleteEvent,
-      addDomain, deleteDomain, addVideo, deleteVideo, updateVideoSequence,
+      likeArtwork, addComment, uploadArtwork, updateArtwork, deleteArtwork, toggleFeatured,
+      rsvpEvent, addEvent, updateEvent, deleteEvent,
+      addDomain, updateDomain, deleteDomain, addVideo, updateVideo, deleteVideo, updateVideoSequence,
       addTeamMember, updateTeamMember, deleteTeamMember,
     }}>
       {children}

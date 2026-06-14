@@ -76,6 +76,39 @@ domainsRouter.post('/', requireAdmin, async (req, res) => {
   res.status(201).json({ id, title, fullName, icon, tagline, description, color, videos: [], quizzes: [] });
 });
 
+const domainUpdateSchema = z.object({
+  title:       z.string().min(1).max(100).optional(),
+  fullName:    z.string().min(1).max(200).optional(),
+  icon:        z.string().min(1).max(100).optional(),
+  tagline:     z.string().max(300).optional(),
+  description: z.string().max(1000).optional(),
+  color:       z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+});
+
+domainsRouter.put('/:id', requireAdmin, async (req, res) => {
+  const existing = await query<DomainRow>('SELECT * FROM domains WHERE id=$1', [req.params.id]);
+  if (existing.length === 0) { res.status(404).json({ error: 'Domain not found' }); return; }
+
+  const parsed = domainUpdateSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  let i = 1;
+  const d = parsed.data;
+  if (d.title       !== undefined) { sets.push(`title = $${i++}`);       vals.push(d.title); }
+  if (d.fullName    !== undefined) { sets.push(`full_name = $${i++}`);    vals.push(d.fullName); }
+  if (d.icon        !== undefined) { sets.push(`icon = $${i++}`);         vals.push(d.icon); }
+  if (d.tagline     !== undefined) { sets.push(`tagline = $${i++}`);      vals.push(d.tagline); }
+  if (d.description !== undefined) { sets.push(`description = $${i++}`);  vals.push(d.description); }
+  if (d.color       !== undefined) { sets.push(`color = $${i++}`);        vals.push(d.color); }
+  if (sets.length === 0) { res.status(400).json({ error: 'Nothing to update' }); return; }
+  vals.push(req.params.id);
+  const result = await pool.query(`UPDATE domains SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, vals);
+  const row = result.rows[0] as DomainRow;
+  res.json({ id: row.id, title: row.title, fullName: row.full_name, icon: row.icon, tagline: row.tagline, description: row.description, color: row.color });
+});
+
 domainsRouter.delete('/:id', requireAdmin, async (req, res) => {
   const result = await pool.query('DELETE FROM domains WHERE id=$1', [req.params.id]);
   if (result.rowCount === 0) { res.status(404).json({ error: 'Domain not found' }); return; }
@@ -137,6 +170,43 @@ domainsRouter.delete('/:id/videos/:videoId', requireAdmin, async (req, res) => {
   const result = await pool.query('DELETE FROM videos WHERE id=$1 AND domain_id=$2', [req.params.videoId, req.params.id]);
   if (result.rowCount === 0) { res.status(404).json({ error: 'Video not found' }); return; }
   res.status(204).end();
+});
+
+const videoUpdateSchema = z.object({
+  title:      z.string().min(1).max(200).optional(),
+  ytUrl:      z.string().min(1).optional(),
+  difficulty: z.enum(['Beginner', 'Intermediate', 'Advanced']).optional(),
+  duration:   z.string().min(1).max(20).optional(),
+  sequence:   z.coerce.number().int().min(1).optional(),
+});
+
+domainsRouter.put('/:id/videos/:videoId', requireAdmin, async (req, res) => {
+  const existing = await query<VideoRow>('SELECT * FROM videos WHERE id=$1 AND domain_id=$2', [req.params.videoId, req.params.id]);
+  if (existing.length === 0) { res.status(404).json({ error: 'Video not found' }); return; }
+
+  const parsed = videoUpdateSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  let i = 1;
+  const d = parsed.data;
+  if (d.title      !== undefined) { sets.push(`title = $${i++}`);      vals.push(d.title); }
+  if (d.difficulty !== undefined) { sets.push(`difficulty = $${i++}`); vals.push(d.difficulty); }
+  if (d.duration   !== undefined) { sets.push(`duration = $${i++}`);   vals.push(d.duration); }
+  if (d.sequence   !== undefined) { sets.push(`sequence = $${i++}`);   vals.push(d.sequence); }
+  if (d.ytUrl      !== undefined) {
+    const ytId = normalizeYouTubeId(d.ytUrl);
+    if (!ytId) { res.status(400).json({ error: 'Invalid YouTube URL or ID' }); return; }
+    sets.push(`yt_id = $${i++}`); vals.push(ytId);
+  }
+  if (sets.length === 0) { res.status(400).json({ error: 'Nothing to update' }); return; }
+  vals.push(req.params.videoId);
+  vals.push(req.params.id);
+  const result = await pool.query(`UPDATE videos SET ${sets.join(', ')} WHERE id = $${i++} AND domain_id = $${i} RETURNING *`, vals);
+  if (result.rowCount === 0) { res.status(404).json({ error: 'Video not found' }); return; }
+  const v = result.rows[0] as VideoRow;
+  res.json({ id: v.id, title: v.title, ytId: v.yt_id, difficulty: v.difficulty, duration: v.duration, sequence: v.sequence });
 });
 
 const seqPatchSchema = z.object({ sequence: z.coerce.number().int().min(1) });

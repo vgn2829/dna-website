@@ -5,6 +5,10 @@ export async function initSchema(): Promise<void> {
   // ALTER TABLE … ADD COLUMN IF NOT EXISTS is idempotent on re-runs.
   // The WHERE sequence = 0 guard makes the UPDATE idempotent too.
   await pool.query(`
+    ALTER TABLE artworks ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT false;
+  `);
+
+  await pool.query(`
     ALTER TABLE videos ADD COLUMN IF NOT EXISTS sequence INTEGER NOT NULL DEFAULT 0;
 
     UPDATE videos v

@@ -1,7 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, ChevronDown, Upload, Loader2, Globe } from 'lucide-react';
-import { useAppData } from '../context/AppDataContext';
+import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star } from 'lucide-react';
+import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
 import { api, setAdminToken, clearAdminToken } from '../lib/api';
 
 function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
@@ -52,11 +52,30 @@ function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const fn = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', fn);
+    return () => window.removeEventListener('keydown', fn);
+  }, [onClose]);
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--color-canvas)', border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-xl)', width: '100%', maxWidth: 560, maxHeight: '90vh', overflow: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--color-hairline)' }}>
+          <h2 style={{ color: 'var(--color-ink)', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, margin: 0 }}>{title}</h2>
+          <button onClick={onClose} className="btn-icon"><X size={16} /></button>
+        </div>
+        <div style={{ padding: '1.5rem' }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
 type Tab = 'academy' | 'gallery' | 'team' | 'events';
 
 // ── Academy tab ──────────────────────────────────────────────────────────────
 function AcademyTab() {
-  const { domains, addDomain, deleteDomain, addVideo, deleteVideo, updateVideoSequence } = useAppData();
+  const { domains, addDomain, updateDomain, deleteDomain, addVideo, updateVideo, deleteVideo, updateVideoSequence } = useAppData();
   const domainKeys = Object.keys(domains);
   const [activeDomain, setActiveDomain] = useState(domainKeys[0] ?? '');
   const [showNewDomain, setShowNewDomain] = useState(false);
@@ -72,6 +91,27 @@ function AcademyTab() {
   const [dColor, setDColor] = useState('#007AFF');
   const [dLoading, setDLoading] = useState(false);
 
+  // Edit domain modal
+  const [editDomain, setEditDomain] = useState<Domain | null>(null);
+  const [edTitle, setEdTitle] = useState('');
+  const [edFullName, setEdFullName] = useState('');
+  const [edIcon, setEdIcon] = useState('');
+  const [edTagline, setEdTagline] = useState('');
+  const [edDesc, setEdDesc] = useState('');
+  const [edColor, setEdColor] = useState('#007AFF');
+  const [edLoading, setEdLoading] = useState(false);
+  const [edError, setEdError] = useState('');
+
+  // Edit video modal
+  const [editVideoState, setEditVideoState] = useState<{ domainId: string; video: VideoResource } | null>(null);
+  const [evTitle, setEvTitle] = useState('');
+  const [evUrl, setEvUrl] = useState('');
+  const [evDiff, setEvDiff] = useState<'Beginner' | 'Intermediate' | 'Advanced'>('Intermediate');
+  const [evDur, setEvDur] = useState('');
+  const [evSeq, setEvSeq] = useState('');
+  const [evLoading, setEvLoading] = useState(false);
+  const [evError, setEvError] = useState('');
+
   const handleAddDomain = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setDLoading(true);
@@ -79,7 +119,44 @@ function AcademyTab() {
       await addDomain({ title: dTitle, fullName: dFullName || dTitle, icon: dIcon, tagline: dTagline, description: dDesc, color: dColor });
       setDTitle(''); setDFullName(''); setDTagline(''); setDDesc(''); setDColor('#007AFF');
       setShowNewDomain(false);
-    } catch (err) { alert(String(err)); } finally { setDLoading(false); }
+    } catch (err) { console.error(err); } finally { setDLoading(false); }
+  };
+
+  const openEditDomain = (d: Domain) => {
+    setEditDomain(d);
+    setEdTitle(d.title); setEdFullName(d.fullName); setEdIcon(d.icon);
+    setEdTagline(d.tagline); setEdDesc(d.description); setEdColor(d.color);
+    setEdError('');
+  };
+
+  const handleEditDomain = async (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    if (!editDomain) return;
+    setEdLoading(true); setEdError('');
+    try {
+      await updateDomain(editDomain.id, { title: edTitle, fullName: edFullName, icon: edIcon, tagline: edTagline, description: edDesc, color: edColor });
+      setEditDomain(null);
+    } catch (err) { setEdError(String(err)); } finally { setEdLoading(false); }
+  };
+
+  const openEditVideo = (domainId: string, v: VideoResource) => {
+    setEditVideoState({ domainId, video: v });
+    setEvTitle(v.title); setEvUrl(`https://youtu.be/${v.ytId}`);
+    setEvDiff(v.difficulty); setEvDur(v.duration); setEvSeq(String(v.sequence));
+    setEvError('');
+  };
+
+  const handleEditVideo = async (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    if (!editVideoState) return;
+    setEvLoading(true); setEvError('');
+    try {
+      await updateVideo(editVideoState.domainId, editVideoState.video.id, {
+        title: evTitle, ytUrl: evUrl, difficulty: evDiff, duration: evDur,
+        sequence: parseInt(evSeq, 10) || editVideoState.video.sequence,
+      });
+      setEditVideoState(null);
+    } catch (err) { setEvError(String(err)); } finally { setEvLoading(false); }
   };
 
   // New video form
@@ -105,7 +182,6 @@ function AcademyTab() {
 
   return (
     <div className="space-y-6">
-      {/* Domain list */}
       <div className="card p-5">
         <div className="flex items-center justify-between mb-4">
           <p className="type-headline">Domains</p>
@@ -145,6 +221,9 @@ function AcademyTab() {
                 style={activeDomain === k ? { background: 'var(--color-surface-2)', color: 'var(--color-ink)' } : { background: 'var(--color-surface-1)', color: 'var(--color-ink-muted)' }}>
                 {domains[k].title}
               </button>
+              <button onClick={() => openEditDomain(domains[k])} className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-blue-500/10 transition-colors" style={{ color: 'var(--color-accent-blue)' }}>
+                <Pencil size={10} />
+              </button>
               <button onClick={() => { if (confirm(`Delete domain "${domains[k].title}" and all its videos?`)) deleteDomain(k); }}
                 className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-red-500/10 transition-colors" style={{ color: '#e5484d' }}>
                 <X size={10} />
@@ -156,7 +235,6 @@ function AcademyTab() {
 
       {domain && (
         <div className="grid lg:grid-cols-5 gap-6">
-          {/* Add video form */}
           <div className="lg:col-span-2 card p-5 space-y-3">
             <p className="type-headline flex items-center gap-2"><Plus size={14} /> Add Video to {domain.title}</p>
             <form onSubmit={handleAddVideo} className="space-y-3">
@@ -170,14 +248,13 @@ function AcademyTab() {
                 </div>
                 <div><label className="type-micro block mb-1">Duration</label><input value={vDur} onChange={e => setVDur(e.target.value)} placeholder="15 mins" className="input-base" /></div>
               </div>
-              <div><label className="type-micro block mb-1">Sequence <span style={{ color: 'var(--color-ink-muted)' }}>(blank = append to end)</span></label><input type="number" min={1} value={vSeq} onChange={e => setVSeq(e.target.value)} placeholder="auto" className="input-base" /></div>
+              <div><label className="type-micro block mb-1">Sequence <span style={{ color: 'var(--color-ink-muted)' }}>(blank = append)</span></label><input type="number" min={1} value={vSeq} onChange={e => setVSeq(e.target.value)} placeholder="auto" className="input-base" /></div>
               <button type="submit" disabled={addingVideo} className="btn-primary w-full justify-center" style={{ opacity: addingVideo ? 0.5 : 1 }}>
                 {addingVideo ? <><Loader2 size={13} className="animate-spin mr-2" />Adding…</> : 'Add Video'}
               </button>
             </form>
           </div>
 
-          {/* Video list */}
           <div className="lg:col-span-3 space-y-2">
             {domain.videos.length === 0 && <p className="type-caption text-center py-8" style={{ color: 'var(--color-ink-muted)' }}>No videos yet</p>}
             {domain.videos.map(v => {
@@ -216,6 +293,9 @@ function AcademyTab() {
                     {seqErrors[v.id] && <p className="type-micro" style={{ color: '#e5484d' }}>{seqErrors[v.id]}</p>}
                   </div>
                   <a href={`https://youtube.com/watch?v=${v.ytId}`} target="_blank" rel="noreferrer" className="type-micro shrink-0" style={{ color: 'var(--color-accent-blue)' }}>↗</a>
+                  <button onClick={() => openEditVideo(activeDomain, v)} className="btn-icon shrink-0" style={{ color: 'var(--color-accent-blue)', width: 28, height: 28, background: 'transparent' }}>
+                    <Pencil size={12} />
+                  </button>
                   <button onClick={() => deleteVideo(activeDomain, v.id)} className="btn-icon shrink-0" style={{ color: '#e5484d', width: 28, height: 28, background: 'transparent' }}>
                     <Trash2 size={12} />
                   </button>
@@ -225,48 +305,146 @@ function AcademyTab() {
           </div>
         </div>
       )}
+
+      {editDomain && (
+        <Modal title={`Edit Domain — ${editDomain.title}`} onClose={() => setEditDomain(null)}>
+          <form onSubmit={handleEditDomain} className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><label className="type-micro block mb-1">Title *</label><input required value={edTitle} onChange={e => setEdTitle(e.target.value)} className="input-base" maxLength={100} /></div>
+              <div><label className="type-micro block mb-1">Full Name</label><input value={edFullName} onChange={e => setEdFullName(e.target.value)} className="input-base" maxLength={200} /></div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><label className="type-micro block mb-1">Icon class</label><input value={edIcon} onChange={e => setEdIcon(e.target.value)} className="input-base" /></div>
+              <div><label className="type-micro block mb-1">Color</label><input type="color" value={edColor} onChange={e => setEdColor(e.target.value)} className="input-base h-10" /></div>
+            </div>
+            <div><label className="type-micro block mb-1">Tagline</label><input value={edTagline} onChange={e => setEdTagline(e.target.value)} className="input-base" maxLength={300} /></div>
+            <div><label className="type-micro block mb-1">Description</label><textarea value={edDesc} onChange={e => setEdDesc(e.target.value)} rows={3} className="input-base resize-none" maxLength={1000} /></div>
+            {edError && <p className="type-micro" style={{ color: '#e5484d' }}>{edError}</p>}
+            <div className="flex gap-2">
+              <button type="submit" disabled={edLoading} className="btn-primary flex items-center gap-2" style={{ opacity: edLoading ? 0.6 : 1 }}>
+                {edLoading ? <Loader2 size={13} className="animate-spin" /> : null} Save Changes
+              </button>
+              <button type="button" onClick={() => setEditDomain(null)} className="btn-secondary">Cancel</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {editVideoState && (
+        <Modal title={`Edit Video — ${editVideoState.video.title}`} onClose={() => setEditVideoState(null)}>
+          <form onSubmit={handleEditVideo} className="space-y-3">
+            <div><label className="type-micro block mb-1">Title *</label><input required value={evTitle} onChange={e => setEvTitle(e.target.value)} className="input-base" maxLength={200} /></div>
+            <div><label className="type-micro block mb-1">YouTube URL or ID *</label><input required value={evUrl} onChange={e => setEvUrl(e.target.value)} className="input-base" maxLength={200} /></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><label className="type-micro block mb-1">Difficulty</label>
+                <select value={evDiff} onChange={e => setEvDiff(e.target.value as 'Beginner' | 'Intermediate' | 'Advanced')} className="input-base">
+                  {['Beginner','Intermediate','Advanced'].map(d => <option key={d}>{d}</option>)}
+                </select>
+              </div>
+              <div><label className="type-micro block mb-1">Duration</label><input value={evDur} onChange={e => setEvDur(e.target.value)} placeholder="15 mins" className="input-base" /></div>
+            </div>
+            <div><label className="type-micro block mb-1">Sequence</label><input type="number" min={1} value={evSeq} onChange={e => setEvSeq(e.target.value)} className="input-base" /></div>
+            {evError && <p className="type-micro" style={{ color: '#e5484d' }}>{evError}</p>}
+            <div className="flex gap-2">
+              <button type="submit" disabled={evLoading} className="btn-primary flex items-center gap-2" style={{ opacity: evLoading ? 0.6 : 1 }}>
+                {evLoading ? <Loader2 size={13} className="animate-spin" /> : null} Save Changes
+              </button>
+              <button type="button" onClick={() => setEditVideoState(null)} className="btn-secondary">Cancel</button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }
 
 // ── Gallery tab ───────────────────────────────────────────────────────────────
 function GalleryTab() {
-  const { artworks, uploadArtwork, deleteArtwork, domains } = useAppData();
+  const { artworks, uploadArtwork, updateArtwork, deleteArtwork, toggleFeatured, domains } = useAppData();
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [aTitle, setATitle] = useState('');
   const [aArtist, setAArtist] = useState('');
   const [aDomain, setADomain] = useState('');
+  const [aCustomDomain, setACustomDomain] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+
+  // Edit artwork modal state
+  const [editArtwork, setEditArtwork] = useState<Artwork | null>(null);
+  const eaFileRef = useRef<HTMLInputElement>(null);
+  const [eaTitle, setEaTitle] = useState('');
+  const [eaArtist, setEaArtist] = useState('');
+  const [eaDomain, setEaDomain] = useState('');
+  const [eaCustomDomain, setEaCustomDomain] = useState('');
+  const [eaFeatured, setEaFeatured] = useState(false);
+  const [eaFile, setEaFile] = useState<File | null>(null);
+  const [eaLoading, setEaLoading] = useState(false);
+  const [eaError, setEaError] = useState('');
+
+  // Featured star toggling
+  const [togglingFeatured, setTogglingFeatured] = useState<Set<string>>(new Set());
+
+  const domainTitles = Object.values(domains).map(d => d.title);
+  const featuredCount = artworks.filter(a => a.featured).length;
 
   const MAX_MB = 50;
   const ALLOWED_EXT = ['jpg','jpeg','png','webp','gif','pdf','mp4'];
 
-  const handleFile = (f: File | null) => {
-    if (!f) { setFile(null); return; }
+  const handleFile = (f: File | null, setFileFn: (f: File | null) => void, setErr: (s: string) => void) => {
+    if (!f) { setFileFn(null); return; }
     const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-    if (!ALLOWED_EXT.includes(ext)) { setUploadError(`Unsupported type. Allowed: ${ALLOWED_EXT.join(', ')}`); return; }
-    if (f.size > MAX_MB * 1024 * 1024) { setUploadError(`File exceeds ${MAX_MB} MB`); return; }
-    setUploadError('');
-    setFile(f);
+    if (!ALLOWED_EXT.includes(ext)) { setErr(`Unsupported type. Allowed: ${ALLOWED_EXT.join(', ')}`); return; }
+    if (f.size > MAX_MB * 1024 * 1024) { setErr(`File exceeds ${MAX_MB} MB`); return; }
+    setErr('');
+    setFileFn(f);
   };
 
   const handleUpload = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!file) return;
-    setUploading(true);
-    setUploadError('');
+    setUploading(true); setUploadError('');
     try {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('title', aTitle);
       fd.append('artist', aArtist);
-      fd.append('domain', aDomain || Object.values(domains)[0]?.title || 'General');
+      const domainVal = aDomain === '__other__' ? aCustomDomain : (aDomain || domainTitles[0] || 'General');
+      fd.append('domain', domainVal);
       await uploadArtwork(fd);
-      setFile(null); setATitle(''); setAArtist('');
+      setFile(null); setATitle(''); setAArtist(''); setADomain(''); setACustomDomain('');
       if (fileRef.current) fileRef.current.value = '';
     } catch (err) { setUploadError(String(err)); } finally { setUploading(false); }
+  };
+
+  const openEditArtwork = (a: Artwork) => {
+    setEditArtwork(a);
+    setEaTitle(a.title); setEaArtist(a.artist); setEaFeatured(a.featured);
+    if (domainTitles.includes(a.domain)) { setEaDomain(a.domain); setEaCustomDomain(''); }
+    else { setEaDomain('__other__'); setEaCustomDomain(a.domain); }
+    setEaFile(null); setEaError('');
+  };
+
+  const handleEditArtwork = async (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    if (!editArtwork) return;
+    setEaLoading(true); setEaError('');
+    try {
+      const fd = new FormData();
+      fd.append('title', eaTitle);
+      fd.append('artist', eaArtist);
+      fd.append('domain', eaDomain === '__other__' ? eaCustomDomain : eaDomain);
+      fd.append('featured', String(eaFeatured));
+      if (eaFile) fd.append('file', eaFile);
+      await updateArtwork(editArtwork.id, fd);
+      setEditArtwork(null);
+    } catch (err) { setEaError(String(err)); } finally { setEaLoading(false); }
+  };
+
+  const handleToggleFeatured = (id: string, featured: boolean) => {
+    setTogglingFeatured(s => new Set(s).add(id));
+    toggleFeatured(id, featured);
+    setTimeout(() => setTogglingFeatured(s => { const n = new Set(s); n.delete(id); return n; }), 800);
   };
 
   return (
@@ -281,10 +459,10 @@ function GalleryTab() {
               style={{ borderColor: file ? 'var(--color-accent-blue)' : 'var(--color-hairline)', cursor: 'pointer' }}
               onClick={() => fileRef.current?.click()}
               onDragOver={e => e.preventDefault()}
-              onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files[0] ?? null); }}
+              onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files[0] ?? null, setFile, setUploadError); }}
             >
               <input ref={fileRef} type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.mp4" className="sr-only"
-                onChange={e => handleFile(e.target.files?.[0] ?? null)} />
+                onChange={e => handleFile(e.target.files?.[0] ?? null, setFile, setUploadError)} />
               {file ? (
                 <p className="type-body-sm truncate">{file.name} <span className="type-micro">({(file.size / 1024 / 1024).toFixed(1)} MB)</span></p>
               ) : (
@@ -296,9 +474,13 @@ function GalleryTab() {
           <div><label className="type-micro block mb-1">Artist *</label><input required value={aArtist} onChange={e => setAArtist(e.target.value)} placeholder="Name (Year)" className="input-base" maxLength={200} /></div>
           <div>
             <label className="type-micro block mb-1">Domain</label>
-            <select value={aDomain} onChange={e => setADomain(e.target.value)} className="input-base">
-              {Object.values(domains).map(d => <option key={d.id} value={d.title}>{d.title}</option>)}
+            <select value={aDomain} onChange={e => { setADomain(e.target.value); if (e.target.value !== '__other__') setACustomDomain(''); }} className="input-base">
+              {domainTitles.map(t => <option key={t} value={t}>{t}</option>)}
+              <option value="__other__">Other (specify)...</option>
             </select>
+            {aDomain === '__other__' && (
+              <input value={aCustomDomain} onChange={e => setACustomDomain(e.target.value)} placeholder="Enter domain name" maxLength={100} className="input-base mt-2" />
+            )}
           </div>
           {uploadError && <p className="type-micro" style={{ color: '#e5484d' }}>{uploadError}</p>}
           <button type="submit" disabled={uploading || !file} className="btn-primary w-full justify-center" style={{ opacity: uploading || !file ? 0.5 : 1 }}>
@@ -308,6 +490,9 @@ function GalleryTab() {
       </div>
 
       <div className="lg:col-span-3 space-y-2">
+        <p className="type-micro px-1" style={{ color: 'var(--color-ink-muted)' }}>
+          {featuredCount} of {artworks.length} artworks featured — these appear on the homepage
+        </p>
         {artworks.map(a => (
           <div key={a.id} className="card p-3 flex items-center gap-3" style={{ borderRadius: 'var(--radius-lg)' }}>
             {a.mediaType === 'image' ? (
@@ -321,19 +506,71 @@ function GalleryTab() {
               <p className="type-body-sm truncate">{a.title}</p>
               <p className="type-micro">{a.artist} · ♥ {a.likes} · <span className="uppercase">{a.mediaType}</span></p>
             </div>
+            <button
+              onClick={() => handleToggleFeatured(a.id, !a.featured)}
+              disabled={togglingFeatured.has(a.id)}
+              className="btn-icon shrink-0"
+              style={{ width: 28, height: 28, background: 'transparent', color: a.featured ? '#FFD700' : 'var(--color-ink-muted)', opacity: togglingFeatured.has(a.id) ? 0.4 : 1 }}
+              title={a.featured ? 'Remove from featured' : 'Add to featured'}
+            >
+              <Star size={14} fill={a.featured ? '#FFD700' : 'none'} />
+            </button>
+            <button onClick={() => openEditArtwork(a)} className="btn-icon shrink-0" style={{ color: 'var(--color-accent-blue)', width: 28, height: 28, background: 'transparent' }}>
+              <Pencil size={12} />
+            </button>
             <button onClick={() => deleteArtwork(a.id)} className="btn-icon shrink-0" style={{ color: '#e5484d', width: 28, height: 28, background: 'transparent' }}>
               <Trash2 size={12} />
             </button>
           </div>
         ))}
       </div>
+
+      {editArtwork && (
+        <div className="lg:col-span-5">
+          <Modal title={`Edit Artwork — ${editArtwork.title}`} onClose={() => setEditArtwork(null)}>
+            <form onSubmit={handleEditArtwork} className="space-y-3">
+              <div><label className="type-micro block mb-1">Title *</label><input required value={eaTitle} onChange={e => setEaTitle(e.target.value)} className="input-base" maxLength={200} /></div>
+              <div><label className="type-micro block mb-1">Artist *</label><input required value={eaArtist} onChange={e => setEaArtist(e.target.value)} className="input-base" maxLength={100} /></div>
+              <div>
+                <label className="type-micro block mb-1">Domain</label>
+                <select value={eaDomain} onChange={e => { setEaDomain(e.target.value); if (e.target.value !== '__other__') setEaCustomDomain(''); }} className="input-base">
+                  {domainTitles.map(t => <option key={t} value={t}>{t}</option>)}
+                  <option value="__other__">Other (specify)...</option>
+                </select>
+                {eaDomain === '__other__' && (
+                  <input value={eaCustomDomain} onChange={e => setEaCustomDomain(e.target.value)} placeholder="Enter domain name" maxLength={100} className="input-base mt-2" />
+                )}
+              </div>
+              <label className="flex items-center gap-2 type-body-sm cursor-pointer">
+                <input type="checkbox" checked={eaFeatured} onChange={e => setEaFeatured(e.target.checked)} />
+                Mark as featured on homepage
+              </label>
+              <div>
+                <label className="type-micro block mb-1">Replace image (optional)</label>
+                <input ref={eaFileRef} type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.mp4" className="input-base text-xs"
+                  onChange={e => handleFile(e.target.files?.[0] ?? null, setEaFile, setEaError)} />
+              </div>
+              {editArtwork.mediaType === 'image' && editArtwork.mediaUrl && (
+                <img src={editArtwork.mediaUrl} alt="current" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--color-hairline)' }} />
+              )}
+              {eaError && <p className="type-micro" style={{ color: '#e5484d' }}>{eaError}</p>}
+              <div className="flex gap-2">
+                <button type="submit" disabled={eaLoading} className="btn-primary flex items-center gap-2" style={{ opacity: eaLoading ? 0.6 : 1 }}>
+                  {eaLoading ? <Loader2 size={13} className="animate-spin" /> : null} Save Changes
+                </button>
+                <button type="button" onClick={() => setEditArtwork(null)} className="btn-secondary">Cancel</button>
+              </div>
+            </form>
+          </Modal>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Team tab ──────────────────────────────────────────────────────────────────
 function TeamTab() {
-  const { team, addTeamMember, deleteTeamMember } = useAppData();
+  const { team, addTeamMember, updateTeamMember, deleteTeamMember } = useAppData();
   const photoRef = useRef<HTMLInputElement>(null);
   const [photo, setPhoto] = useState<File | null>(null);
   const [tName, setTName] = useState('');
@@ -348,25 +585,66 @@ function TeamTab() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
 
+  // Edit member modal
+  const [editMember, setEditMember] = useState<TeamMember | null>(null);
+  const emPhotoRef = useRef<HTMLInputElement>(null);
+  const [emName, setEmName] = useState('');
+  const [emDesig, setEmDesig] = useState('');
+  const [emYear, setEmYear] = useState('');
+  const [emBio, setEmBio] = useState('');
+  const [emColor, setEmColor] = useState('#007AFF');
+  const [emEmail, setEmEmail] = useState('');
+  const [emIG, setEmIG] = useState('');
+  const [emLI, setEmLI] = useState('');
+  const [emOrder, setEmOrder] = useState('0');
+  const [emPhoto, setEmPhoto] = useState<File | null>(null);
+  const [emLoading, setEmLoading] = useState(false);
+  const [emError, setEmError] = useState('');
+
   const handleAdd = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setLoading(true); setErr('');
     try {
       const fd = new FormData();
-      fd.append('name', tName);
-      fd.append('designation', tDesig);
-      if (tYear)  fd.append('year', tYear);
-      if (tBio)   fd.append('bio', tBio);
-      fd.append('color', tColor);
-      fd.append('displayOrder', tOrder);
+      fd.append('name', tName); fd.append('designation', tDesig);
+      if (tYear) fd.append('year', tYear);
+      if (tBio) fd.append('bio', tBio);
+      fd.append('color', tColor); fd.append('displayOrder', tOrder);
       if (tEmail) fd.append('socialEmail', tEmail);
-      if (tIG)    fd.append('socialInstagram', tIG);
-      if (tLI)    fd.append('socialLinkedin', tLI);
-      if (photo)  fd.append('photo', photo);
+      if (tIG) fd.append('socialInstagram', tIG);
+      if (tLI) fd.append('socialLinkedin', tLI);
+      if (photo) fd.append('photo', photo);
       await addTeamMember(fd);
       setTName(''); setTDesig(''); setTYear(''); setTBio(''); setTEmail(''); setTIG(''); setTLI('');
       setPhoto(null); if (photoRef.current) photoRef.current.value = '';
     } catch (error) { setErr(String(error)); } finally { setLoading(false); }
+  };
+
+  const openEditMember = (m: TeamMember) => {
+    setEditMember(m);
+    setEmName(m.name); setEmDesig(m.designation); setEmYear(m.year ?? '');
+    setEmBio(m.bio ?? ''); setEmColor(m.color);
+    setEmEmail(m.social.email ?? ''); setEmIG(m.social.instagram ?? ''); setEmLI(m.social.linkedin ?? '');
+    setEmOrder(String(m.displayOrder)); setEmPhoto(null); setEmError('');
+  };
+
+  const handleEditMember = async (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    if (!editMember) return;
+    setEmLoading(true); setEmError('');
+    try {
+      const fd = new FormData();
+      fd.append('name', emName); fd.append('designation', emDesig);
+      if (emYear) fd.append('year', emYear);
+      if (emBio) fd.append('bio', emBio);
+      fd.append('color', emColor); fd.append('displayOrder', emOrder);
+      if (emEmail) fd.append('socialEmail', emEmail);
+      if (emIG) fd.append('socialInstagram', emIG);
+      if (emLI) fd.append('socialLinkedin', emLI);
+      if (emPhoto) fd.append('photo', emPhoto);
+      await updateTeamMember(editMember.id, fd);
+      setEditMember(null);
+    } catch (error) { setEmError(String(error)); } finally { setEmLoading(false); }
   };
 
   return (
@@ -409,19 +687,58 @@ function TeamTab() {
               <p className="type-body-sm truncate">{m.name}</p>
               <p className="type-micro">{m.designation}{m.year ? ` · ${m.year}` : ''}</p>
             </div>
+            <button onClick={() => openEditMember(m)} className="btn-icon shrink-0" style={{ color: 'var(--color-accent-blue)', width: 28, height: 28, background: 'transparent' }}>
+              <Pencil size={12} />
+            </button>
             <button onClick={() => deleteTeamMember(m.id)} className="btn-icon shrink-0" style={{ color: '#e5484d', width: 28, height: 28, background: 'transparent' }}>
               <Trash2 size={12} />
             </button>
           </div>
         ))}
       </div>
+
+      {editMember && (
+        <div className="lg:col-span-5">
+          <Modal title={`Edit Member — ${editMember.name}`} onClose={() => setEditMember(null)}>
+            <form onSubmit={handleEditMember} className="space-y-3">
+              {editMember.photoUrl && (
+                <img src={editMember.photoUrl} alt="current" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: '50%', border: '1px solid var(--color-hairline)' }} />
+              )}
+              <div><label className="type-micro block mb-1">Name *</label><input required value={emName} onChange={e => setEmName(e.target.value)} className="input-base" maxLength={100} /></div>
+              <div><label className="type-micro block mb-1">Designation *</label><input required value={emDesig} onChange={e => setEmDesig(e.target.value)} className="input-base" maxLength={100} /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div><label className="type-micro block mb-1">Year/Dept</label><input value={emYear} onChange={e => setEmYear(e.target.value)} className="input-base" /></div>
+                <div><label className="type-micro block mb-1">Color</label><input type="color" value={emColor} onChange={e => setEmColor(e.target.value)} className="input-base h-10" /></div>
+              </div>
+              <div><label className="type-micro block mb-1">Bio</label><textarea value={emBio} onChange={e => setEmBio(e.target.value)} rows={2} className="input-base resize-none" maxLength={500} /></div>
+              <div><label className="type-micro block mb-1">Email</label><input type="email" value={emEmail} onChange={e => setEmEmail(e.target.value)} className="input-base" maxLength={200} /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div><label className="type-micro block mb-1">Instagram URL</label><input value={emIG} onChange={e => setEmIG(e.target.value)} className="input-base" maxLength={200} /></div>
+                <div><label className="type-micro block mb-1">LinkedIn URL</label><input value={emLI} onChange={e => setEmLI(e.target.value)} className="input-base" maxLength={200} /></div>
+              </div>
+              <div><label className="type-micro block mb-1">Display order</label><input type="number" value={emOrder} onChange={e => setEmOrder(e.target.value)} className="input-base" /></div>
+              <div>
+                <label className="type-micro block mb-1">Replace photo (optional)</label>
+                <input ref={emPhotoRef} type="file" accept=".jpg,.jpeg,.png,.webp" className="input-base text-xs" onChange={e => setEmPhoto(e.target.files?.[0] ?? null)} />
+              </div>
+              {emError && <p className="type-micro" style={{ color: '#e5484d' }}>{emError}</p>}
+              <div className="flex gap-2">
+                <button type="submit" disabled={emLoading} className="btn-primary flex items-center gap-2" style={{ opacity: emLoading ? 0.6 : 1 }}>
+                  {emLoading ? <Loader2 size={13} className="animate-spin" /> : null} Save Changes
+                </button>
+                <button type="button" onClick={() => setEditMember(null)} className="btn-secondary">Cancel</button>
+              </div>
+            </form>
+          </Modal>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Events tab ─────────────────────────────────────────────────────────────────
 function EventsTab() {
-  const { events, addEvent, deleteEvent } = useAppData();
+  const { events, addEvent, updateEvent, deleteEvent } = useAppData();
   const [eTitle, setETitle] = useState('');
   const [eDate, setEDate] = useState('');
   const [eTime, setETime] = useState('');
@@ -430,6 +747,17 @@ function EventsTab() {
   const [eCapacity, setECapacity] = useState('100');
   const [addingEvent, setAddingEvent] = useState(false);
 
+  // Edit event modal
+  const [editEvent, setEditEvent] = useState<ClubEvent | null>(null);
+  const [eeTitle, setEeTitle] = useState('');
+  const [eeDate, setEeDate] = useState('');
+  const [eeTime, setEeTime] = useState('');
+  const [eeLocation, setEeLocation] = useState('');
+  const [eeContent, setEeContent] = useState('');
+  const [eeCapacity, setEeCapacity] = useState('100');
+  const [eeLoading, setEeLoading] = useState(false);
+  const [eeError, setEeError] = useState('');
+
   const handleAdd = (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (addingEvent) return;
@@ -437,6 +765,23 @@ function EventsTab() {
     addEvent({ title: eTitle, date: eDate, time: eTime, location: eLocation, content: eContent, capacity: Number(eCapacity) || 100 });
     setETitle(''); setEDate(''); setETime(''); setELocation(''); setEContent('');
     setTimeout(() => setAddingEvent(false), 600);
+  };
+
+  const openEditEvent = (ev: ClubEvent) => {
+    setEditEvent(ev);
+    setEeTitle(ev.title); setEeDate(ev.date); setEeTime(ev.time);
+    setEeLocation(ev.location); setEeContent(ev.content); setEeCapacity(String(ev.capacity));
+    setEeError('');
+  };
+
+  const handleEditEvent = async (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    if (!editEvent) return;
+    setEeLoading(true); setEeError('');
+    try {
+      await updateEvent(editEvent.id, { title: eeTitle, date: eeDate, time: eeTime, location: eeLocation, content: eeContent, capacity: Number(eeCapacity) || editEvent.capacity });
+      setEditEvent(null);
+    } catch (err) { setEeError(String(err)); } finally { setEeLoading(false); }
   };
 
   return (
@@ -458,21 +803,48 @@ function EventsTab() {
         </form>
       </div>
       <div className="lg:col-span-3 space-y-2">
-        {events.map(e => (
-          <div key={e.id} className="card p-3 flex items-center gap-3" style={{ borderRadius: 'var(--radius-lg)' }}>
+        {events.map(ev => (
+          <div key={ev.id} className="card p-3 flex items-center gap-3" style={{ borderRadius: 'var(--radius-lg)' }}>
             <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'var(--color-surface-2)' }}>
               <CalendarDays size={12} style={{ color: 'var(--color-ink-muted)' }} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="type-body-sm truncate">{e.title}</p>
-              <p className="type-micro">{e.date} · {e.registeredCount}/{e.capacity}</p>
+              <p className="type-body-sm truncate">{ev.title}</p>
+              <p className="type-micro">{ev.date} · {ev.registeredCount}/{ev.capacity}</p>
             </div>
-            <button onClick={() => deleteEvent(e.id)} className="btn-icon shrink-0" style={{ color: '#e5484d', width: 28, height: 28, background: 'transparent' }}>
+            <button onClick={() => openEditEvent(ev)} className="btn-icon shrink-0" style={{ color: 'var(--color-accent-blue)', width: 28, height: 28, background: 'transparent' }}>
+              <Pencil size={12} />
+            </button>
+            <button onClick={() => deleteEvent(ev.id)} className="btn-icon shrink-0" style={{ color: '#e5484d', width: 28, height: 28, background: 'transparent' }}>
               <Trash2 size={12} />
             </button>
           </div>
         ))}
       </div>
+
+      {editEvent && (
+        <div className="lg:col-span-5">
+          <Modal title={`Edit Event — ${editEvent.title}`} onClose={() => setEditEvent(null)}>
+            <form onSubmit={handleEditEvent} className="space-y-3">
+              <div><label className="type-micro block mb-1">Title *</label><input required value={eeTitle} onChange={e => setEeTitle(e.target.value)} className="input-base" maxLength={200} /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div><label className="type-micro block mb-1">Date</label><input type="date" required value={eeDate} onChange={e => setEeDate(e.target.value)} className="input-base" /></div>
+                <div><label className="type-micro block mb-1">Time</label><input required value={eeTime} onChange={e => setEeTime(e.target.value)} className="input-base" /></div>
+              </div>
+              <div><label className="type-micro block mb-1">Location *</label><input required value={eeLocation} onChange={e => setEeLocation(e.target.value)} className="input-base" maxLength={200} /></div>
+              <div><label className="type-micro block mb-1">Description *</label><textarea required value={eeContent} onChange={e => setEeContent(e.target.value)} rows={3} className="input-base resize-none" maxLength={2000} /></div>
+              <div><label className="type-micro block mb-1">Capacity</label><input type="number" value={eeCapacity} onChange={e => setEeCapacity(e.target.value)} className="input-base" /></div>
+              {eeError && <p className="type-micro" style={{ color: '#e5484d' }}>{eeError}</p>}
+              <div className="flex gap-2">
+                <button type="submit" disabled={eeLoading} className="btn-primary flex items-center gap-2" style={{ opacity: eeLoading ? 0.6 : 1 }}>
+                  {eeLoading ? <Loader2 size={13} className="animate-spin" /> : null} Save Changes
+                </button>
+                <button type="button" onClick={() => setEditEvent(null)} className="btn-secondary">Cancel</button>
+              </div>
+            </form>
+          </Modal>
+        </div>
+      )}
     </div>
   );
 }

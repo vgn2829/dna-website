@@ -57,6 +57,42 @@ eventsRouter.post('/', requireAdmin, async (req, res) => {
   res.status(201).json(formatEvent(rows[0]));
 });
 
+const updateSchema = z.object({
+  title:    z.string().min(1).max(200).optional(),
+  date:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  time:     z.string().min(1).max(50).optional(),
+  location: z.string().min(1).max(200).optional(),
+  content:  z.string().min(1).max(2000).optional(),
+  capacity: z.coerce.number().int().min(1).max(10000).optional(),
+});
+
+eventsRouter.put('/:id', requireAdmin, async (req, res) => {
+  const parsed = updateSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  let i = 1;
+  const d = parsed.data;
+  if (d.title    !== undefined) { sets.push(`title = $${i++}`);    vals.push(d.title); }
+  if (d.date     !== undefined) { sets.push(`date = $${i++}`);     vals.push(d.date); }
+  if (d.time     !== undefined) { sets.push(`time = $${i++}`);     vals.push(d.time); }
+  if (d.location !== undefined) { sets.push(`location = $${i++}`); vals.push(d.location); }
+  if (d.content  !== undefined) { sets.push(`content = $${i++}`);  vals.push(d.content); }
+  if (d.capacity !== undefined) { sets.push(`capacity = $${i++}`); vals.push(d.capacity); }
+  if (sets.length === 0) { res.status(400).json({ error: 'Nothing to update' }); return; }
+  vals.push(req.params.id);
+  const result = await pool.query(`UPDATE events SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, vals);
+  if (result.rowCount === 0) { res.status(404).json({ error: 'Event not found' }); return; }
+  const roll = (req.headers['x-roll-number'] as string | undefined)?.trim().toUpperCase();
+  let isRegistered = false;
+  if (roll) {
+    const r = await query('SELECT 1 FROM event_rsvps WHERE event_id=$1 AND roll_number=$2', [req.params.id, roll]);
+    isRegistered = r.length > 0;
+  }
+  res.json(formatEvent(result.rows[0] as EventRow, isRegistered));
+});
+
 eventsRouter.delete('/:id', requireAdmin, async (req, res) => {
   const result = await pool.query('DELETE FROM events WHERE id=$1', [req.params.id]);
   if (result.rowCount === 0) { res.status(404).json({ error: 'Event not found' }); return; }

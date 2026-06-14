@@ -57,9 +57,12 @@ export const api = {
     list: () => request<Record<string, unknown>>('GET', '/domains'),
     create: (domain: { title: string; fullName: string; icon: string; tagline: string; description: string; color: string }) =>
       request<unknown>('POST', '/domains', { body: domain, admin: true }),
+    update: (id: string, data: object) => request<unknown>('PUT', `/domains/${id}`, { body: data, admin: true }),
     delete: (id: string) => request<void>('DELETE', `/domains/${id}`, { admin: true }),
     addVideo: (domainId: string, video: { title: string; ytUrl: string; difficulty: string; duration: string; sequence?: number }) =>
       request<unknown>('POST', `/domains/${domainId}/videos`, { body: video, admin: true }),
+    updateVideo: (domainId: string, videoId: string, data: object) =>
+      request<unknown>('PUT', `/domains/${domainId}/videos/${videoId}`, { body: data, admin: true }),
     deleteVideo: (domainId: string, videoId: string) =>
       request<void>('DELETE', `/domains/${domainId}/videos/${videoId}`, { admin: true }),
     patchVideoSequence: (domainId: string, videoId: string, sequence: number) =>
@@ -68,16 +71,20 @@ export const api = {
   artworks: {
     list:    (roll?: string) => request<unknown[]>('GET', '/artworks', { roll }),
     upload:  (formData: FormData) => uploadRequest<unknown>('/artworks', formData),
+    update:  (id: string, formData: FormData) => uploadPutRequest<unknown>(`/artworks/${id}`, formData),
     delete:  (id: string)   => request<void>('DELETE', `/artworks/${id}`, { admin: true }),
     like:    (id: string, roll: string) =>
       request<{ likes: number; likedByUser: boolean }>('POST', `/artworks/${id}/like`, { roll }),
     addComment: (id: string, roll: string, sender: string, text: string) =>
       request<{ id: string; sender: string; text: string; date: string }>('POST', `/artworks/${id}/comments`, { body: { sender, text }, roll }),
+    toggleFeatured: (id: string, featured: boolean) =>
+      request<{ id: string; featured: boolean }>('PATCH', `/artworks/${id}/featured`, { body: { featured }, admin: true }),
   },
   events: {
     list: (roll?: string) => request<unknown[]>('GET', '/events', { roll }),
     add:  (event: { title: string; date: string; time: string; location: string; content: string; capacity: number }) =>
       request<unknown>('POST', '/events', { body: event, admin: true }),
+    update: (id: string, data: object) => request<unknown>('PUT', `/events/${id}`, { body: data, admin: true }),
     delete: (id: string)  => request<void>('DELETE', `/events/${id}`, { admin: true }),
     rsvp:  (id: string, roll: string) =>
       request<{ registeredCount: number; isRegistered: boolean }>('POST', `/events/${id}/rsvp`, { roll }),
