@@ -268,6 +268,42 @@ function simulateCB(rgb, type) {
 // PALETTE DERIVATION ENGINE
 // ─────────────────────────────────────────────────────────────────────────────
 
+function nudgeLightnessForContrast(
+  hue,
+  chroma,
+  bgHex,
+  targetL,
+  minCR = 4.5,
+  maxNudge = 0.22
+) {
+  const bgRgb = hexToRgb(bgHex);
+  const original = hexToRgb(oklchToHex(gamutMap({ L: targetL, C: chroma, H: hue })));
+  if (contrastRatio(original, bgRgb) >= minCR) return targetL;
+
+  const bgLum = wcagLuminance(bgRgb);
+  const searchDark = bgLum > 0.5;
+
+  let lo = searchDark ? Math.max(0.04, targetL - maxNudge) : targetL;
+  let hi = searchDark ? targetL : Math.min(0.96, targetL + maxNudge);
+
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    const rgb = hexToRgb(oklchToHex(gamutMap({ L: mid, C: chroma, H: hue })));
+    const cr = contrastRatio(rgb, bgRgb);
+    if (cr >= minCR) {
+      if (searchDark) hi = mid; else lo = mid;
+    } else {
+      if (searchDark) lo = mid; else hi = mid;
+    }
+  }
+
+  const result = searchDark ? hi : lo;
+  const resultRgb = hexToRgb(oklchToHex(gamutMap({ L: result, C: chroma, H: hue })));
+
+  if (contrastRatio(resultRgb, bgRgb) >= minCR) return result;
+  return findAccessibleLightness(hue, chroma, bgHex, targetL, minCR);
+}
+
 export function derivePalette(seedHex, darkMode, harmonyKey, lockedColors = {}) {
   const seedRgb = hexToRgb(seedHex);
   const seed = rgbToOKLCH(seedRgb);
@@ -277,29 +313,55 @@ export function derivePalette(seedHex, darkMode, harmonyKey, lockedColors = {}) 
   const harmony = HARMONY_MODES[harmonyKey] || HARMONY_MODES.complementary;
   const { secondary: secondaryHue, accent: accentHue } = harmony.getHues(seedHue);
 
-  const neutralHue = (seedHue + 200) % 360;
+  const isWarmSeed = (seedHue >= 0 && seedHue <= 100) || seedHue >= 300;
+  const neutralHue = isWarmSeed ? 230 : 65;
 
-  const bgHex    = oklchToHex(gamutMap({ L: darkMode ? 0.09  : 0.985, C: 0.006, H: neutralHue }));
-  const surfHex  = oklchToHex(gamutMap({ L: darkMode ? 0.13  : 0.955, C: 0.008, H: neutralHue }));
-  const surf2Hex = oklchToHex(gamutMap({ L: darkMode ? 0.17  : 0.920, C: 0.009, H: neutralHue }));
+  const bgHex    = oklchToHex(gamutMap({ L: darkMode ? 0.09  : 0.985, C: 0.004, H: neutralHue }));
+  const surfHex  = oklchToHex(gamutMap({ L: darkMode ? 0.13  : 0.955, C: 0.005, H: neutralHue }));
+  const surf2Hex = oklchToHex(gamutMap({ L: darkMode ? 0.17  : 0.920, C: 0.006, H: neutralHue }));
 
-  const textHex   = oklchToHex(gamutMap({ L: darkMode ? 0.94 : 0.11, C: 0.004, H: neutralHue }));
-  const textMHex  = oklchToHex(gamutMap({ L: darkMode ? 0.58 : 0.44, C: 0.008, H: neutralHue }));
-  const borderHex = oklchToHex(gamutMap({ L: darkMode ? 0.26 : 0.83, C: 0.007, H: neutralHue }));
+  const textHex   = oklchToHex(gamutMap({ L: darkMode ? 0.94 : 0.11, C: 0.003, H: neutralHue }));
+  const textMHex  = oklchToHex(gamutMap({ L: darkMode ? 0.58 : 0.44, C: 0.006, H: neutralHue }));
+  const borderHex = oklchToHex(gamutMap({ L: darkMode ? 0.26 : 0.83, C: 0.005, H: neutralHue }));
 
-  const primaryL   = findAccessibleLightness(seedHue,      seedChroma,                    bgHex, seed.L);
-  const secondaryL = findAccessibleLightness(secondaryHue, seedChroma * 0.80,             bgHex, seed.L);
-  const accentL    = findAccessibleLightness(accentHue,    Math.min(seedChroma * 1.1, 0.38), bgHex, seed.L);
+  const primaryChroma   = Math.min(seedChroma * 1.1,  0.40);
+  const secondaryChroma = Math.min(seedChroma * 0.95, 0.36);
+  const accentChroma    = Math.min(seedChroma * 1.2,  0.42);
 
-  const primaryHex   = oklchToHex(gamutMap({ L: primaryL,   C: seedChroma,                    H: seedHue      }));
-  const primaryFgHex = oklchToHex(gamutMap({ L: darkMode ? 0.10 : 0.97, C: 0.004,             H: seedHue      }));
-  const secondaryHex = oklchToHex(gamutMap({ L: secondaryL, C: seedChroma * 0.80,             H: secondaryHue }));
-  const accentHex    = oklchToHex(gamutMap({ L: accentL,    C: Math.min(seedChroma * 1.1, 0.38), H: accentHue }));
+  const primaryL = nudgeLightnessForContrast(
+    seedHue, primaryChroma, bgHex, seed.L
+  );
+  const secondaryL = nudgeLightnessForContrast(
+    secondaryHue, secondaryChroma, bgHex,
+    darkMode ? Math.min(seed.L + 0.08, 0.88) : Math.max(seed.L - 0.08, 0.12)
+  );
+  const accentL = nudgeLightnessForContrast(
+    accentHue, accentChroma, bgHex,
+    darkMode ? Math.min(seed.L + 0.15, 0.92) : Math.max(seed.L - 0.15, 0.08)
+  );
 
-  const successL = findAccessibleLightness(145, 0.17, bgHex, darkMode ? 0.72 : 0.38);
-  const warningL = findAccessibleLightness(75,  0.19, bgHex, darkMode ? 0.80 : 0.46);
-  const errorL   = findAccessibleLightness(25,  0.23, bgHex, darkMode ? 0.72 : 0.42);
-  const infoL    = findAccessibleLightness(240, 0.17, bgHex, darkMode ? 0.72 : 0.42);
+  const primaryHex   = oklchToHex(gamutMap({ L: primaryL,   C: primaryChroma,   H: seedHue      }));
+  const primaryFgHex = oklchToHex(gamutMap({
+    L: darkMode ? 0.97 : 0.03,
+    C: 0.003,
+    H: seedHue
+  }));
+  const secondaryHex = oklchToHex(gamutMap({ L: secondaryL, C: secondaryChroma, H: secondaryHue }));
+  const accentHex    = oklchToHex(gamutMap({ L: accentL,    C: accentChroma,    H: accentHue    }));
+
+  const successL = nudgeLightnessForContrast(145, 0.20, bgHex,
+    darkMode ? 0.75 : 0.35, 4.5, 0.20);
+  const warningL = nudgeLightnessForContrast(75, 0.22, bgHex,
+    darkMode ? 0.82 : 0.50, 4.5, 0.20);
+  const errorL = nudgeLightnessForContrast(25, 0.26, bgHex,
+    darkMode ? 0.72 : 0.40, 4.5, 0.20);
+  const infoL = nudgeLightnessForContrast(240, 0.20, bgHex,
+    darkMode ? 0.72 : 0.40, 4.5, 0.20);
+
+  const successHex = oklchToHex(gamutMap({ L: successL, C: 0.20, H: 145 }));
+  const warningHex = oklchToHex(gamutMap({ L: warningL, C: 0.22, H: 75  }));
+  const errorHex   = oklchToHex(gamutMap({ L: errorL,   C: 0.26, H: 25  }));
+  const infoHex    = oklchToHex(gamutMap({ L: infoL,    C: 0.20, H: 240 }));
 
   const base = {
     bg:             bgHex,
@@ -312,13 +374,13 @@ export function derivePalette(seedHex, darkMode, harmonyKey, lockedColors = {}) 
     primaryFg:      primaryFgHex,
     secondary:      secondaryHex,
     accent:         accentHex,
-    success:        oklchToHex(gamutMap({ L: successL, C: 0.17, H: 145 })),
+    success:        successHex,
     successBg:      oklchToHex(gamutMap({ L: darkMode ? 0.15 : 0.94, C: 0.04, H: 145 })),
-    warning:        oklchToHex(gamutMap({ L: warningL, C: 0.19, H: 75  })),
+    warning:        warningHex,
     warningBg:      oklchToHex(gamutMap({ L: darkMode ? 0.15 : 0.95, C: 0.04, H: 75  })),
-    error:          oklchToHex(gamutMap({ L: errorL,   C: 0.23, H: 25  })),
+    error:          errorHex,
     errorBg:        oklchToHex(gamutMap({ L: darkMode ? 0.15 : 0.95, C: 0.05, H: 25  })),
-    info:           oklchToHex(gamutMap({ L: infoL,    C: 0.17, H: 240 })),
+    info:           infoHex,
     infoBg:         oklchToHex(gamutMap({ L: darkMode ? 0.15 : 0.95, C: 0.04, H: 240 })),
   };
 
