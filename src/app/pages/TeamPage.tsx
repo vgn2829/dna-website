@@ -3,67 +3,117 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Instagram, Linkedin, Mail, Users, ChevronDown, ChevronUp, Sparkles, Loader2 } from 'lucide-react';
 import { useAppData, type TeamMember } from '../context/AppDataContext';
 
-function MemberCard({ member, large = false, expanded = false, onToggle }: {
+function MemberCard({ member, expanded = false, onToggle }: {
   member: TeamMember; large?: boolean; expanded?: boolean; onToggle?: () => void;
 }) {
   return (
-    <motion.div layout initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-      whileHover={{ y: -4 }} className="glass-strong rounded-3xl overflow-hidden group cursor-pointer" onClick={onToggle}>
-
-      <div className={`relative overflow-hidden ${large ? 'h-56' : 'h-44'}`}
-        style={{ background: `linear-gradient(135deg, ${member.color}40 0%, ${member.color}10 100%)` }}>
-        <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute inset-0 flex items-center justify-center">
-          {member.photoUrl ? (
-            <img src={member.photoUrl} alt={member.name}
-              className="rounded-full object-cover shadow-xl"
-              style={{ width: large ? 100 : 80, height: large ? 100 : 80, boxShadow: `0 0 40px ${member.color}40` }} />
-          ) : (
-            <div className="rounded-full glass flex items-center justify-center shadow-xl"
-              style={{ width: large ? 100 : 80, height: large ? 100 : 80, boxShadow: `0 0 40px ${member.color}40` }}>
-              <span className={`font-bold ${large ? 'text-4xl' : 'text-3xl'}`}>{member.name.charAt(0)}</span>
-            </div>
-          )}
-        </motion.div>
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ opacity: 0.1 }}>
-          <div className="rounded-full border-2" style={{ width: large ? 160 : 130, height: large ? 160 : 130, borderColor: member.color }} />
-        </div>
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      whileHover={{ y: -4 }}
+      onClick={onToggle}
+      style={{
+        borderRadius: 'var(--radius-xl)',
+        overflow: 'hidden',
+        background: 'var(--color-surface-1)',
+        border: '1px solid var(--color-hairline)',
+        cursor: 'pointer',
+      }}
+    >
+      {/* Photo area */}
+      <div style={{
+        position: 'relative',
+        height: 260,
+        overflow: 'hidden',
+        borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0',
+        background: `${member.color}20`,
+      }}>
+        {member.photoUrl ? (
+          <img
+            src={member.photoUrl}
+            alt={member.name}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              objectPosition: 'center top',
+              display: 'block',
+            }}
+          />
+        ) : (
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <span style={{
+              fontSize: 64,
+              fontWeight: 800,
+              color: member.color,
+              fontFamily: 'var(--font-display)',
+              opacity: 0.6,
+            }}>
+              {member.name[0]}
+            </span>
+          </div>
+        )}
       </div>
 
-      <div className="p-5">
-        <div className="flex items-start justify-between mb-1">
-          <h3 className={`font-bold group-hover:gradient-text transition-all leading-tight ${large ? 'text-xl' : 'text-lg'}`}>{member.name}</h3>
-          {onToggle && <div className="text-white/40 mt-1">{expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</div>}
-        </div>
-        <p style={{ color: member.color }} className="text-sm font-semibold mb-0.5">{member.designation}</p>
-        {member.year && <p className="text-white/40 text-xs mb-3">{member.year}</p>}
-
-        <AnimatePresence>
-          {expanded && member.bio && (
-            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3 }} className="overflow-hidden">
-              <p className="text-white/60 text-sm leading-relaxed mb-4">{member.bio}</p>
-            </motion.div>
+      {/* Info area */}
+      <div style={{ padding: '16px 20px 20px', background: 'var(--color-surface-1)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <h3 className="type-headline" style={{ fontSize: 18 }}>{member.name}</h3>
+          {onToggle && (
+            <div style={{ color: 'var(--color-ink-muted)', flexShrink: 0 }}>
+              {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </div>
           )}
-        </AnimatePresence>
-
-        <div className="flex gap-2 mt-2">
+        </div>
+        <p className="type-body-sm" style={{ color: member.color, fontWeight: 600, marginBottom: 2 }}>
+          {member.designation}
+        </p>
+        {member.year && (
+          <p className="type-caption" style={{ color: 'var(--color-ink-muted)' }}>{member.year}</p>
+        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
           {member.social.instagram && (
-            <motion.a href={member.social.instagram} whileHover={{ scale: 1.15, y: -2 }} onClick={e => e.stopPropagation()} className="w-9 h-9 glass-hover rounded-full flex items-center justify-center">
-              <Instagram size={15} />
+            <motion.a href={member.social.instagram} whileHover={{ scale: 1.15, y: -2 }} onClick={e => e.stopPropagation()} className="btn-icon" style={{ width: 32, height: 32 }} aria-label="Instagram">
+              <Instagram size={14} />
             </motion.a>
           )}
           {member.social.linkedin && (
-            <motion.a href={member.social.linkedin} whileHover={{ scale: 1.15, y: -2 }} onClick={e => e.stopPropagation()} className="w-9 h-9 glass-hover rounded-full flex items-center justify-center">
-              <Linkedin size={15} />
+            <motion.a href={member.social.linkedin} whileHover={{ scale: 1.15, y: -2 }} onClick={e => e.stopPropagation()} className="btn-icon" style={{ width: 32, height: 32 }} aria-label="LinkedIn">
+              <Linkedin size={14} />
             </motion.a>
           )}
           {member.social.email && (
-            <motion.a href={`mailto:${member.social.email}`} whileHover={{ scale: 1.15, y: -2 }} onClick={e => e.stopPropagation()} className="w-9 h-9 glass-hover rounded-full flex items-center justify-center">
-              <Mail size={15} />
+            <motion.a href={`mailto:${member.social.email}`} whileHover={{ scale: 1.15, y: -2 }} onClick={e => e.stopPropagation()} className="btn-icon" style={{ width: 32, height: 32 }} aria-label="Email">
+              <Mail size={14} />
             </motion.a>
           )}
         </div>
       </div>
+
+      {/* Bio — expands below info on toggle */}
+      <AnimatePresence>
+        {expanded && member.bio && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div style={{ padding: '12px 20px 20px', borderTop: '1px solid var(--color-hairline)' }}>
+              <p className="type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>{member.bio}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion } from 'motion/react';
 import { Instagram, Linkedin, Mail, Loader2 } from 'lucide-react';
 import { useAppData, type TeamMember } from '../context/AppDataContext';
@@ -9,26 +8,61 @@ function MemberCard({ member, index, large = false }: { member: TeamMember; inde
   const accent = member.color || ACCENTS[index % ACCENTS.length];
   return (
     <motion.div
-      className="card"
-      style={{ overflow: 'hidden', cursor: 'pointer' }}
+      style={{
+        borderRadius: 'var(--radius-xl)',
+        overflow: 'hidden',
+        background: 'var(--color-surface-1)',
+        border: '1px solid var(--color-hairline)',
+        cursor: 'pointer',
+      }}
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: index * 0.05, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
       whileHover={{ y: -4 }}
     >
-      <div style={{ height: large ? 280 : 220, background: 'var(--color-surface-2)', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(circle at 50% 40%, ${accent}1a 0%, transparent 70%)` }} />
+      {/* Photo area */}
+      <div style={{
+        position: 'relative',
+        height: large ? 280 : 220,
+        overflow: 'hidden',
+        borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0',
+        background: `${accent}20`,
+      }}>
         {member.photoUrl ? (
-          <img src={member.photoUrl} alt={member.name}
-            style={{ width: 80, height: 80, borderRadius: 'var(--radius-full)', objectFit: 'cover', position: 'relative', zIndex: 1 }} />
+          <img
+            src={member.photoUrl}
+            alt={member.name}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              objectPosition: 'center top',
+              display: 'block',
+            }}
+          />
         ) : (
-          <div style={{ width: 80, height: 80, borderRadius: 'var(--radius-full)', background: 'var(--color-surface-1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--color-hairline)', position: 'relative', zIndex: 1 }}>
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 500, color: 'var(--color-ink)' }}>{member.name[0]}</span>
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <span style={{
+              fontSize: 64,
+              fontWeight: 800,
+              color: accent,
+              fontFamily: 'var(--font-display)',
+              opacity: 0.6,
+            }}>
+              {member.name[0]}
+            </span>
           </div>
         )}
       </div>
 
+      {/* Info area */}
       <div style={{ padding: '20px 20px 24px', textAlign: 'center' }}>
         <h3 className="type-display-md" style={{ fontSize: large ? 22 : 18, marginBottom: 4 }}>{member.name}</h3>
         <p className="type-caption" style={{ marginBottom: 16 }}>{member.designation}</p>
