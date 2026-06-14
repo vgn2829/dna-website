@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Heart, MessageCircle, Share2, X, ZoomIn, ZoomOut, Send, ArrowRight, FileText, Play, ExternalLink } from 'lucide-react';
+import { Heart, MessageCircle, X, ZoomIn, ZoomOut, Send, ArrowRight, FileText, Play, ExternalLink } from 'lucide-react';
 import { useAppData, type Artwork } from '../context/AppDataContext';
 import { useStudent } from '../context/StudentContext';
 
@@ -29,20 +29,44 @@ function LikeBurst({ active }: { active: boolean }) {
 function ZoomImage({ src, alt }: { src: string; alt: string }) {
   const [scale, setScale] = useState(1);
   const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [imgError, setImgError] = useState(false);
   const dragging = useRef(false);
   const last = useRef({ x: 0, y: 0 });
   return (
-    <div className="relative overflow-hidden w-full h-full flex items-center justify-center"
-      style={{ background: 'var(--color-canvas)', cursor: scale > 1 ? 'grab' : 'default', borderRadius: 'var(--radius-xl)' }}
+    <div className="relative overflow-hidden w-full flex items-center justify-center"
+      style={{ background: 'var(--color-canvas)', cursor: scale > 1 ? 'grab' : 'default', borderRadius: 'var(--radius-xl)', minHeight: 160 }}
       onMouseDown={e => { dragging.current = true; last.current = { x: e.clientX, y: e.clientY }; }}
       onMouseMove={e => { if (!dragging.current) return; setPos(p => ({ x: p.x + e.clientX - last.current.x, y: p.y + e.clientY - last.current.y })); last.current = { x: e.clientX, y: e.clientY }; }}
       onMouseUp={() => { dragging.current = false; }}>
-      <img src={src} alt={alt} draggable={false}
-        style={{ transform: `scale(${scale}) translate(${pos.x / scale}px, ${pos.y / scale}px)`, transition: dragging.current ? 'none' : 'transform 0.2s', maxWidth: '100%', maxHeight: '100%', userSelect: 'none' }} />
-      <div className="absolute bottom-3 right-3 flex gap-1.5">
-        <button onClick={() => setScale(s => Math.max(1, s - 0.5))} className="btn-icon" style={{ width: 32, height: 32 }}><ZoomOut size={13} /></button>
-        <button onClick={() => setScale(s => Math.min(4, s + 0.5))} className="btn-icon" style={{ width: 32, height: 32 }}><ZoomIn size={13} /></button>
-      </div>
+      {imgError ? (
+        <div style={{ color: 'var(--color-ink-muted)', fontSize: 13, padding: 24, textAlign: 'center' }}>
+          Image could not be loaded
+        </div>
+      ) : (
+        <img
+          src={src}
+          alt={alt}
+          draggable={false}
+          loading="lazy"
+          onError={() => setImgError(true)}
+          style={{
+            width: '100%',
+            height: 'auto',
+            maxHeight: '60vh',
+            objectFit: 'contain',
+            display: 'block',
+            userSelect: 'none',
+            transform: `scale(${scale}) translate(${pos.x / scale}px, ${pos.y / scale}px)`,
+            transition: dragging.current ? 'none' : 'transform 0.2s',
+          }}
+        />
+      )}
+      {!imgError && (
+        <div className="absolute bottom-3 right-3 flex gap-1.5">
+          <button onClick={() => setScale(s => Math.max(1, s - 0.5))} className="btn-icon" style={{ width: 32, height: 32 }}><ZoomOut size={13} /></button>
+          <button onClick={() => setScale(s => Math.min(4, s + 0.5))} className="btn-icon" style={{ width: 32, height: 32 }}><ZoomIn size={13} /></button>
+        </div>
+      )}
     </div>
   );
 }
@@ -60,7 +84,6 @@ function MediaViewer({ artwork }: { artwork: Artwork }) {
       </div>
     );
   }
-  // PDF
   return (
     <div className="w-full h-full flex flex-col items-center justify-center gap-4" style={{ background: 'var(--color-surface-2)', borderRadius: 'var(--radius-xl)' }}>
       <FileText size={56} style={{ color: 'var(--color-ink-muted)' }} />
@@ -75,6 +98,7 @@ function MediaViewer({ artwork }: { artwork: Artwork }) {
 
 function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () => void }) {
   const { artworks, likeArtwork, addComment } = useAppData();
+  const { studentSession, openRollModal } = useStudent();
   const artwork = artworks.find(a => a.id === artworkId);
   const [burst, setBurst] = useState(false);
   const [name, setName] = useState('');
@@ -89,6 +113,7 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
   if (!artwork) return null;
 
   const handleLike = () => {
+    if (!studentSession) { openRollModal(); return; }
     likeArtwork(artwork.id);
     if (!artwork.likedByUser) { setBurst(true); setTimeout(() => setBurst(false), 500); }
   };
@@ -111,8 +136,8 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
         className="w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col lg:flex-row"
         style={{ background: 'var(--color-surface-1)', borderRadius: 'var(--radius-xxl)', boxShadow: 'var(--shadow-level-2)' }}>
 
-        {/* Media */}
-        <div className="lg:w-3/5 h-64 lg:h-auto p-4 min-h-0">
+        {/* Media — responsive height on mobile, fills column on desktop */}
+        <div className="lg:w-3/5 p-4 min-h-0" style={{ maxHeight: '60vh', background: 'var(--color-canvas)' }}>
           <MediaViewer artwork={artwork} />
         </div>
 
@@ -137,10 +162,6 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
                 <Heart size={14} fill={artwork.likedByUser ? '#ff4d6d' : 'none'} style={{ color: artwork.likedByUser ? '#ff4d6d' : 'var(--color-ink-muted)' }} />
                 <span style={{ color: 'var(--color-ink)' }}>{artwork.likes}</span>
               </button>
-              <button onClick={async () => { if (navigator.share) await navigator.share({ title: artwork.title, text: `Check out "${artwork.title}" by ${artwork.artist}` }); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full type-body-sm" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)' }}>
-                <Share2 size={13} /> Share
-              </button>
               <div className="flex items-center gap-1 ml-auto type-caption" style={{ color: 'var(--color-ink-muted)' }}>
                 <MessageCircle size={12} /> {artwork.comments.length}
               </div>
@@ -161,20 +182,31 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
             ))}
           </div>
 
-          <form onSubmit={handleComment} className="p-4 space-y-2" style={{ borderTop: '1px solid var(--color-hairline-soft)' }}>
-            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" className="input-base" style={{ borderRadius: 'var(--radius-md)' }} />
-            <div className="flex gap-2">
-              <input type="text" value={text} onChange={e => setText(e.target.value)} placeholder="Add a comment…" className="input-base" style={{ borderRadius: 'var(--radius-md)' }} />
-              <button type="submit" className="btn-primary shrink-0" style={{ width: 38, height: 38, minHeight: 38, padding: 0, borderRadius: 'var(--radius-md)' }}><Send size={14} /></button>
+          {studentSession ? (
+            <form onSubmit={handleComment} className="p-4 space-y-2" style={{ borderTop: '1px solid var(--color-hairline-soft)' }}>
+              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" className="input-base" style={{ borderRadius: 'var(--radius-md)' }} />
+              <div className="flex gap-2">
+                <input type="text" value={text} onChange={e => setText(e.target.value)} placeholder="Add a comment…" className="input-base" style={{ borderRadius: 'var(--radius-md)' }} />
+                <button type="submit" className="btn-primary shrink-0" style={{ width: 38, height: 38, minHeight: 38, padding: 0, borderRadius: 'var(--radius-md)' }}><Send size={14} /></button>
+              </div>
+            </form>
+          ) : (
+            <div style={{ borderTop: '1px solid var(--color-hairline-soft)', textAlign: 'center', padding: '16px' }}>
+              <p style={{ color: 'var(--color-ink-muted)', fontSize: 13, marginBottom: 8 }}>
+                Enter your roll number to comment
+              </p>
+              <button onClick={openRollModal} className="btn-secondary">
+                Enter Roll Number
+              </button>
             </div>
-          </form>
+          )}
         </div>
       </motion.div>
     </motion.div>
   );
 }
 
-function MediaThumbnail({ art, aspect }: { art: Artwork; aspect: string }) {
+function MediaThumbnail({ art }: { art: Artwork }) {
   if (art.mediaType === 'image') {
     return (
       <img src={art.mediaUrl} alt={art.title}
@@ -273,26 +305,36 @@ export function GalleryPage() {
               const aspects = ['aspect-[3/4]', 'aspect-square', 'aspect-[4/5]', 'aspect-[2/3]'];
               const aspect = aspects[i % aspects.length];
               return (
-                <motion.div key={art.id} layout initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.94 }} transition={{ delay: i * 0.04 }}
-                  className="break-inside-avoid mb-4 group cursor-pointer relative overflow-hidden" style={{ borderRadius: 'var(--radius-xl)' }}
-                  onClick={() => setSelectedId(art.id)}>
-                  <div className={`${aspect} relative`}>
-                    <MediaThumbnail art={art} aspect={aspect} />
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4"
-                      style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.15) 60%, transparent 100%)' }}>
-                      <p className="type-body-sm font-semibold text-white leading-tight mb-0.5">{art.title}</p>
-                      <p className="type-micro" style={{ color: 'rgba(255,255,255,0.55)' }}>{art.artist}</p>
+                <motion.div
+                  key={art.id} layout
+                  initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.94 }}
+                  transition={{ delay: i * 0.04 }}
+                  className="break-inside-avoid mb-4 cursor-pointer group"
+                  onClick={() => setSelectedId(art.id)}
+                >
+                  <div style={{ borderRadius: 'var(--radius-xl)', overflow: 'hidden', background: 'var(--color-surface-1)' }}>
+                    {/* Image container */}
+                    <div className={`${aspect} relative`}>
+                      <MediaThumbnail art={art} />
+                      {/* Domain badge — top-right of image, always visible */}
+                      <span className="type-micro absolute px-2 py-0.5 rounded-full"
+                        style={{ top: 10, right: 10, background: `${domainColor}30`, color: domainColor, backdropFilter: 'blur(4px)' }}>
+                        {art.domain}
+                      </span>
+                      {/* Like button — bottom-right, visible on hover/touch */}
+                      <button
+                        onClick={e => handleLike(e, art.id)}
+                        className="absolute bottom-3 right-3 relative flex items-center gap-1 px-2.5 py-1.5 rounded-full opacity-0 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity type-micro"
+                        style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', backdropFilter: 'blur(4px)' }}>
+                        <LikeBurst active={hasBurst} />
+                        <Heart size={11} fill={art.likedByUser ? '#ff4d6d' : 'none'} style={{ color: art.likedByUser ? '#ff4d6d' : '#fff' }} />
+                        {art.likes}
+                      </button>
                     </div>
-                    <button onClick={e => handleLike(e, art.id)}
-                      className="absolute top-3 right-3 relative flex items-center gap-1 px-2.5 py-1.5 rounded-full opacity-0 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity type-micro"
-                      style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', backdropFilter: 'blur(4px)' }}>
-                      <LikeBurst active={hasBurst} />
-                      <Heart size={11} fill={art.likedByUser ? '#ff4d6d' : 'none'} style={{ color: art.likedByUser ? '#ff4d6d' : '#fff' }} />
-                      {art.likes}
-                    </button>
-                    <div className="absolute bottom-3 left-3 opacity-0 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity type-micro px-2 py-0.5 rounded-full"
-                      style={{ background: `${domainColor}30`, color: domainColor, backdropFilter: 'blur(4px)' }}>
-                      {art.domain}
+                    {/* Text area below image — always visible, never overlapped */}
+                    <div style={{ padding: '12px 16px' }}>
+                      <p className="type-body-sm font-semibold leading-tight mb-0.5" style={{ color: 'var(--color-ink)' }}>{art.title}</p>
+                      <p className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>{art.artist}</p>
                     </div>
                   </div>
                 </motion.div>
