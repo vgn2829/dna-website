@@ -78,7 +78,7 @@ export function FeaturedMarquee() {
                     <img
                       src={a.mediaUrl}
                       alt={a.title}
-                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--radius-xl)' }}
                     />
                   )}
                   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 60%)', pointerEvents: 'none' }} />

@@ -346,7 +346,7 @@ export function GalleryPage() {
                 >
                   <div style={{ borderRadius: 'var(--radius-xl)', overflow: 'hidden', background: 'var(--color-surface-1)' }}>
                     {/* Image container */}
-                    <div className={`${aspect} relative`}>
+                    <div className={`${aspect} relative`} style={{ overflow: 'hidden', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0' }}>
                       <MediaThumbnail art={art} />
                       {/* Domain badge — top-right of image, always visible */}
                       <span className="type-micro absolute px-2 py-0.5 rounded-full"
@@ -364,7 +364,7 @@ export function GalleryPage() {
                       </button>
                     </div>
                     {/* Text area below image — always visible, never overlapped */}
-                    <div style={{ padding: '12px 16px' }}>
+                    <div style={{ padding: '12px 16px', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)' }}>
                       <p className="type-body-sm font-semibold leading-tight mb-0.5" style={{ color: 'var(--color-ink)' }}>{art.title}</p>
                       <p className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>{art.artist}</p>
                     </div>
