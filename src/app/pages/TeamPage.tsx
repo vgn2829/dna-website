@@ -99,15 +99,6 @@ export function TeamPage() {
           <p className="text-white/60 text-lg max-w-2xl mx-auto">A passionate group of designers, animators, and creative thinkers dedicated to building a vibrant design culture at IIT Kanpur.</p>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="grid grid-cols-3 gap-4 mb-16">
-          {[{ value: String(team.length), label: 'Core Members' }, { value: '6', label: 'Domains Covered' }, { value: '4', label: 'Years Active' }].map(s => (
-            <div key={s.label} className="glass-strong rounded-2xl p-5 text-center">
-              <div className="text-3xl font-bold gradient-text mb-1">{s.value}</div>
-              <div className="text-sm text-white/50">{s.label}</div>
-            </div>
-          ))}
-        </motion.div>
-
         {faculty.length > 0 && (
           <div className="mb-16">
             <div className="flex items-center gap-3 mb-8"><Sparkles size={18} className="text-yellow-400" /><h2 className="text-2xl font-bold">Faculty / Advisors</h2></div>

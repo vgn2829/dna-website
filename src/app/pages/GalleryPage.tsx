@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Heart, MessageCircle, X, ZoomIn, ZoomOut, Send, ArrowRight, FileText, Play, ExternalLink } from 'lucide-react';
+import { Heart, MessageCircle, X, ZoomIn, ZoomOut, Send, FileText, Play, ExternalLink } from 'lucide-react';
 import { useAppData, type Artwork } from '../context/AppDataContext';
 import { useStudent } from '../context/StudentContext';
 
@@ -374,13 +374,6 @@ export function GalleryPage() {
               <p className="type-caption mb-3">Creative Showcase</p>
               <h1 className="type-display-xl" style={{ fontFamily: 'var(--font-display)' }}>Club<br /><span style={{ color: 'var(--color-ink-muted)' }}>Artworks</span></h1>
             </div>
-          </div>
-          <div className="spotlight spotlight-magenta mt-8 flex items-center justify-between gap-4">
-            <div>
-              <p className="type-caption mb-2" style={{ color: 'rgba(255,255,255,0.55)' }}>FEATURED</p>
-              <p className="type-display-md" style={{ fontFamily: 'var(--font-display)', color: '#fff' }}>Spring '26 Creative Showcase</p>
-            </div>
-            <button onClick={() => setFilter('All')} className="btn-translucent shrink-0">View all <ArrowRight size={13} /></button>
           </div>
         </motion.div>
 
