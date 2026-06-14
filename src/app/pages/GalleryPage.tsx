@@ -111,7 +111,7 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
   const [name, setName] = useState('');
   const [text, setText] = useState('');
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   useEffect(() => {
     const fn = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -120,7 +120,7 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
   }, [onClose]);
 
   useEffect(() => {
-    const fn = () => setIsMobile(window.innerWidth < 1024);
+    const fn = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', fn);
     return () => window.removeEventListener('resize', fn);
   }, []);
@@ -142,39 +142,110 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
 
   const domainColor = DOMAIN_COLORS[artwork.domain] ?? '#007AFF';
 
-  const imagePanelWidth = aspectRatio === null ? '55%'
-    : aspectRatio < 0.8  ? '40%'
-    : aspectRatio > 1.3  ? '65%'
-    : '50%';
-  const actualImageWidth = isMobile ? '100%' : imagePanelWidth;
-  const actualInfoWidth  = isMobile ? '100%' : `calc(100% - ${imagePanelWidth})`;
+  // ── Mobile: full-screen sheet sliding up from bottom ──────────────────────
+  if (isMobile) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: '100%' }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: '100%' }}
+        transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+        style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'var(--color-surface-1)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}
+      >
+        {/* Sticky header — always reachable */}
+        <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--color-surface-1)', borderBottom: '1px solid var(--color-hairline)' }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 8 }}>
+            {artwork.title}
+          </span>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--color-surface-2)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <X size={16} style={{ color: 'var(--color-ink)' }} />
+          </button>
+        </div>
 
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.85)' }}
-      onClick={onClose}>
-      <motion.div initial={{ opacity: 0, scale: 0.94, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.94, y: 16 }}
-        transition={{ type: 'spring', damping: 28, stiffness: 320 }} onClick={e => e.stopPropagation()}
-        className="w-full max-w-5xl max-h-[90vh] overflow-hidden flex"
-        style={{ background: 'var(--color-surface-1)', borderRadius: 'var(--radius-xxl)', boxShadow: 'var(--shadow-level-2)', flexDirection: isMobile ? 'column' : 'row' }}>
-
-        {/* Media — adapts width to artwork aspect ratio on desktop, stacks on mobile */}
-        <div style={{
-          width: actualImageWidth,
-          flexShrink: 0,
-          background: 'var(--color-canvas)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 16,
-          minHeight: 0,
-          maxHeight: isMobile ? '50vh' : '90vh',
-        }}>
+        {/* Image */}
+        <div style={{ width: '100%', height: 'min(60vw, 55vh)', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
           <MediaViewer artwork={artwork} onAspectRatio={setAspectRatio} />
         </div>
 
         {/* Info */}
-        <div style={{ width: actualInfoWidth, flexShrink: 0 }} className="flex flex-col overflow-y-auto">
+        <div style={{ padding: 16, borderBottom: '1px solid var(--color-hairline-soft)' }}>
+          <span className="type-micro inline-block mb-2 px-2 py-0.5 rounded-full" style={{ background: `${domainColor}18`, color: domainColor }}>{artwork.domain}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-ink)', margin: 0, lineHeight: 1.3 }}>{artwork.title}</h2>
+            <span className="type-micro px-2 py-0.5 rounded-full uppercase" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)', flexShrink: 0 }}>{artwork.mediaType}</span>
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--color-ink-muted)', marginBottom: 12 }}>by {artwork.artist}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={handleLike} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 'var(--radius-pill)', background: 'var(--color-surface-2)', border: 'none', cursor: 'pointer', fontSize: 13 }}>
+              <LikeBurst active={burst} />
+              <Heart size={14} fill={artwork.likedByUser ? '#ff4d6d' : 'none'} style={{ color: artwork.likedByUser ? '#ff4d6d' : 'var(--color-ink-muted)' }} />
+              <span style={{ color: 'var(--color-ink)' }}>{artwork.likes}</span>
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto', fontSize: 12, color: 'var(--color-ink-muted)' }}>
+              <MessageCircle size={12} /> {artwork.comments.length}
+            </div>
+          </div>
+        </div>
+
+        {/* Comments */}
+        <div style={{ padding: '12px 16px', flex: 1 }}>
+          {artwork.comments.length === 0 && (
+            <p className="type-caption text-center py-6" style={{ color: 'var(--color-ink-muted)' }}>No comments yet.</p>
+          )}
+          {artwork.comments.map(c => (
+            <div key={c.id} style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <div className="type-micro font-bold" style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{c.sender[0]}</div>
+                <span className="type-body-sm">{c.sender}</span>
+                <span className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>{c.date}</span>
+              </div>
+              <p className="type-body" style={{ color: 'var(--color-ink-muted)', marginLeft: 28 }}>{c.text}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Comment form — sticky at bottom */}
+        {studentSession ? (
+          <form onSubmit={handleComment} style={{ position: 'sticky', bottom: 0, padding: '12px 16px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))', borderTop: '1px solid var(--color-hairline-soft)', background: 'var(--color-surface-1)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" className="input-base" style={{ borderRadius: 'var(--radius-md)' }} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input type="text" value={text} onChange={e => setText(e.target.value)} placeholder="Add a comment…" className="input-base" style={{ borderRadius: 'var(--radius-md)', flex: 1 }} />
+              <button type="submit" className="btn-primary shrink-0" style={{ width: 38, height: 38, minHeight: 38, padding: 0, borderRadius: 'var(--radius-md)' }}><Send size={14} /></button>
+            </div>
+          </form>
+        ) : (
+          <div style={{ position: 'sticky', bottom: 0, borderTop: '1px solid var(--color-hairline-soft)', textAlign: 'center', padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))', background: 'var(--color-surface-1)' }}>
+            <p style={{ color: 'var(--color-ink-muted)', fontSize: 13, marginBottom: 8 }}>Enter your roll number to comment</p>
+            <button onClick={openRollModal} className="btn-secondary">Enter Roll Number</button>
+          </div>
+        )}
+      </motion.div>
+    );
+  }
+
+  // ── Desktop: centered floating card ───────────────────────────────────────
+  const imagePanelWidth = aspectRatio === null ? '55%'
+    : aspectRatio < 0.8  ? '40%'
+    : aspectRatio > 1.3  ? '65%'
+    : '50%';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(0,0,0,0.85)' }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.94, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.94, y: 16 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+        onClick={e => e.stopPropagation()}
+        style={{ width: '100%', maxWidth: 1024, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'row', background: 'var(--color-surface-1)', borderRadius: 'var(--radius-xxl)', boxShadow: 'var(--shadow-level-2)' }}
+      >
+        {/* Media panel */}
+        <div style={{ width: imagePanelWidth, flexShrink: 0, background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, minHeight: 0, maxHeight: '90vh' }}>
+          <MediaViewer artwork={artwork} onAspectRatio={setAspectRatio} />
+        </div>
+
+        {/* Info panel */}
+        <div style={{ width: `calc(100% - ${imagePanelWidth})`, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', maxHeight: '90vh' }}>
           <div className="p-6" style={{ borderBottom: '1px solid var(--color-hairline-soft)' }}>
             <div className="flex items-start justify-between gap-3 mb-4">
               <div className="flex-1 min-w-0">
@@ -187,7 +258,6 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
               </div>
               <button onClick={onClose} className="btn-icon" style={{ width: 32, height: 32 }}><X size={15} /></button>
             </div>
-
             <div className="flex items-center gap-2">
               <button onClick={handleLike} className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full type-body-sm transition-colors" style={{ background: 'var(--color-surface-2)' }}>
                 <LikeBurst active={burst} />
@@ -224,12 +294,8 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
             </form>
           ) : (
             <div style={{ borderTop: '1px solid var(--color-hairline-soft)', textAlign: 'center', padding: '16px' }}>
-              <p style={{ color: 'var(--color-ink-muted)', fontSize: 13, marginBottom: 8 }}>
-                Enter your roll number to comment
-              </p>
-              <button onClick={openRollModal} className="btn-secondary">
-                Enter Roll Number
-              </button>
+              <p style={{ color: 'var(--color-ink-muted)', fontSize: 13, marginBottom: 8 }}>Enter your roll number to comment</p>
+              <button onClick={openRollModal} className="btn-secondary">Enter Roll Number</button>
             </div>
           )}
         </div>
