@@ -26,15 +26,15 @@ function LikeBurst({ active }: { active: boolean }) {
   );
 }
 
-function ZoomImage({ src, alt }: { src: string; alt: string }) {
+function ZoomImage({ src, alt, onAspectRatio }: { src: string; alt: string; onAspectRatio?: (ratio: number) => void }) {
   const [scale, setScale] = useState(1);
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [imgError, setImgError] = useState(false);
   const dragging = useRef(false);
   const last = useRef({ x: 0, y: 0 });
   return (
-    <div className="relative overflow-hidden w-full flex items-center justify-center"
-      style={{ background: 'var(--color-canvas)', cursor: scale > 1 ? 'grab' : 'default', borderRadius: 'var(--radius-xl)', minHeight: 160 }}
+    <div
+      style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', background: 'var(--color-canvas)', cursor: scale > 1 ? 'grab' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onMouseDown={e => { dragging.current = true; last.current = { x: e.clientX, y: e.clientY }; }}
       onMouseMove={e => { if (!dragging.current) return; setPos(p => ({ x: p.x + e.clientX - last.current.x, y: p.y + e.clientY - last.current.y })); last.current = { x: e.clientX, y: e.clientY }; }}
       onMouseUp={() => { dragging.current = false; }}>
@@ -48,11 +48,18 @@ function ZoomImage({ src, alt }: { src: string; alt: string }) {
           alt={alt}
           draggable={false}
           loading="lazy"
+          onLoad={e => {
+            const img = e.currentTarget;
+            if (onAspectRatio && img.naturalWidth && img.naturalHeight) {
+              onAspectRatio(img.naturalWidth / img.naturalHeight);
+            }
+          }}
           onError={() => setImgError(true)}
           style={{
-            width: '100%',
+            maxWidth: '100%',
+            maxHeight: '100%',
+            width: 'auto',
             height: 'auto',
-            maxHeight: '60vh',
             objectFit: 'contain',
             display: 'block',
             userSelect: 'none',
@@ -71,9 +78,9 @@ function ZoomImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function MediaViewer({ artwork }: { artwork: Artwork }) {
+function MediaViewer({ artwork, onAspectRatio }: { artwork: Artwork; onAspectRatio?: (ratio: number) => void }) {
   if (artwork.mediaType === 'image') {
-    return <ZoomImage src={artwork.mediaUrl} alt={artwork.title} />;
+    return <ZoomImage src={artwork.mediaUrl} alt={artwork.title} onAspectRatio={onAspectRatio} />;
   }
   if (artwork.mediaType === 'video') {
     return (
@@ -103,12 +110,20 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
   const [burst, setBurst] = useState(false);
   const [name, setName] = useState('');
   const [text, setText] = useState('');
+  const [aspectRatio, setAspectRatio] = useState<number | null>(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
   useEffect(() => {
     const fn = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', fn);
     return () => window.removeEventListener('keydown', fn);
   }, [onClose]);
+
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 1024);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
 
   if (!artwork) return null;
 
@@ -127,22 +142,39 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
 
   const domainColor = DOMAIN_COLORS[artwork.domain] ?? '#007AFF';
 
+  const imagePanelWidth = aspectRatio === null ? '55%'
+    : aspectRatio < 0.8  ? '40%'
+    : aspectRatio > 1.3  ? '65%'
+    : '50%';
+  const actualImageWidth = isMobile ? '100%' : imagePanelWidth;
+  const actualInfoWidth  = isMobile ? '100%' : `calc(100% - ${imagePanelWidth})`;
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.85)' }}
       onClick={onClose}>
       <motion.div initial={{ opacity: 0, scale: 0.94, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.94, y: 16 }}
         transition={{ type: 'spring', damping: 28, stiffness: 320 }} onClick={e => e.stopPropagation()}
-        className="w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col lg:flex-row"
-        style={{ background: 'var(--color-surface-1)', borderRadius: 'var(--radius-xxl)', boxShadow: 'var(--shadow-level-2)' }}>
+        className="w-full max-w-5xl max-h-[90vh] overflow-hidden flex"
+        style={{ background: 'var(--color-surface-1)', borderRadius: 'var(--radius-xxl)', boxShadow: 'var(--shadow-level-2)', flexDirection: isMobile ? 'column' : 'row' }}>
 
-        {/* Media — responsive height on mobile, fills column on desktop */}
-        <div className="lg:w-3/5 p-4 min-h-0" style={{ maxHeight: '60vh', background: 'var(--color-canvas)' }}>
-          <MediaViewer artwork={artwork} />
+        {/* Media — adapts width to artwork aspect ratio on desktop, stacks on mobile */}
+        <div style={{
+          width: actualImageWidth,
+          flexShrink: 0,
+          background: 'var(--color-canvas)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16,
+          minHeight: 0,
+          maxHeight: isMobile ? '50vh' : '90vh',
+        }}>
+          <MediaViewer artwork={artwork} onAspectRatio={setAspectRatio} />
         </div>
 
         {/* Info */}
-        <div className="lg:w-2/5 flex flex-col overflow-y-auto">
+        <div style={{ width: actualInfoWidth, flexShrink: 0 }} className="flex flex-col overflow-y-auto">
           <div className="p-6" style={{ borderBottom: '1px solid var(--color-hairline-soft)' }}>
             <div className="flex items-start justify-between gap-3 mb-4">
               <div className="flex-1 min-w-0">
