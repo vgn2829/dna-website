@@ -17,11 +17,9 @@ export function HomePage() {
       <Stats />
       <GalleryPreview />
       <EventSpotlight />
+      <PaletteStudioCard />
       <ResourcesPreview />
       <Team />
-      <div style={{ padding: '0 24px 96px', maxWidth: 1200, margin: '0 auto' }}>
-        <PaletteStudioCard />
-      </div>
     </div>
   );
 }
