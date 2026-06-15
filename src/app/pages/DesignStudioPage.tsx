@@ -165,6 +165,11 @@ const PAIR_DB: any[] = [
   { s:"contrast", display:"Merriweather",        body:"Lato",               dw:700, bw:300, xh:true,  why:"Readability-optimized serif + light humanist body.", use:"Blog · Documentation · News" },
   { s:"contrast", display:"Montagu Slab",        body:"Figtree",            dw:700, bw:400, xh:true,  why:"Contemporary optical slab + friendly rounded sans.", use:"Brand · Product · Lifestyle" },
   { s:"contrast", display:"Prata",               body:"Manrope",            dw:400, bw:400, xh:false, why:"Display-weight serif + clean geometric body — confident brand voice.", use:"Luxury · Brand · Portfolio" },
+  { s:"contrast", display:"Unica One",           body:"Crimson Text",       dw:400, bw:400, xh:false, why:"Geometric condensed display meets warm humanist text serif.", use:"Editorial · Literary · Art direction" },
+  { s:"contrast", display:"Cinzel",              body:"Fauna One",          dw:400, bw:400, xh:false, why:"Roman lapidary capitals with a soft organic text body — classical gravitas.", use:"Luxury · Wedding · Heritage brands" },
+  { s:"contrast", display:"Yeseva One",          body:"Josefin Sans",       dw:400, bw:300, xh:false, why:"Feminine serif display with a geometric art-deco body — refined contrast.", use:"Fashion · Lifestyle · Creative studio" },
+  { s:"contrast", display:"League Spartan",      body:"Libre Baskerville",  dw:700, bw:400, xh:true,  why:"Geometric strength meets serif elegance — bold sans with refined text body.", use:"Corporate · Portfolio · Professional" },
+  { s:"contrast", display:"Chonburi",            body:"Domine",             dw:400, bw:400, xh:false, why:"Thai-influenced display with a sturdy news serif body — distinctive and readable.", use:"Editorial · Cultural · Multilingual" },
 
   { s:"humanist", display:"Rubik",               body:"Open Sans",          dw:700, bw:400, xh:true,  why:"Slightly rounded grotesque + the most neutral open body.", use:"Food · Lifestyle · Friendly web" },
   { s:"humanist", display:"Montserrat",          body:"Open Sans",          dw:700, bw:400, xh:true,  why:"The most popular Google pairing — urban geometric meets open humanist.", use:"Business · Marketing · Landing page" },
@@ -179,10 +184,17 @@ const PAIR_DB: any[] = [
   { s:"humanist", display:"Albert Sans",         body:"Barlow",             dw:700, bw:400, xh:true,  why:"Low-contrast neo-grotesque + humanist Barlow — calm, professional.", use:"Corporate · SaaS · Product" },
   { s:"humanist", display:"Corben",              body:"Montserrat",         dw:700, bw:400, xh:false, why:"Quirky display + versatile geometric body — fun and distinct.", use:"Food · Retail · Creative brand" },
   { s:"humanist", display:"Phudu",               body:"Onest",              dw:700, bw:400, xh:true,  why:"Contemporary display grotesque + versatile humanist body.", use:"Tech · Product · Modern web" },
+  { s:"humanist", display:"Fugaz One",           body:"Work Sans",          dw:400, bw:400, xh:false, why:"Condensed display energy + utilitarian grotesque body — impact and clarity.", use:"Sports · Event · Bold brand" },
+  { s:"humanist", display:"Oswald",              body:"Source Serif 4",     dw:600, bw:400, xh:true,  why:"Condensed sans headline over Google's variable text serif — editorial authority.", use:"News · Magazine · Feature article" },
+  { s:"humanist", display:"Sacramento",          body:"Poppins",            dw:400, bw:400, xh:false, why:"Script elegance balanced by a modern geometric sans body — playful and refined.", use:"Lifestyle blog · Boutique · Creative business" },
+  { s:"humanist", display:"Sacramento",          body:"Lato",               dw:400, bw:300, xh:false, why:"Flowing script display with a humanist light body — delicate and approachable.", use:"Wedding · Beauty · Artisan brand" },
+  { s:"humanist", display:"Grand Hotel",         body:"Lato",               dw:400, bw:300, xh:false, why:"Ornate script display with a clean light humanist body — glamour meets clarity.", use:"Luxury · Hospitality · Event" },
+  { s:"humanist", display:"Arima Madurai",       body:"Mulish",             dw:700, bw:400, xh:true,  why:"Rounded display with Devanagari warmth + clean geometric sans body — friendly and global.", use:"Education · Multilingual · Friendly brand" },
 
   { s:"mono", display:"Syne",               body:"Space Mono",         dw:800, bw:400, xh:true,  why:"Bold variable grotesque + monospaced body — creative studio energy.", use:"Studio · Portfolio · Creative tech" },
   { s:"mono", display:"Space Grotesk",      body:"IBM Plex Mono",      dw:700, bw:400, xh:true,  why:"Retro-tech display + IBM's corporate monospaced — systematic.", use:"Enterprise tech · Data · SaaS" },
   { s:"mono", display:"Bricolage Grotesque",body:"DM Mono",            dw:700, bw:400, xh:true,  why:"Contemporary display + clean mono body — developer product feel.", use:"Dev tool · API docs · Tech brand" },
+  { s:"mono", display:"Space Mono",        body:"Plus Jakarta Sans",  dw:700, bw:400, xh:true,  why:"Retro monospaced display + contemporary geometric sans body — technical meets modern.", use:"Dev tool · Portfolio · Creative tech" },
 
   { s:"slab", display:"Roboto Slab",        body:"Lato",               dw:700, bw:300, xh:true,  why:"Google slab family + lightweight humanist body — authoritative yet approachable.", use:"Business · Blog · Report" },
   { s:"slab", display:"Bitter",             body:"Open Sans",          dw:700, bw:400, xh:true,  why:"News-grade slab + the web's most-used sans — journalistic powerhouse.", use:"News · Content marketing · Blog" },
@@ -191,6 +203,7 @@ const PAIR_DB: any[] = [
   { s:"slab", display:"Lexend",             body:"Zilla Slab",         dw:700, bw:400, xh:true,  why:"Accessibility display + slab body — highly legible, educational.", use:"E-learning · Healthcare · Accessibility" },
   { s:"slab", display:"Work Sans",          body:"Bitter",             dw:700, bw:400, xh:true,  why:"Sans headline + slab body — inverts convention for editorial richness.", use:"Magazine · Blog · Editorial" },
   { s:"slab", display:"Montagu Slab",       body:"Source Sans 3",      dw:700, bw:400, xh:true,  why:"Modern optical slab + versatile sans body — design-system ready.", use:"Product · Brand · Web" },
+  { s:"slab", display:"Ultra",              body:"Slabo 27px",         dw:400, bw:400, xh:false, why:"Maximum-weight slab display + a text-optimized serif body — extreme editorial contrast.", use:"Poster · Magazine · Bold editorial" },
 
   { s:"serif-serif", display:"Quattrocento",     body:"Fanwood Text",       dw:700, bw:400, xh:false, why:"Classical Italian roman + American text serif — old-world literary.", use:"Academic · Heritage · Publishing" },
   { s:"serif-serif", display:"Abril Fatface",    body:"Crimson Pro",        dw:400, bw:400, xh:false, why:"Ultra-fat display + refined scholarly text serif.", use:"Culture · Literary · Magazine" },
@@ -207,6 +220,7 @@ const PAIR_DB: any[] = [
   { s:"display-drama", display:"Barlow Condensed",body:"Merriweather",      dw:700, bw:300, xh:true,  why:"Tight condensed sans + wide-set readable serif — editorial authority.", use:"Feature · Long-form · News" },
   { s:"display-drama", display:"Anton",          body:"Lora",               dw:400, bw:400, xh:false, why:"Ultra-heavy display + elegant text serif — maximum weight contrast.", use:"Poster · Sports · Dramatic" },
   { s:"display-drama", display:"Fjalla One",     body:"Libre Baskerville",  dw:400, bw:400, xh:false, why:"Heavy condensed display + reliable text serif body.", use:"News · Nonprofit · Editorial" },
+  { s:"display-drama", display:"Yeseva One",     body:"Crimson Text",       dw:400, bw:400, xh:false, why:"Decorative serif display with an elegant literary text body — dramatic editorial warmth.", use:"Culture · Literary · Magazine" },
 
   { s:"grotesque", display:"Montserrat",         body:"Montserrat",         dw:900, bw:300, xh:true,  why:"Montserrat Black vs Light — one typeface, maximum weight drama.", use:"Landing page · Poster · Bold brand" },
   { s:"grotesque", display:"Raleway",            body:"Open Sans",          dw:700, bw:400, xh:true,  why:"Display geometric + open humanist — elegant modern web pairing.", use:"Portfolio · Agency · Lifestyle" },
@@ -221,10 +235,11 @@ const PAIR_DB: any[] = [
   { s:"grotesque", display:"Epilogue",           body:"Inter",              dw:700, bw:400, xh:true,  why:"Display grotesque + neutral system body — clear hierarchy.", use:"SaaS · Product · Documentation" },
   { s:"grotesque", display:"Albert Sans",        body:"Inter",              dw:700, bw:400, xh:true,  why:"Warm neo-grotesque + neutral system body — approachable authority.", use:"Startup · App · Corporate" },
   { s:"grotesque", display:"PT Sans",            body:"PT Sans",            dw:700, bw:400, xh:true,  why:"Paratype's humanist grotesque — weight contrast within one global family.", use:"Government · International · Publication" },
+  { s:"grotesque", display:"PT Sans",            body:"PT Serif",           dw:700, bw:400, xh:true,  why:"Superfamily pairing — bold PT Sans with its matching PT Serif body for perfect harmony.", use:"Content-heavy sites · Publication · International" },
 ];
 
 const STRATEGIES = [
-  { id:"all",          label:"All",            vibe:"All 132 curated pairs across 7 strategies",                       gradient:T.gradViolet  },
+  { id:"all",          label:"All",            vibe:"All 147 curated pairs across 7 strategies",                       gradient:T.gradViolet  },
   { id:"contrast",     label:"Contrast",       vibe:"Serif display + sans body — the timeless editorial formula.",     gradient:T.gradViolet  },
   { id:"humanist",     label:"Humanist",       vibe:"High-impact condensed headlines + readable sans body.",           gradient:T.gradMagenta },
   { id:"mono",         label:"Mono Accent",    vibe:"Geometric or sans headline + monospaced body for tech.",          gradient:T.gradOrange  },
