@@ -316,14 +316,14 @@ function FontPairing() {
   return (
     <div style={{display:"flex",gap:24,flexDirection:"column"}}>
       <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap",flex:1}}>
+        <div style={{display:"flex",gap:6,flexWrap:"nowrap",flex:1,overflowX:"auto",scrollbarWidth:"none"}}>
           {STRATEGIES.map(s => (
             <button key={s.id} onClick={() => switchStrategy(s.id)}
-              style={{padding:"7px 14px",borderRadius:100,border:"none",cursor:"pointer",
-                fontFamily:"var(--font-body)",fontSize:12,fontWeight:500,
-                background:strategy===s.id ? T.primary : T.surface2,
-                color:strategy===s.id ? T.canvas : T.inkMuted,
-                transition:"all .12s"}}>
+              style={{padding:"6px 14px",borderRadius:"var(--radius-pill)",border:"none",cursor:"pointer",
+                fontFamily:"var(--font-body)",fontSize:12,fontWeight:strategy===s.id?500:400,
+                background:strategy===s.id ? "var(--color-inverse-canvas)" : "var(--color-surface-1)",
+                color:strategy===s.id ? "var(--color-canvas)" : "var(--color-ink-muted)",
+                whiteSpace:"nowrap",transition:"all .12s"}}>
               {s.label}
               {s.id!=="all" && <span style={{marginLeft:6,fontSize:10,opacity:0.6}}>
                 {PAIR_DB.filter((p:any)=>p.s===s.id).length}
@@ -341,11 +341,11 @@ function FontPairing() {
         </div>
       </div>
 
-      <div style={{fontFamily:"var(--font-body)",fontSize:11,color:T.inkDim}}>
+      <div style={{fontFamily:"var(--font-body)",fontSize:11,color:"var(--color-ink-muted)",marginBottom:16}}>
         Showing pair {safeIdx+1} of {currentPool.length} in <span style={{color:T.inkMuted}}>{strat.label}</span>
       </div>
 
-      <div style={{background:T.surface1,borderRadius:20,padding:40,border:`1px solid ${T.hairline}`,position:"relative",overflow:"hidden",minHeight:260}}>
+      <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:40,border:"1px solid rgba(255,255,255,0.06)",position:"relative",overflow:"hidden",minHeight:260}}>
         <div style={{position:"absolute",top:-80,right:-80,width:280,height:280,borderRadius:"50%",background:strat.gradient,opacity:0.13,filter:"blur(70px)",pointerEvents:"none"}}/>
         <div style={{display:"flex",gap:7,marginBottom:22,flexWrap:"wrap"}}>
           <span style={{padding:"4px 10px",borderRadius:6,background:T.surface2,color:T.inkMuted,fontFamily:"var(--font-body)",fontSize:11,fontWeight:500}}>
@@ -389,13 +389,13 @@ function FontPairing() {
 
         <div style={{display:"flex",gap:10,marginTop:24,flexWrap:"wrap"}}>
           {[{label:"Display",name:pair.display,w:pair.dw},{label:"Body",name:pair.body,w:pair.bw}].map((f:any)=>(
-            <div key={f.label} style={{background:T.surface2,borderRadius:10,padding:"10px 16px",border:`1px solid ${T.hairline}`,flex:1,minWidth:120}}>
+            <div key={f.label} style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:"16px",border:"1px solid rgba(255,255,255,0.06)",flex:1,minWidth:120}}>
               <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkMuted,letterSpacing:".06em",textTransform:"uppercase",marginBottom:4}}>{f.label}</div>
               <div style={{fontFamily:`'${f.name}',serif,sans-serif`,fontWeight:f.w,fontSize:16,color:T.ink,marginBottom:2}}>{f.name}</div>
               <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkDim}}>weight {f.w}</div>
             </div>
           ))}
-          <div style={{background:T.surface2,borderRadius:10,padding:"12px 16px",border:`1px solid ${T.hairline}`,minWidth:130}}>
+          <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:"16px",border:"1px solid rgba(255,255,255,0.06)",minWidth:130}}>
             <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkMuted,letterSpacing:".06em",textTransform:"uppercase",marginBottom:8}}>Pairing score</div>
             {[["Category",catScore],["X-height",xhScore],["Weight Δ",wScore]].map(([k,v]:any)=>(
               <div key={k} style={{marginBottom:6}}>
@@ -421,7 +421,7 @@ function FontPairing() {
           <label style={ss.label}>Display size — {fontSize}px</label>
           <input type="range" min={24} max={96} value={fontSize} onChange={(e:any)=>setFontSize(+e.target.value)} style={{width:"100%",accentColor:T.accentBlue}}/>
         </div>
-        <a href={`https://fonts.google.com/specimen/${encodeURIComponent(pair.display)}`} target="_blank" rel="noopener" style={{...ss.btnPri,textDecoration:"none",whiteSpace:"nowrap",fontSize:12}}>
+        <a href={`https://fonts.google.com/specimen/${encodeURIComponent(pair.display)}`} target="_blank" rel="noopener" style={{...ss.btnSec,textDecoration:"none",whiteSpace:"nowrap",fontSize:12}}>
           ↗ {pair.display}
         </a>
         <a href={`https://fonts.google.com/specimen/${encodeURIComponent(pair.body)}`} target="_blank" rel="noopener" style={{...ss.btnSec,textDecoration:"none",whiteSpace:"nowrap",fontSize:12}}>
@@ -575,7 +575,7 @@ function ContrastChecker() {
 
   return (
     <div style={{display:"flex",gap:24,flexDirection:"column"}}>
-      <div style={{borderRadius:20,padding:40,background:isHex(bg)?bg:T.canvas,border:`1px solid ${T.hairline}`,minHeight:160,display:"flex",flexDirection:"column",justifyContent:"center",position:"relative"}}>
+      <div style={{borderRadius:"var(--radius-xl)",padding:40,background:isHex(bg)?bg:T.canvas,border:"1px solid rgba(255,255,255,0.06)",minHeight:160,display:"flex",flexDirection:"column",justifyContent:"center",position:"relative"}}>
         <div style={{fontFamily:"var(--font-body)",letterSpacing:"-3px",fontSize:64,fontWeight:700,lineHeight:1,color:isHex(fg)?fg:T.ink}}>Aa</div>
         <p style={{fontFamily:"var(--font-body)",fontSize:15,lineHeight:1.5,letterSpacing:"-0.15px",margin:"12px 0 0",color:isHex(fg)?fg:T.ink,opacity:0.85}}>
           Contrast ratio: <strong>{rStr}:1</strong>
@@ -598,7 +598,7 @@ function ContrastChecker() {
             <input value={fgI} onChange={(e:any)=>syncFg(e.target.value)} style={{...ss.input,fontFamily:"var(--font-mono)",letterSpacing:"0.05em"}} maxLength={7}/>
           </div>
         </div>
-        <button onClick={swap} style={{width:44,height:44,borderRadius:100,border:`1px solid ${T.hairline}`,background:T.surface2,color:T.ink,cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>⇅</button>
+        <button onClick={swap} style={{background:"var(--color-surface-1)",color:"var(--color-ink)",borderRadius:"var(--radius-pill)",border:"none",cursor:"pointer",fontFamily:"var(--font-body)",width:44,height:44,fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>⇅</button>
         <div style={{flex:1,minWidth:160}}>
           <label style={ss.label}>Background</label>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -608,7 +608,7 @@ function ContrastChecker() {
         </div>
       </div>
 
-      <div style={{background:T.surface1,borderRadius:12,padding:20,border:`1px solid ${T.hairline}`}}>
+      <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:24,border:"1px solid rgba(255,255,255,0.06)"}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
           <span style={{fontFamily:"var(--font-body)",fontSize:13,color:T.inkMuted}}>Contrast ratio</span>
           <span style={{fontFamily:"var(--font-body)",fontSize:13,fontWeight:600,color:rc}}>{rStr}:1</span>
@@ -624,7 +624,7 @@ function ContrastChecker() {
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
         {levels.map((l:any)=>(
-          <div key={l.l} style={{background:T.surface1,borderRadius:12,padding:14,border:`1px solid ${l.p?"#166534":"#7f1d1d"}`}}>
+          <div key={l.l} style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-lg)",padding:14,border:`1px solid ${l.p?"#166534":"#7f1d1d"}`}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
               <span style={{fontFamily:"var(--font-body)",fontSize:11,color:T.inkMuted,lineHeight:1.3}}>{l.l}</span>
               <span style={{fontSize:16}}>{l.p?"✓":"✗"}</span>
@@ -636,14 +636,14 @@ function ContrastChecker() {
       </div>
 
       {failing && (
-        <div style={{background:T.surface1,borderRadius:16,border:`1px solid rgba(239,68,68,0.3)`,padding:20}}>
+        <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",border:"1px solid rgba(239,68,68,0.3)",padding:24}}>
           <div style={{marginBottom:16}}>
             <div style={{fontFamily:"var(--font-body)",fontSize:13,fontWeight:600,color:T.ink,marginBottom:2}}>Suggested foreground colors</div>
             <div style={{fontFamily:"var(--font-body)",fontSize:11,color:T.inkMuted}}>All achieve WCAG AA (4.5:1) against your background, maintaining color harmony</div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10}}>
             {suggestions.map((s:any,i:number)=>(
-              <button key={i} onClick={()=>{setFg(s.hex);setFgI(s.hex);}} style={{background:T.surface2,borderRadius:12,padding:14,border:`1px solid ${T.hairline}`,cursor:"pointer",textAlign:"left",transition:"border-color .15s"}}
+              <button key={i} onClick={()=>{setFg(s.hex);setFgI(s.hex);}} style={{background:"var(--color-surface-2)",borderRadius:"var(--radius-lg)",padding:14,border:`1px solid ${T.hairline}`,cursor:"pointer",textAlign:"left",transition:"border-color .15s"}}
                 onMouseEnter={(e:any)=>e.currentTarget.style.borderColor=s.hex}
                 onMouseLeave={(e:any)=>e.currentTarget.style.borderColor=T.hairline}>
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
@@ -710,7 +710,7 @@ function ImageConverter(){
       <canvas ref={canvasRef} style={{display:"none"}}/>
       {!preview?(
         <div onClick={()=>document.getElementById("img-inp")?.click()} onDragOver={(e:any)=>e.preventDefault()} onDrop={(e:any)=>{e.preventDefault();loadFile(e.dataTransfer.files[0]);}}
-          style={{borderRadius:20,border:`2px dashed ${T.hairline}`,background:T.surface1,padding:"60px 40px",display:"flex",flexDirection:"column",alignItems:"center",cursor:"pointer",gap:12}}
+          style={{borderRadius:"var(--radius-xl)",border:"2px dashed var(--color-hairline)",background:"var(--color-surface-1)",padding:"60px 40px",display:"flex",flexDirection:"column",alignItems:"center",cursor:"pointer",gap:12}}
           onMouseEnter={(e:any)=>e.currentTarget.style.borderColor=T.accentBlue} onMouseLeave={(e:any)=>e.currentTarget.style.borderColor=T.hairline}>
           <div style={{width:56,height:56,borderRadius:14,background:T.surface2,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -724,7 +724,7 @@ function ImageConverter(){
       ):(
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
           {[{label:"Original",src:preview,meta:info?`${info.w}×${info.h} · ${info.size}KB`:""},{label:"Output",src:converted?.url,meta:converted?`${converted.w}×${converted.h} · ${converted.size}KB`:""}].map((p:any)=>(
-            <div key={p.label} style={{background:T.surface1,borderRadius:16,overflow:"hidden",border:`1px solid ${T.hairline}`}}>
+            <div key={p.label} style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",overflow:"hidden",border:"1px solid rgba(255,255,255,0.06)"}}>
               <div style={{padding:"10px 16px",borderBottom:`1px solid ${T.hairline}`,display:"flex",justifyContent:"space-between"}}>
                 <span style={{fontFamily:"var(--font-body)",fontSize:12,color:T.inkMuted}}>{p.label}</span>
                 {p.meta&&<span style={{fontFamily:"var(--font-mono)",fontSize:11,color:T.inkMuted}}>{p.meta}</span>}
@@ -738,12 +738,12 @@ function ImageConverter(){
         </div>
       )}
       {preview&&(
-        <div style={{background:T.surface1,borderRadius:16,padding:20,border:`1px solid ${T.hairline}`,display:"flex",gap:20,flexWrap:"wrap",alignItems:"flex-end"}}>
+        <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:24,border:"1px solid rgba(255,255,255,0.06)",display:"flex",gap:20,flexWrap:"wrap",alignItems:"flex-end"}}>
           <div>
             <label style={ss.label}>Format</label>
             <div style={{display:"flex",gap:8}}>
               {[["image/png","PNG"],["image/jpeg","JPEG"],["image/webp","WebP"]].map(([m,l])=>(
-                <button key={m} onClick={()=>setFormat(m)} style={{padding:"8px 14px",borderRadius:100,border:"none",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:12,fontWeight:500,background:format===m?T.primary:T.surface2,color:format===m?T.canvas:T.inkMuted}}>{l}</button>
+                <button key={m} onClick={()=>setFormat(m)} style={{padding:"6px 14px",borderRadius:"var(--radius-pill)",border:"none",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:12,fontWeight:format===m?500:400,background:format===m?"var(--color-inverse-canvas)":"var(--color-surface-1)",color:format===m?"var(--color-canvas)":"var(--color-ink-muted)"}}>{l}</button>
               ))}
             </div>
           </div>
