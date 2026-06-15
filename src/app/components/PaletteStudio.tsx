@@ -1073,7 +1073,7 @@ export default function PaletteStudio() {
                         style={{
                           ...s.swatch,
                           outline: isLocked
-                            ? "2px solid #a16207"
+                            ? "2px solid var(--color-accent-blue)"
                             : "1px solid var(--color-hairline)",
                           outlineOffset: isLocked ? 2 : 0,
                         }}
@@ -1105,7 +1105,7 @@ export default function PaletteStudio() {
                             aria-label={`${isLocked ? "Unlock" : "Lock"} ${role.label}`}
                             style={{
                               ...s.lockBtn,
-                              color: isLocked ? "#a16207" : "var(--color-ink-muted)",
+                              color: isLocked ? "var(--color-accent-blue)" : "var(--color-ink-muted)",
                             }}
                           >
                             <i
@@ -1126,7 +1126,7 @@ export default function PaletteStudio() {
               <div style={s.lockHint}>
                 <i
                   className="ti ti-lock"
-                  style={{ fontSize: 12, color: "#a16207", flexShrink: 0 }}
+                  style={{ fontSize: 12, color: "var(--color-accent-blue)", flexShrink: 0 }}
                   aria-hidden="true"
                 />
                 {lockedCount} color{lockedCount > 1 ? "s" : ""} locked — regenerating preserves{" "}

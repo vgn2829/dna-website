@@ -2,28 +2,69 @@ import { useState, useRef, useEffect } from "react";
 import PaletteStudio from "../components/PaletteStudio";
 
 const T = {
-  canvas:       "#0a0a0b",
-  surface1:     "#141416",
-  surface2:     "#1e1e22",
-  surface3:     "#28282e",
-  hairline:     "#2a2a2e",
-  hairlineSoft: "#1f1f23",
-  ink:          "#ffffff",
-  inkMuted:     "#999999",
-  inkDim:       "#555558",
-  accentBlue:   "#0099ff",
-  primary:      "#ffffff",
-  gradViolet:  "linear-gradient(135deg,#2d1b69 0%,#7c3aed 60%,#a855f7 100%)",
-  gradMagenta: "linear-gradient(135deg,#831843 0%,#ec4899 60%,#f9a8d4 100%)",
-  gradOrange:  "linear-gradient(135deg,#7c2d12 0%,#ea580c 60%,#fb923c 100%)",
-  gradCoral:   "linear-gradient(135deg,#881337 0%,#f43f5e 60%,#fb7185 100%)",
+  get canvas()       { return "var(--color-canvas)"; },
+  get surface1()     { return "var(--color-surface-1)"; },
+  get surface2()     { return "var(--color-surface-2)"; },
+  get surface3()     { return "var(--color-surface-2)"; },
+  get hairline()     { return "var(--color-hairline)"; },
+  get hairlineSoft() { return "var(--color-hairline-soft)"; },
+  get ink()          { return "var(--color-ink)"; },
+  get inkMuted()     { return "var(--color-ink-muted)"; },
+  get inkDim()       { return "var(--color-ink-muted)"; },
+  get accentBlue()   { return "var(--color-accent-blue)"; },
+  get primary()      { return "var(--color-inverse-canvas)"; },
+  get gradViolet()   { return "var(--gradient-violet)"; },
+  get gradMagenta()  { return "var(--gradient-magenta)"; },
+  get gradOrange()   { return "var(--gradient-orange)"; },
+  get gradCoral()    { return "var(--gradient-coral)"; },
 };
 
 const ss: any = {
-  label: { display:"block", fontFamily:"Inter,sans-serif", fontSize:11, color:"#666", letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:7 },
-  input: { width:"100%", padding:"9px 13px", borderRadius:10, background:"#1e1e22", border:"1px solid #2a2a2e", color:"#ffffff", fontFamily:"Inter,sans-serif", fontSize:14, outline:"none", boxSizing:"border-box" },
-  btnPri: { padding:"10px 18px", borderRadius:100, border:"none", cursor:"pointer", background:"#ffffff", color:"#0a0a0b", fontFamily:"Inter,sans-serif", fontSize:13, fontWeight:500, letterSpacing:"-0.13px" },
-  btnSec: { padding:"10px 18px", borderRadius:100, border:"none", cursor:"pointer", background:"#1e1e22", color:"#ffffff", fontFamily:"Inter,sans-serif", fontSize:13, fontWeight:500, letterSpacing:"-0.13px" },
+  label: {
+    display: "block",
+    fontFamily: "var(--font-body)",
+    fontSize: 11,
+    color: "var(--color-ink-muted)",
+    letterSpacing: "0.06em",
+    textTransform: "uppercase" as const,
+    marginBottom: 7,
+  },
+  input: {
+    width: "100%",
+    padding: "9px 13px",
+    borderRadius: "var(--radius-md)",
+    background: "var(--color-surface-2)",
+    border: "1px solid var(--color-hairline)",
+    color: "var(--color-ink)",
+    fontFamily: "var(--font-body)",
+    fontSize: 14,
+    outline: "none",
+    boxSizing: "border-box" as const,
+  },
+  btnPri: {
+    padding: "10px 18px",
+    borderRadius: "var(--radius-pill)",
+    border: "none",
+    cursor: "pointer",
+    background: "var(--color-inverse-canvas)",
+    color: "var(--color-canvas)",
+    fontFamily: "var(--font-body)",
+    fontSize: 13,
+    fontWeight: 500,
+    letterSpacing: "-0.13px",
+  },
+  btnSec: {
+    padding: "10px 18px",
+    borderRadius: "var(--radius-pill)",
+    border: "none",
+    cursor: "pointer",
+    background: "var(--color-surface-2)",
+    color: "var(--color-ink)",
+    fontFamily: "var(--font-body)",
+    fontSize: 13,
+    fontWeight: 500,
+    letterSpacing: "-0.13px",
+  },
 };
 
 const PAIR_DB: any[] = [
@@ -279,7 +320,7 @@ function FontPairing() {
           {STRATEGIES.map(s => (
             <button key={s.id} onClick={() => switchStrategy(s.id)}
               style={{padding:"7px 14px",borderRadius:100,border:"none",cursor:"pointer",
-                fontFamily:"Inter,sans-serif",fontSize:12,fontWeight:500,
+                fontFamily:"var(--font-body)",fontSize:12,fontWeight:500,
                 background:strategy===s.id ? T.primary : T.surface2,
                 color:strategy===s.id ? T.canvas : T.inkMuted,
                 transition:"all .12s"}}>
@@ -300,20 +341,20 @@ function FontPairing() {
         </div>
       </div>
 
-      <div style={{fontFamily:"Inter,sans-serif",fontSize:11,color:T.inkDim}}>
+      <div style={{fontFamily:"var(--font-body)",fontSize:11,color:T.inkDim}}>
         Showing pair {safeIdx+1} of {currentPool.length} in <span style={{color:T.inkMuted}}>{strat.label}</span>
       </div>
 
       <div style={{background:T.surface1,borderRadius:20,padding:40,border:`1px solid ${T.hairline}`,position:"relative",overflow:"hidden",minHeight:260}}>
         <div style={{position:"absolute",top:-80,right:-80,width:280,height:280,borderRadius:"50%",background:strat.gradient,opacity:0.13,filter:"blur(70px)",pointerEvents:"none"}}/>
         <div style={{display:"flex",gap:7,marginBottom:22,flexWrap:"wrap"}}>
-          <span style={{padding:"4px 10px",borderRadius:6,background:T.surface2,color:T.inkMuted,fontFamily:"Inter,sans-serif",fontSize:11,fontWeight:500}}>
+          <span style={{padding:"4px 10px",borderRadius:6,background:T.surface2,color:T.inkMuted,fontFamily:"var(--font-body)",fontSize:11,fontWeight:500}}>
             {strat.label}
           </span>
-          <span style={{padding:"4px 10px",borderRadius:6,background:T.surface2,color:T.inkMuted,fontFamily:"Inter,sans-serif",fontSize:11}}>
+          <span style={{padding:"4px 10px",borderRadius:6,background:T.surface2,color:T.inkMuted,fontFamily:"var(--font-body)",fontSize:11}}>
             {pair.xh ? "✓ Matched x-height" : "Contrasting x-height"}
           </span>
-          <span style={{padding:"4px 10px",borderRadius:6,background:T.surface2,color:T.inkMuted,fontFamily:"Inter,sans-serif",fontSize:11}}>
+          <span style={{padding:"4px 10px",borderRadius:6,background:T.surface2,color:T.inkMuted,fontFamily:"var(--font-body)",fontSize:11}}>
             Δ weight {Math.abs(pair.dw - pair.bw)}
           </span>
         </div>
@@ -349,18 +390,18 @@ function FontPairing() {
         <div style={{display:"flex",gap:10,marginTop:24,flexWrap:"wrap"}}>
           {[{label:"Display",name:pair.display,w:pair.dw},{label:"Body",name:pair.body,w:pair.bw}].map((f:any)=>(
             <div key={f.label} style={{background:T.surface2,borderRadius:10,padding:"10px 16px",border:`1px solid ${T.hairline}`,flex:1,minWidth:120}}>
-              <div style={{fontFamily:"Inter,sans-serif",fontSize:10,color:T.inkMuted,letterSpacing:".06em",textTransform:"uppercase",marginBottom:4}}>{f.label}</div>
+              <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkMuted,letterSpacing:".06em",textTransform:"uppercase",marginBottom:4}}>{f.label}</div>
               <div style={{fontFamily:`'${f.name}',serif,sans-serif`,fontWeight:f.w,fontSize:16,color:T.ink,marginBottom:2}}>{f.name}</div>
-              <div style={{fontFamily:"Inter,sans-serif",fontSize:10,color:T.inkDim}}>weight {f.w}</div>
+              <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkDim}}>weight {f.w}</div>
             </div>
           ))}
           <div style={{background:T.surface2,borderRadius:10,padding:"12px 16px",border:`1px solid ${T.hairline}`,minWidth:130}}>
-            <div style={{fontFamily:"Inter,sans-serif",fontSize:10,color:T.inkMuted,letterSpacing:".06em",textTransform:"uppercase",marginBottom:8}}>Pairing score</div>
+            <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkMuted,letterSpacing:".06em",textTransform:"uppercase",marginBottom:8}}>Pairing score</div>
             {[["Category",catScore],["X-height",xhScore],["Weight Δ",wScore]].map(([k,v]:any)=>(
               <div key={k} style={{marginBottom:6}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                  <span style={{fontFamily:"Inter,sans-serif",fontSize:10,color:T.inkDim}}>{k}</span>
-                  <span style={{fontFamily:"monospace",fontSize:10,color:v>80?"#4ade80":v>65?"#fbbf24":"#f87171"}}>{v}</span>
+                  <span style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkDim}}>{k}</span>
+                  <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:v>80?"#4ade80":v>65?"#fbbf24":"#f87171"}}>{v}</span>
                 </div>
                 <div style={{height:3,background:T.surface1,borderRadius:100}}>
                   <div style={{width:`${v}%`,height:"100%",background:v>80?"#4ade80":v>65?"#fbbf24":"#f87171",borderRadius:100}}/>
@@ -389,13 +430,13 @@ function FontPairing() {
       </div>
 
       <div style={{display:"flex",gap:5,alignItems:"center",paddingTop:4}}>
-        <span style={{fontFamily:"Inter,sans-serif",fontSize:11,color:T.inkDim}}>History:</span>
+        <span style={{fontFamily:"var(--font-body)",fontSize:11,color:T.inkDim}}>History:</span>
         {history.map((h:any,i:number)=>(
           <button key={i} onClick={()=>{setHistIdx(i);setStrategy(h.strategy);setPairIdx(h.pairIdx);}}
             style={{width:7,height:7,borderRadius:"50%",border:"none",cursor:"pointer",
-              background:i===histIdx?"#ffffff":"#2e2e33",padding:0,transition:"background .15s"}}/>
+              background:i===histIdx?"var(--color-inverse-canvas)":"var(--color-surface-2)",padding:0,transition:"background .15s"}}/>
         ))}
-        <span style={{fontFamily:"monospace",fontSize:10,color:T.inkDim,marginLeft:6}}>{pair.display} + {pair.body}</span>
+        <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:T.inkDim,marginLeft:6}}>{pair.display} + {pair.body}</span>
       </div>
     </div>
   );
@@ -535,15 +576,15 @@ function ContrastChecker() {
   return (
     <div style={{display:"flex",gap:24,flexDirection:"column"}}>
       <div style={{borderRadius:20,padding:40,background:isHex(bg)?bg:T.canvas,border:`1px solid ${T.hairline}`,minHeight:160,display:"flex",flexDirection:"column",justifyContent:"center",position:"relative"}}>
-        <div style={{fontFamily:"Inter,sans-serif",letterSpacing:"-3px",fontSize:64,fontWeight:700,lineHeight:1,color:isHex(fg)?fg:T.ink}}>Aa</div>
-        <p style={{fontFamily:"Inter,sans-serif",fontSize:15,lineHeight:1.5,letterSpacing:"-0.15px",margin:"12px 0 0",color:isHex(fg)?fg:T.ink,opacity:0.85}}>
+        <div style={{fontFamily:"var(--font-body)",letterSpacing:"-3px",fontSize:64,fontWeight:700,lineHeight:1,color:isHex(fg)?fg:T.ink}}>Aa</div>
+        <p style={{fontFamily:"var(--font-body)",fontSize:15,lineHeight:1.5,letterSpacing:"-0.15px",margin:"12px 0 0",color:isHex(fg)?fg:T.ink,opacity:0.85}}>
           Contrast ratio: <strong>{rStr}:1</strong>
         </p>
-        <div style={{position:"absolute",top:20,right:20,padding:"8px 16px",borderRadius:100,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(8px)",fontFamily:"Inter,sans-serif",fontSize:20,fontWeight:700,color:rc,letterSpacing:"-0.5px"}}>
+        <div style={{position:"absolute",top:20,right:20,padding:"8px 16px",borderRadius:100,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(8px)",fontFamily:"var(--font-body)",fontSize:20,fontWeight:700,color:rc,letterSpacing:"-0.5px"}}>
           {rStr}:1
         </div>
         {failing && (
-          <div style={{position:"absolute",bottom:16,right:16,padding:"5px 12px",borderRadius:8,background:"rgba(239,68,68,0.18)",border:"1px solid rgba(239,68,68,0.35)",fontFamily:"Inter,sans-serif",fontSize:11,color:"#f87171"}}>
+          <div style={{position:"absolute",bottom:16,right:16,padding:"5px 12px",borderRadius:8,background:"rgba(239,68,68,0.18)",border:"1px solid rgba(239,68,68,0.35)",fontFamily:"var(--font-body)",fontSize:11,color:"#f87171"}}>
             Fails WCAG AA
           </div>
         )}
@@ -554,7 +595,7 @@ function ContrastChecker() {
           <label style={ss.label}>Foreground (text)</label>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <input type="color" value={isHex(fg)?fg:"#fff"} onChange={(e:any)=>{setFg(e.target.value);setFgI(e.target.value);}} style={{width:44,height:44,borderRadius:10,border:`1px solid ${T.hairline}`,background:"none",cursor:"pointer",padding:2}}/>
-            <input value={fgI} onChange={(e:any)=>syncFg(e.target.value)} style={{...ss.input,fontFamily:"monospace",letterSpacing:"0.05em"}} maxLength={7}/>
+            <input value={fgI} onChange={(e:any)=>syncFg(e.target.value)} style={{...ss.input,fontFamily:"var(--font-mono)",letterSpacing:"0.05em"}} maxLength={7}/>
           </div>
         </div>
         <button onClick={swap} style={{width:44,height:44,borderRadius:100,border:`1px solid ${T.hairline}`,background:T.surface2,color:T.ink,cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>⇅</button>
@@ -562,22 +603,22 @@ function ContrastChecker() {
           <label style={ss.label}>Background</label>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <input type="color" value={isHex(bg)?bg:"#000"} onChange={(e:any)=>{setBg(e.target.value);setBgI(e.target.value);}} style={{width:44,height:44,borderRadius:10,border:`1px solid ${T.hairline}`,background:"none",cursor:"pointer",padding:2}}/>
-            <input value={bgI} onChange={(e:any)=>syncBg(e.target.value)} style={{...ss.input,fontFamily:"monospace",letterSpacing:"0.05em"}} maxLength={7}/>
+            <input value={bgI} onChange={(e:any)=>syncBg(e.target.value)} style={{...ss.input,fontFamily:"var(--font-mono)",letterSpacing:"0.05em"}} maxLength={7}/>
           </div>
         </div>
       </div>
 
       <div style={{background:T.surface1,borderRadius:12,padding:20,border:`1px solid ${T.hairline}`}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
-          <span style={{fontFamily:"Inter,sans-serif",fontSize:13,color:T.inkMuted}}>Contrast ratio</span>
-          <span style={{fontFamily:"Inter,sans-serif",fontSize:13,fontWeight:600,color:rc}}>{rStr}:1</span>
+          <span style={{fontFamily:"var(--font-body)",fontSize:13,color:T.inkMuted}}>Contrast ratio</span>
+          <span style={{fontFamily:"var(--font-body)",fontSize:13,fontWeight:600,color:rc}}>{rStr}:1</span>
         </div>
         <div style={{height:6,background:T.surface2,borderRadius:100,overflow:"hidden",position:"relative"}}>
           <div style={{width:`${Math.min(((ratio-1)/20)*100,100)}%`,height:"100%",background:rc,borderRadius:100,transition:"width .3s"}}/>
         </div>
         <div style={{display:"flex",justifyContent:"space-between",marginTop:6}}>
-          <span style={{fontFamily:"Inter,sans-serif",fontSize:11,color:T.inkMuted}}>1:1</span>
-          <span style={{fontFamily:"Inter,sans-serif",fontSize:11,color:T.inkMuted}}>3 · 4.5 · 7 · 21:1</span>
+          <span style={{fontFamily:"var(--font-body)",fontSize:11,color:T.inkMuted}}>1:1</span>
+          <span style={{fontFamily:"var(--font-body)",fontSize:11,color:T.inkMuted}}>3 · 4.5 · 7 · 21:1</span>
         </div>
       </div>
 
@@ -585,11 +626,11 @@ function ContrastChecker() {
         {levels.map((l:any)=>(
           <div key={l.l} style={{background:T.surface1,borderRadius:12,padding:14,border:`1px solid ${l.p?"#166534":"#7f1d1d"}`}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-              <span style={{fontFamily:"Inter,sans-serif",fontSize:11,color:T.inkMuted,lineHeight:1.3}}>{l.l}</span>
+              <span style={{fontFamily:"var(--font-body)",fontSize:11,color:T.inkMuted,lineHeight:1.3}}>{l.l}</span>
               <span style={{fontSize:16}}>{l.p?"✓":"✗"}</span>
             </div>
-            <div style={{fontFamily:"Inter,sans-serif",fontSize:13,fontWeight:600,color:l.p?"#4ade80":"#f87171"}}>{l.p?"Pass":"Fail"}</div>
-            <div style={{fontFamily:"Inter,sans-serif",fontSize:11,color:T.inkMuted}}>Requires {l.r}</div>
+            <div style={{fontFamily:"var(--font-body)",fontSize:13,fontWeight:600,color:l.p?"#4ade80":"#f87171"}}>{l.p?"Pass":"Fail"}</div>
+            <div style={{fontFamily:"var(--font-body)",fontSize:11,color:T.inkMuted}}>Requires {l.r}</div>
           </div>
         ))}
       </div>
@@ -597,8 +638,8 @@ function ContrastChecker() {
       {failing && (
         <div style={{background:T.surface1,borderRadius:16,border:`1px solid rgba(239,68,68,0.3)`,padding:20}}>
           <div style={{marginBottom:16}}>
-            <div style={{fontFamily:"Inter,sans-serif",fontSize:13,fontWeight:600,color:T.ink,marginBottom:2}}>Suggested foreground colors</div>
-            <div style={{fontFamily:"Inter,sans-serif",fontSize:11,color:T.inkMuted}}>All achieve WCAG AA (4.5:1) against your background, maintaining color harmony</div>
+            <div style={{fontFamily:"var(--font-body)",fontSize:13,fontWeight:600,color:T.ink,marginBottom:2}}>Suggested foreground colors</div>
+            <div style={{fontFamily:"var(--font-body)",fontSize:11,color:T.inkMuted}}>All achieve WCAG AA (4.5:1) against your background, maintaining color harmony</div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10}}>
             {suggestions.map((s:any,i:number)=>(
@@ -608,13 +649,13 @@ function ContrastChecker() {
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
                   <div style={{width:32,height:32,borderRadius:8,background:s.hex,border:`1px solid rgba(255,255,255,0.1)`,flexShrink:0}}/>
                   <div>
-                    <div style={{fontFamily:"monospace",fontSize:12,color:T.ink}}>{s.hex.toUpperCase()}</div>
-                    <div style={{fontFamily:"Inter,sans-serif",fontSize:10,color:T.inkMuted}}>{cRatio(s.hex,bg).toFixed(1)}:1</div>
+                    <div style={{fontFamily:"var(--font-mono)",fontSize:12,color:T.ink}}>{s.hex.toUpperCase()}</div>
+                    <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkMuted}}>{cRatio(s.hex,bg).toFixed(1)}:1</div>
                   </div>
                 </div>
-                <div style={{fontFamily:"Inter,sans-serif",fontSize:11,fontWeight:600,color:T.ink,marginBottom:2}}>{s.label}</div>
-                <div style={{fontFamily:"Inter,sans-serif",fontSize:10,color:T.inkMuted,lineHeight:1.4}}>{s.theory}</div>
-                <div style={{marginTop:8,padding:"6px 10px",borderRadius:6,background:bg,fontFamily:"Inter,sans-serif",fontSize:11,color:s.hex,fontWeight:600}}>
+                <div style={{fontFamily:"var(--font-body)",fontSize:11,fontWeight:600,color:T.ink,marginBottom:2}}>{s.label}</div>
+                <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkMuted,lineHeight:1.4}}>{s.theory}</div>
+                <div style={{marginTop:8,padding:"6px 10px",borderRadius:6,background:bg,fontFamily:"var(--font-body)",fontSize:11,color:s.hex,fontWeight:600}}>
                   Aa — preview
                 </div>
               </button>
@@ -676,8 +717,8 @@ function ImageConverter(){
               <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
             </svg>
           </div>
-          <span style={{fontFamily:"Inter,sans-serif",fontSize:16,fontWeight:500,color:T.ink}}>Drop an image here</span>
-          <span style={{fontFamily:"Inter,sans-serif",fontSize:13,color:T.inkMuted}}>or click to browse — PNG, JPEG, WebP</span>
+          <span style={{fontFamily:"var(--font-body)",fontSize:16,fontWeight:500,color:T.ink}}>Drop an image here</span>
+          <span style={{fontFamily:"var(--font-body)",fontSize:13,color:T.inkMuted}}>or click to browse — PNG, JPEG, WebP</span>
           <input id="img-inp" type="file" accept="image/*" style={{display:"none"}} onChange={(e:any)=>loadFile(e.target.files[0])}/>
         </div>
       ):(
@@ -685,11 +726,11 @@ function ImageConverter(){
           {[{label:"Original",src:preview,meta:info?`${info.w}×${info.h} · ${info.size}KB`:""},{label:"Output",src:converted?.url,meta:converted?`${converted.w}×${converted.h} · ${converted.size}KB`:""}].map((p:any)=>(
             <div key={p.label} style={{background:T.surface1,borderRadius:16,overflow:"hidden",border:`1px solid ${T.hairline}`}}>
               <div style={{padding:"10px 16px",borderBottom:`1px solid ${T.hairline}`,display:"flex",justifyContent:"space-between"}}>
-                <span style={{fontFamily:"Inter,sans-serif",fontSize:12,color:T.inkMuted}}>{p.label}</span>
-                {p.meta&&<span style={{fontFamily:"monospace",fontSize:11,color:T.inkMuted}}>{p.meta}</span>}
+                <span style={{fontFamily:"var(--font-body)",fontSize:12,color:T.inkMuted}}>{p.label}</span>
+                {p.meta&&<span style={{fontFamily:"var(--font-mono)",fontSize:11,color:T.inkMuted}}>{p.meta}</span>}
               </div>
-              {p.src?<img src={p.src} alt={p.label} style={{width:"100%",height:180,objectFit:"contain",background:"#111"}}/>:
-                <div style={{height:180,display:"flex",alignItems:"center",justifyContent:"center",color:T.inkMuted,fontFamily:"Inter,sans-serif",fontSize:13}}>
+              {p.src?<img src={p.src} alt={p.label} style={{width:"100%",height:180,objectFit:"contain",background:"var(--color-canvas)"}}/>:
+                <div style={{height:180,display:"flex",alignItems:"center",justifyContent:"center",color:T.inkMuted,fontFamily:"var(--font-body)",fontSize:13}}>
                   {converting?"Converting…":"Configure below →"}
                 </div>}
             </div>
@@ -702,7 +743,7 @@ function ImageConverter(){
             <label style={ss.label}>Format</label>
             <div style={{display:"flex",gap:8}}>
               {[["image/png","PNG"],["image/jpeg","JPEG"],["image/webp","WebP"]].map(([m,l])=>(
-                <button key={m} onClick={()=>setFormat(m)} style={{padding:"8px 14px",borderRadius:100,border:"none",cursor:"pointer",fontFamily:"Inter,sans-serif",fontSize:12,fontWeight:500,background:format===m?T.primary:T.surface2,color:format===m?T.canvas:T.inkMuted}}>{l}</button>
+                <button key={m} onClick={()=>setFormat(m)} style={{padding:"8px 14px",borderRadius:100,border:"none",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:12,fontWeight:500,background:format===m?T.primary:T.surface2,color:format===m?T.canvas:T.inkMuted}}>{l}</button>
               ))}
             </div>
           </div>
@@ -1032,14 +1073,14 @@ function GridCalculator(){
   return(
     <div style={{display:"flex",gap:20,flexDirection:"column"}}>
       <div>
-        <div style={{fontFamily:"Inter,sans-serif",fontSize:10,color:T.inkDim,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:8}}>Format</div>
+        <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkDim,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:8}}>Format</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {FORMATS.map(f=>(
-            <button key={f.id} onClick={()=>setFmtId(f.id)} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${fmtId===f.id?"#444":"#2a2a2e"}`,cursor:"pointer",fontFamily:"Inter,sans-serif",fontSize:12,fontWeight:500,background:fmtId===f.id?T.surface2:"transparent",color:fmtId===f.id?T.ink:T.inkMuted,transition:"all .12s"}}>
+            <button key={f.id} onClick={()=>setFmtId(f.id)} style={{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-hairline)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:12,fontWeight:500,background:fmtId===f.id?T.surface2:"transparent",color:fmtId===f.id?T.ink:T.inkMuted,transition:"all .12s"}}>
               {f.label}
             </button>
           ))}
-          <button onClick={()=>setLandscape((l:boolean)=>!l)} style={{padding:"6px 12px",borderRadius:8,border:`1px solid #2a2a2e`,cursor:"pointer",fontFamily:"Inter,sans-serif",fontSize:12,background:landscape?T.surface2:"transparent",color:landscape?T.ink:T.inkMuted}}>
+          <button onClick={()=>setLandscape((l:boolean)=>!l)} style={{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-hairline)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:12,background:landscape?T.surface2:"transparent",color:landscape?T.ink:T.inkMuted}}>
             {landscape?"⬛":"⬜"} {landscape?"Land":"Port"}
           </button>
         </div>
@@ -1048,7 +1089,7 @@ function GridCalculator(){
             {[["customW","Width (px)"],["customH","Height (px)"]].map(([k,l])=>(
               <div key={k} style={{width:130}}>
                 <label style={ss.label}>{l}</label>
-                <input type="number" value={params[k]} min={100} max={5000} onChange={(e:any)=>setP(k,+e.target.value)} style={{...ss.input,fontFamily:"monospace"}}/>
+                <input type="number" value={params[k]} min={100} max={5000} onChange={(e:any)=>setP(k,+e.target.value)} style={{...ss.input,fontFamily:"var(--font-mono)"}}/>
               </div>
             ))}
           </div>
@@ -1059,10 +1100,10 @@ function GridCalculator(){
         const sys2=GRID_SYSTEMS.filter(g=>g.cat===cat);
         return(
           <div key={cat}>
-            <div style={{fontFamily:"Inter,sans-serif",fontSize:10,color:T.inkDim,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:8}}>{cat} Grids</div>
+            <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkDim,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:8}}>{cat} Grids</div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
               {sys2.map(g=>(
-                <button key={g.id} onClick={()=>setSystem(g.id)} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,border:"none",cursor:"pointer",fontFamily:"Inter,sans-serif",fontSize:12,fontWeight:500,background:system===g.id?T.surface2:"transparent",color:system===g.id?T.ink:T.inkMuted,outline:system===g.id?`1px solid ${T.hairline}`:"none",transition:"all .13s"}}>
+                <button key={g.id} onClick={()=>setSystem(g.id)} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,border:"none",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:12,fontWeight:500,background:system===g.id?T.surface2:"transparent",color:system===g.id?T.ink:T.inkMuted,outline:system===g.id?`1px solid ${T.hairline}`:"none",transition:"all .13s"}}>
                   <span style={{fontSize:14}}>{g.icon}</span>{g.label}
                 </button>
               ))}
@@ -1074,12 +1115,12 @@ function GridCalculator(){
       <div style={{background:T.surface1,borderRadius:14,padding:"13px 17px",border:`1px solid ${T.hairline}`,display:"flex",gap:12,alignItems:"flex-start"}}>
         <span style={{fontSize:22,flexShrink:0}}>{sys.icon}</span>
         <div>
-          <div style={{fontFamily:"Inter,sans-serif",fontSize:13,fontWeight:600,color:T.ink,marginBottom:3}}>{sys.label}</div>
-          <div style={{fontFamily:"Inter,sans-serif",fontSize:12,color:T.inkMuted,lineHeight:1.6}}>{sys.desc}</div>
+          <div style={{fontFamily:"var(--font-body)",fontSize:13,fontWeight:600,color:T.ink,marginBottom:3}}>{sys.label}</div>
+          <div style={{fontFamily:"var(--font-body)",fontSize:12,color:T.inkMuted,lineHeight:1.6}}>{sys.desc}</div>
         </div>
       </div>
 
-      <div style={{background:"#0d0d0f",borderRadius:20,overflow:"hidden",border:`1px solid ${T.hairline}`,padding:12}}>
+      <div style={{background:"var(--color-canvas)",borderRadius:20,overflow:"hidden",border:`1px solid ${T.hairline}`,padding:12}}>
         <canvas ref={canvasRef} width={680} height={440} style={{width:"100%",height:"auto",display:"block",borderRadius:10}}/>
       </div>
 
@@ -1092,8 +1133,8 @@ function GridCalculator(){
             {l:"Aspect ratio", v:`${(IW/IH).toFixed(3)}:1`},
           ].map((s:any)=>(
             <div key={s.l} style={{background:T.surface1,borderRadius:10,padding:"11px 13px",border:`1px solid ${T.hairline}`}}>
-              <div style={{fontFamily:"Inter,sans-serif",fontSize:9,color:T.inkDim,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:3}}>{s.l}</div>
-              <div style={{fontFamily:"monospace",fontSize:14,fontWeight:600,color:T.ink}}>{s.v}</div>
+              <div style={{fontFamily:"var(--font-body)",fontSize:9,color:T.inkDim,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:3}}>{s.l}</div>
+              <div style={{fontFamily:"var(--font-mono)",fontSize:14,fontWeight:600,color:T.ink}}>{s.v}</div>
             </div>
           ))}
         </div>
@@ -1101,11 +1142,11 @@ function GridCalculator(){
 
       {(controlDefs[system]||[]).length>0&&(
         <div style={{background:T.surface1,borderRadius:14,padding:18,border:`1px solid ${T.hairline}`}}>
-          <div style={{fontFamily:"Inter,sans-serif",fontSize:10,color:T.inkDim,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:14}}>Parameters</div>
+          <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkDim,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:14}}>Parameters</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:16}}>
             {(controlDefs[system]||[]).map((c:any)=>(
               <div key={c.k}>
-                <label style={ss.label}>{c.l} — <span style={{color:T.accentBlue,fontFamily:"monospace"}}>{params[c.k]}</span></label>
+                <label style={ss.label}>{c.l} — <span style={{color:T.accentBlue,fontFamily:"var(--font-mono)"}}>{params[c.k]}</span></label>
                 <input type="range" min={c.mn} max={c.mx} step={1} value={params[c.k]} onChange={(e:any)=>setP(c.k,+e.target.value)} style={{width:"100%",accentColor:T.accentBlue}}/>
               </div>
             ))}
@@ -1143,12 +1184,12 @@ export default function DesignStudio() {
   const [active, setActive] = useState("palette");
   const Tool = TOOLS.find(t => t.id === active)!.comp;
   return (
-    <div style={{minHeight:"100vh",background:T.canvas,fontFamily:"Inter,sans-serif",color:T.ink,paddingTop:"56px"}}>
-      <nav style={{position:"sticky",top:"56px",zIndex:99,background:`${T.canvas}e8`,backdropFilter:"blur(16px)",borderBottom:`1px solid ${T.hairlineSoft}`,height:56,display:"flex",alignItems:"center",padding:"0 24px",gap:16}}>
+    <div style={{minHeight:"100vh",background:T.canvas,fontFamily:"var(--font-body)",color:T.ink,paddingTop:"56px"}}>
+      <nav style={{position:"sticky",top:"56px",zIndex:99,background:"var(--color-nav-blur-bg)",backdropFilter:"blur(16px)",borderBottom:`1px solid ${T.hairlineSoft}`,height:56,display:"flex",alignItems:"center",padding:"0 24px",gap:16}}>
         <div style={{fontSize:14,fontWeight:700,letterSpacing:"-1.5px",color:T.ink,marginRight:8}}>Design Studio</div>
         <div style={{height:20,width:1,background:T.hairline}}/>
         {TOOLS.map(t=>(
-          <button key={t.id} onClick={()=>setActive(t.id)} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:100,border:"none",cursor:"pointer",background:active===t.id?T.surface2:"transparent",color:active===t.id?T.ink:T.inkMuted,fontFamily:"Inter,sans-serif",fontSize:13,fontWeight:500,letterSpacing:"-0.13px",transition:"all .15s"}}>
+          <button key={t.id} onClick={()=>setActive(t.id)} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:100,border:"none",cursor:"pointer",background:active===t.id?T.surface2:"transparent",color:active===t.id?T.ink:T.inkMuted,fontFamily:"var(--font-body)",fontSize:13,fontWeight:500,letterSpacing:"-0.13px",transition:"all .15s"}}>
             <span style={{fontSize:14}}>{t.icon}</span><span>{t.label}</span>
           </button>
         ))}
