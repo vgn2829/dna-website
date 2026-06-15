@@ -1164,7 +1164,7 @@ function PaletteStudioWrapper() {
 
 // ── Tool registry ─────────────────────────────────────────────────────────────
 const TOOLS = [
-  { id:"palette",  icon:"🎨", label:"Palette Studio",    comp:PaletteStudioWrapper },
+  { id:"palette",  icon:"",   label:"Palette Studio",    comp:PaletteStudioWrapper },
   { id:"font",     icon:"Aa", label:"Font Pairing",      comp:FontPairing          },
   { id:"contrast", icon:"◑",  label:"Contrast Checker",  comp:ContrastChecker      },
   { id:"image",    icon:"↔",  label:"Image Converter",   comp:ImageConverter       },
@@ -1186,11 +1186,9 @@ export default function DesignStudio() {
   return (
     <div style={{minHeight:"100vh",background:T.canvas,fontFamily:"var(--font-body)",color:T.ink,paddingTop:"56px"}}>
       <nav style={{position:"sticky",top:"56px",zIndex:99,background:"var(--color-nav-blur-bg)",backdropFilter:"blur(16px)",borderBottom:`1px solid ${T.hairlineSoft}`,height:56,display:"flex",alignItems:"center",padding:"0 24px",gap:16}}>
-        <div style={{fontSize:14,fontWeight:700,letterSpacing:"-1.5px",color:T.ink,marginRight:8}}>Design Studio</div>
-        <div style={{height:20,width:1,background:T.hairline}}/>
         {TOOLS.map(t=>(
           <button key={t.id} onClick={()=>setActive(t.id)} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:100,border:"none",cursor:"pointer",background:active===t.id?T.surface2:"transparent",color:active===t.id?T.ink:T.inkMuted,fontFamily:"var(--font-body)",fontSize:13,fontWeight:500,letterSpacing:"-0.13px",transition:"all .15s"}}>
-            <span style={{fontSize:14}}>{t.icon}</span><span>{t.label}</span>
+            {t.icon && <span style={{fontSize:14}}>{t.icon}</span>}<span>{t.label}</span>
           </button>
         ))}
       </nav>

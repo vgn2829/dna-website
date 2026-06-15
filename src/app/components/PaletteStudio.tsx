@@ -1417,6 +1417,7 @@ const VISUAL_MODE_DESCRIPTIONS = {
 
 function MoodTab({ palette, visualMode, onChangeMode, onReroll }) {
   const s = styles;
+  const [copied, setCopied] = useState('');
   return (
     <div>
       {/* Mode selector row */}
@@ -1449,7 +1450,11 @@ function MoodTab({ palette, visualMode, onChangeMode, onReroll }) {
             return (
               <button
                 key={swatch.index}
-                onClick={() => navigator.clipboard.writeText(swatch.hex).catch(() => {})}
+                onClick={() => {
+                  navigator.clipboard.writeText(swatch.hex).catch(() => {});
+                  setCopied(swatch.hex);
+                  setTimeout(() => setCopied(''), 1500);
+                }}
                 aria-label={`Copy ${swatch.name} ${swatch.hex}`}
                 style={{ ...s.moodSwatch, background: swatch.hex }}
                 onMouseEnter={(e) => {
@@ -1463,7 +1468,7 @@ function MoodTab({ palette, visualMode, onChangeMode, onReroll }) {
               >
                 <div style={{ ...s.moodSwatchInner, color: onColor }}>
                   <span style={s.moodSwatchName}>{swatch.name}</span>
-                  <span style={s.moodSwatchHex}>{swatch.hex}</span>
+                  <span style={s.moodSwatchHex}>{copied === swatch.hex ? '✓ Copied' : swatch.hex}</span>
                 </div>
               </button>
             );
