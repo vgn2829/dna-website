@@ -9,6 +9,7 @@ import { TeamPage } from './pages/TeamPage';
 import { AcademyPage } from './pages/AcademyPage';
 import { AdminPage } from './pages/AdminPage';
 import { PalettePage } from './pages/PalettePage'; // PALETTE_STUDIO_FEATURE
+import DesignStudio from './pages/DesignStudioPage';
 
 export const router = createBrowserRouter([
   {
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
       { path: 'events', Component: EventsPage },
       { path: 'team', Component: TeamPage },
       { path: 'palette', Component: PalettePage }, // PALETTE_STUDIO_FEATURE
+      { path: 'design-studio', Component: DesignStudio },
       { path: 'admin', Component: AdminPage },
     ],
   },

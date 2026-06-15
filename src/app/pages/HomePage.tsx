@@ -6,7 +6,7 @@ import { GalleryPreview } from '../components/GalleryPreview';
 import { EventSpotlight } from '../components/EventSpotlight';
 import { ResourcesPreview } from '../components/ResourcesPreview';
 import { Team } from '../components/Team';
-import { PaletteStudioCard } from '../components/PaletteStudioCard';
+import { DesignStudioCard } from '../components/DesignStudioCard';
 
 export function HomePage() {
   return (
@@ -17,7 +17,7 @@ export function HomePage() {
       <Stats />
       <GalleryPreview />
       <EventSpotlight />
-      <PaletteStudioCard />
+      <DesignStudioCard />
       <ResourcesPreview />
       <Team />
     </div>
