@@ -646,8 +646,8 @@ export function deriveVisualPalette(seedHex, harmonyKey = "complementary", palet
   const { secondary: H2, accent: H3 } = harmony.getHues(H);
 
   // Softened harmony angles — break rigid geometry
-  const H2soft = (H2 + (Math.random() - 0.5) * 25 + 360) % 360;
-  const H3soft = (H3 + (Math.random() - 0.5) * 20 + 360) % 360;
+  const H2soft = (H2 + (Math.random() - 0.5) * 60 + 360) % 360;
+  const H3soft = (H3 + (Math.random() - 0.5) * 50 + 360) % 360;
 
   // Adaptive chroma cap — yellow-green stays clean, blue-purple gets headroom
   const chromaCap =
@@ -661,18 +661,18 @@ export function deriveVisualPalette(seedHex, harmonyKey = "complementary", palet
 
   const profiles = {
     visual: [
-      { L,                                        C,                                             H       },
-      { L: jitter(Math.min(L+0.15,0.85), 0.05),  C: jitter(C*0.65, 0.03, 0, chromaCap),        H: H2soft },
-      { L: jitter(Math.max(L-0.15,0.15), 0.05),  C: jitter(C*0.50, 0.03, 0, chromaCap),        H       },
-      { L: jitter(L,                     0.05),  C: jitter(C*0.80, 0.03, 0, chromaCap),         H: H3soft },
-      { L: jitter(Math.min(L+0.28,0.93), 0.05),  C: jitter(C*0.18, 0.03, 0, chromaCap),        H: H2soft },
+      { L: jitter(L, 0.06), C: jitter(C, 0.03, 0, chromaCap), H: (H + (Math.random()-0.5)*12 + 360) % 360 },
+      { L: jitter(Math.min(L+0.15,0.85), 0.10),  C: jitter(C*0.65, 0.04, 0, chromaCap),        H: H2soft },
+      { L: jitter(Math.max(L-0.15,0.15), 0.10),  C: jitter(C*0.50, 0.04, 0, chromaCap),        H       },
+      { L: jitter(L,                     0.10),  C: jitter(C*0.80, 0.04, 0, chromaCap),         H: H3soft },
+      { L: jitter(Math.min(L+0.28,0.93), 0.10),  C: jitter(C*0.18, 0.04, 0, chromaCap),        H: H2soft },
     ],
     poster: [
-      { L: jitter(0.52, 0.05), C: jitter(Math.min(C*1.1, chromaCap), 0.03, 0, chromaCap), H       },
-      { L: jitter(0.60, 0.05), C: jitter(Math.min(C*0.9, chromaCap), 0.03, 0, chromaCap), H: H2soft },
-      { L: jitter(0.42, 0.05), C: jitter(Math.min(C*1.0, chromaCap), 0.03, 0, chromaCap), H: H3soft },
-      { L: jitter(0.15, 0.05), C: jitter(0.010, 0.02, 0, 0.05),                           H       },
-      { L: jitter(0.95, 0.05), C: jitter(0.006, 0.02, 0, 0.03),                           H       },
+      { L: jitter(0.52, 0.10), C: jitter(Math.min(C*1.1, chromaCap), 0.04, 0, chromaCap), H       },
+      { L: jitter(0.60, 0.10), C: jitter(Math.min(C*1.1, chromaCap), 0.04, 0, chromaCap), H: H2soft },
+      { L: jitter(0.42, 0.10), C: jitter(Math.min(C*1.1, chromaCap), 0.04, 0, chromaCap), H: H3soft },
+      { L: jitter(0.15, 0.06), C: jitter(0.010, 0.02, 0, 0.05),                           H       },
+      { L: jitter(0.95, 0.06), C: jitter(0.006, 0.02, 0, 0.03),                           H       },
     ],
     luxury: [
       { L: jitter(0.12, 0.05), C: jitter(0.015,                  0.03, 0, 0.06),          H: neutralH },
@@ -1435,9 +1435,9 @@ function MoodTab({ palette, visualMode, onChangeMode, onReroll }) {
           ))}
         </div>
         <span style={s.harmonyDesc}>{VISUAL_MODE_DESCRIPTIONS[visualMode]}</span>
-        <button onClick={onReroll} style={s.rerollBtn} aria-label="Re-roll visual palette">
+        <button onClick={onReroll} style={s.rerollBtn} aria-label="Generate visual palette">
           <i className="ti ti-refresh" aria-hidden="true" style={{ fontSize: 13 }} />
-          Re-roll
+          Generate
         </button>
       </div>
 
