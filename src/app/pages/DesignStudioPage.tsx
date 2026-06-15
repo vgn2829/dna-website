@@ -1073,19 +1073,19 @@ function GridCalculator(){
   return(
     <div style={{display:"flex",gap:20,flexDirection:"column"}}>
       <div>
-        <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkDim,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:8}}>Format</div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        <div style={{fontFamily:"var(--font-body)",fontSize:10,fontWeight:600,color:"var(--color-ink-muted)",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10,marginTop:32}}>Format</div>
+        <div style={{display:"flex",gap:6,flexWrap:"nowrap",overflowX:"auto",scrollbarWidth:"none"}}>
           {FORMATS.map(f=>(
-            <button key={f.id} onClick={()=>setFmtId(f.id)} style={{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-hairline)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:12,fontWeight:500,background:fmtId===f.id?T.surface2:"transparent",color:fmtId===f.id?T.ink:T.inkMuted,transition:"all .12s"}}>
+            <button key={f.id} onClick={()=>setFmtId(f.id)} style={{padding:"6px 14px",borderRadius:"var(--radius-pill)",border:"none",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:12,fontWeight:fmtId===f.id?500:400,background:fmtId===f.id?"var(--color-inverse-canvas)":"var(--color-surface-1)",color:fmtId===f.id?"var(--color-canvas)":"var(--color-ink-muted)",whiteSpace:"nowrap"}}>
               {f.label}
             </button>
           ))}
-          <button onClick={()=>setLandscape((l:boolean)=>!l)} style={{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-hairline)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:12,background:landscape?T.surface2:"transparent",color:landscape?T.ink:T.inkMuted}}>
+          <button onClick={()=>setLandscape((l:boolean)=>!l)} style={{background:"var(--color-surface-1)",color:"var(--color-ink)",borderRadius:"var(--radius-pill)",padding:"10px 18px",fontSize:13,fontWeight:500,border:"none",cursor:"pointer",fontFamily:"var(--font-body)",whiteSpace:"nowrap"}}>
             {landscape?"⬛":"⬜"} {landscape?"Land":"Port"}
           </button>
         </div>
         {fmtId==="custom"&&(
-          <div style={{display:"flex",gap:12,marginTop:10}}>
+          <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",border:"1px solid rgba(255,255,255,0.06)",padding:"24px",display:"flex",gap:12,marginTop:10}}>
             {[["customW","Width (px)"],["customH","Height (px)"]].map(([k,l])=>(
               <div key={k} style={{width:130}}>
                 <label style={ss.label}>{l}</label>
@@ -1100,10 +1100,10 @@ function GridCalculator(){
         const sys2=GRID_SYSTEMS.filter(g=>g.cat===cat);
         return(
           <div key={cat}>
-            <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkDim,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:8}}>{cat} Grids</div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <div style={{fontFamily:"var(--font-body)",fontSize:10,fontWeight:600,color:"var(--color-ink-muted)",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10,marginTop:32}}>{cat} Grids</div>
+            <div style={{display:"flex",gap:6,flexWrap:"nowrap",overflowX:"auto",scrollbarWidth:"none"}}>
               {sys2.map(g=>(
-                <button key={g.id} onClick={()=>setSystem(g.id)} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,border:"none",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:12,fontWeight:500,background:system===g.id?T.surface2:"transparent",color:system===g.id?T.ink:T.inkMuted,outline:system===g.id?`1px solid ${T.hairline}`:"none",transition:"all .13s"}}>
+                <button key={g.id} onClick={()=>setSystem(g.id)} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:"var(--radius-pill)",border:"none",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:12,fontWeight:system===g.id?500:400,background:system===g.id?"var(--color-inverse-canvas)":"var(--color-surface-1)",color:system===g.id?"var(--color-canvas)":"var(--color-ink-muted)",whiteSpace:"nowrap"}}>
                   <span style={{fontSize:14}}>{g.icon}</span>{g.label}
                 </button>
               ))}
@@ -1112,15 +1112,15 @@ function GridCalculator(){
         );
       })}
 
-      <div style={{background:T.surface1,borderRadius:14,padding:"13px 17px",border:`1px solid ${T.hairline}`,display:"flex",gap:12,alignItems:"flex-start"}}>
-        <span style={{fontSize:22,flexShrink:0}}>{sys.icon}</span>
+      <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:24,border:"1px solid rgba(255,255,255,0.06)",display:"flex",gap:12,alignItems:"flex-start"}}>
+        <span style={{fontSize:22,marginRight:12,flexShrink:0}}>{sys.icon}</span>
         <div>
           <div style={{fontFamily:"var(--font-body)",fontSize:13,fontWeight:600,color:T.ink,marginBottom:3}}>{sys.label}</div>
           <div style={{fontFamily:"var(--font-body)",fontSize:12,color:T.inkMuted,lineHeight:1.6}}>{sys.desc}</div>
         </div>
       </div>
 
-      <div style={{background:"var(--color-canvas)",borderRadius:20,overflow:"hidden",border:`1px solid ${T.hairline}`,padding:12}}>
+      <div style={{background:"var(--color-canvas)",borderRadius:"var(--radius-xl)",overflow:"hidden",border:"1px solid rgba(255,255,255,0.06)",padding:12}}>
         <canvas ref={canvasRef} width={680} height={440} style={{width:"100%",height:"auto",display:"block",borderRadius:10}}/>
       </div>
 
@@ -1132,17 +1132,17 @@ function GridCalculator(){
             {l:"Inner area",   v:`${IW}×${IH}px`},
             {l:"Aspect ratio", v:`${(IW/IH).toFixed(3)}:1`},
           ].map((s:any)=>(
-            <div key={s.l} style={{background:T.surface1,borderRadius:10,padding:"11px 13px",border:`1px solid ${T.hairline}`}}>
-              <div style={{fontFamily:"var(--font-body)",fontSize:9,color:T.inkDim,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:3}}>{s.l}</div>
-              <div style={{fontFamily:"var(--font-mono)",fontSize:14,fontWeight:600,color:T.ink}}>{s.v}</div>
+            <div key={s.l} style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-lg)",padding:"11px 13px",border:"1px solid rgba(255,255,255,0.06)"}}>
+              <div style={{fontFamily:"var(--font-body)",fontSize:9,color:"var(--color-ink-muted)",letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:3}}>{s.l}</div>
+              <div style={{fontFamily:"var(--font-mono)",fontSize:14,fontWeight:600,color:"var(--color-ink)"}}>{s.v}</div>
             </div>
           ))}
         </div>
       )}
 
       {(controlDefs[system]||[]).length>0&&(
-        <div style={{background:T.surface1,borderRadius:14,padding:18,border:`1px solid ${T.hairline}`}}>
-          <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkDim,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:14}}>Parameters</div>
+        <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:24,border:"1px solid rgba(255,255,255,0.06)"}}>
+          <div style={{fontFamily:"var(--font-body)",fontSize:10,fontWeight:600,color:"var(--color-ink-muted)",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Parameters</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:16}}>
             {(controlDefs[system]||[]).map((c:any)=>(
               <div key={c.k}>
