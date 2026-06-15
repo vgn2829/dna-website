@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star } from 'lucide-react';
+import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
 import { api, setAdminToken, clearAdminToken } from '../lib/api';
 
@@ -71,7 +71,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-type Tab = 'academy' | 'gallery' | 'team' | 'events';
+type Tab = 'academy' | 'gallery' | 'team' | 'events' | 'comments';
 
 // ── Academy tab ──────────────────────────────────────────────────────────────
 function AcademyTab() {
@@ -849,6 +849,102 @@ function EventsTab() {
   );
 }
 
+// ── Comments tab ──────────────────────────────────────────────────────────────
+function CommentsTab() {
+  const { artworks, deleteComment } = useAppData();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  const handleDelete = async (artworkId: string, commentId: string) => {
+    setDeletingId(commentId);
+    try {
+      await deleteComment(artworkId, commentId);
+      setConfirmId(null);
+    } catch (err) {
+      console.error('Failed to delete comment:', err);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const allComments = artworks.flatMap(artwork =>
+    artwork.comments.map(comment => ({
+      ...comment,
+      artworkId: artwork.id,
+      artworkTitle: artwork.title,
+      artworkArtist: artwork.artist,
+    }))
+  );
+
+  const totalComments = allComments.length;
+  const artworksWithComments = artworks.filter(a => a.comments.length > 0).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <p className="type-headline">Comments</p>
+          <p className="type-micro" style={{ color: 'var(--color-ink-muted)', marginTop: 2 }}>
+            {totalComments} comment{totalComments !== 1 ? 's' : ''} across {artworksWithComments} artwork{artworksWithComments !== 1 ? 's' : ''}
+          </p>
+        </div>
+      </div>
+
+      {allComments.length === 0 ? (
+        <p className="type-caption text-center py-12" style={{ color: 'var(--color-ink-muted)' }}>No comments yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {allComments.map(comment => (
+            <div key={comment.id} className="card p-3 flex items-start gap-3" style={{ borderRadius: 'var(--radius-lg)' }}>
+              <div className="flex-1 min-w-0">
+                <p className="type-micro truncate" style={{ color: 'var(--color-ink-muted)', marginBottom: 2 }}>
+                  <span style={{ fontWeight: 600 }}>{comment.artworkTitle}</span>
+                  <span> · {comment.artworkArtist}</span>
+                </p>
+                <p className="type-body-sm" style={{ marginBottom: 2 }}>"{comment.text}"</p>
+                <p className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>
+                  — {comment.sender}{comment.date ? ` · ${comment.date}` : ''}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {confirmId === comment.id ? (
+                  <>
+                    <span className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>Delete?</span>
+                    <button
+                      onClick={() => handleDelete(comment.artworkId, comment.id)}
+                      disabled={deletingId === comment.id}
+                      className="type-micro"
+                      style={{ color: '#e5484d', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', opacity: deletingId === comment.id ? 0.5 : 1 }}
+                    >
+                      {deletingId === comment.id ? '…' : 'Yes'}
+                    </button>
+                    <button
+                      onClick={() => setConfirmId(null)}
+                      className="type-micro"
+                      style={{ color: 'var(--color-ink-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setConfirmId(comment.id)}
+                    className="btn-icon shrink-0"
+                    title="Delete comment"
+                    style={{ color: '#e5484d', width: 28, height: 28, background: 'transparent' }}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main AdminPage ─────────────────────────────────────────────────────────────
 export function AdminPage() {
   const [authed, setAuthed] = useState(false);
@@ -857,10 +953,11 @@ export function AdminPage() {
   if (!authed) return <AdminLogin onSuccess={() => setAuthed(true)} />;
 
   const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-    { id: 'academy', label: 'Academy',  icon: Video },
-    { id: 'gallery', label: 'Gallery',  icon: Image },
-    { id: 'team',    label: 'Team',     icon: Users },
-    { id: 'events',  label: 'Events',   icon: CalendarDays },
+    { id: 'academy',  label: 'Academy',  icon: Video },
+    { id: 'gallery',  label: 'Gallery',  icon: Image },
+    { id: 'team',     label: 'Team',     icon: Users },
+    { id: 'events',   label: 'Events',   icon: CalendarDays },
+    { id: 'comments', label: 'Comments', icon: MessageSquare },
   ];
 
   return (
@@ -897,7 +994,8 @@ export function AdminPage() {
           {tab === 'academy' && <motion.div key="academy" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><AcademyTab /></motion.div>}
           {tab === 'gallery' && <motion.div key="gallery" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><GalleryTab /></motion.div>}
           {tab === 'team'    && <motion.div key="team"    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><TeamTab /></motion.div>}
-          {tab === 'events'  && <motion.div key="events"  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><EventsTab /></motion.div>}
+          {tab === 'events'   && <motion.div key="events"    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><EventsTab /></motion.div>}
+          {tab === 'comments' && <motion.div key="comments"  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><CommentsTab /></motion.div>}
         </AnimatePresence>
       </div>
     </div>

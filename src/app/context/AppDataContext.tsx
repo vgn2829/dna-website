@@ -61,6 +61,7 @@ interface AppDataContextValue {
   updateArtwork:  (id: string, formData: FormData) => Promise<void>;
   deleteArtwork:  (id: string) => void;
   toggleFeatured: (id: string, featured: boolean) => void;
+  deleteComment:  (artworkId: string, commentId: string) => Promise<void>;
   // Events
   rsvpEvent:   (id: string) => void;
   addEvent:    (event: Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered'>) => void;
@@ -260,10 +261,18 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     api.team.delete(id).then(() => setTeam(prev => prev.filter(t => t.id !== id))).catch(onAdminErr);
   }, []);
 
+  const deleteComment = useCallback(async (artworkId: string, commentId: string) => {
+    await api.artworks.deleteComment(artworkId, commentId);
+    setArtworks(prev => prev.map(artwork =>
+      artwork.id !== artworkId ? artwork :
+      { ...artwork, comments: artwork.comments.filter(c => c.id !== commentId) }
+    ));
+  }, []);
+
   return (
     <AppDataContext.Provider value={{
       domains, artworks, events, team, loading, error,
-      likeArtwork, addComment, uploadArtwork, updateArtwork, deleteArtwork, toggleFeatured,
+      likeArtwork, addComment, uploadArtwork, updateArtwork, deleteArtwork, toggleFeatured, deleteComment,
       rsvpEvent, addEvent, updateEvent, deleteEvent,
       addDomain, updateDomain, deleteDomain, addVideo, updateVideo, deleteVideo, updateVideoSequence,
       addTeamMember, updateTeamMember, deleteTeamMember,

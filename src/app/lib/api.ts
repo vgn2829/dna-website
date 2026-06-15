@@ -79,6 +79,8 @@ export const api = {
       request<{ id: string; sender: string; text: string; date: string }>('POST', `/artworks/${id}/comments`, { body: { sender, text }, roll }),
     toggleFeatured: (id: string, featured: boolean) =>
       request<{ id: string; featured: boolean }>('PATCH', `/artworks/${id}/featured`, { body: { featured }, admin: true }),
+    deleteComment: (artworkId: string, commentId: string) =>
+      request<void>('DELETE', `/artworks/${artworkId}/comments/${commentId}`, { admin: true }),
   },
   events: {
     list: (roll?: string) => request<unknown[]>('GET', '/events', { roll }),
