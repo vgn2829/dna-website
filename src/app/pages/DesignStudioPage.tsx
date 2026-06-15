@@ -1185,19 +1185,21 @@ export default function DesignStudio() {
   const Tool = TOOLS.find(t => t.id === active)!.comp;
   return (
     <div style={{minHeight:"100vh",background:T.canvas,fontFamily:"var(--font-body)",color:T.ink,paddingTop:"56px"}}>
-      <nav style={{position:"sticky",top:"56px",zIndex:99,background:"var(--color-nav-blur-bg)",backdropFilter:"blur(16px)",borderBottom:`1px solid ${T.hairlineSoft}`,height:56,display:"flex",alignItems:"center",padding:"0 24px",gap:16}}>
+      <nav style={{display:"flex",gap:4,alignItems:"center",overflowX:"auto",scrollbarWidth:"none",padding:"8px 24px",borderBottom:`1px solid ${T.hairline}`,background:"var(--color-canvas)",position:"sticky",top:56,zIndex:90}}>
         {TOOLS.map(t=>(
-          <button key={t.id} onClick={()=>setActive(t.id)} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:100,border:"none",cursor:"pointer",background:active===t.id?T.surface2:"transparent",color:active===t.id?T.ink:T.inkMuted,fontFamily:"var(--font-body)",fontSize:13,fontWeight:500,letterSpacing:"-0.13px",transition:"all .15s"}}>
-            {t.icon && <span style={{fontSize:14}}>{t.icon}</span>}<span>{t.label}</span>
+          <button key={t.id} onClick={()=>setActive(t.id)} style={active===t.id
+            ? {background:"var(--color-surface-2)",color:"var(--color-ink)",borderRadius:"var(--radius-pill)",padding:"6px 16px",fontSize:13,fontWeight:500,border:"none",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"var(--font-body)",letterSpacing:"-0.1px"}
+            : {background:"transparent",color:"var(--color-ink-muted)",borderRadius:"var(--radius-pill)",padding:"6px 16px",fontSize:13,fontWeight:400,border:"none",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"var(--font-body)"}}>
+            {t.label}
           </button>
         ))}
       </nav>
       <main style={{maxWidth:1100,margin:"0 auto",padding:"40px 24px 80px"}}>
-        <div style={{marginBottom:32}}>
-          <h1 style={{fontSize:52,fontWeight:500,letterSpacing:"-3px",lineHeight:0.95,margin:"0 0 12px",color:T.ink}}>
+        <div style={{marginBottom:40,paddingTop:8}}>
+          <h1 style={{fontSize:48,fontWeight:600,letterSpacing:"-0.03em",lineHeight:1.0,color:"var(--color-ink)",fontFamily:"var(--font-display)",margin:"0 0 10px 0"}}>
             {TOOLS.find(t=>t.id===active)!.label}
           </h1>
-          <p style={{margin:0,fontSize:15,color:T.inkMuted,letterSpacing:"-0.15px"}}>{SUBTITLES[active]}</p>
+          <p style={{fontSize:16,fontWeight:400,color:"var(--color-ink-muted)",lineHeight:1.5,letterSpacing:"-0.01em",margin:0,fontFamily:"var(--font-body)"}}>{SUBTITLES[active]}</p>
         </div>
         <Tool/>
       </main>
