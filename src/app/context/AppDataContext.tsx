@@ -23,6 +23,7 @@ export interface Artwork {
   likes: number;
   likedByUser: boolean;
   featured: boolean;
+  coverUrl: string | null;
   comments: ArtworkComment[];
 }
 

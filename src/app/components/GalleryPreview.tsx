@@ -17,8 +17,12 @@ function ArtworkCard({ a, i }: { a: Artwork; i: number }) {
       onClick={() => navigate('/gallery')}
     >
       <div style={{ height: 220, position: 'relative', background: 'var(--color-surface-2)', overflow: 'hidden' }}>
-        {a.mediaType === 'image' && a.mediaUrl ? (
-          <img src={a.mediaUrl} alt={a.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        {(a.mediaType === 'image' && a.mediaUrl) || ((a.mediaType === 'video' || a.mediaType === 'pdf') && a.coverUrl) ? (
+          <img
+            src={(a.mediaType === 'video' || a.mediaType === 'pdf') && a.coverUrl ? a.coverUrl : a.mediaUrl}
+            alt={a.title}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
         ) : (
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(145deg, #7c3aed22 0%, transparent 70%)' }} />
         )}

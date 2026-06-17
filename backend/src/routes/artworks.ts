@@ -23,7 +23,7 @@ type ArtworkRow = {
   id: string; title: string; artist: string; domain: string;
   image_url: string | null; media_type: string; storage_path: string | null;
   original_filename: string | null; mime_type: string | null; file_size: number | null;
-  likes: number; featured: boolean;
+  likes: number; featured: boolean; cover_url: string | null;
 };
 type CommentRow = { id: string; sender: string; text: string; created_at: string };
 
@@ -60,6 +60,7 @@ function formatArtwork(row: ArtworkRow, likedByUser: boolean, comments: CommentR
     likes: row.likes,
     likedByUser,
     featured: row.featured ?? false,
+    coverUrl: row.cover_url ?? null,
     comments: comments.map(c => ({ id: c.id, sender: c.sender, text: c.text, date: relativeTime(c.created_at) })),
   };
 }
@@ -86,11 +87,13 @@ artworksRouter.get('/', async (req, res) => {
 artworksRouter.post(
   '/',
   requireAdmin,
-  upload.single('file'),
+  upload.fields([{ name: 'file', maxCount: 1 }, { name: 'cover', maxCount: 1 }]),
   async (req, res) => {
-    if (!req.file) { res.status(400).json({ message: 'File is required' }); return; }
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    const mainFile = files?.['file']?.[0];
+    if (!mainFile) { res.status(400).json({ message: 'File is required' }); return; }
 
-    const file = req.file;
+    const file = mainFile;
     const originalName = file.originalname;
     const ext = originalName.split('.').pop()?.toLowerCase() ?? '';
     const spec = ALLOWED_EXT[ext];
@@ -122,12 +125,25 @@ artworksRouter.post(
 
     await getStorage().upload(storagePath, file.buffer, spec.mime);
 
+    // Handle optional cover image
+    let coverUrl: string | null = null;
+    const coverFile = files?.['cover']?.[0];
+    if (coverFile) {
+      const coverExt = coverFile.originalname.split('.').pop()?.toLowerCase() ?? '';
+      const coverSpec = ALLOWED_EXT[coverExt];
+      if (coverSpec && coverSpec.mime.startsWith('image/')) {
+        const coverPath = `covers/${uuidv4()}.jpg`;
+        await getStorage().upload(coverPath, coverFile.buffer, 'image/jpeg');
+        coverUrl = getStorage().getPublicUrl(coverPath);
+      }
+    }
+
     const id = `art-${uuidv4().slice(0, 8)}`;
     try {
       await query(
-        `INSERT INTO artworks(id,title,artist,domain,media_type,storage_path,original_filename,mime_type,file_size,likes)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,0)`,
-        [id, title, artist, domain, spec.mediaType, storagePath, originalName, spec.mime, file.size]
+        `INSERT INTO artworks(id,title,artist,domain,media_type,storage_path,original_filename,mime_type,file_size,cover_url,likes)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0)`,
+        [id, title, artist, domain, spec.mediaType, storagePath, originalName, spec.mime, file.size, coverUrl]
       );
     } catch (err) {
       await getStorage().delete(storagePath).catch(() => {});
@@ -163,7 +179,7 @@ artworksRouter.patch('/:id/featured', requireAdmin, async (req, res) => {
   res.json({ id: row.id, featured: row.featured });
 });
 
-artworksRouter.put('/:id', requireAdmin, upload.single('file'), async (req, res) => {
+artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
   const existing = await query<ArtworkRow>('SELECT * FROM artworks WHERE id=$1', [req.params.id]);
   if (existing.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
 
@@ -177,8 +193,10 @@ artworksRouter.put('/:id', requireAdmin, upload.single('file'), async (req, res)
   if (domain !== undefined) { sets.push(`domain = $${i++}`); vals.push(domain); }
   if (featuredStr !== undefined) { sets.push(`featured = $${i++}`); vals.push(featuredStr === 'true'); }
 
-  if (req.file) {
-    const file = req.file;
+  const putFiles = req.files as Record<string, Express.Multer.File[]> | undefined;
+  const mainFile = putFiles?.['file']?.[0];
+  if (mainFile) {
+    const file = mainFile;
     const ext = file.originalname.split('.').pop()?.toLowerCase() ?? '';
     const spec = ALLOWED_EXT[ext];
     if (!spec) { res.status(400).json({ error: 'Unsupported file type' }); return; }
@@ -197,6 +215,18 @@ artworksRouter.put('/:id', requireAdmin, upload.single('file'), async (req, res)
     sets.push(`original_filename = $${i++}`); vals.push(file.originalname);
     sets.push(`mime_type = $${i++}`); vals.push(spec.mime);
     sets.push(`file_size = $${i++}`); vals.push(file.size);
+  }
+
+  const coverFile = putFiles?.['cover']?.[0];
+  if (coverFile) {
+    const coverExt = coverFile.originalname.split('.').pop()?.toLowerCase() ?? '';
+    const coverSpec = ALLOWED_EXT[coverExt];
+    if (coverSpec && coverSpec.mime.startsWith('image/')) {
+      const coverPath = `covers/${uuidv4()}.jpg`;
+      await getStorage().upload(coverPath, coverFile.buffer, 'image/jpeg');
+      const newCoverUrl = getStorage().getPublicUrl(coverPath);
+      sets.push(`cover_url = $${i++}`); vals.push(newCoverUrl);
+    }
   }
 
   if (sets.length === 0) { res.status(400).json({ error: 'Nothing to update' }); return; }

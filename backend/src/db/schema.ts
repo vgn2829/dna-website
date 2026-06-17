@@ -9,6 +9,11 @@ export async function initSchema(): Promise<void> {
   `);
 
   await pool.query(`
+    ALTER TABLE artworks
+    ADD COLUMN IF NOT EXISTS cover_url TEXT DEFAULT NULL
+  `);
+
+  await pool.query(`
     ALTER TABLE videos ADD COLUMN IF NOT EXISTS sequence INTEGER NOT NULL DEFAULT 0;
 
     UPDATE videos v

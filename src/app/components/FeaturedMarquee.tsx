@@ -74,9 +74,9 @@ export function FeaturedMarquee() {
                     position: 'relative',
                   }}
                 >
-                  {a.mediaType === 'image' && a.mediaUrl && (
+                  {((a.mediaType === 'image' && a.mediaUrl) || ((a.mediaType === 'video' || a.mediaType === 'pdf') && a.coverUrl)) && (
                     <img
-                      src={a.mediaUrl}
+                      src={(a.mediaType === 'video' || a.mediaType === 'pdf') && a.coverUrl ? a.coverUrl : a.mediaUrl}
                       alt={a.title}
                       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--radius-xl)' }}
                     />

@@ -85,8 +85,13 @@ function MediaViewer({ artwork, onAspectRatio, isMobile }: { artwork: Artwork; o
   }
   if (artwork.mediaType === 'video') {
     return (
-      <div className="w-full h-full flex items-center justify-center" style={{ background: '#000', borderRadius: 'var(--radius-xl)' }}>
-        <video controls autoPlay src={artwork.mediaUrl} className="max-w-full max-h-full rounded-xl" style={{ maxHeight: '100%' }}>
+      <div className="w-full h-full flex items-center justify-center" style={{ background: 'var(--color-canvas)', borderRadius: 'var(--radius-xl)' }}>
+        <video
+          controls
+          autoPlay
+          src={artwork.mediaUrl}
+          style={{ maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', display: 'block', background: 'transparent', objectFit: 'contain' }}
+        >
           Your browser does not support video.
         </video>
       </div>
@@ -311,6 +316,16 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
 }
 
 function MediaThumbnail({ art }: { art: Artwork }) {
+  if (art.coverUrl && (art.mediaType === 'video' || art.mediaType === 'pdf')) {
+    return (
+      <img
+        src={art.coverUrl}
+        alt={art.title}
+        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+        loading="lazy"
+      />
+    );
+  }
   if (art.mediaType === 'image') {
     return (
       <img src={art.mediaUrl} alt={art.title}

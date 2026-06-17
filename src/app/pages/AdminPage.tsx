@@ -5,6 +5,37 @@ import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain,
 import { api, setAdminToken, clearAdminToken } from '../lib/api';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
 
+async function captureVideoFirstFrame(file: File): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    const url = URL.createObjectURL(file);
+    video.src = url;
+    video.muted = true;
+    video.playsInline = true;
+    video.currentTime = 0.1;
+
+    video.addEventListener('seeked', () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(video, 0, 0);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('Failed to capture frame'));
+      }, 'image/jpeg', 0.90);
+    });
+
+    video.addEventListener('error', () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Video load error'));
+    });
+
+    video.load();
+  });
+}
+
 function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
   const [pw, setPw] = useState('');
   const [show, setShow] = useState(false);
@@ -383,6 +414,15 @@ function GalleryTab() {
   const [eaLoading, setEaLoading] = useState(false);
   const [eaError, setEaError] = useState('');
 
+  // Cover image state (add form)
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [isCapturingFrame, setIsCapturingFrame] = useState(false);
+
+  // Cover image state (edit form)
+  const [eaCoverFile, setEaCoverFile] = useState<File | null>(null);
+  const [eaCoverPreview, setEaCoverPreview] = useState<string | null>(null);
+
   // Featured star toggling
   const [togglingFeatured, setTogglingFeatured] = useState<Set<string>>(new Set());
 
@@ -412,8 +452,10 @@ function GalleryTab() {
       fd.append('artist', aArtist);
       const domainVal = aDomain === '__other__' ? aCustomDomain : (aDomain || domainTitles[0] || 'General');
       fd.append('domain', domainVal);
+      if (coverFile) fd.append('cover', coverFile);
       await uploadArtwork(fd);
       setFile(null); setATitle(''); setAArtist(''); setADomain(''); setACustomDomain('');
+      setCoverFile(null); if (coverPreview) URL.revokeObjectURL(coverPreview); setCoverPreview(null);
       if (fileRef.current) fileRef.current.value = '';
     } catch (err) { setUploadError(err instanceof Error ? err.message : String(err)); } finally { setUploading(false); }
   };
@@ -424,6 +466,7 @@ function GalleryTab() {
     if (domainTitles.includes(a.domain)) { setEaDomain(a.domain); setEaCustomDomain(''); }
     else { setEaDomain('__other__'); setEaCustomDomain(a.domain); }
     setEaFile(null); setEaError('');
+    setEaCoverFile(null); setEaCoverPreview(null);
   };
 
   const handleEditArtwork = async (e: React.SyntheticEvent) => {
@@ -437,6 +480,7 @@ function GalleryTab() {
       fd.append('domain', eaDomain === '__other__' ? eaCustomDomain : eaDomain);
       fd.append('featured', String(eaFeatured));
       if (eaFile) fd.append('file', eaFile);
+      if (eaCoverFile) fd.append('cover', eaCoverFile);
       await updateArtwork(editArtwork.id, fd);
       setEditArtwork(null);
     } catch (err) { setEaError(String(err)); } finally { setEaLoading(false); }
@@ -482,6 +526,24 @@ function GalleryTab() {
                     setFile(new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
                   } else {
                     setFile(f);
+                    if (f.type === 'video/mp4' || f.type.startsWith('video/')) {
+                      setIsCapturingFrame(true);
+                      try {
+                        const frameBlob = await captureVideoFirstFrame(f);
+                        const frameFile = new File([frameBlob], 'cover.jpg', { type: 'image/jpeg' });
+                        setCoverFile(frameFile);
+                        if (coverPreview) URL.revokeObjectURL(coverPreview);
+                        setCoverPreview(URL.createObjectURL(frameBlob));
+                      } catch (e) {
+                        console.error('Frame capture failed:', e);
+                      } finally {
+                        setIsCapturingFrame(false);
+                      }
+                    } else if (f.type === 'application/pdf') {
+                      setCoverFile(null);
+                      if (coverPreview) URL.revokeObjectURL(coverPreview);
+                      setCoverPreview(null);
+                    }
                   }
                 }} />
               {file ? (
@@ -491,6 +553,54 @@ function GalleryTab() {
               )}
             </div>
           </div>
+
+          {/* Cover image — shown for video and PDF only */}
+          {file && (file.type.startsWith('video/') || file.type === 'application/pdf') && (
+            <div style={{ marginTop: 4 }}>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
+                Cover Image
+                {file.type.startsWith('video/') && (
+                  <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, marginLeft: 8, color: 'var(--color-ink-muted)' }}>(auto-captured from first frame)</span>
+                )}
+                {file.type === 'application/pdf' && (
+                  <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, marginLeft: 8, color: 'var(--color-ink-muted)' }}>(optional — shown as thumbnail in gallery)</span>
+                )}
+              </label>
+              {isCapturingFrame && (
+                <p style={{ fontSize: 12, color: 'var(--color-ink-muted)' }}>Capturing first frame…</p>
+              )}
+              {coverPreview && !isCapturingFrame && (
+                <div style={{ width: 80, height: 108, borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: 8, border: '1px solid var(--color-hairline)' }}>
+                  <img src={coverPreview} alt="Cover preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 'var(--radius-pill)', background: 'var(--color-surface-2)', border: '1px solid var(--color-hairline)', cursor: 'pointer', fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                  {coverFile ? '↺ Change cover' : '+ Upload cover'}
+                  <input type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = '';
+                      if (!f) return;
+                      const blob = await openCropModal(f, 'artwork');
+                      if (!blob) return;
+                      const cropped = new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+                      setCoverFile(cropped);
+                      if (coverPreview) URL.revokeObjectURL(coverPreview);
+                      setCoverPreview(URL.createObjectURL(blob));
+                    }}
+                  />
+                </label>
+                {coverFile && (
+                  <button type="button" onClick={() => { setCoverFile(null); if (coverPreview) URL.revokeObjectURL(coverPreview); setCoverPreview(null); }}
+                    style={{ background: 'none', border: 'none', color: 'var(--color-ink-muted)', cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-body)' }}>
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           <div><label className="type-micro block mb-1">Title *</label><input required value={aTitle} onChange={e => setATitle(e.target.value)} placeholder="Artwork title" className="input-base" maxLength={200} /></div>
           <div><label className="type-micro block mb-1">Artist</label><input value={aArtist} onChange={e => setAArtist(e.target.value)} placeholder="Name (Year)" className="input-base" maxLength={200} /></div>
           <div>
@@ -585,6 +695,42 @@ function GalleryTab() {
               {editArtwork.mediaType === 'image' && editArtwork.mediaUrl && (
                 <img src={editArtwork.mediaUrl} alt="current" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--color-hairline)' }} />
               )}
+
+              {/* Cover image — for video / PDF only */}
+              {(editArtwork.mediaType === 'video' || editArtwork.mediaType === 'pdf') && (
+                <div>
+                  <label className="type-micro block mb-2">Cover Image</label>
+                  {(eaCoverPreview || editArtwork.coverUrl) && (
+                    <img src={eaCoverPreview ?? editArtwork.coverUrl!} alt="cover"
+                      style={{ width: 80, height: 108, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--color-hairline)', marginBottom: 8, display: 'block' }} />
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 'var(--radius-pill)', background: 'var(--color-surface-2)', border: '1px solid var(--color-hairline)', cursor: 'pointer', fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                      {eaCoverFile || editArtwork.coverUrl ? '↺ Change cover' : '+ Upload cover'}
+                      <input type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          e.target.value = '';
+                          if (!f) return;
+                          const blob = await openCropModal(f, 'artwork');
+                          if (!blob) return;
+                          const cropped = new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+                          setEaCoverFile(cropped);
+                          if (eaCoverPreview) URL.revokeObjectURL(eaCoverPreview);
+                          setEaCoverPreview(URL.createObjectURL(blob));
+                        }}
+                      />
+                    </label>
+                    {eaCoverFile && (
+                      <button type="button" onClick={() => { setEaCoverFile(null); if (eaCoverPreview) URL.revokeObjectURL(eaCoverPreview); setEaCoverPreview(null); }}
+                        style={{ background: 'none', border: 'none', color: 'var(--color-ink-muted)', cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-body)' }}>
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {eaError && <p className="type-micro" style={{ color: '#e5484d' }}>{eaError}</p>}
               <div className="flex gap-2">
                 <button type="submit" disabled={eaLoading} className="btn-primary flex items-center gap-2" style={{ opacity: eaLoading ? 0.6 : 1 }}>
