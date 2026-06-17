@@ -470,7 +470,7 @@ function GalleryTab() {
                   if (f.type.startsWith('image/')) {
                     const blob = await openCropModal(f, 'artwork');
                     if (!blob) return;
-                    setFile(new File([blob], f.name, { type: 'image/jpeg' }));
+                    setFile(new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
                   } else {
                     setFile(f);
                   }
@@ -567,7 +567,7 @@ function GalleryTab() {
                     if (f.type.startsWith('image/')) {
                       const blob = await openCropModal(f, 'artwork');
                       if (!blob) return;
-                      setEaFile(new File([blob], f.name, { type: 'image/jpeg' }));
+                      setEaFile(new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
                     } else {
                       handleFile(f, setEaFile, setEaError);
                     }
@@ -714,7 +714,7 @@ function TeamTab() {
                 if (!f) return;
                 const blob = await openCropModal(f, 'team');
                 if (!blob) return;
-                setPhoto(new File([blob], f.name, { type: 'image/jpeg' }));
+                setPhoto(new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
               }} />
           </div>
           {err && <p className="type-micro" style={{ color: '#e5484d' }}>{err}</p>}
@@ -790,7 +790,7 @@ function TeamTab() {
                     if (!f) return;
                     const blob = await openCropModal(f, 'team');
                     if (!blob) return;
-                    setEmPhoto(new File([blob], f.name, { type: 'image/jpeg' }));
+                    setEmPhoto(new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
                   }} />
               </div>
               {emError && <p className="type-micro" style={{ color: '#e5484d' }}>{emError}</p>}
