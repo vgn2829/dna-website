@@ -615,7 +615,7 @@ function TeamTab() {
       if (tLI) fd.append('socialLinkedin', tLI);
       if (photo) fd.append('photo', photo);
       await addTeamMember(fd);
-      setTName(''); setTDesig(''); setTYear(''); setTBio(''); setTEmail(''); setTIG(''); setTLI('');
+      setTName(''); setTDesig(''); setTYear(''); setTBio(''); setTColor('#007AFF'); setTEmail(''); setTIG(''); setTLI('');
       setPhoto(null); if (photoRef.current) photoRef.current.value = '';
     } catch (error) { setErr(String(error)); } finally { setLoading(false); }
   };
@@ -653,9 +653,25 @@ function TeamTab() {
         <p className="type-headline flex items-center gap-2"><Plus size={14} /> Add Member</p>
         <form onSubmit={handleAdd} className="space-y-3">
           <div><label className="type-micro block mb-1">Name *</label><input required value={tName} onChange={e => setTName(e.target.value)} className="input-base" maxLength={100} /></div>
-          <div><label className="type-micro block mb-1">Designation *</label><input required value={tDesig} onChange={e => setTDesig(e.target.value)} placeholder="Club Coordinator" className="input-base" maxLength={100} /></div>
+          <div>
+            <label className="type-micro block mb-1">Designation *</label>
+            <select required value={tDesig} onChange={e => setTDesig(e.target.value)} className="input-base">
+              <option value="">Select designation…</option>
+              <option value="Coordinator">Coordinator</option>
+              <option value="Secretary">Secretary</option>
+              <option value="Ex-Coordinator">Ex-Coordinator</option>
+              <option value="Ex-Core">Ex-Core</option>
+              <option value="Faculty Advisor">Faculty Advisor</option>
+            </select>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="type-micro block mb-1">Year/Dept</label><input value={tYear} onChange={e => setTYear(e.target.value)} placeholder="Y3 · CSE" className="input-base" /></div>
+            <div>
+              <label className="type-micro block mb-1">Year/Dept</label>
+              <input value={tYear} onChange={e => setTYear(e.target.value)} placeholder="Y3 · CSE" className="input-base" />
+              {(tDesig === 'Ex-Coordinator' || tDesig === 'Ex-Core') && (
+                <p style={{ fontSize: 11, color: 'var(--color-ink-muted)', marginTop: 4 }}>Use format Y-22, Y-23, Y-24 — members are grouped by this year</p>
+              )}
+            </div>
             <div><label className="type-micro block mb-1">Color</label><input type="color" value={tColor} onChange={e => setTColor(e.target.value)} className="input-base h-10" /></div>
           </div>
           <div><label className="type-micro block mb-1">Bio</label><textarea value={tBio} onChange={e => setTBio(e.target.value)} rows={2} className="input-base resize-none" maxLength={500} /></div>
@@ -705,9 +721,25 @@ function TeamTab() {
                 <img src={editMember.photoUrl} alt="current" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: '50%', border: '1px solid var(--color-hairline)' }} />
               )}
               <div><label className="type-micro block mb-1">Name *</label><input required value={emName} onChange={e => setEmName(e.target.value)} className="input-base" maxLength={100} /></div>
-              <div><label className="type-micro block mb-1">Designation *</label><input required value={emDesig} onChange={e => setEmDesig(e.target.value)} className="input-base" maxLength={100} /></div>
+              <div>
+                <label className="type-micro block mb-1">Designation *</label>
+                <select required value={emDesig} onChange={e => setEmDesig(e.target.value)} className="input-base">
+                  <option value="">Select designation…</option>
+                  <option value="Coordinator">Coordinator</option>
+                  <option value="Secretary">Secretary</option>
+                  <option value="Ex-Coordinator">Ex-Coordinator</option>
+                  <option value="Ex-Core">Ex-Core</option>
+                  <option value="Faculty Advisor">Faculty Advisor</option>
+                </select>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="type-micro block mb-1">Year/Dept</label><input value={emYear} onChange={e => setEmYear(e.target.value)} className="input-base" /></div>
+                <div>
+                  <label className="type-micro block mb-1">Year/Dept</label>
+                  <input value={emYear} onChange={e => setEmYear(e.target.value)} className="input-base" />
+                  {(emDesig === 'Ex-Coordinator' || emDesig === 'Ex-Core') && (
+                    <p style={{ fontSize: 11, color: 'var(--color-ink-muted)', marginTop: 4 }}>Use format Y-22, Y-23, Y-24 — members are grouped by this year</p>
+                  )}
+                </div>
                 <div><label className="type-micro block mb-1">Color</label><input type="color" value={emColor} onChange={e => setEmColor(e.target.value)} className="input-base h-10" /></div>
               </div>
               <div><label className="type-micro block mb-1">Bio</label><textarea value={emBio} onChange={e => setEmBio(e.target.value)} rows={2} className="input-base resize-none" maxLength={500} /></div>

@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Instagram, Linkedin, Mail, Users, ChevronDown, ChevronUp, Sparkles, Loader2 } from 'lucide-react';
 import { useAppData, type TeamMember } from '../context/AppDataContext';
 
-function MemberCard({ member, expanded = false, onToggle }: {
-  member: TeamMember; large?: boolean; expanded?: boolean; onToggle?: () => void;
+function MemberCard({ member, expanded = false, onToggle, size = 'normal' }: {
+  member: TeamMember; large?: boolean; expanded?: boolean; onToggle?: () => void; size?: 'normal' | 'small';
 }) {
+  const isSmall = size === 'small';
   return (
     <motion.div
       layout
@@ -25,7 +26,7 @@ function MemberCard({ member, expanded = false, onToggle }: {
       {/* Photo area */}
       <div style={{
         position: 'relative',
-        height: 260,
+        height: isSmall ? 180 : 260,
         overflow: 'hidden',
         borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0',
         background: `${member.color}20`,
@@ -64,9 +65,9 @@ function MemberCard({ member, expanded = false, onToggle }: {
       </div>
 
       {/* Info area */}
-      <div style={{ padding: '16px 20px 20px', background: 'var(--color-surface-1)' }}>
+      <div style={{ padding: isSmall ? '12px 14px 14px' : '16px 20px 20px', background: 'var(--color-surface-1)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <h3 className="type-headline" style={{ fontSize: 18 }}>{member.name}</h3>
+          <h3 className={isSmall ? 'type-body-sm' : 'type-headline'} style={{ fontSize: isSmall ? 14 : 18 }}>{member.name}</h3>
           {onToggle && (
             <div style={{ color: 'var(--color-ink-muted)', flexShrink: 0 }}>
               {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -123,11 +124,37 @@ export function TeamPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const toggle = (id: string) => setExpandedId(prev => prev === id ? null : id);
 
+  const [cols, setCols] = useState({ coord: 4, secy: 5, excore: 4 });
+  useEffect(() => {
+    const update = () => {
+      const w = window.innerWidth;
+      if (w < 640) setCols({ coord: 2, secy: 3, excore: 2 });
+      else if (w < 1024) setCols({ coord: 3, secy: 4, excore: 3 });
+      else setCols({ coord: 4, secy: 5, excore: 4 });
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
   const d = (m: TeamMember) => m.designation.toLowerCase();
+  const isExCore = (m: TeamMember) => d(m).startsWith('ex-');
   const faculty = team.filter(m => d(m).includes('faculty') || d(m).includes('advisor'));
-  const coords  = team.filter(m => d(m).includes('coordinator'));
-  const secs    = team.filter(m => d(m).includes('secretary'));
-  const rest    = team.filter(m => !d(m).includes('coordinator') && !d(m).includes('secretary') && !d(m).includes('faculty') && !d(m).includes('advisor'));
+  const exCoreMembers = team.filter(m => isExCore(m));
+  const coords  = team.filter(m => !isExCore(m) && d(m).includes('coordinator'));
+  const secs    = team.filter(m => !isExCore(m) && d(m).includes('secretary'));
+  const rest    = team.filter(m => !isExCore(m) && !d(m).includes('coordinator') && !d(m).includes('secretary') && !d(m).includes('faculty') && !d(m).includes('advisor'));
+
+  const exCoreByYear = Object.entries(
+    exCoreMembers.reduce((acc, m) => {
+      const yr = m.year || 'Unknown';
+      if (!acc[yr]) acc[yr] = [];
+      acc[yr].push(m);
+      return acc;
+    }, {} as Record<string, typeof exCoreMembers>)
+  )
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([year, members]) => ({ year, members }));
 
   if (loading) {
     return (
@@ -159,7 +186,7 @@ export function TeamPage() {
         {coords.length > 0 && (
           <div className="mb-16">
             <div className="flex items-center gap-3 mb-8"><div className="w-2 h-2 rounded-full bg-blue-400" /><h2 className="text-2xl font-bold">Coordinators</h2></div>
-            <div className="grid md:grid-cols-2 gap-8 max-w-3xl">
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols.coord}, 1fr)`, gap: 16 }}>
               {coords.map(m => <MemberCard key={m.id} member={m} large expanded={expandedId === `m-${m.id}`} onToggle={() => toggle(`m-${m.id}`)} />)}
             </div>
           </div>
@@ -168,8 +195,8 @@ export function TeamPage() {
         {secs.length > 0 && (
           <div className="mb-16">
             <div className="flex items-center gap-3 mb-8"><div className="w-2 h-2 rounded-full bg-purple-400" /><h2 className="text-2xl font-bold">Secretaries</h2></div>
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {secs.map(m => <MemberCard key={m.id} member={m} expanded={expandedId === `m-${m.id}`} onToggle={() => toggle(`m-${m.id}`)} />)}
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols.secy}, 1fr)`, gap: 12 }}>
+              {secs.map(m => <MemberCard key={m.id} member={m} size="small" expanded={expandedId === `m-${m.id}`} onToggle={() => toggle(`m-${m.id}`)} />)}
             </div>
           </div>
         )}
@@ -181,6 +208,40 @@ export function TeamPage() {
               {rest.map(m => <MemberCard key={m.id} member={m} expanded={expandedId === `m-${m.id}`} onToggle={() => toggle(`m-${m.id}`)} />)}
             </div>
           </div>
+        )}
+
+        {exCoreByYear.length > 0 && (
+          <section style={{ marginTop: 64 }}>
+            <h2 className="type-display-lg" style={{ marginBottom: 8 }}>Ex-Core</h2>
+            <p className="type-body" style={{ color: 'var(--color-ink-muted)', marginBottom: 48 }}>
+              Alumni who led DnA Club in previous years
+            </p>
+            {exCoreByYear.map(({ year, members }) => (
+              <div key={year} style={{ marginBottom: 48 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
+                    textTransform: 'uppercase' as const,
+                    color: 'var(--color-ink-muted)', whiteSpace: 'nowrap' as const,
+                  }}>
+                    {year}
+                  </span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--color-hairline)' }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols.excore}, 1fr)`, gap: 16 }}>
+                  {members.map(m => (
+                    <MemberCard
+                      key={m.id}
+                      member={m}
+                      size="normal"
+                      expanded={expandedId === `m-${m.id}`}
+                      onToggle={() => toggle(`m-${m.id}`)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </section>
         )}
 
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
