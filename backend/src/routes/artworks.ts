@@ -110,11 +110,11 @@ artworksRouter.post(
 
     const bodySchema = z.object({
       title:  z.string().min(1).max(200),
-      artist: z.string().min(1).max(200),
+      artist: z.string().max(200).default(''),
       domain: z.string().min(1).max(100),
     });
     const parsed = bodySchema.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.issues.map(i => i.message).join('; ') }); return; }
     const { title, artist, domain } = parsed.data;
 
     const safeExt = ext === 'jpeg' ? 'jpg' : ext;

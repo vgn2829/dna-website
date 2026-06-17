@@ -415,7 +415,7 @@ function GalleryTab() {
       await uploadArtwork(fd);
       setFile(null); setATitle(''); setAArtist(''); setADomain(''); setACustomDomain('');
       if (fileRef.current) fileRef.current.value = '';
-    } catch (err) { setUploadError(String(err)); } finally { setUploading(false); }
+    } catch (err) { setUploadError(err instanceof Error ? err.message : String(err)); } finally { setUploading(false); }
   };
 
   const openEditArtwork = (a: Artwork) => {
