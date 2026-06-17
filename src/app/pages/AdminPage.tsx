@@ -560,7 +560,18 @@ function GalleryTab() {
               <div>
                 <label className="type-micro block mb-1">Replace image (optional)</label>
                 <input ref={eaFileRef} type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.mp4" className="input-base text-xs"
-                  onChange={e => handleFile(e.target.files?.[0] ?? null, setEaFile, setEaError)} />
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!f) return;
+                    if (f.type.startsWith('image/')) {
+                      const blob = await openCropModal(f, 'artwork');
+                      if (!blob) return;
+                      setEaFile(new File([blob], f.name, { type: 'image/jpeg' }));
+                    } else {
+                      handleFile(f, setEaFile, setEaError);
+                    }
+                  }} />
               </div>
               {editArtwork.mediaType === 'image' && editArtwork.mediaUrl && (
                 <img src={editArtwork.mediaUrl} alt="current" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--color-hairline)' }} />
@@ -772,7 +783,15 @@ function TeamTab() {
               <div><label className="type-micro block mb-1">Display order</label><input type="number" value={emOrder} onChange={e => setEmOrder(e.target.value)} className="input-base" /></div>
               <div>
                 <label className="type-micro block mb-1">Replace photo (optional)</label>
-                <input ref={emPhotoRef} type="file" accept=".jpg,.jpeg,.png,.webp" className="input-base text-xs" onChange={e => setEmPhoto(e.target.files?.[0] ?? null)} />
+                <input ref={emPhotoRef} type="file" accept=".jpg,.jpeg,.png,.webp" className="input-base text-xs"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!f) return;
+                    const blob = await openCropModal(f, 'team');
+                    if (!blob) return;
+                    setEmPhoto(new File([blob], f.name, { type: 'image/jpeg' }));
+                  }} />
               </div>
               {emError && <p className="type-micro" style={{ color: '#e5484d' }}>{emError}</p>}
               <div className="flex gap-2">
