@@ -14,8 +14,11 @@ export class SupabaseStorageProvider implements StorageProvider {
   async upload(path: string, buffer: Buffer, mimeType: string): Promise<void> {
     const { error } = await client().storage
       .from(bucket())
-      .upload(path, buffer, { contentType: mimeType, upsert: false });
-    if (error) throw new Error(`Storage upload failed: ${error.message}`);
+      .upload(path, buffer, { contentType: mimeType, upsert: true });
+    if (error) {
+      console.error('Supabase storage upload error:', error);
+      throw new Error(`Storage upload failed: ${error.message}`);
+    }
   }
 
   getPublicUrl(path: string): string {

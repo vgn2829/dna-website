@@ -132,9 +132,15 @@ artworksRouter.post(
       const coverExt = coverFile.originalname.split('.').pop()?.toLowerCase() ?? '';
       const coverSpec = ALLOWED_EXT[coverExt];
       if (coverSpec && coverSpec.mime.startsWith('image/')) {
-        const coverPath = `covers/${uuidv4()}.jpg`;
-        await getStorage().upload(coverPath, coverFile.buffer, 'image/jpeg');
-        coverUrl = getStorage().getPublicUrl(coverPath);
+        try {
+          const coverPath = `covers/${uuidv4()}.jpg`;
+          console.log('Uploading cover file:', coverFile.originalname, coverFile.size);
+          await getStorage().upload(coverPath, coverFile.buffer, 'image/jpeg');
+          coverUrl = getStorage().getPublicUrl(coverPath);
+          console.log('Cover uploaded successfully:', coverUrl);
+        } catch (e) {
+          console.error('Cover upload failed (continuing without cover):', e);
+        }
       }
     }
 
@@ -222,10 +228,18 @@ artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount
     const coverExt = coverFile.originalname.split('.').pop()?.toLowerCase() ?? '';
     const coverSpec = ALLOWED_EXT[coverExt];
     if (coverSpec && coverSpec.mime.startsWith('image/')) {
-      const coverPath = `covers/${uuidv4()}.jpg`;
-      await getStorage().upload(coverPath, coverFile.buffer, 'image/jpeg');
-      const newCoverUrl = getStorage().getPublicUrl(coverPath);
-      sets.push(`cover_url = $${i++}`); vals.push(newCoverUrl);
+      try {
+        const coverPath = `covers/${uuidv4()}.jpg`;
+        console.log('Uploading cover file:', coverFile.originalname, coverFile.size);
+        await getStorage().upload(coverPath, coverFile.buffer, 'image/jpeg');
+        const newCoverUrl = getStorage().getPublicUrl(coverPath);
+        console.log('Cover uploaded successfully:', newCoverUrl);
+        sets.push(`cover_url = $${i++}`); vals.push(newCoverUrl);
+      } catch (e) {
+        console.error('Cover upload error:', e);
+        res.status(500).json({ error: 'Cover image upload failed: ' + (e instanceof Error ? e.message : String(e)) });
+        return;
+      }
     }
   }
 
