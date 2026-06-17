@@ -116,10 +116,28 @@ export function Team() {
 
         <div>
           <p className="type-headline" style={{ marginBottom: 24 }}>Coordinators</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, maxWidth: 720 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
             {coordinators.map((m, i) => <MemberCard key={m.id} member={m} index={i} large />)}
           </div>
         </div>
+
+        <motion.div
+          style={{ marginTop: 64, textAlign: 'center' }}
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <a
+            href="https://www.instagram.com/dnaiitk/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-primary"
+            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            Join the Club
+          </a>
+        </motion.div>
       </div>
     </section>
   );

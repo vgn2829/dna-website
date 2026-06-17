@@ -251,7 +251,15 @@ export function TeamPage() {
           <p className="text-white/60 mb-6 max-w-md mx-auto">We recruit each semester. If you are passionate about design or animation, we would love to have you.</p>
           <div className="flex justify-center gap-3 flex-wrap">
             <button className="px-6 py-3 rounded-2xl glass text-white font-semibold hover:bg-white/10 transition-colors">Learn more</button>
-            <button className="px-6 py-3 rounded-2xl font-semibold text-black transition-all hover:opacity-90" style={{ background: 'linear-gradient(135deg, #007AFF, #BF5AF2)' }}>Apply Now</button>
+            <a
+              href="https://www.instagram.com/dnaiitk/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-6 py-3 rounded-2xl font-semibold text-black transition-all hover:opacity-90"
+              style={{ background: 'linear-gradient(135deg, #007AFF, #BF5AF2)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              Apply Now
+            </a>
           </div>
         </motion.div>
       </div>

@@ -35,13 +35,14 @@ export function Footer() {
 
   return (
     <footer
-      className="px-6 pt-16 pb-10"
+      className="pt-16 pb-10"
       style={{
+        width: '100%',
         background: 'var(--color-canvas)',
         borderTop: '1px solid var(--color-hairline-soft)',
       }}
     >
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 30px' }}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-14">
 
           {/* Brand column */}
