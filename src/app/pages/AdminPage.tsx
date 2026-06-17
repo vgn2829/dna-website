@@ -467,6 +467,15 @@ function GalleryTab() {
                   const f = e.target.files?.[0];
                   e.target.value = '';
                   if (!f) return;
+                  if (!aTitle || aTitle.trim() === '') {
+                    const cleanTitle = f.name
+                      .replace(/\.[^.]+$/, '')
+                      .replace(/[-_]/g, ' ')
+                      .replace(/\s+/g, ' ')
+                      .trim()
+                      .replace(/\b\w/g, c => c.toUpperCase());
+                    setATitle(cleanTitle);
+                  }
                   if (f.type.startsWith('image/')) {
                     const blob = await openCropModal(f, 'artwork');
                     if (!blob) return;
