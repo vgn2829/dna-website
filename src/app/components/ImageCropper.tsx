@@ -10,23 +10,33 @@ import 'react-image-crop/dist/ReactCrop.css';
 // Module-level singleton — survives tab switches, works across any component
 let _resolve: ((blob: Blob | null) => void) | null = null;
 let _setOpen: ((config: CropConfig | null) => void) | null = null;
+let _isObjectUrl = false;
 
 interface CropConfig {
   src: string;
   aspect?: number;
   ratioPresets?: { label: string; value: number }[];
+  showCardPreview?: boolean;
+  cardLabel?: string;
 }
 
 export function openCropModal(
-  file: File,
+  fileOrUrl: File | string,
   type: 'artwork' | 'team'
 ): Promise<Blob | null> {
   return new Promise((resolve) => {
     _resolve = resolve;
-    const src = URL.createObjectURL(file);
+    const isObjectUrl = typeof fileOrUrl !== 'string';
+    const src = isObjectUrl ? URL.createObjectURL(fileOrUrl as File) : fileOrUrl as string;
+    _isObjectUrl = isObjectUrl;
     const config: CropConfig =
       type === 'team'
-        ? { src, aspect: 3 / 4 }
+        ? {
+            src,
+            aspect: 3 / 4,
+            showCardPreview: true,
+            cardLabel: 'Card Preview',
+          }
         : {
             src,
             ratioPresets: [
@@ -39,7 +49,7 @@ export function openCropModal(
     if (_setOpen) {
       _setOpen(config);
     } else {
-      URL.revokeObjectURL(src);
+      if (isObjectUrl) URL.revokeObjectURL(src);
       resolve(null);
     }
   });
@@ -58,6 +68,7 @@ export function ImageCropperPortal() {
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
   const [currentAspect, setCurrentAspect] = useState<number | undefined>();
   const imgRef = useRef<HTMLImageElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     _setOpen = (cfg) => {
@@ -68,6 +79,32 @@ export function ImageCropperPortal() {
     };
     return () => { _setOpen = null; };
   }, []);
+
+  useEffect(() => {
+    if (!completedCrop || !imgRef.current || !previewCanvasRef.current) return;
+    if (!config?.showCardPreview) return;
+
+    const image = imgRef.current;
+    const canvas = previewCanvasRef.current;
+    const scaleX = image.naturalWidth / image.width;
+    const scaleY = image.naturalHeight / image.height;
+
+    canvas.width = 120;
+    canvas.height = 160;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.drawImage(
+      image,
+      completedCrop.x * scaleX,
+      completedCrop.y * scaleY,
+      completedCrop.width * scaleX,
+      completedCrop.height * scaleY,
+      0, 0,
+      120, 160
+    );
+  }, [completedCrop, config]);
 
   const onImageLoad = useCallback(
     (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -102,14 +139,14 @@ export function ImageCropperPortal() {
       0, 0, canvas.width, canvas.height
     );
     canvas.toBlob((blob) => {
-      URL.revokeObjectURL(config.src);
+      if (_isObjectUrl) URL.revokeObjectURL(config.src);
       setConfig(null);
       if (_resolve) { _resolve(blob); _resolve = null; }
     }, 'image/jpeg', 0.95);
   }, [completedCrop, config]);
 
   const handleCancel = () => {
-    if (config) URL.revokeObjectURL(config.src);
+    if (config && _isObjectUrl) URL.revokeObjectURL(config.src);
     setConfig(null);
     if (_resolve) { _resolve(null); _resolve = null; }
   };
@@ -126,7 +163,7 @@ export function ImageCropperPortal() {
     }}>
       {/* Header */}
       <div style={{
-        width: '100%', maxWidth: 700,
+        width: '100%', maxWidth: 900,
         display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', marginBottom: 4,
       }}>
@@ -169,23 +206,53 @@ export function ImageCropperPortal() {
         </div>
       )}
 
-      {/* Crop area */}
-      <div style={{ maxWidth: 700, maxHeight: '55vh', overflow: 'hidden', borderRadius: 'var(--radius-xl)' }}>
-        <ReactCrop
-          crop={crop}
-          onChange={c => setCrop(c)}
-          onComplete={c => setCompletedCrop(c)}
-          aspect={currentAspect}
-          style={{ maxHeight: '55vh' }}
-        >
-          <img
-            ref={imgRef}
-            src={config.src}
-            alt="Crop preview"
-            onLoad={onImageLoad}
-            style={{ maxWidth: '100%', maxHeight: '55vh', objectFit: 'contain', display: 'block' }}
-          />
-        </ReactCrop>
+      {/* Crop area + optional card preview */}
+      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', maxWidth: 900, width: '100%' }}>
+        {/* Left: crop area */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ maxHeight: '55vh', overflow: 'hidden', borderRadius: 'var(--radius-xl)' }}>
+            <ReactCrop
+              crop={crop}
+              onChange={c => setCrop(c)}
+              onComplete={c => setCompletedCrop(c)}
+              aspect={currentAspect}
+              style={{ maxHeight: '55vh' }}
+            >
+              <img
+                ref={imgRef}
+                src={config.src}
+                crossOrigin="anonymous"
+                alt="Crop preview"
+                onLoad={onImageLoad}
+                style={{ maxWidth: '100%', maxHeight: '55vh', objectFit: 'contain', display: 'block' }}
+              />
+            </ReactCrop>
+          </div>
+        </div>
+
+        {/* Right: live card preview (team only) */}
+        {config.showCardPreview && (
+          <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-ink-muted)', margin: 0, fontFamily: 'var(--font-body)' }}>
+              Card Preview
+            </p>
+            <div style={{ width: 140, borderRadius: 'var(--radius-xl)', overflow: 'hidden', background: 'var(--color-surface-1)', border: '1px solid var(--color-hairline)' }}>
+              <div style={{ width: 140, height: 186, overflow: 'hidden', background: 'var(--color-surface-2)' }}>
+                <canvas
+                  ref={previewCanvasRef}
+                  style={{ width: '100%', height: '100%', display: 'block' }}
+                />
+              </div>
+              <div style={{ padding: '10px 12px' }}>
+                <div style={{ height: 10, width: '70%', borderRadius: 4, background: 'var(--color-surface-2)', marginBottom: 6 }} />
+                <div style={{ height: 8, width: '50%', borderRadius: 4, background: 'var(--color-surface-2)' }} />
+              </div>
+            </div>
+            <p style={{ fontSize: 10, color: 'var(--color-ink-muted)', margin: 0, fontFamily: 'var(--font-body)', textAlign: 'center', maxWidth: 140, lineHeight: 1.4 }}>
+              Drag to position the photo in the card
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Buttons */}

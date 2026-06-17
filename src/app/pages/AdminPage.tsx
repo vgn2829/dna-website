@@ -752,6 +752,7 @@ function TeamTab() {
   const { team, addTeamMember, updateTeamMember, deleteTeamMember } = useAppData();
   const photoRef = useRef<HTMLInputElement>(null);
   const [photo, setPhoto] = useState<File | null>(null);
+  const [addPhotoPreview, setAddPhotoPreview] = useState<string | null>(null);
   const [tName, setTName] = useState('');
   const [tDesig, setTDesig] = useState('');
   const [tYear, setTYear] = useState('');
@@ -777,6 +778,7 @@ function TeamTab() {
   const [emLI, setEmLI] = useState('');
   const [emOrder, setEmOrder] = useState('0');
   const [emPhoto, setEmPhoto] = useState<File | null>(null);
+  const [emPhotoPreview, setEmPhotoPreview] = useState<string | null>(null);
   const [emLoading, setEmLoading] = useState(false);
   const [emError, setEmError] = useState('');
 
@@ -796,6 +798,7 @@ function TeamTab() {
       await addTeamMember(fd);
       setTName(''); setTDesig(''); setTYear(''); setTBio(''); setTColor('#007AFF'); setTEmail(''); setTIG(''); setTLI('');
       setPhoto(null); if (photoRef.current) photoRef.current.value = '';
+      if (addPhotoPreview) URL.revokeObjectURL(addPhotoPreview); setAddPhotoPreview(null);
     } catch (error) { setErr(String(error)); } finally { setLoading(false); }
   };
 
@@ -804,7 +807,7 @@ function TeamTab() {
     setEmName(m.name); setEmDesig(m.designation); setEmYear(m.year ?? '');
     setEmBio(m.bio ?? ''); setEmColor(m.color);
     setEmEmail(m.social.email ?? ''); setEmIG(m.social.instagram ?? ''); setEmLI(m.social.linkedin ?? '');
-    setEmOrder(String(m.displayOrder)); setEmPhoto(null); setEmError('');
+    setEmOrder(String(m.displayOrder)); setEmPhoto(null); setEmPhotoPreview(null); setEmError('');
   };
 
   const handleEditMember = async (e: React.SyntheticEvent) => {
@@ -880,8 +883,33 @@ function TeamTab() {
                 if (!f) return;
                 const blob = await openCropModal(f, 'team');
                 if (!blob) return;
-                setPhoto(new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+                const cropped = new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+                setPhoto(cropped);
+                if (addPhotoPreview) URL.revokeObjectURL(addPhotoPreview);
+                setAddPhotoPreview(URL.createObjectURL(blob));
               }} />
+            {addPhotoPreview && (
+              <div style={{ position: 'relative', display: 'inline-block', marginTop: 8 }}>
+                <img
+                  src={addPhotoPreview}
+                  style={{ width: 100, height: 133, objectFit: 'cover', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-hairline)', display: 'block' }}
+                  alt="Photo preview"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const blob = await openCropModal(addPhotoPreview, 'team');
+                    if (!blob) return;
+                    const cropped = new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+                    setPhoto(cropped);
+                    if (addPhotoPreview) URL.revokeObjectURL(addPhotoPreview);
+                    setAddPhotoPreview(URL.createObjectURL(blob));
+                  }}
+                  style={{ position: 'absolute', bottom: 6, right: 6, width: 28, height: 28, borderRadius: '50%', background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13 }}
+                  title="Reframe photo"
+                >✂</button>
+              </div>
+            )}
           </div>
           {err && <p className="type-micro" style={{ color: '#e5484d' }}>{err}</p>}
           <button type="submit" disabled={loading} className="btn-primary w-full justify-center" style={{ opacity: loading ? 0.5 : 1 }}>
@@ -913,10 +941,30 @@ function TeamTab() {
 
       {editMember && (
         <div className="lg:col-span-5">
-          <Modal title={`Edit Member — ${editMember.name}`} onClose={() => setEditMember(null)}>
+          <Modal title={`Edit Member — ${editMember.name}`} onClose={() => { setEditMember(null); if (emPhotoPreview) URL.revokeObjectURL(emPhotoPreview); setEmPhotoPreview(null); }}>
             <form onSubmit={handleEditMember} className="space-y-3">
-              {editMember.photoUrl && (
-                <img src={editMember.photoUrl} alt="current" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: '50%', border: '1px solid var(--color-hairline)' }} />
+              {(emPhotoPreview || editMember?.photoUrl) && (
+                <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <img
+                    src={emPhotoPreview || editMember!.photoUrl!}
+                    alt="Current photo"
+                    style={{ width: 100, height: 133, objectFit: 'cover', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-hairline)', display: 'block' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const src = emPhotoPreview || editMember!.photoUrl!;
+                      const blob = await openCropModal(src, 'team');
+                      if (!blob) return;
+                      const cropped = new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+                      setEmPhoto(cropped);
+                      if (emPhotoPreview) URL.revokeObjectURL(emPhotoPreview);
+                      setEmPhotoPreview(URL.createObjectURL(blob));
+                    }}
+                    style={{ position: 'absolute', bottom: 6, right: 6, width: 28, height: 28, borderRadius: '50%', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13 }}
+                    title="Reframe photo"
+                  >✂</button>
+                </div>
               )}
               <div><label className="type-micro block mb-1">Name *</label><input required value={emName} onChange={e => setEmName(e.target.value)} className="input-base" maxLength={100} /></div>
               <div>
@@ -960,6 +1008,8 @@ function TeamTab() {
                     console.log('=== Crop complete ===');
                     console.log('cropped file:', cropped.name, cropped.size, cropped.type);
                     setEmPhoto(cropped);
+                    if (emPhotoPreview) URL.revokeObjectURL(emPhotoPreview);
+                    setEmPhotoPreview(URL.createObjectURL(blob));
                     console.log('setEmPhoto called');
                   }} />
               </div>
