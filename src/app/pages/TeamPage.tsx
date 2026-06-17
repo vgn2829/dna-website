@@ -128,7 +128,7 @@ export function TeamPage() {
   useEffect(() => {
     const update = () => {
       const w = window.innerWidth;
-      if (w < 640) setCols({ coord: 2, secy: 3, excore: 2 });
+      if (w < 640) setCols({ coord: 1, secy: 2, excore: 1 });
       else if (w < 1024) setCols({ coord: 3, secy: 4, excore: 3 });
       else setCols({ coord: 4, secy: 5, excore: 4 });
     };

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
 import { api, setAdminToken, clearAdminToken } from '../lib/api';
+import { ImageCropper } from '../components/ImageCropper';
 
 function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
   const [pw, setPw] = useState('');
@@ -385,6 +386,10 @@ function GalleryTab() {
   // Featured star toggling
   const [togglingFeatured, setTogglingFeatured] = useState<Set<string>>(new Set());
 
+  // Image cropper state
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [cropResolve, setCropResolve] = useState<((blob: Blob) => void) | null>(null);
+
   const domainTitles = Object.values(domains).map(d => d.title);
   const featuredCount = artworks.filter(a => a.featured).length;
 
@@ -447,6 +452,25 @@ function GalleryTab() {
     setTimeout(() => setTogglingFeatured(s => { const n = new Set(s); n.delete(id); return n; }), 800);
   };
 
+  const openArtworkCropper = (file: File): Promise<Blob> => {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      setCropSrc(url);
+      setCropResolve(() => (blob: Blob) => {
+        URL.revokeObjectURL(url);
+        setCropSrc(null);
+        setCropResolve(null);
+        resolve(blob);
+      });
+    });
+  };
+
+  const handleCropCancel = () => {
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
+    setCropResolve(null);
+  };
+
   return (
     <div className="grid lg:grid-cols-5 gap-6">
       <div className="lg:col-span-2 card p-5 space-y-4">
@@ -462,7 +486,18 @@ function GalleryTab() {
               onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files[0] ?? null, setFile, setUploadError); }}
             >
               <input ref={fileRef} type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.mp4" className="sr-only"
-                onChange={e => handleFile(e.target.files?.[0] ?? null, setFile, setUploadError)} />
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  if (f.type.startsWith('image/')) {
+                    const blob = await openArtworkCropper(f);
+                    const croppedFile = new File([blob], f.name, { type: 'image/jpeg' });
+                    setFile(croppedFile);
+                  } else {
+                    setFile(f);
+                  }
+                  e.target.value = '';
+                }} />
               {file ? (
                 <p className="type-body-sm truncate">{file.name} <span className="type-micro">({(file.size / 1024 / 1024).toFixed(1)} MB)</span></p>
               ) : (
@@ -564,6 +599,21 @@ function GalleryTab() {
           </Modal>
         </div>
       )}
+
+      {/* Image Cropper Modal */}
+      {cropSrc && cropResolve && (
+        <ImageCropper
+          src={cropSrc}
+          ratioPresets={[
+            { label: '3:4', value: 3/4 },
+            { label: '1:1', value: 1/1 },
+            { label: '4:5', value: 4/5 },
+            { label: '2:3', value: 2/3 },
+          ]}
+          onComplete={cropResolve}
+          onCancel={handleCropCancel}
+        />
+      )}
     </div>
   );
 }
@@ -600,6 +650,29 @@ function TeamTab() {
   const [emPhoto, setEmPhoto] = useState<File | null>(null);
   const [emLoading, setEmLoading] = useState(false);
   const [emError, setEmError] = useState('');
+
+  // Image cropper state
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [cropResolve, setCropResolve] = useState<((blob: Blob) => void) | null>(null);
+
+  const openTeamCropper = (file: File): Promise<Blob> => {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      setCropSrc(url);
+      setCropResolve(() => (blob: Blob) => {
+        URL.revokeObjectURL(url);
+        setCropSrc(null);
+        setCropResolve(null);
+        resolve(blob);
+      });
+    });
+  };
+
+  const handleCropCancel = () => {
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
+    setCropResolve(null);
+  };
 
   const handleAdd = async (e: React.SyntheticEvent) => {
     e.preventDefault();
@@ -683,7 +756,15 @@ function TeamTab() {
           <div><label className="type-micro block mb-1">Display order</label><input type="number" value={tOrder} onChange={e => setTOrder(e.target.value)} className="input-base" /></div>
           <div>
             <label className="type-micro block mb-1">Photo (optional, jpg/png/webp)</label>
-            <input ref={photoRef} type="file" accept=".jpg,.jpeg,.png,.webp" className="input-base text-xs" onChange={e => setPhoto(e.target.files?.[0] ?? null)} />
+            <input ref={photoRef} type="file" accept=".jpg,.jpeg,.png,.webp" className="input-base text-xs"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                const blob = await openTeamCropper(f);
+                const croppedFile = new File([blob], f.name, { type: 'image/jpeg' });
+                setPhoto(croppedFile);
+                e.target.value = '';
+              }} />
           </div>
           {err && <p className="type-micro" style={{ color: '#e5484d' }}>{err}</p>}
           <button type="submit" disabled={loading} className="btn-primary w-full justify-center" style={{ opacity: loading ? 0.5 : 1 }}>
@@ -763,6 +844,16 @@ function TeamTab() {
             </form>
           </Modal>
         </div>
+      )}
+
+      {/* Image Cropper Modal */}
+      {cropSrc && cropResolve && (
+        <ImageCropper
+          src={cropSrc}
+          aspect={3/4}
+          onComplete={cropResolve}
+          onCancel={handleCropCancel}
+        />
       )}
     </div>
   );
