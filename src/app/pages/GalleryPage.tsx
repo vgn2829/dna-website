@@ -178,7 +178,7 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
             <button onClick={handleLike} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 'var(--radius-pill)', background: 'var(--color-surface-2)', border: 'none', cursor: 'pointer', fontSize: 13 }}>
               <LikeBurst active={burst} />
               <Heart size={14} fill={artwork.likedByUser ? '#ff4d6d' : 'none'} style={{ color: artwork.likedByUser ? '#ff4d6d' : 'var(--color-ink-muted)' }} />
-              <span style={{ color: 'var(--color-ink)' }}>{artwork.likes}</span>
+              <span className="tabular-nums" style={{ color: 'var(--color-ink)' }}>{artwork.likes}</span>
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto', fontSize: 12, color: 'var(--color-ink-muted)' }}>
               <MessageCircle size={12} /> {artwork.comments.length}
@@ -263,7 +263,7 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
               <button onClick={handleLike} className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full type-body-sm transition-colors" style={{ background: 'var(--color-surface-2)' }}>
                 <LikeBurst active={burst} />
                 <Heart size={14} fill={artwork.likedByUser ? '#ff4d6d' : 'none'} style={{ color: artwork.likedByUser ? '#ff4d6d' : 'var(--color-ink-muted)' }} />
-                <span style={{ color: 'var(--color-ink)' }}>{artwork.likes}</span>
+                <span className="tabular-nums" style={{ color: 'var(--color-ink)' }}>{artwork.likes}</span>
               </button>
               <div className="flex items-center gap-1 ml-auto type-caption" style={{ color: 'var(--color-ink-muted)' }}>
                 <MessageCircle size={12} /> {artwork.comments.length}
@@ -367,7 +367,7 @@ export function GalleryPage() {
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-canvas)', paddingTop: '6rem', paddingBottom: '5rem' }}>
-      <div className="max-w-6xl mx-auto px-6">
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 30px' }}>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-12">
           <div className="flex items-end justify-between gap-4">
             <div>
@@ -420,7 +420,7 @@ export function GalleryPage() {
                         style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', backdropFilter: 'blur(4px)' }}>
                         <LikeBurst active={hasBurst} />
                         <Heart size={11} fill={art.likedByUser ? '#ff4d6d' : 'none'} style={{ color: art.likedByUser ? '#ff4d6d' : '#fff' }} />
-                        {art.likes}
+                        <span className="tabular-nums">{art.likes}</span>
                       </button>
                     </div>
                     {/* Text area below image — always visible, never overlapped */}

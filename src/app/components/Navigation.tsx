@@ -50,8 +50,11 @@ export function Navigation() {
          * This prevents any column from bleeding into another.
          */}
         <div
-          className="h-full max-w-7xl mx-auto px-5 md:px-8"
+          className="h-full"
           style={{
+            maxWidth: 1200,
+            margin: '0 auto',
+            padding: '0 30px',
             display: 'grid',
             gridTemplateColumns: '1fr auto 1fr',
             alignItems: 'center',

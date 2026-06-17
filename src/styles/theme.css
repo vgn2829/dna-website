@@ -151,8 +151,8 @@
     color: var(--color-ink);
     overflow-x: hidden;
     /* Inter Variable OpenType character variants — brand voice */
-    font-feature-settings: "cv01" on, "cv05" on, "cv09" on, "cv11" on,
-                           "ss03" on, "ss07" on, "dlig" on;
+    font-feature-settings: "cv01" 1, "cv05" 1, "cv09" 1, "cv11" 1,
+                           "ss03" 1, "ss07" 1, "dlig" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -270,6 +270,12 @@
     font-weight: 500;
     line-height: 1.0;
     letter-spacing: -0.14px;
+  }
+  .tabular-nums {
+    font-feature-settings:
+      "cv01" 1, "cv05" 1, "cv09" 1, "cv11" 1,
+      "ss03" 1, "ss07" 1, "dlig" 1,
+      "tnum" 1;
   }
 
   /* ── Surface utilities ── */

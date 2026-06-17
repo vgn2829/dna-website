@@ -41,7 +41,7 @@ export function Footer() {
         borderTop: '1px solid var(--color-hairline-soft)',
       }}
     >
-      <div className="max-w-6xl mx-auto">
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-14">
 
           {/* Brand column */}

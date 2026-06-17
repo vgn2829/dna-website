@@ -177,7 +177,7 @@ export function Hero() {
             { value: '500+', label: 'Artworks' },
           ].map(s => (
             <div key={s.label} style={{ textAlign: 'center' }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 500, letterSpacing: '-1.5px', color: '#fff', lineHeight: 1 }}>{s.value}</div>
+              <div className="tabular-nums" style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 500, letterSpacing: '-1.5px', color: '#fff', lineHeight: 1 }}>{s.value}</div>
               <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'rgba(255,255,255,0.55)', marginTop: 4 }}>{s.label}</div>
             </div>
           ))}

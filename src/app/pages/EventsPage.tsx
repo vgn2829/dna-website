@@ -32,7 +32,7 @@ function useCountdown(dateStr: string) {
 function CountUnit({ value, label }: { value: number; label: string }) {
   return (
     <div className="text-center">
-      <div className="type-headline font-mono w-10">{String(value).padStart(2, '0')}</div>
+      <div className="type-headline font-mono w-10 tabular-nums">{String(value).padStart(2, '0')}</div>
       <div className="type-micro mt-0.5">{label}</div>
     </div>
   );
@@ -109,8 +109,8 @@ function EventCard({ event, view, delay, onRSVP }: {
         {/* Capacity bar */}
         <div>
           <div className="flex justify-between type-micro mb-1.5">
-            <span className="flex items-center gap-1"><Users size={10} />{event.registeredCount}/{event.capacity}</span>
-            <span>{fillPct}% full</span>
+            <span className="flex items-center gap-1 tabular-nums"><Users size={10} />{event.registeredCount}/{event.capacity}</span>
+            <span className="tabular-nums">{fillPct}% full</span>
           </div>
           <div className="w-full h-0.5 rounded-full" style={{ background: 'var(--color-surface-2)' }}>
             <motion.div
@@ -195,7 +195,7 @@ export function EventsPage() {
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-canvas)', paddingTop: '5rem', paddingBottom: '5rem' }}>
-      <div className="max-w-6xl mx-auto px-6">
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 30px' }}>
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
           <p className="type-caption mb-3">Club Activities</p>
