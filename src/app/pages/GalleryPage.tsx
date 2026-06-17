@@ -79,7 +79,7 @@ function ZoomImage({ src, alt, onAspectRatio }: { src: string; alt: string; onAs
   );
 }
 
-function MediaViewer({ artwork, onAspectRatio }: { artwork: Artwork; onAspectRatio?: (ratio: number) => void }) {
+function MediaViewer({ artwork, onAspectRatio, isMobile }: { artwork: Artwork; onAspectRatio?: (ratio: number) => void; isMobile?: boolean }) {
   if (artwork.mediaType === 'image') {
     return <ZoomImage src={artwork.mediaUrl} alt={artwork.title} onAspectRatio={onAspectRatio} />;
   }
@@ -93,11 +93,16 @@ function MediaViewer({ artwork, onAspectRatio }: { artwork: Artwork; onAspectRat
     );
   }
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center gap-4" style={{ background: 'var(--color-surface-2)', borderRadius: 'var(--radius-xl)' }}>
-      <FileText size={56} style={{ color: 'var(--color-ink-muted)' }} />
-      <p className="type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>{artwork.originalFilename ?? artwork.title}</p>
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+      <iframe
+        src={`${artwork.mediaUrl}#toolbar=0`}
+        width="100%"
+        height={isMobile ? '400px' : '600px'}
+        style={{ border: 'none', borderRadius: 8, display: 'block' }}
+        title={artwork.title}
+      />
       <a href={artwork.mediaUrl} target="_blank" rel="noreferrer"
-        className="btn-primary flex items-center gap-2">
+        className="btn-secondary flex items-center gap-2">
         <ExternalLink size={14} /> Open PDF
       </a>
     </div>
@@ -162,8 +167,8 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
         </div>
 
         {/* Image */}
-        <div style={{ width: '100%', height: 'min(60vw, 55vh)', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0' }}>
-          <MediaViewer artwork={artwork} onAspectRatio={setAspectRatio} />
+        <div style={{ width: '100%', height: artwork.mediaType === 'pdf' ? 'auto' : 'min(60vw, 55vh)', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: artwork.mediaType === 'pdf' ? 'visible' : 'hidden', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', padding: artwork.mediaType === 'pdf' ? 12 : 0 }}>
+          <MediaViewer artwork={artwork} onAspectRatio={setAspectRatio} isMobile={isMobile} />
         </div>
 
         {/* Info */}
@@ -241,8 +246,8 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
         style={{ width: '100%', maxWidth: 1024, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'row', background: 'var(--color-surface-1)', borderRadius: 'var(--radius-xxl)', boxShadow: 'var(--shadow-level-2)' }}
       >
         {/* Media panel */}
-        <div style={{ width: imagePanelWidth, flexShrink: 0, background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, minHeight: 0, maxHeight: '90vh', borderRadius: 'var(--radius-xl) 0 0 var(--radius-xl)', overflow: 'hidden' }}>
-          <MediaViewer artwork={artwork} onAspectRatio={setAspectRatio} />
+        <div style={{ width: imagePanelWidth, flexShrink: 0, background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, minHeight: 0, maxHeight: '90vh', borderRadius: 'var(--radius-xl) 0 0 var(--radius-xl)', overflow: artwork.mediaType === 'pdf' ? 'auto' : 'hidden' }}>
+          <MediaViewer artwork={artwork} onAspectRatio={setAspectRatio} isMobile={isMobile} />
         </div>
 
         {/* Info panel */}
