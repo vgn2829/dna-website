@@ -2,9 +2,7 @@ import { Pool } from 'pg';
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('supabase.co')
-    ? { rejectUnauthorized: process.env.NODE_ENV === 'production' }
-    : undefined,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : undefined,
 });
 
 export type Row = Record<string, unknown>;
