@@ -655,6 +655,11 @@ function TeamTab() {
   const handleEditMember = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!editMember) return;
+    console.log('=== handleEditMember called ===');
+    console.log('emPhoto state:', emPhoto);
+    console.log('emPhoto name:', emPhoto?.name);
+    console.log('emPhoto size:', emPhoto?.size);
+    console.log('emPhoto type:', emPhoto?.type);
     setEmLoading(true); setEmError('');
     try {
       const fd = new FormData();
@@ -666,9 +671,15 @@ function TeamTab() {
       if (emIG) fd.append('socialInstagram', emIG);
       if (emLI) fd.append('socialLinkedin', emLI);
       if (emPhoto) fd.append('photo', emPhoto);
+      console.log('FormData has photo?', emPhoto !== null);
+      console.log('About to call updateTeamMember');
       await updateTeamMember(editMember.id, fd);
+      console.log('updateTeamMember SUCCESS');
       setEditMember(null);
-    } catch (error) { setEmError(String(error)); } finally { setEmLoading(false); }
+    } catch (error) {
+      console.log('updateTeamMember FAILED:', error);
+      setEmError(String(error));
+    } finally { setEmLoading(false); }
   };
 
   return (
@@ -790,7 +801,11 @@ function TeamTab() {
                     if (!f) return;
                     const blob = await openCropModal(f, 'team');
                     if (!blob) return;
-                    setEmPhoto(new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+                    const cropped = new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+                    console.log('=== Crop complete ===');
+                    console.log('cropped file:', cropped.name, cropped.size, cropped.type);
+                    setEmPhoto(cropped);
+                    console.log('setEmPhoto called');
                   }} />
               </div>
               {emError && <p className="type-micro" style={{ color: '#e5484d' }}>{emError}</p>}
