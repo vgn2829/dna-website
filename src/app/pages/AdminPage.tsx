@@ -483,7 +483,7 @@ function GalleryTab() {
             </div>
           </div>
           <div><label className="type-micro block mb-1">Title *</label><input required value={aTitle} onChange={e => setATitle(e.target.value)} placeholder="Artwork title" className="input-base" maxLength={200} /></div>
-          <div><label className="type-micro block mb-1">Artist *</label><input required value={aArtist} onChange={e => setAArtist(e.target.value)} placeholder="Name (Year)" className="input-base" maxLength={200} /></div>
+          <div><label className="type-micro block mb-1">Artist</label><input value={aArtist} onChange={e => setAArtist(e.target.value)} placeholder="Name (Year)" className="input-base" maxLength={200} /></div>
           <div>
             <label className="type-micro block mb-1">Domain</label>
             <select value={aDomain} onChange={e => { setADomain(e.target.value); if (e.target.value !== '__other__') setACustomDomain(''); }} className="input-base">
