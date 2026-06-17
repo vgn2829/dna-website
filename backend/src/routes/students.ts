@@ -4,6 +4,18 @@ import { v4 as uuidv4 } from 'uuid';
 import rateLimit from 'express-rate-limit';
 import { query } from '../db/client';
 
+const progressWriteLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: 'Too many progress updates — please slow down' },
+});
+
+const progressReadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { error: 'Too many requests — please slow down' },
+});
+
 export const studentsRouter = Router();
 
 const VALID_ID  = /^[a-zA-Z0-9_-]{1,100}$/;
@@ -49,7 +61,7 @@ studentsRouter.post('/sessions', sessionLimiter, async (req, res) => {
   });
 });
 
-studentsRouter.get('/:roll/progress', async (req, res) => {
+studentsRouter.get('/:roll/progress', progressReadLimiter, async (req, res) => {
   const roll = req.params.roll.trim().toUpperCase();
   const exists = await query('SELECT 1 FROM student_sessions WHERE roll_number=$1', [roll]);
   if (exists.length === 0) { res.status(404).json({ error: 'Student not found' }); return; }
@@ -68,7 +80,7 @@ function ownerGuard(req: Parameters<Parameters<typeof studentsRouter.post>[1]>[0
   return true;
 }
 
-studentsRouter.post('/:roll/progress/videos/:videoId', async (req, res) => {
+studentsRouter.post('/:roll/progress/videos/:videoId', progressWriteLimiter, async (req, res) => {
   if (!ownerGuard(req, res)) return;
   const roll = req.params.roll.trim().toUpperCase();
   if (!ROLL_RE.test(roll)) { res.status(400).json({ error: 'Invalid roll number format' }); return; }
@@ -82,7 +94,7 @@ studentsRouter.post('/:roll/progress/videos/:videoId', async (req, res) => {
   res.status(204).end();
 });
 
-studentsRouter.delete('/:roll/progress/videos/:videoId', async (req, res) => {
+studentsRouter.delete('/:roll/progress/videos/:videoId', progressWriteLimiter, async (req, res) => {
   if (!ownerGuard(req, res)) return;
   const roll = req.params.roll.trim().toUpperCase();
   if (!ROLL_RE.test(roll)) { res.status(400).json({ error: 'Invalid roll number format' }); return; }
@@ -91,7 +103,7 @@ studentsRouter.delete('/:roll/progress/videos/:videoId', async (req, res) => {
   res.status(204).end();
 });
 
-studentsRouter.post('/:roll/progress/quizzes/:domainId', async (req, res) => {
+studentsRouter.post('/:roll/progress/quizzes/:domainId', progressWriteLimiter, async (req, res) => {
   if (!ownerGuard(req, res)) return;
   const roll = req.params.roll.trim().toUpperCase();
   if (!ROLL_RE.test(roll)) { res.status(400).json({ error: 'Invalid roll number format' }); return; }

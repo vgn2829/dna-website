@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { authRouter }    from './routes/auth';
 import { eventsRouter }  from './routes/events';
@@ -43,6 +44,16 @@ export function createApp() {
   );
 
   app.use(express.json({ limit: '256kb' }));
+
+  const globalLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests — please slow down' },
+    skip: (req) => req.path === '/api/health',
+  });
+  app.use(globalLimiter);
 
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
   app.use('/api/auth',     authRouter);
