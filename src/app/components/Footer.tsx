@@ -1,4 +1,3 @@
-import { motion } from 'motion/react';
 import { Instagram, Linkedin, Mail, Youtube } from 'lucide-react';
 import { useNavigate } from 'react-router';
 
@@ -35,18 +34,18 @@ export function Footer() {
 
   return (
     <footer
-      className="pt-16 pb-10"
       style={{
         width: '100%',
         background: 'var(--color-canvas)',
         borderTop: '1px solid var(--color-hairline-soft)',
+        padding: '64px 0',
       }}
     >
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 30px' }}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-14">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 40, marginBottom: 48 }}>
 
           {/* Brand column */}
-          <div className="col-span-2 md:col-span-1">
+          <div>
             <p
               className="text-base font-semibold mb-3"
               style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.5px', color: 'var(--color-ink)' }}
@@ -56,19 +55,40 @@ export function Footer() {
             <p className="type-caption mb-6" style={{ maxWidth: 200 }}>
               IIT Kanpur's community for digital and animation
             </p>
-            <div className="flex gap-2">
+            <div style={{ display: 'flex', gap: 8 }}>
               {SOCIAL.map(s => {
                 const Icon = s.icon;
                 return (
-                  <motion.a
+                  <a
                     key={s.label}
                     href={s.href}
-                    whileHover={{ y: -2 }}
-                    className="btn-icon"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     aria-label={s.label}
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: '50%',
+                      background: 'var(--color-surface-1)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--color-ink-muted)',
+                      textDecoration: 'none',
+                      flexShrink: 0,
+                      transition: 'background 0.2s, color 0.2s',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = 'var(--color-surface-2)';
+                      e.currentTarget.style.color = 'var(--color-ink)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = 'var(--color-surface-1)';
+                      e.currentTarget.style.color = 'var(--color-ink-muted)';
+                    }}
                   >
-                    <Icon size={15} />
-                  </motion.a>
+                    <Icon size={16} />
+                  </a>
                 );
               })}
             </div>
@@ -77,19 +97,38 @@ export function Footer() {
           {/* Link columns */}
           {COLS.map(col => (
             <div key={col.heading}>
-              <p
-                className="type-caption mb-4"
-                style={{ color: 'var(--color-ink)', letterSpacing: '-0.13px' }}
-              >
+              <p style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: 'var(--color-ink)',
+                letterSpacing: '-0.13px',
+                lineHeight: 1.20,
+                marginBottom: 16,
+                fontFamily: 'var(--font-body)',
+              }}>
                 {col.heading}
               </p>
-              <ul className="space-y-2.5">
+              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {col.links.map(link => (
                   <li key={link.label}>
                     <button
                       onClick={() => navigate(link.path)}
-                      className="type-caption hover:opacity-100 transition-opacity"
-                      style={{ color: 'var(--color-ink-muted)', opacity: 0.8 }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: 0,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        letterSpacing: '-0.13px',
+                        lineHeight: 1.20,
+                        color: 'var(--color-ink-muted)',
+                        textDecoration: 'none',
+                        transition: 'color 0.15s',
+                        fontFamily: 'var(--font-body)',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-ink)')}
+                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-ink-muted)')}
                     >
                       {link.label}
                     </button>
@@ -101,104 +140,118 @@ export function Footer() {
 
           {/* Contact column */}
           <div>
-            <p
-              className="type-caption mb-4"
-              style={{ color: 'var(--color-ink)', letterSpacing: '-0.13px' }}
-            >
+            <p style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--color-ink)',
+              letterSpacing: '-0.13px',
+              lineHeight: 1.20,
+              marginBottom: 16,
+              fontFamily: 'var(--font-body)',
+            }}>
               Contact
             </p>
-            <ul className="space-y-2.5">
+            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
               <li>
-                <a href="mailto:designandanimationclub.iitk@gmail.com" className="type-caption" style={{ color: 'var(--color-accent-blue)' }}>
+                <a
+                  href="mailto:designandanimationclub.iitk@gmail.com"
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 500,
+                    letterSpacing: '-0.13px',
+                    lineHeight: 1.20,
+                    color: 'var(--color-accent-blue)',
+                    textDecoration: 'none',
+                    fontFamily: 'var(--font-body)',
+                  }}
+                >
                   designandanimationclub.iitk@gmail.com
                 </a>
               </li>
               <li>
-                <p className="type-caption">Room No. 210, Indian Institute of Technology Kanpur, Kalyanpur, Kanpur, Uttar Pradesh 208016</p>
+                <p style={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  letterSpacing: '-0.13px',
+                  lineHeight: 1.20,
+                  color: 'var(--color-ink-muted)',
+                  fontFamily: 'var(--font-body)',
+                }}>
+                  Room No. 210, Indian Institute of Technology Kanpur, Kalyanpur, Kanpur, Uttar Pradesh 208016
+                </p>
               </li>
             </ul>
           </div>
         </div>
 
-        {/* Bottom row */}
-        <div
-          className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-8"
-          style={{ borderTop: '1px solid var(--color-hairline-soft)' }}
-        >
-          <p className="type-micro">
-            © 2026 Design &amp; Animation Club, IIT Kanpur.
-          </p>
-          <p className="type-micro">All rights reserved.</p>
-        </div>
-
-        {/* Designer credit */}
+        {/* Bottom bar — copyright left, designer credit right */}
         <div style={{
           borderTop: '1px solid var(--color-hairline)',
-          marginTop: 32,
-          paddingTop: 20,
+          marginTop: 48,
+          paddingTop: 24,
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
-          gap: 10,
-          textAlign: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 12,
         }}>
-          <p style={{ fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', letterSpacing: '0.02em' }}>
-            Built with ♥ for DnA Club IITK
-          </p>
-          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)', letterSpacing: '-0.1px' }}>
-            Designed &amp; Developed by Venugopal
-          </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 4 }}>
-            <a
-              href="https://www.instagram.com/venugopal29_/"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Venugopal on Instagram"
-              style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--color-ink-muted)', textDecoration: 'none', fontSize: 12, transition: 'color 0.2s' }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#E1306C')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-ink-muted)')}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
-                <circle cx="12" cy="12" r="4"/>
-                <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
-              </svg>
-              @venugopal29_
-            </a>
-            <span style={{ color: 'var(--color-hairline)', fontSize: 14 }}>·</span>
-            <a
-              href="https://www.linkedin.com/in/venugopal29/"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Venugopal on LinkedIn"
-              style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--color-ink-muted)', textDecoration: 'none', fontSize: 12, transition: 'color 0.2s' }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#0A66C2')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-ink-muted)')}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/>
-                <rect x="2" y="9" width="4" height="12"/>
-                <circle cx="4" cy="4" r="2"/>
-              </svg>
-              venugopal29
-            </a>
-            <span style={{ color: 'var(--color-hairline)', fontSize: 14 }}>·</span>
-            <a
-              href="tel:+917019080178"
-              aria-label="Call Venugopal"
-              style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--color-ink-muted)', textDecoration: 'none', fontSize: 12, transition: 'color 0.2s' }}
-              onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-ink)')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-ink-muted)')}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.56 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
-              </svg>
-              +91 70190 80178
-            </a>
-          </div>
-          <p style={{ fontSize: 11, color: 'var(--color-ink-muted)', opacity: 0.6, marginTop: 4, fontFamily: 'var(--font-body)' }}>
+          <p style={{
+            fontSize: 12,
+            color: 'var(--color-ink-muted)',
+            margin: 0,
+            letterSpacing: '-0.12px',
+            fontFamily: 'var(--font-body)',
+          }}>
             © {new Date().getFullYear()} Design &amp; Animation Club, IIT Kanpur
           </p>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{
+              fontSize: 12,
+              color: 'var(--color-ink-muted)',
+              letterSpacing: '-0.12px',
+              fontFamily: 'var(--font-body)',
+            }}>
+              Designed &amp; Developed by{' '}
+              <span style={{ color: 'var(--color-ink)', fontWeight: 600 }}>Venugopal</span>
+            </span>
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <a href="https://www.instagram.com/venugopal29_/"
+                target="_blank" rel="noopener noreferrer"
+                style={{ color: 'var(--color-ink-muted)', display: 'flex', transition: 'color 0.2s' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#E1306C')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-ink-muted)')}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                  <circle cx="12" cy="12" r="4"/>
+                  <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
+                </svg>
+              </a>
+              <a href="https://www.linkedin.com/in/venugopal29/"
+                target="_blank" rel="noopener noreferrer"
+                style={{ color: 'var(--color-ink-muted)', display: 'flex', transition: 'color 0.2s' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#0A66C2')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-ink-muted)')}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/>
+                  <rect x="2" y="9" width="4" height="12"/>
+                  <circle cx="4" cy="4" r="2"/>
+                </svg>
+              </a>
+              <a href="tel:+917019080178"
+                style={{ color: 'var(--color-ink-muted)', display: 'flex', transition: 'color 0.2s' }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-ink)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-ink-muted)')}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.56 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                </svg>
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     </footer>
