@@ -389,6 +389,7 @@ function GalleryTab() {
   // Image cropper state
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropResolve, setCropResolve] = useState<((blob: Blob) => void) | null>(null);
+  const [cropCancel, setCropCancel] = useState<(() => void) | null>(null);
 
   const domainTitles = Object.values(domains).map(d => d.title);
   const featuredCount = artworks.filter(a => a.featured).length;
@@ -452,23 +453,25 @@ function GalleryTab() {
     setTimeout(() => setTogglingFeatured(s => { const n = new Set(s); n.delete(id); return n; }), 800);
   };
 
-  const openArtworkCropper = (file: File): Promise<Blob> => {
+  const openArtworkCropper = (file: File): Promise<Blob | null> => {
     return new Promise((resolve) => {
       const url = URL.createObjectURL(file);
       setCropSrc(url);
       setCropResolve(() => (blob: Blob) => {
         URL.revokeObjectURL(url);
-        setCropSrc(null);
-        setCropResolve(null);
+        setCropSrc(null); setCropResolve(null); setCropCancel(null);
         resolve(blob);
+      });
+      setCropCancel(() => () => {
+        URL.revokeObjectURL(url);
+        setCropSrc(null); setCropResolve(null); setCropCancel(null);
+        resolve(null);
       });
     });
   };
 
   const handleCropCancel = () => {
-    if (cropSrc) URL.revokeObjectURL(cropSrc);
-    setCropSrc(null);
-    setCropResolve(null);
+    if (cropCancel) cropCancel();
   };
 
   return (
@@ -489,14 +492,14 @@ function GalleryTab() {
                 onChange={async (e) => {
                   const f = e.target.files?.[0];
                   if (!f) return;
+                  e.target.value = '';
                   if (f.type.startsWith('image/')) {
                     const blob = await openArtworkCropper(f);
-                    const croppedFile = new File([blob], f.name, { type: 'image/jpeg' });
-                    setFile(croppedFile);
+                    if (!blob) return;
+                    setFile(new File([blob], f.name, { type: 'image/jpeg' }));
                   } else {
                     setFile(f);
                   }
-                  e.target.value = '';
                 }} />
               {file ? (
                 <p className="type-body-sm truncate">{file.name} <span className="type-micro">({(file.size / 1024 / 1024).toFixed(1)} MB)</span></p>
@@ -654,24 +657,27 @@ function TeamTab() {
   // Image cropper state
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropResolve, setCropResolve] = useState<((blob: Blob) => void) | null>(null);
+  const [cropCancel, setCropCancel] = useState<(() => void) | null>(null);
 
-  const openTeamCropper = (file: File): Promise<Blob> => {
+  const openTeamCropper = (file: File): Promise<Blob | null> => {
     return new Promise((resolve) => {
       const url = URL.createObjectURL(file);
       setCropSrc(url);
       setCropResolve(() => (blob: Blob) => {
         URL.revokeObjectURL(url);
-        setCropSrc(null);
-        setCropResolve(null);
+        setCropSrc(null); setCropResolve(null); setCropCancel(null);
         resolve(blob);
+      });
+      setCropCancel(() => () => {
+        URL.revokeObjectURL(url);
+        setCropSrc(null); setCropResolve(null); setCropCancel(null);
+        resolve(null);
       });
     });
   };
 
   const handleCropCancel = () => {
-    if (cropSrc) URL.revokeObjectURL(cropSrc);
-    setCropSrc(null);
-    setCropResolve(null);
+    if (cropCancel) cropCancel();
   };
 
   const handleAdd = async (e: React.SyntheticEvent) => {
@@ -760,10 +766,10 @@ function TeamTab() {
               onChange={async (e) => {
                 const f = e.target.files?.[0];
                 if (!f) return;
-                const blob = await openTeamCropper(f);
-                const croppedFile = new File([blob], f.name, { type: 'image/jpeg' });
-                setPhoto(croppedFile);
                 e.target.value = '';
+                const blob = await openTeamCropper(f);
+                if (!blob) return;
+                setPhoto(new File([blob], f.name, { type: 'image/jpeg' }));
               }} />
           </div>
           {err && <p className="type-micro" style={{ color: '#e5484d' }}>{err}</p>}
