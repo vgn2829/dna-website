@@ -32,8 +32,13 @@ async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
   if (tok) headers['Authorization'] = `Bearer ${tok}`;
   const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: formData });
   if (res.status === 204) return undefined as T;
-  const data = await res.json() as T | { error: unknown };
-  if (!res.ok) throw new Error(String((data as { error: unknown }).error ?? res.statusText));
+  const data = await res.json() as T | { message?: unknown; error?: unknown };
+  if (!res.ok) {
+    console.log('Upload error response:', data);
+    const d = data as { message?: unknown; error?: unknown };
+    const msg = d.message ?? d.error ?? res.statusText;
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  }
   return data as T;
 }
 
@@ -43,8 +48,13 @@ async function uploadPutRequest<T>(path: string, formData: FormData): Promise<T>
   if (tok) headers['Authorization'] = `Bearer ${tok}`;
   const res = await fetch(`${BASE}${path}`, { method: 'PUT', headers, body: formData });
   if (res.status === 204) return undefined as T;
-  const data = await res.json() as T | { error: unknown };
-  if (!res.ok) throw new Error(String((data as { error: unknown }).error ?? res.statusText));
+  const data = await res.json() as T | { message?: unknown; error?: unknown };
+  if (!res.ok) {
+    console.log('Upload error response:', data);
+    const d = data as { message?: unknown; error?: unknown };
+    const msg = d.message ?? d.error ?? res.statusText;
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  }
   return data as T;
 }
 

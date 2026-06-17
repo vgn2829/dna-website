@@ -88,7 +88,7 @@ artworksRouter.post(
   requireAdmin,
   upload.single('file'),
   async (req, res) => {
-    if (!req.file) { res.status(400).json({ error: 'File is required' }); return; }
+    if (!req.file) { res.status(400).json({ message: 'File is required' }); return; }
 
     const file = req.file;
     const originalName = file.originalname;
@@ -96,15 +96,15 @@ artworksRouter.post(
     const spec = ALLOWED_EXT[ext];
 
     if (!spec) {
-      res.status(400).json({ error: `Unsupported file type. Allowed: ${Object.keys(ALLOWED_EXT).join(', ')}` });
+      res.status(400).json({ message: `Unsupported file type. Allowed: ${Object.keys(ALLOWED_EXT).join(', ')}` });
       return;
     }
     if (!spec.check(file.buffer)) {
-      res.status(400).json({ error: 'File content does not match its extension (magic bytes mismatch)' });
+      res.status(400).json({ message: 'File content does not match its extension (magic bytes mismatch)' });
       return;
     }
     if (file.size > MAX_BYTES) {
-      res.status(400).json({ error: 'File exceeds 50 MB limit' });
+      res.status(400).json({ message: 'File exceeds 50 MB limit' });
       return;
     }
 
@@ -114,7 +114,7 @@ artworksRouter.post(
       domain: z.string().min(1).max(100),
     });
     const parsed = bodySchema.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: parsed.error.issues.map(i => i.message).join('; ') }); return; }
+    if (!parsed.success) { res.status(400).json({ message: parsed.error.issues.map(i => i.message).join('; ') }); return; }
     const { title, artist, domain } = parsed.data;
 
     const safeExt = ext === 'jpeg' ? 'jpg' : ext;
