@@ -26,7 +26,7 @@ const STATS = [
 export function Stats() {
   return (
     <section style={{ background: 'var(--color-canvas)', padding: '0 24px 96px' }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 48px' }}>
         {/* 4-up card grid — surface-1 lift, no chromatic fill */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
           {STATS.map(({ Icon, label, value }, i) => (

@@ -5,7 +5,7 @@ export function DesignStudioCard() {
   const navigate = useNavigate();
 
   const tools = [
-    { icon: '🎨', label: 'Palette Studio' },
+    { icon: '',   label: 'Palette Studio' },
     { icon: 'Aa', label: 'Font Pairing' },
     { icon: '◑',  label: 'Contrast Checker' },
     { icon: '↔',  label: 'Image Converter' },
@@ -72,7 +72,7 @@ export function DesignStudioCard() {
                   fontFamily: 'var(--font-body)',
                 }}
               >
-                <span style={{ fontSize: 14 }}>{t.icon}</span>
+                {t.icon && <span style={{ fontSize: 14 }}>{t.icon}</span>}
                 {t.label}
               </span>
             ))}

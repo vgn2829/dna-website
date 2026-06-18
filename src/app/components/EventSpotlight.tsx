@@ -27,7 +27,7 @@ export function EventSpotlight() {
 
   return (
     <section style={{ background: 'var(--color-canvas)', padding: '96px 24px' }}>
-      <div style={{ maxWidth: 960, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 48px' }}>
 
         {/* Canvas-mounted section label */}
         <motion.div

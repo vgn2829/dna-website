@@ -46,7 +46,7 @@ export function GalleryPreview() {
 
   return (
     <section id="gallery" style={{ background: 'var(--color-canvas)', padding: '96px 24px' }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 48px' }}>
 
         <motion.div
           style={{ marginBottom: 64 }}

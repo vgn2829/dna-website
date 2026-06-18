@@ -154,7 +154,7 @@ export function AcademyPage() {
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-canvas)', paddingTop: '5rem', paddingBottom: '5rem' }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 30px' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 48px' }}>
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
           <p className="type-caption mb-3">Learning Center</p>

@@ -1209,7 +1209,7 @@ export default function DesignStudio() {
           </button>
         ))}
       </nav>
-      <main style={{maxWidth:1100,margin:"0 auto",padding:"40px 24px 80px"}}>
+      <main style={{maxWidth:1400,margin:"0 auto",padding:"40px 48px 80px"}}>
         <div style={{marginBottom:40,paddingTop:8}}>
           <h1 style={{fontSize:48,fontWeight:600,letterSpacing:"-0.03em",lineHeight:1.0,color:"var(--color-ink)",fontFamily:"var(--font-display)",margin:"0 0 10px 0"}}>
             {TOOLS.find(t=>t.id===active)!.label}
