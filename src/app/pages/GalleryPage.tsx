@@ -80,6 +80,7 @@ function ZoomImage({ src, alt, onAspectRatio }: { src: string; alt: string; onAs
 }
 
 function MediaViewer({ artwork, onAspectRatio, isMobile }: { artwork: Artwork; onAspectRatio?: (ratio: number) => void; isMobile?: boolean }) {
+  const [pdfLoadFailed, setPdfLoadFailed] = useState(false);
   if (artwork.mediaType === 'image') {
     return <ZoomImage src={artwork.mediaUrl} alt={artwork.title} onAspectRatio={onAspectRatio} />;
   }
@@ -97,6 +98,17 @@ function MediaViewer({ artwork, onAspectRatio, isMobile }: { artwork: Artwork; o
       </div>
     );
   }
+  if (pdfLoadFailed) {
+    return (
+      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: 24 }}>
+        <p style={{ color: 'var(--color-ink-muted)', fontSize: 13, textAlign: 'center' }}>PDF could not be displayed in browser.</p>
+        <a href={artwork.mediaUrl} target="_blank" rel="noreferrer"
+          className="btn-secondary flex items-center gap-2">
+          <ExternalLink size={14} /> Open PDF
+        </a>
+      </div>
+    );
+  }
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
       <iframe
@@ -105,6 +117,7 @@ function MediaViewer({ artwork, onAspectRatio, isMobile }: { artwork: Artwork; o
         height={isMobile ? '400px' : '600px'}
         style={{ border: 'none', borderRadius: 8, display: 'block' }}
         title={artwork.title}
+        onError={() => setPdfLoadFailed(true)}
       />
       <a href={artwork.mediaUrl} target="_blank" rel="noreferrer"
         className="btn-secondary flex items-center gap-2">

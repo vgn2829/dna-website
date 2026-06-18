@@ -131,7 +131,7 @@ artworksRouter.post(
     if (coverFile) {
       const coverExt = coverFile.originalname.split('.').pop()?.toLowerCase() ?? '';
       const coverSpec = ALLOWED_EXT[coverExt];
-      if (coverSpec && coverSpec.mime.startsWith('image/')) {
+      if (coverSpec && coverSpec.mime.startsWith('image/') && coverSpec.check(coverFile.buffer)) {
         try {
           const coverPath = `covers/${uuidv4()}.jpg`;
           console.log('Uploading cover file:', coverFile.originalname, coverFile.size);
@@ -201,6 +201,7 @@ artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount
 
   const putFiles = req.files as Record<string, Express.Multer.File[]> | undefined;
   const mainFile = putFiles?.['file']?.[0];
+  let oldStoragePath: string | null = null;
   if (mainFile) {
     const file = mainFile;
     const ext = file.originalname.split('.').pop()?.toLowerCase() ?? '';
@@ -210,11 +211,8 @@ artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount
 
     const safeExt = ext === 'jpeg' ? 'jpg' : ext;
     const storagePath = `gallery/${uuidv4()}.${safeExt}`;
+    oldStoragePath = existing[0].storage_path ?? null;
     await getStorage().upload(storagePath, file.buffer, spec.mime);
-
-    if (existing[0].storage_path) {
-      await getStorage().delete(existing[0].storage_path).catch(() => {});
-    }
 
     sets.push(`storage_path = $${i++}`); vals.push(storagePath);
     sets.push(`media_type = $${i++}`); vals.push(spec.mediaType);
@@ -227,7 +225,7 @@ artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount
   if (coverFile) {
     const coverExt = coverFile.originalname.split('.').pop()?.toLowerCase() ?? '';
     const coverSpec = ALLOWED_EXT[coverExt];
-    if (coverSpec && coverSpec.mime.startsWith('image/')) {
+    if (coverSpec && coverSpec.mime.startsWith('image/') && coverSpec.check(coverFile.buffer)) {
       try {
         const coverPath = `covers/${uuidv4()}.jpg`;
         console.log('Uploading cover file:', coverFile.originalname, coverFile.size);
@@ -246,6 +244,10 @@ artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount
   if (sets.length === 0) { res.status(400).json({ error: 'Nothing to update' }); return; }
   vals.push(req.params.id);
   await pool.query(`UPDATE artworks SET ${sets.join(', ')} WHERE id = $${i}`, vals);
+
+  if (oldStoragePath) {
+    await getStorage().delete(oldStoragePath).catch(() => {});
+  }
 
   const allComments = await query<CommentRow & { artwork_id: string }>(
     'SELECT id, artwork_id, sender, text, created_at FROM artwork_comments WHERE artwork_id=$1 ORDER BY created_at ASC',

@@ -24,10 +24,15 @@ export function openCropModal(
   fileOrUrl: File | string,
   type: 'artwork' | 'team'
 ): Promise<Blob | null> {
+  if (_resolve !== null) {
+    console.warn('ImageCropper: crop already in progress');
+    return Promise.resolve(null);
+  }
   return new Promise((resolve) => {
     _resolve = resolve;
     const isObjectUrl = typeof fileOrUrl !== 'string';
-    const src = isObjectUrl ? URL.createObjectURL(fileOrUrl as File) : fileOrUrl as string;
+    const rawSrc = isObjectUrl ? URL.createObjectURL(fileOrUrl as File) : fileOrUrl as string;
+    const src = (!isObjectUrl && rawSrc.includes('supabase.co')) ? `${rawSrc}?t=${Date.now()}` : rawSrc;
     _isObjectUrl = isObjectUrl;
     const config: CropConfig =
       type === 'team'
@@ -234,7 +239,7 @@ export function ImageCropperPortal() {
         {config.showCardPreview && (
           <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-ink-muted)', margin: 0, fontFamily: 'var(--font-body)' }}>
-              Card Preview
+              {config.cardLabel ?? 'Card Preview'}
             </p>
             <div style={{ width: 140, borderRadius: 'var(--radius-xl)', overflow: 'hidden', background: 'var(--color-surface-1)', border: '1px solid var(--color-hairline)' }}>
               <div style={{ width: 140, height: 186, overflow: 'hidden', background: 'var(--color-surface-2)' }}>

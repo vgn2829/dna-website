@@ -12,9 +12,17 @@ async function captureVideoFirstFrame(file: File): Promise<Blob> {
     video.src = url;
     video.muted = true;
     video.playsInline = true;
-    video.currentTime = 0.1;
+
+    video.addEventListener('loadedmetadata', () => {
+      video.currentTime = 0.1;
+    });
 
     video.addEventListener('seeked', () => {
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        URL.revokeObjectURL(url);
+        reject(new Error('Video dimensions unavailable'));
+        return;
+      }
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -466,7 +474,7 @@ function GalleryTab() {
     if (domainTitles.includes(a.domain)) { setEaDomain(a.domain); setEaCustomDomain(''); }
     else { setEaDomain('__other__'); setEaCustomDomain(a.domain); }
     setEaFile(null); setEaError('');
-    setEaCoverFile(null); setEaCoverPreview(null);
+    setEaCoverFile(null); if (eaCoverPreview) URL.revokeObjectURL(eaCoverPreview); setEaCoverPreview(null);
   };
 
   const handleEditArtwork = async (e: React.SyntheticEvent) => {
@@ -482,6 +490,7 @@ function GalleryTab() {
       if (eaFile) fd.append('file', eaFile);
       if (eaCoverFile) fd.append('cover', eaCoverFile);
       await updateArtwork(editArtwork.id, fd);
+      if (eaCoverPreview) { URL.revokeObjectURL(eaCoverPreview); setEaCoverPreview(null); }
       setEditArtwork(null);
     } catch (err) { setEaError(String(err)); } finally { setEaLoading(false); }
   };
@@ -524,6 +533,9 @@ function GalleryTab() {
                     const blob = await openCropModal(f, 'artwork');
                     if (!blob) return;
                     setFile(new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+                    setCoverFile(null);
+                    if (coverPreview) URL.revokeObjectURL(coverPreview);
+                    setCoverPreview(null);
                   } else {
                     setFile(f);
                     if (f.type === 'video/mp4' || f.type.startsWith('video/')) {
@@ -658,7 +670,7 @@ function GalleryTab() {
 
       {editArtwork && (
         <div className="lg:col-span-5">
-          <Modal title={`Edit Artwork — ${editArtwork.title}`} onClose={() => setEditArtwork(null)}>
+          <Modal title={`Edit Artwork — ${editArtwork.title}`} onClose={() => { if (eaCoverPreview) { URL.revokeObjectURL(eaCoverPreview); setEaCoverPreview(null); } setEditArtwork(null); }}>
             <form onSubmit={handleEditArtwork} className="space-y-3">
               <div><label className="type-micro block mb-1">Title *</label><input required value={eaTitle} onChange={e => setEaTitle(e.target.value)} className="input-base" maxLength={200} /></div>
               <div><label className="type-micro block mb-1">Artist *</label><input required value={eaArtist} onChange={e => setEaArtist(e.target.value)} className="input-base" maxLength={100} /></div>
@@ -736,7 +748,7 @@ function GalleryTab() {
                 <button type="submit" disabled={eaLoading} className="btn-primary flex items-center gap-2" style={{ opacity: eaLoading ? 0.6 : 1 }}>
                   {eaLoading ? <Loader2 size={13} className="animate-spin" /> : null} Save Changes
                 </button>
-                <button type="button" onClick={() => setEditArtwork(null)} className="btn-secondary">Cancel</button>
+                <button type="button" onClick={() => { if (eaCoverPreview) { URL.revokeObjectURL(eaCoverPreview); setEaCoverPreview(null); } setEditArtwork(null); }} className="btn-secondary">Cancel</button>
               </div>
             </form>
           </Modal>
