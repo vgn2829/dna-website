@@ -98,14 +98,14 @@ function MediaViewer({ artwork, onAspectRatio, isMobile }: { artwork: Artwork; o
       </div>
     );
   }
-  console.log('PDF artwork data:', { mediaUrl: artwork.mediaUrl, coverUrl: artwork.coverUrl, mediaType: artwork.mediaType });
+  // PDF — always use the actual PDF viewer, never coverUrl
   const pdfViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(artwork.mediaUrl)}&embedded=true`;
   if (pdfLoadFailed) {
     return (
       <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: 24 }}>
-        <p style={{ color: 'var(--color-ink-muted)', fontSize: 13, textAlign: 'center' }}>PDF could not be displayed in browser.</p>
+        <p style={{ color: 'var(--color-ink-muted)', fontSize: 13, textAlign: 'center' }}>Unable to display PDF in browser.</p>
         <a href={artwork.mediaUrl} target="_blank" rel="noreferrer"
-          className="btn-secondary flex items-center gap-2">
+          className="btn-primary flex items-center gap-2">
           <ExternalLink size={14} /> Open PDF
         </a>
       </div>
