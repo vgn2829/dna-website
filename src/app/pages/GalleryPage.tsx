@@ -112,10 +112,10 @@ function MediaViewer({ artwork, onAspectRatio, isMobile }: { artwork: Artwork; o
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
       <iframe
-        src={`${artwork.mediaUrl}#toolbar=0`}
+        src={`${artwork.mediaUrl}#toolbar=0&navpanes=0&scrollbar=1`}
         width="100%"
         height={isMobile ? '400px' : '600px'}
-        style={{ border: 'none', borderRadius: 8, display: 'block' }}
+        style={{ border: 'none', borderRadius: 8, display: 'block', minHeight: isMobile ? '400px' : '600px' }}
         title={artwork.title}
         onError={() => setPdfLoadFailed(true)}
       />
@@ -185,7 +185,7 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
         </div>
 
         {/* Image */}
-        <div style={{ width: '100%', height: artwork.mediaType === 'pdf' ? 'auto' : 'min(60vw, 55vh)', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: artwork.mediaType === 'pdf' ? 'visible' : 'hidden', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', padding: artwork.mediaType === 'pdf' ? 12 : 0 }}>
+        <div style={{ width: '100%', height: artwork.mediaType === 'pdf' ? 'auto' : 'min(60vw, 55vh)', minHeight: artwork.mediaType === 'pdf' ? '400px' : undefined, background: 'var(--color-canvas)', display: 'flex', alignItems: artwork.mediaType === 'pdf' ? 'flex-start' : 'center', justifyContent: 'center', overflow: artwork.mediaType === 'pdf' ? 'visible' : 'hidden', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', padding: artwork.mediaType === 'pdf' ? 12 : 0 }}>
           <MediaViewer artwork={artwork} onAspectRatio={setAspectRatio} isMobile={isMobile} />
         </div>
 
@@ -246,7 +246,8 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
   }
 
   // ── Desktop: centered floating card ───────────────────────────────────────
-  const imagePanelWidth = aspectRatio === null ? '55%'
+  const imagePanelWidth = artwork.mediaType === 'pdf' ? '62%'
+    : aspectRatio === null ? '55%'
     : aspectRatio < 0.8  ? '40%'
     : aspectRatio > 1.3  ? '65%'
     : '50%';
@@ -264,7 +265,7 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
         style={{ width: '100%', maxWidth: 1024, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'row', background: 'var(--color-surface-1)', borderRadius: 'var(--radius-xxl)', boxShadow: 'var(--shadow-level-2)' }}
       >
         {/* Media panel */}
-        <div style={{ width: imagePanelWidth, flexShrink: 0, background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, minHeight: 0, maxHeight: '90vh', borderRadius: 'var(--radius-xl) 0 0 var(--radius-xl)', overflow: artwork.mediaType === 'pdf' ? 'auto' : 'hidden' }}>
+        <div style={{ width: imagePanelWidth, flexShrink: 0, background: 'var(--color-canvas)', display: 'flex', alignItems: artwork.mediaType === 'pdf' ? 'flex-start' : 'center', justifyContent: 'center', padding: 16, minHeight: artwork.mediaType === 'pdf' ? '600px' : 0, maxHeight: '90vh', borderRadius: 'var(--radius-xl) 0 0 var(--radius-xl)', overflow: artwork.mediaType === 'pdf' ? 'auto' : 'hidden' }}>
           <MediaViewer artwork={artwork} onAspectRatio={setAspectRatio} isMobile={isMobile} />
         </div>
 
