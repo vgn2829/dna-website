@@ -13,8 +13,8 @@ export function DesignStudioCard() {
   ];
 
   return (
-    <section style={{ padding: '96px 24px', background: 'var(--color-canvas)' }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+    <section style={{ padding: '96px 0', background: 'var(--color-canvas)' }}>
+      <div className="page-container">
         <motion.div
           className="card"
           initial={{ opacity: 0, y: 24 }}

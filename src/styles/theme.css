@@ -467,8 +467,22 @@
     -webkit-text-fill-color: transparent;
   }
 
+  /* ── Page container — use on inner wrappers inside full-bleed sections ── */
+  .page-container {
+    max-width: 1440px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 0 48px;
+  }
+
   /* ── Scrollbar ── */
   ::-webkit-scrollbar       { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: var(--color-canvas); }
   ::-webkit-scrollbar-thumb { background: var(--color-surface-2); border-radius: 3px; }
+}
+
+@media (max-width: 768px) {
+  .page-container {
+    padding: 0 16px;
+  }
 }

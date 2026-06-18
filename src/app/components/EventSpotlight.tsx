@@ -26,8 +26,8 @@ export function EventSpotlight() {
   const pad = (n: number) => String(n).padStart(2, '0');
 
   return (
-    <section style={{ background: 'var(--color-canvas)', padding: '96px 24px' }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 48px' }}>
+    <section style={{ background: 'var(--color-canvas)', padding: '96px 0' }}>
+      <div className="page-container">
 
         {/* Canvas-mounted section label */}
         <motion.div

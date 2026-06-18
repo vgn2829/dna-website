@@ -52,7 +52,7 @@ export function Navigation() {
         <div
           className="h-full"
           style={{
-            maxWidth: 1400,
+            maxWidth: 1440,
             margin: '0 auto',
             padding: '0 48px',
             display: 'grid',

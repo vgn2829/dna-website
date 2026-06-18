@@ -1268,7 +1268,7 @@ export function AdminPage() {
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-canvas)', paddingTop: '5rem', paddingBottom: '5rem' }}>
       <ImageCropperPortal />
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 48px' }}>
+      <div className="page-container">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: 'var(--color-surface-1)' }}>

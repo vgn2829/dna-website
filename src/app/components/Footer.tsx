@@ -41,7 +41,7 @@ export function Footer() {
         padding: '64px 0',
       }}
     >
-      <div style={{ maxWidth: 1400, margin: '0 auto', width: '100%', padding: '0 48px', boxSizing: 'border-box' }}>
+      <div style={{ maxWidth: 1440, margin: '0 auto', width: '100%', padding: '0 48px', boxSizing: 'border-box' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 40, marginBottom: 48 }}>
 
           {/* Brand column */}

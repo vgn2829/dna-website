@@ -403,7 +403,7 @@ export function GalleryPage() {
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-canvas)', paddingTop: '6rem', paddingBottom: '5rem' }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 48px' }}>
+      <div className="page-container">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-12">
           <div className="flex items-end justify-between gap-4">
             <div>

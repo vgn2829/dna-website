@@ -10,8 +10,8 @@ export function ResourcesPreview() {
   const maxVideos = Math.max(1, ...domainList.map(d => d.videos.length));
 
   return (
-    <section id="resources" style={{ background: 'var(--color-canvas)', padding: '96px 24px' }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 48px' }}>
+    <section id="resources" style={{ background: 'var(--color-canvas)', padding: '96px 0' }}>
+      <div className="page-container">
 
         {/* Section header */}
         <motion.div

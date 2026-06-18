@@ -98,8 +98,8 @@ export function Team() {
   }
 
   return (
-    <section id="team" style={{ background: 'var(--color-canvas)', padding: '96px 24px' }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 48px' }}>
+    <section id="team" style={{ background: 'var(--color-canvas)', padding: '96px 0' }}>
+      <div className="page-container">
 
         <motion.div
           style={{ marginBottom: 64 }}

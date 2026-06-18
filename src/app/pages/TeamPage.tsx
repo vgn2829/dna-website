@@ -165,8 +165,8 @@ export function TeamPage() {
   }
 
   return (
-    <div className="min-h-screen px-6 py-16">
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 48px' }}>
+    <div className="min-h-screen py-16">
+      <div className="page-container">
         <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-16">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-6">
             <Users size={16} className="text-cyan-400" />

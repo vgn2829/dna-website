@@ -1710,7 +1710,7 @@ const styles = {
   // ── Content ─────────────────────────────────────────────────────────────────
   content: {
     padding: "24px",
-    maxWidth: 1200,
+    maxWidth: 1440,
     margin: "0 auto",
   },
 

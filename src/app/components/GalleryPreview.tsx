@@ -45,8 +45,8 @@ export function GalleryPreview() {
   const nonFeatured = artworks.filter(a => !a.featured);
 
   return (
-    <section id="gallery" style={{ background: 'var(--color-canvas)', padding: '96px 24px' }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 48px' }}>
+    <section id="gallery" style={{ background: 'var(--color-canvas)', padding: '96px 0' }}>
+      <div className="page-container">
 
         <motion.div
           style={{ marginBottom: 64 }}
