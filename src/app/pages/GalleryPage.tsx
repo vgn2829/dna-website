@@ -98,6 +98,8 @@ function MediaViewer({ artwork, onAspectRatio, isMobile }: { artwork: Artwork; o
       </div>
     );
   }
+  console.log('PDF artwork data:', { mediaUrl: artwork.mediaUrl, coverUrl: artwork.coverUrl, mediaType: artwork.mediaType });
+  const pdfViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(artwork.mediaUrl)}&embedded=true`;
   if (pdfLoadFailed) {
     return (
       <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: 24 }}>
@@ -112,7 +114,7 @@ function MediaViewer({ artwork, onAspectRatio, isMobile }: { artwork: Artwork; o
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
       <iframe
-        src={`${artwork.mediaUrl}#toolbar=0&navpanes=0&scrollbar=1`}
+        src={pdfViewerUrl}
         width="100%"
         height={isMobile ? '400px' : '600px'}
         style={{ border: 'none', borderRadius: 8, display: 'block', minHeight: isMobile ? '400px' : '600px' }}
