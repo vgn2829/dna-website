@@ -59,7 +59,7 @@ export function Events() {
 
   return (
     <section id="events" className="relative py-24 px-6">
-      <div className="max-w-7xl mx-auto">
+      <div className="page-container">
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}

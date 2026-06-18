@@ -63,7 +63,7 @@ export function ResourcesPage() {
 
   return (
     <div className="min-h-screen px-6 py-16">
-      <div className="max-w-7xl mx-auto">
+      <div className="page-container">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 40 }}
