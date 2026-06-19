@@ -102,10 +102,6 @@ artworksRouter.post(
       res.status(400).json({ message: `Unsupported file type. Allowed: ${Object.keys(ALLOWED_EXT).join(', ')}` });
       return;
     }
-    if (!spec.check(file.buffer)) {
-      res.status(400).json({ message: 'File content does not match its extension (magic bytes mismatch)' });
-      return;
-    }
     if (file.size > MAX_BYTES) {
       res.status(400).json({ message: 'File exceeds 50 MB limit' });
       return;
@@ -131,7 +127,7 @@ artworksRouter.post(
     if (coverFile) {
       const coverExt = coverFile.originalname.split('.').pop()?.toLowerCase() ?? '';
       const coverSpec = ALLOWED_EXT[coverExt];
-      if (coverSpec && coverSpec.mime.startsWith('image/') && coverSpec.check(coverFile.buffer)) {
+      if (coverSpec && coverSpec.mime.startsWith('image/')) {
         try {
           const coverPath = `covers/${uuidv4()}.jpg`;
           console.log('Uploading cover file:', coverFile.originalname, coverFile.size);
@@ -207,7 +203,6 @@ artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount
     const ext = file.originalname.split('.').pop()?.toLowerCase() ?? '';
     const spec = ALLOWED_EXT[ext];
     if (!spec) { res.status(400).json({ error: 'Unsupported file type' }); return; }
-    if (!spec.check(file.buffer)) { res.status(400).json({ error: 'File content does not match extension' }); return; }
 
     const safeExt = ext === 'jpeg' ? 'jpg' : ext;
     const storagePath = `gallery/${uuidv4()}.${safeExt}`;

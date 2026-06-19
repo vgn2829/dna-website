@@ -405,6 +405,7 @@ interface BulkItem {
   title: string;
   artist: string;
   domain: string;
+  customDomain: string;
   featured: boolean;
   status: 'pending' | 'capturing' | 'uploading' | 'done' | 'error';
   error: string;
@@ -551,6 +552,7 @@ function GalleryTab() {
           title,
           artist,
           domain: domainTitles[0] || 'General',
+          customDomain: '',
           featured: false,
           status: 'pending' as const,
           error: '',
@@ -615,7 +617,7 @@ function GalleryTab() {
         fd.append('file', item.file);
         fd.append('title', item.title.trim() || item.file.name);
         fd.append('artist', item.artist.trim());
-        fd.append('domain', item.domain || domainTitles[0] || 'General');
+        fd.append('domain', item.domain === '__other__' ? (item.customDomain || 'General') : (item.domain || domainTitles[0] || 'General'));
         fd.append('featured', String(item.featured));
         if (item.coverFile) fd.append('cover', item.coverFile);
         await uploadArtwork(fd);
@@ -766,13 +768,25 @@ function GalleryTab() {
                         <select
                           className="input-base"
                           value={item.domain}
-                          onChange={e => updateBulkItem(item.id, { domain: e.target.value })}
+                          onChange={e => updateBulkItem(item.id, { domain: e.target.value, customDomain: e.target.value !== '__other__' ? '' : item.customDomain })}
                           disabled={item.status === 'uploading' || item.status === 'done'}
                           style={{ flex: 1, fontSize: 12 }}
                         >
                           {domainTitles.map(t => <option key={t} value={t}>{t}</option>)}
+                          <option value="__other__">Other…</option>
                         </select>
                       </div>
+                      {item.domain === '__other__' && (
+                        <input
+                          className="input-base"
+                          value={item.customDomain}
+                          onChange={e => updateBulkItem(item.id, { customDomain: e.target.value })}
+                          placeholder="Enter domain name"
+                          disabled={item.status === 'uploading' || item.status === 'done'}
+                          style={{ marginTop: 6, width: '100%', fontSize: 12, boxSizing: 'border-box' }}
+                          maxLength={100}
+                        />
+                      )}
                       {item.status === 'error' && item.error && (
                         <p style={{ fontSize: 11, color: '#ef4444', margin: '4px 0 0', fontFamily: 'var(--font-body)' }}>{item.error}</p>
                       )}
