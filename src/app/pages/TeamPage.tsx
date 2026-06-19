@@ -26,7 +26,8 @@ function MemberCard({ member, expanded = false, onToggle, size = 'normal' }: {
       {/* Photo area */}
       <div style={{
         position: 'relative',
-        height: isSmall ? 180 : 260,
+        width: '100%',
+        aspectRatio: '3 / 4',
         overflow: 'hidden',
         borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0',
         background: `${member.color}20`,
