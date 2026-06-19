@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare } from 'lucide-react';
+import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
 import { api, setAdminToken, clearAdminToken } from '../lib/api';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
@@ -111,7 +111,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-type Tab = 'academy' | 'gallery' | 'team' | 'events' | 'comments';
+type Tab = 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings';
 
 // ── Academy tab ──────────────────────────────────────────────────────────────
 function AcademyTab() {
@@ -398,6 +398,20 @@ function AcademyTab() {
   );
 }
 
+interface BulkItem {
+  id: string;
+  file: File;
+  preview: string;
+  title: string;
+  artist: string;
+  domain: string;
+  featured: boolean;
+  status: 'pending' | 'capturing' | 'uploading' | 'done' | 'error';
+  error: string;
+  coverFile: File | null;
+  coverPreview: string | null;
+}
+
 // ── Gallery tab ───────────────────────────────────────────────────────────────
 function GalleryTab() {
   const { artworks, uploadArtwork, updateArtwork, deleteArtwork, toggleFeatured, domains } = useAppData();
@@ -436,6 +450,11 @@ function GalleryTab() {
 
   const domainTitles = Object.values(domains).map(d => d.title);
   const featuredCount = artworks.filter(a => a.featured).length;
+
+  const [bulkQueue, setBulkQueue] = useState<BulkItem[]>([]);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [forceUpper] = useState(() => localStorage.getItem('forceUppercase') !== 'false');
 
   const MAX_MB = 50;
   const ALLOWED_EXT = ['jpg','jpeg','png','webp','gif','pdf','mp4'];
@@ -501,6 +520,131 @@ function GalleryTab() {
     setTimeout(() => setTogglingFeatured(s => { const n = new Set(s); n.delete(id); return n; }), 800);
   };
 
+  const parseFilename = (filename: string) => {
+    const base = filename.replace(/\.[^/.]+$/, '');
+    const parts = base.split('_');
+    if (parts.length === 1) return { title: parts[0].toUpperCase(), artist: '' };
+    const artist = parts[parts.length - 1].replace(/-/g, ' ').toUpperCase();
+    const title = parts.slice(0, -1).join(' ').toUpperCase();
+    return { title, artist };
+  };
+
+  const handleBulkFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length === 0) return;
+    if (files.length === 1) return;
+
+    setBulkMode(true);
+
+    const items: BulkItem[] = files
+      .filter(f => {
+        const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
+        return ALLOWED_EXT.includes(ext) && f.size <= MAX_MB * 1024 * 1024;
+      })
+      .map(file => {
+        const { title, artist } = parseFilename(file.name);
+        return {
+          id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          file,
+          preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
+          title,
+          artist,
+          domain: domainTitles[0] || 'General',
+          featured: false,
+          status: 'pending' as const,
+          error: '',
+          coverFile: null,
+          coverPreview: null,
+        };
+      });
+
+    setBulkQueue(items);
+
+    items.forEach(async (item, idx) => {
+      if (!item.file.type.startsWith('video/')) return;
+
+      setBulkQueue(prev => prev.map((q, i) => i === idx ? { ...q, status: 'capturing' as const } : q));
+
+      try {
+        const frameBlob = await captureVideoFirstFrame(item.file);
+        const coverFile = new File([frameBlob], 'cover.jpg', { type: 'image/jpeg' });
+        const coverPreview = URL.createObjectURL(frameBlob);
+        const videoPreview = URL.createObjectURL(item.file);
+        setBulkQueue(prev => prev.map((q, i) =>
+          i === idx ? { ...q, status: 'pending' as const, coverFile, coverPreview, preview: videoPreview } : q
+        ));
+      } catch {
+        setBulkQueue(prev => prev.map((q, i) => i === idx ? { ...q, status: 'pending' as const } : q));
+      }
+    });
+  };
+
+  const updateBulkItem = (id: string, updates: Partial<BulkItem>) => {
+    setBulkQueue(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+  };
+
+  const removeBulkItem = (id: string) => {
+    setBulkQueue(prev => {
+      const item = prev.find(q => q.id === id);
+      if (item?.preview) URL.revokeObjectURL(item.preview);
+      if (item?.coverPreview) URL.revokeObjectURL(item.coverPreview);
+      return prev.filter(q => q.id !== id);
+    });
+  };
+
+  const clearBulkQueue = () => {
+    setBulkQueue(prev => {
+      prev.forEach(item => {
+        if (item.preview) URL.revokeObjectURL(item.preview);
+        if (item.coverPreview) URL.revokeObjectURL(item.coverPreview);
+      });
+      return [];
+    });
+    setBulkMode(false);
+  };
+
+  const publishAll = async () => {
+    setBulkUploading(true);
+
+    for (const item of bulkQueue) {
+      if (item.status !== 'pending') continue;
+      updateBulkItem(item.id, { status: 'uploading' });
+      try {
+        const fd = new FormData();
+        fd.append('file', item.file);
+        fd.append('title', item.title.trim() || item.file.name);
+        fd.append('artist', item.artist.trim());
+        fd.append('domain', item.domain || domainTitles[0] || 'General');
+        fd.append('featured', String(item.featured));
+        if (item.coverFile) fd.append('cover', item.coverFile);
+        await uploadArtwork(fd);
+        updateBulkItem(item.id, { status: 'done' });
+      } catch (err) {
+        updateBulkItem(item.id, {
+          status: 'error',
+          error: err instanceof Error ? err.message : 'Upload failed',
+        });
+      }
+    }
+
+    setBulkUploading(false);
+
+    setTimeout(() => {
+      setBulkQueue(prev => {
+        const remaining = prev.filter(q => q.status !== 'done');
+        if (remaining.length === 0) {
+          prev.forEach(item => {
+            if (item.preview) URL.revokeObjectURL(item.preview);
+            if (item.coverPreview) URL.revokeObjectURL(item.coverPreview);
+          });
+          setBulkMode(false);
+        }
+        return remaining;
+      });
+    }, 2000);
+  };
+
   return (
     <div className="grid lg:grid-cols-5 gap-6">
       <div className="lg:col-span-2 card p-5 space-y-4">
@@ -515,20 +659,16 @@ function GalleryTab() {
               onDragOver={e => e.preventDefault()}
               onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files[0] ?? null, setFile, setUploadError); }}
             >
-              <input ref={fileRef} type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.mp4" className="sr-only"
+              <input ref={fileRef} type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.mp4" multiple className="sr-only"
                 onChange={async (e) => {
-                  const f = e.target.files?.[0];
+                  const files = e.target.files;
+                  if (!files || files.length === 0) { e.target.value = ''; return; }
+                  if (files.length > 1) { await handleBulkFiles(e); return; }
                   e.target.value = '';
-                  if (!f) return;
-                  if (!aTitle || aTitle.trim() === '') {
-                    const cleanTitle = f.name
-                      .replace(/\.[^.]+$/, '')
-                      .replace(/[-_]/g, ' ')
-                      .replace(/\s+/g, ' ')
-                      .trim()
-                      .replace(/\b\w/g, c => c.toUpperCase());
-                    setATitle(cleanTitle);
-                  }
+                  const f = files[0];
+                  const parsed = parseFilename(f.name);
+                  if (!aTitle || aTitle.trim() === '') setATitle(parsed.title);
+                  if (!aArtist || aArtist.trim() === '') setAArtist(parsed.artist);
                   if (f.type.startsWith('image/')) {
                     const blob = await openCropModal(f, 'artwork');
                     if (!blob) return;
@@ -564,71 +704,181 @@ function GalleryTab() {
                 <p className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>Click or drag & drop</p>
               )}
             </div>
+            <div style={{ fontSize: 11, color: 'var(--color-ink-muted)', fontStyle: 'italic', lineHeight: 1.7, marginTop: 4 }}>
+              💡 Name files as <strong style={{ fontStyle: 'normal' }}>title_artist.ext</strong> for auto-fill. Use hyphens for spaces in artist name.
+              <div style={{ marginTop: 4 }}>
+                <div>• sunset_john-doe.jpg → SUNSET / JOHN DOE</div>
+                <div>• hell_v_pie_utham.jpg → HELL V PIE / UTHAM</div>
+                <div>• doomsday.png → DOOMSDAY / (empty artist)</div>
+              </div>
+            </div>
           </div>
 
-          {/* Cover image — shown for video and PDF only */}
-          {file && (file.type.startsWith('video/') || file.type === 'application/pdf') && (
+          {/* Bulk queue UI — shown when multiple files selected */}
+          {bulkMode && bulkQueue.length > 0 && (
             <div style={{ marginTop: 4 }}>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
-                Cover Image
-                {file.type.startsWith('video/') && (
-                  <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, marginLeft: 8, color: 'var(--color-ink-muted)' }}>(auto-captured from first frame)</span>
-                )}
-                {file.type === 'application/pdf' && (
-                  <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, marginLeft: 8, color: 'var(--color-ink-muted)' }}>(optional — shown as thumbnail in gallery)</span>
-                )}
-              </label>
-              {isCapturingFrame && (
-                <p style={{ fontSize: 12, color: 'var(--color-ink-muted)' }}>Capturing first frame…</p>
-              )}
-              {coverPreview && !isCapturingFrame && (
-                <div style={{ width: 80, height: 108, borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: 8, border: '1px solid var(--color-hairline)' }}>
-                  <img src={coverPreview} alt="Cover preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', margin: 0, fontFamily: 'var(--font-body)' }}>
+                    {bulkQueue.length} files selected
+                  </p>
+                  <p style={{ fontSize: 11, color: 'var(--color-ink-muted)', margin: '2px 0 0', fontFamily: 'var(--font-body)' }}>
+                    Edit titles and artists before publishing
+                  </p>
                 </div>
-              )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 'var(--radius-pill)', background: 'var(--color-surface-2)', border: '1px solid var(--color-hairline)', cursor: 'pointer', fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-                  {coverFile ? '↺ Change cover' : '+ Upload cover'}
-                  <input type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
-                    onChange={async (e) => {
-                      const f = e.target.files?.[0];
-                      e.target.value = '';
-                      if (!f) return;
-                      const blob = await openCropModal(f, 'artwork');
-                      if (!blob) return;
-                      const cropped = new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
-                      setCoverFile(cropped);
-                      if (coverPreview) URL.revokeObjectURL(coverPreview);
-                      setCoverPreview(URL.createObjectURL(blob));
-                    }}
-                  />
-                </label>
-                {coverFile && (
-                  <button type="button" onClick={() => { setCoverFile(null); if (coverPreview) URL.revokeObjectURL(coverPreview); setCoverPreview(null); }}
-                    style={{ background: 'none', border: 'none', color: 'var(--color-ink-muted)', cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-body)' }}>
-                    Remove
-                  </button>
-                )}
+                <button type="button" onClick={clearBulkQueue} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-ink-muted)', fontSize: 12, fontFamily: 'var(--font-body)' }}>
+                  Clear all
+                </button>
               </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 480, overflowY: 'auto', paddingRight: 4 }}>
+                {bulkQueue.map((item) => (
+                  <div key={item.id} className="card" style={{ padding: '12px 14px', display: 'flex', alignItems: 'flex-start', gap: 12, opacity: item.status === 'done' ? 0.5 : 1, transition: 'opacity 0.3s' }}>
+                    <div style={{ width: 56, height: 56, borderRadius: 'var(--radius-md)', overflow: 'hidden', flexShrink: 0, background: 'var(--color-surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {item.coverPreview || item.preview ? (
+                        <img src={item.coverPreview || item.preview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
+                      ) : (
+                        <span style={{ fontSize: 18, color: 'var(--color-ink-muted)' }}>
+                          {item.file.type === 'application/pdf' ? '📄' : '🎬'}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <input
+                        className="input-base"
+                        value={item.title}
+                        onChange={e => updateBulkItem(item.id, { title: forceUpper ? e.target.value.toUpperCase() : e.target.value })}
+                        placeholder="Title"
+                        disabled={item.status === 'uploading' || item.status === 'done'}
+                        style={{ width: '100%', marginBottom: 6, fontSize: 13, boxSizing: 'border-box' }}
+                        maxLength={200}
+                      />
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <input
+                          className="input-base"
+                          value={item.artist}
+                          onChange={e => updateBulkItem(item.id, { artist: forceUpper ? e.target.value.toUpperCase() : e.target.value })}
+                          placeholder="Artist (optional)"
+                          disabled={item.status === 'uploading' || item.status === 'done'}
+                          style={{ flex: 1, fontSize: 12, boxSizing: 'border-box' }}
+                          maxLength={100}
+                        />
+                        <select
+                          className="input-base"
+                          value={item.domain}
+                          onChange={e => updateBulkItem(item.id, { domain: e.target.value })}
+                          disabled={item.status === 'uploading' || item.status === 'done'}
+                          style={{ flex: 1, fontSize: 12 }}
+                        >
+                          {domainTitles.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      {item.status === 'error' && item.error && (
+                        <p style={{ fontSize: 11, color: '#ef4444', margin: '4px 0 0', fontFamily: 'var(--font-body)' }}>{item.error}</p>
+                      )}
+                    </div>
+                    <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                      {item.status === 'pending' && (
+                        <button type="button" onClick={() => removeBulkItem(item.id)} style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--color-surface-2)', border: 'none', cursor: 'pointer', color: 'var(--color-ink-muted)', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                      )}
+                      {item.status === 'capturing' && <span style={{ fontSize: 10, color: 'var(--color-ink-muted)' }}>⏳</span>}
+                      {item.status === 'uploading' && <Loader2 size={14} className="animate-spin" style={{ color: 'var(--color-ink-muted)' }} />}
+                      {item.status === 'done' && <span style={{ fontSize: 14, color: '#4ade80' }}>✓</span>}
+                      {item.status === 'error' && <span style={{ fontSize: 14, color: '#ef4444' }}>✗</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={publishAll}
+                  disabled={bulkUploading || bulkQueue.every(q => q.status !== 'pending') || bulkQueue.some(q => q.status === 'capturing')}
+                  className="btn-primary"
+                  style={{ flex: 1, opacity: (bulkUploading || bulkQueue.every(q => q.status !== 'pending') || bulkQueue.some(q => q.status === 'capturing')) ? 0.5 : 1 }}
+                >
+                  {bulkUploading
+                    ? `Uploading… (${bulkQueue.filter(q => q.status === 'done').length}/${bulkQueue.length})`
+                    : `Publish All (${bulkQueue.filter(q => q.status === 'pending').length} pending)`
+                  }
+                </button>
+                <button type="button" onClick={clearBulkQueue} className="btn-secondary" disabled={bulkUploading}>Cancel</button>
+              </div>
+              <p style={{ fontSize: 10, color: 'var(--color-ink-muted)', margin: '8px 0 0', fontFamily: 'var(--font-body)', lineHeight: 1.5 }}>
+                💡 Name files as <em>Title_ArtistName.jpg</em> for auto-fill. Underscores and hyphens become spaces.
+              </p>
             </div>
           )}
 
-          <div><label className="type-micro block mb-1">Title *</label><input required value={aTitle} onChange={e => setATitle(e.target.value)} placeholder="Artwork title" className="input-base" maxLength={200} /></div>
-          <div><label className="type-micro block mb-1">Artist</label><input value={aArtist} onChange={e => setAArtist(e.target.value)} placeholder="Name (Year)" className="input-base" maxLength={200} /></div>
-          <div>
-            <label className="type-micro block mb-1">Domain</label>
-            <select value={aDomain} onChange={e => { setADomain(e.target.value); if (e.target.value !== '__other__') setACustomDomain(''); }} className="input-base">
-              {domainTitles.map(t => <option key={t} value={t}>{t}</option>)}
-              <option value="__other__">Other (specify)...</option>
-            </select>
-            {aDomain === '__other__' && (
-              <input value={aCustomDomain} onChange={e => setACustomDomain(e.target.value)} placeholder="Enter domain name" maxLength={100} className="input-base mt-2" />
-            )}
-          </div>
-          {uploadError && <p className="type-micro" style={{ color: '#e5484d' }}>{uploadError}</p>}
-          <button type="submit" disabled={uploading || !file} className="btn-primary w-full justify-center" style={{ opacity: uploading || !file ? 0.5 : 1 }}>
-            {uploading ? <><Loader2 size={13} className="animate-spin mr-2" />Uploading…</> : 'Publish'}
-          </button>
+          {/* Single upload fields — hidden when bulk mode active */}
+          {!bulkMode && (
+            <>
+              {/* Cover image — shown for video and PDF only */}
+              {file && (file.type.startsWith('video/') || file.type === 'application/pdf') && (
+                <div style={{ marginTop: 4 }}>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
+                    Cover Image
+                    {file.type.startsWith('video/') && (
+                      <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, marginLeft: 8, color: 'var(--color-ink-muted)' }}>(auto-captured from first frame)</span>
+                    )}
+                    {file.type === 'application/pdf' && (
+                      <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, marginLeft: 8, color: 'var(--color-ink-muted)' }}>(optional — shown as thumbnail in gallery)</span>
+                    )}
+                  </label>
+                  {isCapturingFrame && (
+                    <p style={{ fontSize: 12, color: 'var(--color-ink-muted)' }}>Capturing first frame…</p>
+                  )}
+                  {coverPreview && !isCapturingFrame && (
+                    <div style={{ width: 80, height: 108, borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: 8, border: '1px solid var(--color-hairline)' }}>
+                      <img src={coverPreview} alt="Cover preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 'var(--radius-pill)', background: 'var(--color-surface-2)', border: '1px solid var(--color-hairline)', cursor: 'pointer', fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                      {coverFile ? '↺ Change cover' : '+ Upload cover'}
+                      <input type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          e.target.value = '';
+                          if (!f) return;
+                          const blob = await openCropModal(f, 'artwork');
+                          if (!blob) return;
+                          const cropped = new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+                          setCoverFile(cropped);
+                          if (coverPreview) URL.revokeObjectURL(coverPreview);
+                          setCoverPreview(URL.createObjectURL(blob));
+                        }}
+                      />
+                    </label>
+                    {coverFile && (
+                      <button type="button" onClick={() => { setCoverFile(null); if (coverPreview) URL.revokeObjectURL(coverPreview); setCoverPreview(null); }}
+                        style={{ background: 'none', border: 'none', color: 'var(--color-ink-muted)', cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-body)' }}>
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div><label className="type-micro block mb-1">Title *</label><input required value={aTitle} onChange={e => setATitle(forceUpper ? e.target.value.toUpperCase() : e.target.value)} placeholder="Artwork title" className="input-base" maxLength={200} /></div>
+              <div><label className="type-micro block mb-1">Artist</label><input value={aArtist} onChange={e => setAArtist(forceUpper ? e.target.value.toUpperCase() : e.target.value)} placeholder="Name (Year)" className="input-base" maxLength={200} /></div>
+              <div>
+                <label className="type-micro block mb-1">Domain</label>
+                <select value={aDomain} onChange={e => { setADomain(e.target.value); if (e.target.value !== '__other__') setACustomDomain(''); }} className="input-base">
+                  {domainTitles.map(t => <option key={t} value={t}>{t}</option>)}
+                  <option value="__other__">Other (specify)...</option>
+                </select>
+                {aDomain === '__other__' && (
+                  <input value={aCustomDomain} onChange={e => setACustomDomain(e.target.value)} placeholder="Enter domain name" maxLength={100} className="input-base mt-2" />
+                )}
+              </div>
+              {uploadError && <p className="type-micro" style={{ color: '#e5484d' }}>{uploadError}</p>}
+              <button type="submit" disabled={uploading || !file} className="btn-primary w-full justify-center" style={{ opacity: uploading || !file ? 0.5 : 1 }}>
+                {uploading ? <><Loader2 size={13} className="animate-spin mr-2" />Uploading…</> : 'Publish'}
+              </button>
+            </>
+          )}
         </form>
       </div>
 
@@ -672,8 +922,8 @@ function GalleryTab() {
         <div className="lg:col-span-5">
           <Modal title={`Edit Artwork — ${editArtwork.title}`} onClose={() => { if (eaCoverPreview) { URL.revokeObjectURL(eaCoverPreview); setEaCoverPreview(null); } setEditArtwork(null); }}>
             <form onSubmit={handleEditArtwork} className="space-y-3">
-              <div><label className="type-micro block mb-1">Title *</label><input required value={eaTitle} onChange={e => setEaTitle(e.target.value)} className="input-base" maxLength={200} /></div>
-              <div><label className="type-micro block mb-1">Artist *</label><input required value={eaArtist} onChange={e => setEaArtist(e.target.value)} className="input-base" maxLength={100} /></div>
+              <div><label className="type-micro block mb-1">Title *</label><input required value={eaTitle} onChange={e => setEaTitle(forceUpper ? e.target.value.toUpperCase() : e.target.value)} className="input-base" maxLength={200} /></div>
+              <div><label className="type-micro block mb-1">Artist *</label><input required value={eaArtist} onChange={e => setEaArtist(forceUpper ? e.target.value.toUpperCase() : e.target.value)} className="input-base" maxLength={100} /></div>
               <div>
                 <label className="type-micro block mb-1">Domain</label>
                 <select value={eaDomain} onChange={e => { setEaDomain(e.target.value); if (e.target.value !== '__other__') setEaCustomDomain(''); }} className="input-base">
@@ -1250,6 +1500,52 @@ function CommentsTab() {
   );
 }
 
+// ── Settings tab ─────────────────────────────────────────────────────────────
+function SettingsTab() {
+  const [forceUpper, setForceUpperState] = useState(() => localStorage.getItem('forceUppercase') !== 'false');
+
+  const toggle = () => {
+    const next = !forceUpper;
+    localStorage.setItem('forceUppercase', next ? 'true' : 'false');
+    setForceUpperState(next);
+  };
+
+  return (
+    <div className="card p-6 space-y-6" style={{ maxWidth: 480 }}>
+      <h2 className="type-headline">Gallery Settings</h2>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+        <div>
+          <p className="type-body-sm" style={{ fontWeight: 600 }}>Force uppercase titles &amp; artist names</p>
+          <p className="type-micro" style={{ color: 'var(--color-ink-muted)', marginTop: 2 }}>
+            {forceUpper
+              ? 'ON — titles and artist names are uppercased in forms and displays.'
+              : 'OFF — text is shown as entered.'}
+          </p>
+          {!forceUpper && (
+            <p className="type-micro" style={{ color: '#e5a000', marginTop: 4 }}>
+              Note: existing artworks uploaded while ON are already stored uppercase.
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={toggle}
+          style={{
+            flexShrink: 0,
+            width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
+            background: forceUpper ? 'var(--color-accent-blue)' : 'var(--color-surface-2)',
+          }}
+        >
+          <span style={{
+            position: 'absolute', top: 3, left: forceUpper ? 22 : 3, width: 18, height: 18,
+            borderRadius: '50%', background: '#fff', transition: 'left 0.2s', display: 'block',
+          }} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main AdminPage ─────────────────────────────────────────────────────────────
 export function AdminPage() {
   const [authed, setAuthed] = useState(false);
@@ -1263,6 +1559,7 @@ export function AdminPage() {
     { id: 'team',     label: 'Team',     icon: Users },
     { id: 'events',   label: 'Events',   icon: CalendarDays },
     { id: 'comments', label: 'Comments', icon: MessageSquare },
+    { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   return (
@@ -1302,6 +1599,7 @@ export function AdminPage() {
           {tab === 'team'    && <motion.div key="team"    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><TeamTab /></motion.div>}
           {tab === 'events'   && <motion.div key="events"    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><EventsTab /></motion.div>}
           {tab === 'comments' && <motion.div key="comments"  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><CommentsTab /></motion.div>}
+          {tab === 'settings' && <motion.div key="settings"  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><SettingsTab /></motion.div>}
         </AnimatePresence>
       </div>
     </div>

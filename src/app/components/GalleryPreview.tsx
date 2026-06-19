@@ -5,6 +5,7 @@ import { useAppData, type Artwork } from '../context/AppDataContext';
 
 function ArtworkCard({ a, i }: { a: Artwork; i: number }) {
   const navigate = useNavigate();
+  const forceUpper = localStorage.getItem('forceUppercase') !== 'false';
   return (
     <motion.div
       className="card"
@@ -31,8 +32,8 @@ function ArtworkCard({ a, i }: { a: Artwork; i: number }) {
         </span>
       </div>
       <div style={{ padding: '20px 20px 24px' }}>
-        <h3 className="type-display-md" style={{ marginBottom: 4, fontSize: 20 }}>{a.title}</h3>
-        <p className="type-caption">by {a.artist}</p>
+        <h3 className="type-display-md" style={{ marginBottom: 4, fontSize: 20, textTransform: forceUpper ? 'uppercase' : 'none' }}>{a.title}</h3>
+        {a.artist?.trim() && <p className="type-caption" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>by {a.artist}</p>}
       </div>
     </motion.div>
   );

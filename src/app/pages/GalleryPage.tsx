@@ -138,6 +138,7 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
   const [text, setText] = useState('');
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const forceUpper = localStorage.getItem('forceUppercase') !== 'false';
 
   useEffect(() => {
     const fn = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -195,10 +196,10 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
         <div style={{ padding: 16, borderBottom: '1px solid var(--color-hairline-soft)' }}>
           <span className="type-micro inline-block mb-2 px-2 py-0.5 rounded-full" style={{ background: `${domainColor}18`, color: domainColor }}>{artwork.domain}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-ink)', margin: 0, lineHeight: 1.3 }}>{artwork.title}</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-ink)', margin: 0, lineHeight: 1.3, textTransform: forceUpper ? 'uppercase' : 'none' }}>{artwork.title}</h2>
             <span className="type-micro px-2 py-0.5 rounded-full uppercase" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)', flexShrink: 0 }}>{artwork.mediaType}</span>
           </div>
-          <p style={{ fontSize: 13, color: 'var(--color-ink-muted)', marginBottom: 12 }}>by {artwork.artist}</p>
+          {artwork.artist?.trim() && <p style={{ fontSize: 13, color: 'var(--color-ink-muted)', marginBottom: 12, textTransform: forceUpper ? 'uppercase' : 'none' }}>by {artwork.artist}</p>}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={handleLike} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 'var(--radius-pill)', background: 'var(--color-surface-2)', border: 'none', cursor: 'pointer', fontSize: 13 }}>
               <LikeBurst active={burst} />
@@ -278,10 +279,10 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
               <div className="flex-1 min-w-0">
                 <span className="type-micro inline-block mb-2 px-2 py-0.5 rounded-full" style={{ background: `${domainColor}18`, color: domainColor }}>{artwork.domain}</span>
                 <div className="flex items-center gap-2 mb-1">
-                  <h2 className="type-headline leading-tight">{artwork.title}</h2>
+                  <h2 className="type-headline leading-tight" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>{artwork.title}</h2>
                   <span className="type-micro px-2 py-0.5 rounded-full uppercase" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)' }}>{artwork.mediaType}</span>
                 </div>
-                <p className="type-caption mt-1">by {artwork.artist}</p>
+                {artwork.artist?.trim() && <p className="type-caption mt-1" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>by {artwork.artist}</p>}
               </div>
               <button onClick={onClose} className="btn-icon" style={{ width: 32, height: 32 }}><X size={15} /></button>
             </div>
@@ -371,6 +372,7 @@ export function GalleryPage() {
   const [filter, setFilter] = useState('All');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [burstIds, setBurstIds] = useState<Set<string>>(new Set());
+  const forceUpper = localStorage.getItem('forceUppercase') !== 'false';
 
   const handleLike = useCallback((e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -460,9 +462,9 @@ export function GalleryPage() {
                       </button>
                     </div>
                     {/* Text area below image — always visible, never overlapped */}
-                    <div style={{ padding: '12px 16px', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)' }}>
-                      <p className="type-body-sm font-semibold leading-tight mb-0.5" style={{ color: 'var(--color-ink)' }}>{art.title}</p>
-                      <p className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>{art.artist}</p>
+                    <div style={{ padding: '20px 20px 24px' }}>
+                      <h3 className="type-display-md" style={{ marginBottom: 4, fontSize: 20, textTransform: forceUpper ? 'uppercase' : 'none' }}>{art.title}</h3>
+                      {art.artist?.trim() && <p className="type-caption" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>by {art.artist}</p>}
                     </div>
                   </div>
                 </motion.div>
