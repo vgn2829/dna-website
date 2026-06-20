@@ -23,6 +23,23 @@ async function getAllStudentEmails(): Promise<string[]> {
   }
 }
 
+async function getTemplate(id: string): Promise<{ subject: string; body: string } | null> {
+  try {
+    const result = await pool.query(
+      'SELECT subject, body FROM email_templates WHERE id = $1',
+      [id]
+    );
+    return result.rows.length > 0 ? (result.rows[0] as { subject: string; body: string }) : null;
+  } catch (err) {
+    console.error(`Failed to fetch template "${id}":`, err);
+    return null;
+  }
+}
+
+function resolve(template: string, vars: Record<string, string>): string {
+  return Object.entries(vars).reduce((s, [k, v]) => s.replaceAll(k, v), template);
+}
+
 function getBaseTemplate(content: string): string {
   return `
     <div style="font-family:sans-serif;max-width:600px;margin:0 auto;
@@ -55,36 +72,37 @@ function getBaseTemplate(content: string): string {
   `;
 }
 
-export async function sendWelcomeEmail(
-  name: string,
-  email: string
-): Promise<void> {
+async function sendInBatches(emails: string[], subject: string, html: string): Promise<void> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < emails.length; i += 50) {
+    chunks.push(emails.slice(i, i + 50));
+  }
+  for (const chunk of chunks) {
+    await resend.emails.send({
+      from: 'DnA Club IITK <onboarding@resend.dev>',
+      bcc: chunk,
+      to: 'designandanimationclub.iitk@gmail.com',
+      subject,
+      html: getBaseTemplate(html),
+    });
+  }
+}
+
+export async function sendWelcomeEmail(name: string, email: string): Promise<void> {
   if (!process.env.RESEND_API_KEY) return;
 
-  const content = `
-    <h2 style="margin:0 0 12px;font-size:22px;color:#ffffff;">
-      Welcome to DnA Club, ${name}
-    </h2>
-    <p style="margin:0 0 12px;color:#cccccc;font-size:15px;line-height:1.7;">
-      You are now part of the Design and Animation Club family at IIT Kanpur.
-    </p>
-    <p style="margin:0 0 12px;color:#cccccc;font-size:15px;line-height:1.7;">
-      We are a community of designers, animators, and creative thinkers.
-      Explore our gallery, attend our events, and be part of the creative
-      journey at IITK.
-    </p>
-    <p style="margin:0;color:#cccccc;font-size:15px;line-height:1.7;">
-      Stay tuned for updates on workshops, exhibitions, and events.
-      We are glad to have you with us.
-    </p>
-  `;
+  const tpl = await getTemplate('welcome');
+  const subject = tpl?.subject ?? 'Welcome to Design and Animation Club, IIT Kanpur';
+  const body = tpl?.body ?? '<p>Welcome to DnA Club, {{name}}</p>';
+
+  const vars = { '{{name}}': name };
 
   try {
     await resend.emails.send({
       from: 'DnA Club IITK <onboarding@resend.dev>',
       to: email,
-      subject: 'Welcome to Design and Animation Club, IIT Kanpur',
-      html: getBaseTemplate(content),
+      subject: resolve(subject, vars),
+      html: getBaseTemplate(resolve(body, vars)),
     });
     console.log(`Welcome email sent to ${email}`);
   } catch (err) {
@@ -102,32 +120,19 @@ export async function sendEventNotification(event: {
   const emails = await getAllStudentEmails();
   if (emails.length === 0) return;
 
-  const content = `
-    <h2 style="margin:0 0 8px;font-size:22px;color:#ffffff;">
-      New Event: ${event.title}
-    </h2>
-    ${event.date ? `<p style="margin:0 0 4px;color:#999;font-size:14px;">
-      Date: ${event.date}</p>` : ''}
-    ${event.venue ? `<p style="margin:0 0 16px;color:#999;font-size:14px;">
-      Venue: ${event.venue}</p>` : ''}
-    ${event.description ? `<p style="margin:16px 0;color:#cccccc;
-      font-size:15px;line-height:1.7;">${event.description}</p>` : ''}
-  `;
+  const tpl = await getTemplate('new_event');
+  const subject = tpl?.subject ?? 'New Event: {{title}} — DnA Club IITK';
+  const body = tpl?.body ?? '<h2>{{title}}</h2><p>{{date}}</p><p>{{description}}</p>';
+
+  const vars: Record<string, string> = {
+    '{{title}}':       event.title ?? '',
+    '{{date}}':        event.date ?? '',
+    '{{venue}}':       event.venue ?? '',
+    '{{description}}': event.description ?? '',
+  };
 
   try {
-    const chunks: string[][] = [];
-    for (let i = 0; i < emails.length; i += 50) {
-      chunks.push(emails.slice(i, i + 50));
-    }
-    for (const chunk of chunks) {
-      await resend.emails.send({
-        from: 'DnA Club IITK <onboarding@resend.dev>',
-        bcc: chunk,
-        to: 'designandanimationclub.iitk@gmail.com',
-        subject: `New Event: ${event.title} — DnA Club IITK`,
-        html: getBaseTemplate(content),
-      });
-    }
+    await sendInBatches(emails, resolve(subject, vars), resolve(body, vars));
     console.log(`Event notification sent to ${emails.length} students`);
   } catch (err) {
     console.error('Failed to send event notification:', err);
@@ -143,31 +148,18 @@ export async function sendArtworkNotification(artwork: {
   const emails = await getAllStudentEmails();
   if (emails.length === 0) return;
 
-  const content = `
-    <h2 style="margin:0 0 8px;font-size:22px;color:#ffffff;">
-      New Artwork: ${artwork.title}
-    </h2>
-    <p style="margin:0 0 4px;color:#999;font-size:14px;">
-      by ${artwork.artist}
-    </p>
-    ${artwork.domain ? `<p style="margin:0;color:#999;font-size:14px;">
-      ${artwork.domain}</p>` : ''}
-  `;
+  const tpl = await getTemplate('new_artwork');
+  const subject = tpl?.subject ?? 'New Artwork: {{title}} — DnA Club IITK';
+  const body = tpl?.body ?? '<h2>{{title}}</h2><p>by {{artist}}</p>';
+
+  const vars: Record<string, string> = {
+    '{{title}}':  artwork.title ?? '',
+    '{{artist}}': artwork.artist ?? '',
+    '{{domain}}': artwork.domain ?? '',
+  };
 
   try {
-    const chunks: string[][] = [];
-    for (let i = 0; i < emails.length; i += 50) {
-      chunks.push(emails.slice(i, i + 50));
-    }
-    for (const chunk of chunks) {
-      await resend.emails.send({
-        from: 'DnA Club IITK <onboarding@resend.dev>',
-        bcc: chunk,
-        to: 'designandanimationclub.iitk@gmail.com',
-        subject: `New Artwork: ${artwork.title} by ${artwork.artist} — DnA Club`,
-        html: getBaseTemplate(content),
-      });
-    }
+    await sendInBatches(emails, resolve(subject, vars), resolve(body, vars));
     console.log(`Artwork notification sent to ${emails.length} students`);
   } catch (err) {
     console.error('Failed to send artwork notification:', err);
@@ -183,19 +175,7 @@ export async function sendCustomAnnouncement(
   if (emails.length === 0) return;
 
   try {
-    const chunks: string[][] = [];
-    for (let i = 0; i < emails.length; i += 50) {
-      chunks.push(emails.slice(i, i + 50));
-    }
-    for (const chunk of chunks) {
-      await resend.emails.send({
-        from: 'DnA Club IITK <onboarding@resend.dev>',
-        bcc: chunk,
-        to: 'designandanimationclub.iitk@gmail.com',
-        subject,
-        html: getBaseTemplate(html),
-      });
-    }
+    await sendInBatches(emails, subject, html);
     console.log(`Custom announcement sent to ${emails.length} students`);
   } catch (err) {
     console.error('Failed to send custom announcement:', err);

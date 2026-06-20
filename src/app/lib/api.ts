@@ -1,5 +1,13 @@
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '') + '/api';
 
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  updated_at: string;
+}
+
 const ADMIN_TOKEN_KEY = 'dna_admin_token';
 
 export function getAdminToken(): string | null  { return sessionStorage.getItem(ADMIN_TOKEN_KEY); }
@@ -114,6 +122,14 @@ export const api = {
       request<void>('POST', '/notify/event', { body: event, admin: true }),
     artwork: (artwork: { title: string; artist: string; domain?: string }) =>
       request<void>('POST', '/notify/artwork', { body: artwork, admin: true }),
+    getTemplates: () =>
+      request<EmailTemplate[]>('GET', '/notify/templates', { admin: true }),
+    getTemplate: (id: string) =>
+      request<EmailTemplate>('GET', `/notify/templates/${id}`, { admin: true }),
+    updateTemplate: (id: string, data: { subject: string; body: string }) =>
+      request<EmailTemplate>('PUT', `/notify/templates/${id}`, { body: data, admin: true }),
+    sendAnnouncement: (data: { subject: string; html: string }) =>
+      request<{ success: boolean; sent: number }>('POST', '/notify/announce', { body: data, admin: true }),
   },
   students: {
     createSession: (rollNumber: string, name: string, email: string) =>

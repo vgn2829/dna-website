@@ -63,6 +63,53 @@ router.post('/artwork', requireAdmin, async (req, res) => {
   }
 });
 
+router.get('/templates', requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM email_templates ORDER BY id');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Get templates error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/templates/:id', requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM email_templates WHERE id = $1',
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Template not found' });
+      return;
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.put('/templates/:id', requireAdmin, async (req, res) => {
+  try {
+    const { subject, body } = req.body as { subject?: string; body?: string };
+    if (!subject || !body) {
+      res.status(400).json({ error: 'Subject and body are required' });
+      return;
+    }
+    const result = await pool.query(
+      `UPDATE email_templates SET subject = $1, body = $2, updated_at = $3 WHERE id = $4 RETURNING *`,
+      [subject, body, new Date().toISOString(), req.params.id]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Template not found' });
+      return;
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.post('/announce', requireAdmin, async (req, res) => {
   try {
     const { subject, html } = req.body as Record<string, string>;

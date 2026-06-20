@@ -156,4 +156,69 @@ export async function initSchema(): Promise<void> {
       created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  // Clear old sessions that are missing email (pre-registration-form era)
+  const hasOldEntries = await pool.query(
+    `SELECT COUNT(*) FROM student_sessions WHERE email IS NULL`
+  );
+  if (parseInt((hasOldEntries.rows[0] as { count: string }).count) > 0) {
+    await pool.query(`DELETE FROM student_sessions`);
+    console.log('Cleared old student_sessions (missing email/name)');
+  }
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS email_templates (
+      id          TEXT PRIMARY KEY,
+      name        TEXT NOT NULL,
+      subject     TEXT NOT NULL,
+      body        TEXT NOT NULL,
+      updated_at  TEXT NOT NULL
+    )
+  `);
+
+  const templateCount = await pool.query(`SELECT COUNT(*) FROM email_templates`);
+  if (parseInt((templateCount.rows[0] as { count: string }).count) === 0) {
+    const now = new Date().toISOString();
+
+    const welcomeBody = `<h2 style="margin:0 0 12px;font-size:22px;color:#ffffff;">Welcome to DnA Club, {{name}}</h2>
+        <p style="margin:0 0 12px;color:#cccccc;font-size:15px;line-height:1.7;">
+          You are now part of the Design and Animation Club family at IIT Kanpur.
+        </p>
+        <p style="margin:0 0 12px;color:#cccccc;font-size:15px;line-height:1.7;">
+          We are a community of designers, animators, and creative thinkers.
+          Explore our gallery, attend our events, and be part of the creative
+          journey at IITK.
+        </p>
+        <p style="margin:0;color:#cccccc;font-size:15px;line-height:1.7;">
+          Stay tuned for updates on workshops, exhibitions, and events.
+          We are glad to have you with us.
+        </p>`;
+
+    const artworkBody = `<h2 style="margin:0 0 8px;font-size:22px;color:#ffffff;">New Artwork: {{title}}</h2>
+        <p style="margin:0 0 4px;color:#999;font-size:14px;">by {{artist}}</p>
+        <p style="margin:0 0 16px;color:#999;font-size:14px;">{{domain}}</p>
+        <p style="margin:16px 0;color:#cccccc;font-size:15px;line-height:1.7;">
+          A new artwork has been added to the DnA Club gallery. Visit the
+          website to explore the latest creative work from our members.
+        </p>`;
+
+    const eventBody = `<h2 style="margin:0 0 8px;font-size:22px;color:#ffffff;">New Event: {{title}}</h2>
+        <p style="margin:0 0 4px;color:#999;font-size:14px;">Date: {{date}}</p>
+        <p style="margin:0 0 16px;color:#999;font-size:14px;">Venue: {{venue}}</p>
+        <p style="margin:16px 0;color:#cccccc;font-size:15px;line-height:1.7;">{{description}}</p>`;
+
+    await pool.query(
+      `INSERT INTO email_templates (id, name, subject, body, updated_at) VALUES ($1,$2,$3,$4,$5)`,
+      ['welcome', 'Welcome Email', 'Welcome to Design and Animation Club, IIT Kanpur', welcomeBody, now]
+    );
+    await pool.query(
+      `INSERT INTO email_templates (id, name, subject, body, updated_at) VALUES ($1,$2,$3,$4,$5)`,
+      ['new_artwork', 'New Artwork', 'New Artwork: {{title}} by {{artist}} — DnA Club IITK', artworkBody, now]
+    );
+    await pool.query(
+      `INSERT INTO email_templates (id, name, subject, body, updated_at) VALUES ($1,$2,$3,$4,$5)`,
+      ['new_event', 'New Event', 'New Event: {{title}} — DnA Club IITK', eventBody, now]
+    );
+    console.log('Email templates seeded');
+  }
 }
