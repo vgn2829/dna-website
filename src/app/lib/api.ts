@@ -105,7 +105,9 @@ export const api = {
     list:   () => request<unknown[]>('GET', '/team'),
     add:    (formData: FormData) => uploadRequest<unknown>('/team', formData),
     update: (id: number, formData: FormData) => uploadPutRequest<unknown>(`/team/${id}`, formData),
-    delete: (id: number) => request<void>('DELETE', `/team/${id}`, { admin: true }),
+    delete:     (id: number) => request<void>('DELETE', `/team/${id}`, { admin: true }),
+    patchOrder: (id: number, displayOrder: number) =>
+      request<void>('PATCH', `/team/${id}/order`, { body: { display_order: displayOrder }, admin: true }),
   },
   students: {
     createSession:     (rollNumber: string) =>

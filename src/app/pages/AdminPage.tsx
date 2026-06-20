@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings } from 'lucide-react';
+import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
 import { api, setAdminToken, clearAdminToken } from '../lib/api';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
@@ -1025,7 +1025,51 @@ function GalleryTab() {
 
 // ── Team tab ──────────────────────────────────────────────────────────────────
 function TeamTab() {
-  const { team, addTeamMember, updateTeamMember, deleteTeamMember } = useAppData();
+  const { team, addTeamMember, updateTeamMember, deleteTeamMember, reorderTeamSection } = useAppData();
+  const dragIndexRef = useRef<number | null>(null);
+  const dragGroupRef = useRef<string | null>(null);
+
+  const sortByOrder = (members: TeamMember[]) =>
+    [...members].sort((a, b) => {
+      const ao = a.displayOrder ?? 999, bo = b.displayOrder ?? 999;
+      return ao !== bo ? ao - bo : a.name.trim().localeCompare(b.name.trim());
+    });
+
+  const getGroup = (desig: string): string => {
+    const d = desig.toLowerCase();
+    if (d.includes('coordinator') && !d.startsWith('ex-')) return 'coordinator';
+    if (d.includes('secretary')) return 'secretary';
+    return 'other';
+  };
+
+  const groupedTeam = {
+    coordinator: sortByOrder(team.filter(m => getGroup(m.designation) === 'coordinator')),
+    secretary:   sortByOrder(team.filter(m => getGroup(m.designation) === 'secretary')),
+    other:       sortByOrder(team.filter(m => getGroup(m.designation) === 'other')),
+  };
+
+  const handleDragStart = (groupKey: string, index: number) => {
+    dragIndexRef.current = index;
+    dragGroupRef.current = groupKey;
+  };
+
+  const handleDrop = async (groupKey: string, dropIndex: number) => {
+    const from = dragIndexRef.current;
+    if (from === null || from === dropIndex || dragGroupRef.current !== groupKey) return;
+    const section = [...groupedTeam[groupKey as keyof typeof groupedTeam]];
+    const [moved] = section.splice(from, 1);
+    section.splice(dropIndex, 0, moved);
+    dragIndexRef.current = null;
+    dragGroupRef.current = null;
+    await reorderTeamSection(section);
+  };
+
+  const resetGroupToAlpha = async (groupKey: keyof typeof groupedTeam) => {
+    const sorted = [...groupedTeam[groupKey]].sort((a, b) =>
+      a.name.trim().localeCompare(b.name.trim())
+    );
+    await reorderTeamSection(sorted);
+  };
   const photoRef = useRef<HTMLInputElement>(null);
   const [photo, setPhoto] = useState<File | null>(null);
   const [addPhotoPreview, setAddPhotoPreview] = useState<string | null>(null);
@@ -1194,25 +1238,55 @@ function TeamTab() {
         </form>
       </div>
 
-      <div className="lg:col-span-3 space-y-2">
-        {team.map(m => (
-          <div key={m.id} className="card p-3 flex items-center gap-3" style={{ borderRadius: 'var(--radius-lg)' }}>
-            <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold"
-              style={{ background: `${m.color}20`, color: m.color }}>
-              {m.photoUrl ? <img src={m.photoUrl} alt={m.name} className="w-9 h-9 rounded-full object-cover" /> : m.name[0]}
+      <div className="lg:col-span-3 space-y-6">
+        {(['coordinator', 'secretary', 'other'] as const).map(groupKey => {
+          const members = groupedTeam[groupKey];
+          if (members.length === 0) return null;
+          const label = groupKey === 'coordinator' ? 'Coordinators' : groupKey === 'secretary' ? 'Secretaries' : 'Others';
+          return (
+            <div key={groupKey}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <p className="type-micro" style={{ color: 'var(--color-ink-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</p>
+                <button
+                  type="button"
+                  onClick={() => resetGroupToAlpha(groupKey)}
+                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 100, background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)', border: '1px solid var(--color-hairline)', cursor: 'pointer', fontFamily: 'var(--font-body)' }}
+                >
+                  Reset to A–Z
+                </button>
+              </div>
+              <div className="space-y-2">
+                {members.map((m, idx) => (
+                  <div
+                    key={m.id}
+                    draggable
+                    onDragStart={() => handleDragStart(groupKey, idx)}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={() => handleDrop(groupKey, idx)}
+                    className="card p-3 flex items-center gap-3"
+                    style={{ borderRadius: 'var(--radius-lg)', cursor: 'default' }}
+                  >
+                    <GripVertical size={14} style={{ color: 'var(--color-ink-muted)', cursor: 'grab', flexShrink: 0 }} />
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold"
+                      style={{ background: `${m.color}20`, color: m.color }}>
+                      {m.photoUrl ? <img src={m.photoUrl} alt={m.name} className="w-9 h-9 rounded-full object-cover" /> : m.name[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="type-body-sm truncate">{m.name}</p>
+                      <p className="type-micro">{m.designation}{m.year ? ` · ${m.year}` : ''}</p>
+                    </div>
+                    <button onClick={() => openEditMember(m)} className="btn-icon shrink-0" style={{ color: 'var(--color-accent-blue)', width: 28, height: 28, background: 'transparent' }}>
+                      <Pencil size={12} />
+                    </button>
+                    <button onClick={() => deleteTeamMember(m.id)} className="btn-icon shrink-0" style={{ color: '#e5484d', width: 28, height: 28, background: 'transparent' }}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="type-body-sm truncate">{m.name}</p>
-              <p className="type-micro">{m.designation}{m.year ? ` · ${m.year}` : ''}</p>
-            </div>
-            <button onClick={() => openEditMember(m)} className="btn-icon shrink-0" style={{ color: 'var(--color-accent-blue)', width: 28, height: 28, background: 'transparent' }}>
-              <Pencil size={12} />
-            </button>
-            <button onClick={() => deleteTeamMember(m.id)} className="btn-icon shrink-0" style={{ color: '#e5484d', width: 28, height: 28, background: 'transparent' }}>
-              <Trash2 size={12} />
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {editMember && (

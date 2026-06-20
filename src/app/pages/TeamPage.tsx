@@ -138,13 +138,19 @@ export function TeamPage() {
     return () => window.removeEventListener('resize', update);
   }, []);
 
+  const sortByOrder = (members: TeamMember[]) =>
+    [...members].sort((a, b) => {
+      const ao = a.displayOrder ?? 999, bo = b.displayOrder ?? 999;
+      return ao !== bo ? ao - bo : a.name.trim().localeCompare(b.name.trim());
+    });
+
   const d = (m: TeamMember) => m.designation.toLowerCase();
   const isExCore = (m: TeamMember) => d(m).startsWith('ex-');
   const faculty = team.filter(m => d(m).includes('faculty') || d(m).includes('advisor'));
   const exCoreMembers = team.filter(m => isExCore(m));
-  const coords  = team.filter(m => !isExCore(m) && d(m).includes('coordinator'));
-  const secs    = team.filter(m => !isExCore(m) && d(m).includes('secretary'));
-  const rest    = team.filter(m => !isExCore(m) && !d(m).includes('coordinator') && !d(m).includes('secretary') && !d(m).includes('faculty') && !d(m).includes('advisor'));
+  const coords  = sortByOrder(team.filter(m => !isExCore(m) && d(m).includes('coordinator')));
+  const secs    = sortByOrder(team.filter(m => !isExCore(m) && d(m).includes('secretary')));
+  const rest    = sortByOrder(team.filter(m => !isExCore(m) && !d(m).includes('coordinator') && !d(m).includes('secretary') && !d(m).includes('faculty') && !d(m).includes('advisor')));
 
   const exCoreByYear = Object.entries(
     exCoreMembers.reduce((acc, m) => {

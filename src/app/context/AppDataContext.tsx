@@ -77,9 +77,10 @@ interface AppDataContextValue {
   deleteVideo:        (domainId: string, videoId: string) => void;
   updateVideoSequence:(domainId: string, videoId: string, sequence: number) => Promise<void>;
   // Team
-  addTeamMember:    (formData: FormData) => Promise<void>;
-  updateTeamMember: (id: number, formData: FormData) => Promise<void>;
-  deleteTeamMember: (id: number) => void;
+  addTeamMember:       (formData: FormData) => Promise<void>;
+  updateTeamMember:    (id: number, formData: FormData) => Promise<void>;
+  deleteTeamMember:    (id: number) => void;
+  reorderTeamSection:  (ordered: TeamMember[]) => Promise<void>;
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
@@ -262,6 +263,16 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     api.team.delete(id).then(() => setTeam(prev => prev.filter(t => t.id !== id))).catch(onAdminErr);
   }, []);
 
+  const reorderTeamSection = useCallback(async (ordered: TeamMember[]) => {
+    await Promise.all(ordered.map((m, i) => api.team.patchOrder(m.id, i + 1)));
+    const updated = ordered.map((m, i) => ({ ...m, displayOrder: i + 1 }));
+    setTeam(prev => {
+      const ids = new Set(updated.map(m => m.id));
+      return [...prev.filter(m => !ids.has(m.id)), ...updated]
+        .sort((a, b) => a.displayOrder - b.displayOrder);
+    });
+  }, []);
+
   const deleteComment = useCallback(async (artworkId: string, commentId: string) => {
     await api.artworks.deleteComment(artworkId, commentId);
     setArtworks(prev => prev.map(artwork =>
@@ -276,7 +287,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       likeArtwork, addComment, uploadArtwork, updateArtwork, deleteArtwork, toggleFeatured, deleteComment,
       rsvpEvent, addEvent, updateEvent, deleteEvent,
       addDomain, updateDomain, deleteDomain, addVideo, updateVideo, deleteVideo, updateVideoSequence,
-      addTeamMember, updateTeamMember, deleteTeamMember,
+      addTeamMember, updateTeamMember, deleteTeamMember, reorderTeamSection,
     }}>
       {children}
     </AppDataContext.Provider>

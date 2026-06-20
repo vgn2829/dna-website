@@ -132,6 +132,17 @@ teamRouter.put('/:id', requireAdmin, photoUpload.single('photo'), async (req, re
   res.json(formatMember(rows[0]));
 });
 
+teamRouter.patch('/:id/order', requireAdmin, async (req, res) => {
+  const displayOrder = Number(req.body.display_order);
+  if (!Number.isInteger(displayOrder)) { res.status(400).json({ error: 'display_order must be an integer' }); return; }
+  const result = await pool.query(
+    'UPDATE team_members SET display_order=$1 WHERE id=$2 RETURNING id',
+    [displayOrder, req.params.id]
+  );
+  if (result.rowCount === 0) { res.status(404).json({ error: 'Member not found' }); return; }
+  res.json({ success: true });
+});
+
 teamRouter.delete('/:id', requireAdmin, async (req, res) => {
   const rows = await query<MemberRow>('SELECT photo_path FROM team_members WHERE id=$1', [req.params.id]);
   if (rows.length === 0) { res.status(404).json({ error: 'Member not found' }); return; }
