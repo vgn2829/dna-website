@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import rateLimit from 'express-rate-limit';
 import { query } from '../db/client';
+import { sendWelcomeEmail } from '../services/mailer';
 
 const progressWriteLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -56,6 +57,7 @@ studentsRouter.post('/sessions', sessionLimiter, async (req, res) => {
        ON CONFLICT (roll_number) DO UPDATE SET name=EXCLUDED.name, email=EXCLUDED.email`,
       [roll, uniqueId, registeredAt, name, email]
     );
+    sendWelcomeEmail(name, email).catch(err => console.error('Welcome email failed:', err));
   } else {
     uniqueId = existingRows[0].unique_id;
     registeredAt = existingRows[0].registered_at;

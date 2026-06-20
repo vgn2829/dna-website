@@ -1,49 +1,35 @@
 import { Router } from 'express';
 import { requireAdmin } from '../middleware/adminAuth';
-import { sendEventNotification, sendArtworkNotification } from '../services/mailer';
+import { sendEventNotification, sendArtworkNotification, sendCustomAnnouncement } from '../services/mailer';
+import { pool } from '../db/client';
 
 const router = Router();
 
 router.get('/test-email', requireAdmin, async (req, res) => {
   try {
-    const nodemailer = await import('nodemailer');
-
     console.log('=== EMAIL TEST ===');
-    console.log('GMAIL_USER:', process.env.GMAIL_USER ? 'SET' : 'NOT SET');
-    console.log('GMAIL_APP_PASSWORD:', process.env.GMAIL_APP_PASSWORD ? 'SET' : 'NOT SET');
+    console.log('RESEND_API_KEY:', process.env.RESEND_API_KEY ? 'SET' : 'NOT SET');
 
-    const transporter = nodemailer.default.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
-      },
-    });
+    if (!process.env.RESEND_API_KEY) {
+      res.status(500).json({ error: 'RESEND_API_KEY not set in environment variables' });
+      return;
+    }
 
-    await transporter.verify();
-    console.log('Transporter verified OK');
+    const { Resend } = await import('resend');
+    const resend = new Resend(process.env.RESEND_API_KEY);
 
-    await transporter.sendMail({
-      from: `"DnA Club IITK" <${process.env.GMAIL_USER}>`,
-      to: process.env.GMAIL_USER,
+    const result = await resend.emails.send({
+      from: 'DnA Club IITK <onboarding@resend.dev>',
+      to: 'designandanimationclub.iitk@gmail.com',
       subject: 'DnA Club — Email Test',
-      html: '<p>Email is working correctly.</p>',
+      html: '<p>Email is working correctly via Resend.</p>',
     });
 
-    console.log('Test email sent successfully');
-    res.json({
-      success: true,
-      message: 'Test email sent to ' + process.env.GMAIL_USER,
-      gmail_user: process.env.GMAIL_USER ? 'configured' : 'MISSING',
-      gmail_pass: process.env.GMAIL_APP_PASSWORD ? 'configured' : 'MISSING',
-    });
+    console.log('Test email sent:', result);
+    res.json({ success: true, message: 'Test email sent', result });
   } catch (err) {
     console.error('Email test failed:', err);
-    res.status(500).json({
-      error: err instanceof Error ? err.message : String(err),
-      gmail_user: process.env.GMAIL_USER ? 'configured' : 'MISSING',
-      gmail_pass: process.env.GMAIL_APP_PASSWORD ? 'configured' : 'MISSING',
-    });
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 });
 
@@ -74,6 +60,39 @@ router.post('/artwork', requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('Notify artwork error:', err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/announce', requireAdmin, async (req, res) => {
+  try {
+    const { subject, html } = req.body as Record<string, string>;
+    if (!subject || !html) {
+      res.status(400).json({ error: 'Subject and html are required' });
+      return;
+    }
+
+    const result = await pool.query(
+      'SELECT email FROM student_sessions WHERE email IS NOT NULL'
+    );
+    const emails = (result.rows as { email: string }[])
+      .map(r => r.email)
+      .filter(Boolean);
+
+    if (emails.length === 0) {
+      res.json({ success: true, message: 'No registered students to notify', sent: 0 });
+      return;
+    }
+
+    await sendCustomAnnouncement(subject, html, emails);
+
+    res.json({
+      success: true,
+      message: `Announcement sent to ${emails.length} students`,
+      sent: emails.length,
+    });
+  } catch (err) {
+    console.error('Announce error:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to send' });
   }
 });
 
