@@ -424,6 +424,7 @@ function GalleryTab() {
   const [aCustomDomain, setACustomDomain] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [uploadSuccess, setUploadSuccess] = useState('');
 
   // Edit artwork modal state
   const [editArtwork, setEditArtwork] = useState<Artwork | null>(null);
@@ -485,6 +486,8 @@ function GalleryTab() {
       setFile(null); setATitle(''); setAArtist(''); setADomain(''); setACustomDomain('');
       setCoverFile(null); if (coverPreview) URL.revokeObjectURL(coverPreview); setCoverPreview(null);
       if (fileRef.current) fileRef.current.value = '';
+      setUploadSuccess('Artwork published · Students will be notified by email');
+      setTimeout(() => setUploadSuccess(''), 4000);
     } catch (err) { setUploadError(err instanceof Error ? err.message : String(err)); } finally { setUploading(false); }
   };
 
@@ -888,6 +891,7 @@ function GalleryTab() {
                 )}
               </div>
               {uploadError && <p className="type-micro" style={{ color: '#e5484d' }}>{uploadError}</p>}
+              {uploadSuccess && <p className="type-micro" style={{ color: '#4ade80' }}>{uploadSuccess}</p>}
               <button type="submit" disabled={uploading || !file} className="btn-primary w-full justify-center" style={{ opacity: uploading || !file ? 0.5 : 1 }}>
                 {uploading ? <><Loader2 size={13} className="animate-spin mr-2" />Uploading…</> : 'Publish'}
               </button>
@@ -1389,6 +1393,7 @@ function EventsTab() {
   const [eContent, setEContent] = useState('');
   const [eCapacity, setECapacity] = useState('100');
   const [addingEvent, setAddingEvent] = useState(false);
+  const [eSuccess, setESuccess] = useState('');
 
   // Edit event modal
   const [editEvent, setEditEvent] = useState<ClubEvent | null>(null);
@@ -1407,7 +1412,8 @@ function EventsTab() {
     setAddingEvent(true);
     addEvent({ title: eTitle, date: eDate, time: eTime, location: eLocation, content: eContent, capacity: Number(eCapacity) || 100 });
     setETitle(''); setEDate(''); setETime(''); setELocation(''); setEContent('');
-    setTimeout(() => setAddingEvent(false), 600);
+    setESuccess('Event created · Students will be notified by email');
+    setTimeout(() => { setAddingEvent(false); setESuccess(''); }, 4000);
   };
 
   const openEditEvent = (ev: ClubEvent) => {
@@ -1443,6 +1449,7 @@ function EventsTab() {
           <button type="submit" disabled={addingEvent} className="btn-primary w-full justify-center" style={{ opacity: addingEvent ? 0.5 : 1 }}>
             {addingEvent ? <><Loader2 size={13} className="animate-spin mr-2" />Scheduling…</> : 'Schedule Event'}
           </button>
+          {eSuccess && <p className="type-micro" style={{ color: '#4ade80' }}>{eSuccess}</p>}
         </form>
       </div>
       <div className="lg:col-span-3 space-y-2">

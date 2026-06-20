@@ -137,6 +137,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const uploadArtwork = useCallback(async (formData: FormData) => {
     const newArt = await api.artworks.upload(formData);
     setArtworks(prev => [newArt as Artwork, ...prev]);
+    api.notify.artwork({
+      title: (newArt as Artwork).title,
+      artist: (newArt as Artwork).artist,
+      domain: (newArt as Artwork).domain,
+    }).catch(err => console.error('Artwork notification failed:', err));
   }, []);
 
   const updateArtwork = useCallback(async (id: string, formData: FormData) => {
@@ -172,7 +177,15 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, [roll]);
 
   const addEvent = useCallback((event: Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered'>) => {
-    api.events.add(event).then(e => setEvents(prev => [e as ClubEvent, ...prev])).catch(onAdminErr);
+    api.events.add(event).then(e => {
+      setEvents(prev => [e as ClubEvent, ...prev]);
+      api.notify.event({
+        title: (e as ClubEvent).title,
+        date: (e as ClubEvent).date,
+        venue: (e as ClubEvent).location,
+        description: (e as ClubEvent).content,
+      }).catch(err => console.error('Event notification failed:', err));
+    }).catch(onAdminErr);
   }, []);
 
   const updateEvent = useCallback(async (id: string, data: Partial<Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered'>>) => {

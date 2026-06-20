@@ -109,6 +109,12 @@ export const api = {
     patchOrder: (id: number, displayOrder: number) =>
       request<void>('PATCH', `/team/${id}/order`, { body: { display_order: displayOrder }, admin: true }),
   },
+  notify: {
+    event: (event: { title: string; date?: string; venue?: string; description?: string }) =>
+      request<void>('POST', '/notify/event', { body: event, admin: true }),
+    artwork: (artwork: { title: string; artist: string; domain?: string }) =>
+      request<void>('POST', '/notify/artwork', { body: artwork, admin: true }),
+  },
   students: {
     createSession: (rollNumber: string, name: string, email: string) =>
       request<{ session: { rollNumber: string; uniqueId: string; registeredAt: string; name: string; email: string }; progress: { watchedVideos: string[]; completedQuizzes: string[] } }>('POST', '/students/sessions', { body: { rollNumber, name, email } }),
