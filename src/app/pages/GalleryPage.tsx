@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Heart, MessageCircle, X, ZoomIn, ZoomOut, Send, FileText, Play, ExternalLink } from 'lucide-react';
 import { useAppData, type Artwork } from '../context/AppDataContext';
@@ -367,8 +367,13 @@ function MediaThumbnail({ art }: { art: Artwork }) {
 }
 
 export function GalleryPage() {
-  const { artworks, likeArtwork, domains, loading, error } = useAppData();
-  const domainTitles = ['All', ...Object.values(domains).map(d => d.title)];
+  const { artworks, likeArtwork, loading, error } = useAppData();
+  const domainTitles = useMemo(() => {
+    const unique = [...new Set(
+      artworks.map(a => a.domain).filter(d => d?.trim())
+    )].sort();
+    return ['All', ...unique];
+  }, [artworks]);
   const [filter, setFilter] = useState('All');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [burstIds, setBurstIds] = useState<Set<string>>(new Set());
