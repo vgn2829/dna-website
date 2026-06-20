@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical } from 'lucide-react';
+import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
 import { api, setAdminToken, clearAdminToken } from '../lib/api';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
@@ -111,7 +111,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-type Tab = 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings';
+type Tab = 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings' | 'announcements';
 
 // ── Academy tab ──────────────────────────────────────────────────────────────
 function AcademyTab() {
@@ -1641,6 +1641,253 @@ function SettingsTab() {
   );
 }
 
+// ── Announcements tab ─────────────────────────────────────────────────────────
+
+type AnnouncementSubTab = 'welcome' | 'new_post' | 'new_event' | 'custom';
+
+interface TemplateEditorProps {
+  templateId: string;
+  label: string;
+  variables: string[];
+}
+
+function TemplateEditor({ templateId, variables }: TemplateEditorProps) {
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setLoading(true);
+    api.notify.getTemplate(templateId)
+      .then(t => { setSubject(t.subject); setBody(t.body); })
+      .catch(() => setError('Failed to load template'))
+      .finally(() => setLoading(false));
+  }, [templateId]);
+
+  const handleSave = async () => {
+    setSaving(true); setError('');
+    try {
+      await api.notify.updateTemplate(templateId, { subject, body });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch { setError('Failed to save template'); }
+    finally { setSaving(false); }
+  };
+
+  if (loading) return (
+    <p style={{ color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', fontSize: 14 }}>
+      Loading template...
+    </p>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div>
+        <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)' }}>
+          Available Variables
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {variables.map(v => (
+            <code
+              key={v}
+              onClick={() => setBody(prev => prev + v)}
+              style={{ padding: '3px 10px', borderRadius: 100, background: 'rgba(233,30,140,0.12)', color: '#E91E8C', fontSize: 12, fontFamily: 'var(--font-mono, monospace)', border: '1px solid rgba(233,30,140,0.2)', cursor: 'pointer' }}
+            >
+              {v}
+            </code>
+          ))}
+        </div>
+        <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+          Click a variable to insert it into the body. These are replaced with real values when the email is sent.
+        </p>
+      </div>
+
+      <div>
+        <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+          Subject Line
+        </label>
+        <input className="input-base" type="text" value={subject} onChange={e => setSubject(e.target.value)} style={{ width: '100%', boxSizing: 'border-box' }} />
+      </div>
+
+      <div>
+        <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+          Email Body (HTML supported)
+        </label>
+        <textarea
+          className="input-base"
+          value={body}
+          onChange={e => setBody(e.target.value)}
+          rows={10}
+          style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'var(--font-mono, monospace)', fontSize: 13, lineHeight: 1.6 }}
+        />
+      </div>
+
+      <div>
+        <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)' }}>
+          Preview
+        </p>
+        <div style={{ border: '1px solid var(--color-hairline)', borderRadius: 12, overflow: 'hidden', background: '#0a0a0a' }}>
+          <div style={{ background: '#E91E8C', padding: '16px 24px' }}>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-body)' }}>Design & Animation Club, IIT Kanpur</p>
+          </div>
+          <div style={{ padding: 24 }} dangerouslySetInnerHTML={{ __html: body }} />
+        </div>
+      </div>
+
+      {error && <p style={{ color: '#ef4444', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>{error}</p>}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button className="btn-primary" onClick={handleSave} disabled={saving || !subject || !body}>
+          {saving ? 'Saving...' : 'Save Template'}
+        </button>
+        {saved && <span style={{ color: '#22c55e', fontSize: 13, fontFamily: 'var(--font-body)' }}>Template saved</span>}
+      </div>
+    </div>
+  );
+}
+
+function CustomAnnouncement() {
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const handleSend = async () => {
+    setSending(true); setResult(null);
+    try {
+      const res = await api.notify.sendAnnouncement({ subject, html: body });
+      setResult({ success: true, message: `Sent to ${res.sent} registered students` });
+      setConfirmOpen(false);
+    } catch {
+      setResult({ success: false, message: 'Failed to send announcement' });
+    } finally { setSending(false); }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ padding: '12px 16px', borderRadius: 8, background: 'rgba(233,30,140,0.08)', border: '1px solid rgba(233,30,140,0.2)' }}>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', lineHeight: 1.6 }}>
+          This sends a one-time custom email to all registered students. Use it for announcements not tied to a specific artwork or event.
+        </p>
+      </div>
+
+      <div>
+        <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+          Subject
+        </label>
+        <input className="input-base" type="text" placeholder="e.g. Recruitment open for DnA Club 2025" value={subject} onChange={e => setSubject(e.target.value)} style={{ width: '100%', boxSizing: 'border-box' }} />
+      </div>
+
+      <div>
+        <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+          Message (HTML supported)
+        </label>
+        <textarea
+          className="input-base"
+          value={body}
+          onChange={e => setBody(e.target.value)}
+          rows={8}
+          placeholder="<p>Write your announcement here...</p>"
+          style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'var(--font-mono, monospace)', fontSize: 13, lineHeight: 1.6 }}
+        />
+      </div>
+
+      {body && (
+        <div>
+          <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)' }}>
+            Preview
+          </p>
+          <div style={{ border: '1px solid var(--color-hairline)', borderRadius: 12, overflow: 'hidden', background: '#0a0a0a' }}>
+            <div style={{ background: '#E91E8C', padding: '16px 24px' }}>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-body)' }}>Design & Animation Club, IIT Kanpur</p>
+            </div>
+            <div style={{ padding: 24 }} dangerouslySetInnerHTML={{ __html: body }} />
+          </div>
+        </div>
+      )}
+
+      {result && (
+        <p style={{ color: result.success ? '#22c55e' : '#ef4444', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
+          {result.message}
+        </p>
+      )}
+
+      {!confirmOpen ? (
+        <button className="btn-primary" onClick={() => setConfirmOpen(true)} disabled={!subject || !body}>
+          Send to All Students
+        </button>
+      ) : (
+        <div style={{ padding: 16, borderRadius: 10, border: '1px solid rgba(233,30,140,0.3)', background: 'rgba(233,30,140,0.06)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--color-ink)', fontFamily: 'var(--font-body)', fontWeight: 600 }}>
+            Send this announcement to all registered students?
+          </p>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+            Subject: {subject}
+          </p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="btn-primary" onClick={handleSend} disabled={sending}>{sending ? 'Sending...' : 'Confirm Send'}</button>
+            <button className="btn-secondary" onClick={() => setConfirmOpen(false)} disabled={sending}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AnnouncementsTab() {
+  const [subTab, setSubTab] = useState<AnnouncementSubTab>('welcome');
+
+  const subTabs: { id: AnnouncementSubTab; label: string }[] = [
+    { id: 'welcome',   label: 'Welcome'   },
+    { id: 'new_post',  label: 'New Post'  },
+    { id: 'new_event', label: 'New Event' },
+    { id: 'custom',    label: 'Custom'    },
+  ];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div>
+        <h2 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.5px' }}>
+          Announcements
+        </h2>
+        <p style={{ margin: 0, fontSize: 14, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+          Manage email templates and send announcements to registered students.
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--color-hairline)' }}>
+        {subTabs.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setSubTab(t.id)}
+            style={{
+              padding: '8px 16px', background: 'none', border: 'none',
+              borderBottom: subTab === t.id ? '2px solid #E91E8C' : '2px solid transparent',
+              color: subTab === t.id ? '#E91E8C' : 'var(--color-ink-muted)',
+              fontSize: 13, fontWeight: subTab === t.id ? 600 : 400,
+              fontFamily: 'var(--font-body)', cursor: 'pointer',
+              marginBottom: -1, transition: 'all 0.15s ease',
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div>
+        {subTab === 'welcome'   && <TemplateEditor templateId="welcome"     label="Welcome Email"   variables={['{{name}}']} />}
+        {subTab === 'new_post'  && <TemplateEditor templateId="new_artwork" label="New Artwork Email" variables={['{{title}}', '{{artist}}', '{{domain}}']} />}
+        {subTab === 'new_event' && <TemplateEditor templateId="new_event"   label="New Event Email"  variables={['{{title}}', '{{date}}', '{{venue}}', '{{description}}']} />}
+        {subTab === 'custom'    && <CustomAnnouncement />}
+      </div>
+    </div>
+  );
+}
+
 // ── Main AdminPage ─────────────────────────────────────────────────────────────
 export function AdminPage() {
   const [authed, setAuthed] = useState(false);
@@ -1653,8 +1900,9 @@ export function AdminPage() {
     { id: 'gallery',  label: 'Gallery',  icon: Image },
     { id: 'team',     label: 'Team',     icon: Users },
     { id: 'events',   label: 'Events',   icon: CalendarDays },
-    { id: 'comments', label: 'Comments', icon: MessageSquare },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'comments',      label: 'Comments',      icon: MessageSquare },
+    { id: 'settings',      label: 'Settings',      icon: Settings },
+    { id: 'announcements', label: 'Announcements', icon: Mail },
   ];
 
   return (
@@ -1694,7 +1942,8 @@ export function AdminPage() {
           {tab === 'team'    && <motion.div key="team"    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><TeamTab /></motion.div>}
           {tab === 'events'   && <motion.div key="events"    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><EventsTab /></motion.div>}
           {tab === 'comments' && <motion.div key="comments"  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><CommentsTab /></motion.div>}
-          {tab === 'settings' && <motion.div key="settings"  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><SettingsTab /></motion.div>}
+          {tab === 'settings'      && <motion.div key="settings"      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><SettingsTab /></motion.div>}
+          {tab === 'announcements' && <motion.div key="announcements" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><AnnouncementsTab /></motion.div>}
         </AnimatePresence>
       </div>
     </div>
