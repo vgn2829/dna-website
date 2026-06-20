@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, ArrowRight } from 'lucide-react';
-import { useStudent } from '../context/StudentContext';
+import { useStudent, hasSeenWelcome, markWelcomeSeen } from '../context/StudentContext';
+import WelcomeOverlay from './WelcomeOverlay';
 
 const IITK_ROLL_REGEX = /^[0-9]{2}[a-zA-Z0-9]{4,6}$/;
 
@@ -14,6 +15,9 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
   const [success, setSuccess] = useState<string | null>(null);
   const [shake, setShake] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserRoll, setNewUserRoll] = useState('');
 
   const isValidName  = (n: string) => n.trim().length >= 2 && n.trim().length <= 100;
   const isValidEmail = (e: string) => e.endsWith('@iitk.ac.in') && e.includes('@');
@@ -31,9 +35,15 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
     setSubmitting(true);
     try {
       const session = await login(trimmed, name.trim(), email.trim());
+      setNewUserName(name.trim());
+      setNewUserRoll(session.rollNumber);
       setSuccess(session.uniqueId);
       onSuccess?.(session.uniqueId);
-      setTimeout(() => { setSuccess(null); setRollInput(''); setName(''); setEmail(''); setError(''); closeRollModal(); }, 1800);
+      if (!hasSeenWelcome(session.rollNumber)) {
+        setTimeout(() => { setSuccess(null); setShowWelcome(true); }, 1000);
+      } else {
+        setTimeout(() => { setSuccess(null); setRollInput(''); setName(''); setEmail(''); setError(''); closeRollModal(); }, 1800);
+      }
     } catch {
       setError('Could not connect — please try again');
       setShake(true);
@@ -45,10 +55,18 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
 
   const handleClose = () => { setRollInput(''); setName(''); setEmail(''); setError(''); setSuccess(null); closeRollModal(); };
 
+  const handleWelcomeDone = () => {
+    markWelcomeSeen(newUserRoll);
+    setShowWelcome(false);
+    setRollInput(''); setName(''); setEmail(''); setError('');
+    closeRollModal();
+  };
+
   return (
-    <AnimatePresence>
-      {isRollModalOpen && (
-        <>
+    <>
+      <AnimatePresence>
+        {isRollModalOpen && !showWelcome && (
+          <>
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -180,8 +198,12 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
               </motion.div>
             </motion.div>
           </div>
-        </>
+          </>
+        )}
+      </AnimatePresence>
+      {showWelcome && (
+        <WelcomeOverlay name={newUserName} onDone={handleWelcomeDone} />
       )}
-    </AnimatePresence>
+    </>
   );
 }

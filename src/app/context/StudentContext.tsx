@@ -29,8 +29,17 @@ interface StudentContextValue {
 }
 
 const EMPTY_PROGRESS: StudentProgress = { watchedVideos: [], completedQuizzes: [] };
-const SESSION_KEY  = 'iitk_dna_student_session';
-const PROGRESS_KEY = 'iitk_dna_student_progress';
+const SESSION_KEY       = 'iitk_dna_student_session';
+const PROGRESS_KEY      = 'iitk_dna_student_progress';
+const WELCOME_SHOWN_KEY = 'iitk_dna_welcome_shown';
+
+export function hasSeenWelcome(rollNumber: string): boolean {
+  return localStorage.getItem(`${WELCOME_SHOWN_KEY}_${rollNumber}`) === 'true';
+}
+
+export function markWelcomeSeen(rollNumber: string): void {
+  localStorage.setItem(`${WELCOME_SHOWN_KEY}_${rollNumber}`, 'true');
+}
 
 function loadSession(): StudentSession | null {
   try { const r = localStorage.getItem(SESSION_KEY); return r ? JSON.parse(r) : null; } catch { return null; }
