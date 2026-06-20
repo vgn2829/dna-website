@@ -80,6 +80,7 @@ async function sendInBatches(emails: string[], subject: string, html: string): P
   for (const chunk of chunks) {
     await resend.emails.send({
       from: 'DnA Club IITK <onboarding@resend.dev>',
+      replyTo: 'designandanimationclub.iitk@gmail.com',
       bcc: chunk,
       to: 'designandanimationclub.iitk@gmail.com',
       subject,
@@ -100,6 +101,7 @@ export async function sendWelcomeEmail(name: string, email: string): Promise<voi
   try {
     await resend.emails.send({
       from: 'DnA Club IITK <onboarding@resend.dev>',
+      replyTo: 'designandanimationclub.iitk@gmail.com',
       to: email,
       subject: resolve(subject, vars),
       html: getBaseTemplate(resolve(body, vars)),
