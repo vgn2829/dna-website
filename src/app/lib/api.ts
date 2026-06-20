@@ -110,10 +110,12 @@ export const api = {
       request<void>('PATCH', `/team/${id}/order`, { body: { display_order: displayOrder }, admin: true }),
   },
   students: {
-    createSession:     (rollNumber: string) =>
-      request<{ session: { rollNumber: string; uniqueId: string; registeredAt: string }; progress: { watchedVideos: string[]; completedQuizzes: string[] } }>('POST', '/students/sessions', { body: { rollNumber } }),
-    markVideoWatched:  (roll: string, videoId: string) => request<void>('POST', `/students/${roll}/progress/videos/${videoId}`, { roll }),
-    unmarkVideoWatched:(roll: string, videoId: string) => request<void>('DELETE', `/students/${roll}/progress/videos/${videoId}`, { roll }),
-    completeQuiz:      (roll: string, domainId: string) => request<void>('POST', `/students/${roll}/progress/quizzes/${domainId}`, { roll }),
+    createSession: (rollNumber: string, name: string, email: string) =>
+      request<{ session: { rollNumber: string; uniqueId: string; registeredAt: string; name: string; email: string }; progress: { watchedVideos: string[]; completedQuizzes: string[] } }>('POST', '/students/sessions', { body: { rollNumber, name, email } }),
+    getStudentProfile: (roll: string) =>
+      request<{ rollNumber: string; name: string }>('GET', `/students/${roll}/profile`),
+    markVideoWatched:   (roll: string, videoId: string) => request<void>('POST', `/students/${roll}/progress/videos/${videoId}`, { roll }),
+    unmarkVideoWatched: (roll: string, videoId: string) => request<void>('DELETE', `/students/${roll}/progress/videos/${videoId}`, { roll }),
+    completeQuiz:       (roll: string, domainId: string) => request<void>('POST', `/students/${roll}/progress/quizzes/${domainId}`, { roll }),
   },
 };

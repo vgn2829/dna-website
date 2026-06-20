@@ -134,7 +134,6 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
   const { studentSession, openRollModal } = useStudent();
   const artwork = artworks.find(a => a.id === artworkId);
   const [burst, setBurst] = useState(false);
-  const [name, setName] = useState('');
   const [text, setText] = useState('');
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -162,9 +161,10 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
 
   const handleComment = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !text.trim()) return;
-    addComment(artwork.id, name.trim(), text.trim());
-    setName(''); setText('');
+    if (!text.trim()) return;
+    const sender = studentSession?.name || studentSession?.rollNumber || 'Anonymous';
+    addComment(artwork.id, sender, text.trim());
+    setText('');
   };
 
   const domainColor = DOMAIN_COLORS[artwork.domain] ?? '#007AFF';
@@ -232,7 +232,9 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
         {/* Comment form — sticky at bottom */}
         {studentSession ? (
           <form onSubmit={handleComment} style={{ position: 'sticky', bottom: 0, padding: '12px 16px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))', borderTop: '1px solid var(--color-hairline-soft)', background: 'var(--color-surface-1)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" className="input-base" style={{ borderRadius: 'var(--radius-md)' }} />
+            <p style={{ fontSize: 12, color: 'var(--color-ink-muted)', margin: 0, fontFamily: 'var(--font-body)' }}>
+              Commenting as <strong style={{ color: 'var(--color-ink)' }}>{studentSession.name || studentSession.rollNumber}</strong>
+            </p>
             <div style={{ display: 'flex', gap: 8 }}>
               <input type="text" value={text} onChange={e => setText(e.target.value)} placeholder="Add a comment…" className="input-base" style={{ borderRadius: 'var(--radius-md)', flex: 1 }} />
               <button type="submit" className="btn-primary shrink-0" style={{ width: 38, height: 38, minHeight: 38, padding: 0, borderRadius: 'var(--radius-md)' }}><Send size={14} /></button>
@@ -314,7 +316,9 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
 
           {studentSession ? (
             <form onSubmit={handleComment} className="p-4 space-y-2" style={{ borderTop: '1px solid var(--color-hairline-soft)' }}>
-              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" className="input-base" style={{ borderRadius: 'var(--radius-md)' }} />
+              <p style={{ fontSize: 12, color: 'var(--color-ink-muted)', margin: 0, fontFamily: 'var(--font-body)' }}>
+                Commenting as <strong style={{ color: 'var(--color-ink)' }}>{studentSession.name || studentSession.rollNumber}</strong>
+              </p>
               <div className="flex gap-2">
                 <input type="text" value={text} onChange={e => setText(e.target.value)} placeholder="Add a comment…" className="input-base" style={{ borderRadius: 'var(--radius-md)' }} />
                 <button type="submit" className="btn-primary shrink-0" style={{ width: 38, height: 38, minHeight: 38, padding: 0, borderRadius: 'var(--radius-md)' }}><Send size={14} /></button>

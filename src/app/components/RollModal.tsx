@@ -8,27 +8,32 @@ const IITK_ROLL_REGEX = /^[0-9]{2}[a-zA-Z0-9]{4,6}$/;
 export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => void }) {
   const { isRollModalOpen, closeRollModal, login } = useStudent();
   const [rollInput, setRollInput] = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState<string | null>(null);
   const [shake, setShake] = useState(false);
-
   const [submitting, setSubmitting] = useState(false);
+
+  const isValidName  = (n: string) => n.trim().length >= 2 && n.trim().length <= 100;
+  const isValidEmail = (e: string) => e.endsWith('@iitk.ac.in') && e.includes('@');
+  const isValidRoll  = IITK_ROLL_REGEX.test(rollInput.trim());
 
   const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     const trimmed = rollInput.trim();
-    if (!IITK_ROLL_REGEX.test(trimmed)) {
-      setError('Enter a valid IITK roll number (e.g. 230182)');
+    if (!isValidRoll || !isValidName(name) || !isValidEmail(email)) {
+      setError('Please fill all fields correctly');
       setShake(true);
       setTimeout(() => setShake(false), 450);
       return;
     }
     setSubmitting(true);
     try {
-      const session = await login(trimmed);
+      const session = await login(trimmed, name.trim(), email.trim());
       setSuccess(session.uniqueId);
       onSuccess?.(session.uniqueId);
-      setTimeout(() => { setSuccess(null); setRollInput(''); setError(''); closeRollModal(); }, 1800);
+      setTimeout(() => { setSuccess(null); setRollInput(''); setName(''); setEmail(''); setError(''); closeRollModal(); }, 1800);
     } catch {
       setError('Could not connect — please try again');
       setShake(true);
@@ -38,7 +43,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
     }
   };
 
-  const handleClose = () => { setRollInput(''); setError(''); setSuccess(null); closeRollModal(); };
+  const handleClose = () => { setRollInput(''); setName(''); setEmail(''); setError(''); setSuccess(null); closeRollModal(); };
 
   return (
     <AnimatePresence>
@@ -119,21 +124,54 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                           className="input-base font-mono text-xl tracking-widest"
                           autoFocus
                         />
-                        {error && (
-                          <motion.p
-                            initial={{ opacity: 0, y: -4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="type-micro mt-2"
-                            style={{ color: '#e5484d' }}
-                          >
-                            {error}
-                          </motion.p>
+                      </div>
+                      <div>
+                        <label className="type-micro block mb-2">Full Name</label>
+                        <input
+                          type="text"
+                          value={name}
+                          onChange={e => { setName(e.target.value); setError(''); }}
+                          placeholder="e.g. Rahul Kumar"
+                          maxLength={100}
+                          className="input-base"
+                          style={{ width: '100%', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                      <div>
+                        <label className="type-micro block mb-2">IITK Email</label>
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={e => { setEmail(e.target.value.toLowerCase()); setError(''); }}
+                          placeholder="rollno@iitk.ac.in"
+                          className="input-base"
+                          style={{ width: '100%', boxSizing: 'border-box' }}
+                        />
+                        {email && !isValidEmail(email) && (
+                          <p className="type-micro mt-1" style={{ color: '#e5484d' }}>
+                            Must be an @iitk.ac.in email address
+                          </p>
                         )}
                       </div>
+                      {error && (
+                        <motion.p
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="type-micro"
+                          style={{ color: '#e5484d' }}
+                        >
+                          {error}
+                        </motion.p>
+                      )}
                       <p className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>
                         Your roll number links to a unique tracker ID. Progress saves locally on this device — no password needed.
                       </p>
-                      <button type="submit" disabled={submitting} className="btn-primary w-full justify-center gap-2" style={{ opacity: submitting ? 0.6 : 1 }}>
+                      <button
+                        type="submit"
+                        disabled={submitting || !isValidRoll || !isValidName(name) || !isValidEmail(email)}
+                        className="btn-primary w-full justify-center gap-2"
+                        style={{ opacity: (submitting || !isValidRoll || !isValidName(name) || !isValidEmail(email)) ? 0.6 : 1 }}
+                      >
                         {submitting ? 'Linking…' : <><span>Generate My Tracker ID</span><ArrowRight size={13} /></>}
                       </button>
                     </motion.form>
