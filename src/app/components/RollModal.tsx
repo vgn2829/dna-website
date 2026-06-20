@@ -161,7 +161,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                           type="email"
                           value={email}
                           onChange={e => { setEmail(e.target.value.toLowerCase()); setError(''); }}
-                          placeholder="rollno@iitk.ac.in"
+                          placeholder="email@iitk.ac.in"
                           className="input-base"
                           style={{ width: '100%', boxSizing: 'border-box' }}
                         />
@@ -182,7 +182,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                         </motion.p>
                       )}
                       <p className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>
-                        Your roll number links to a unique tracker ID. Progress saves locally on this device — no password needed.
+                        Your IITK email is used to identify you. Progress and activity saves to your account — no password needed.
                       </p>
                       <button
                         type="submit"
