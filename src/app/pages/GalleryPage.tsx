@@ -336,11 +336,15 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
   );
 }
 
+function thumbUrl(url: string): string {
+  return `${url}?width=300&quality=75`;
+}
+
 function MediaThumbnail({ art }: { art: Artwork }) {
   if (art.coverUrl && (art.mediaType === 'video' || art.mediaType === 'pdf')) {
     return (
       <img
-        src={art.coverUrl}
+        src={thumbUrl(art.coverUrl)}
         alt={art.title}
         className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         loading="lazy"
@@ -349,7 +353,7 @@ function MediaThumbnail({ art }: { art: Artwork }) {
   }
   if (art.mediaType === 'image') {
     return (
-      <img src={art.mediaUrl} alt={art.title}
+      <img src={thumbUrl(art.mediaUrl)} alt={art.title}
         className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
     );
   }

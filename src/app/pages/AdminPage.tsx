@@ -4,6 +4,16 @@ import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff,
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
 import { api, setAdminToken, clearAdminToken } from '../lib/api';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
+import imageCompression from 'browser-image-compression';
+
+async function compressImage(file: File): Promise<File> {
+  if (!file.type.startsWith('image/')) return file;
+  return imageCompression(file, {
+    maxSizeMB: 0.5,
+    maxWidthOrHeight: 1920,
+    useWebWorker: true,
+  });
+}
 
 async function captureVideoFirstFrame(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -476,12 +486,12 @@ function GalleryTab() {
     setUploading(true); setUploadError('');
     try {
       const fd = new FormData();
-      fd.append('file', file);
+      fd.append('file', await compressImage(file));
       fd.append('title', aTitle);
       fd.append('artist', aArtist);
       const domainVal = aDomain === '__other__' ? aCustomDomain : (aDomain || domainTitles[0] || 'General');
       fd.append('domain', domainVal);
-      if (coverFile) fd.append('cover', coverFile);
+      if (coverFile) fd.append('cover', await compressImage(coverFile));
       await uploadArtwork(fd);
       setFile(null); setATitle(''); setAArtist(''); setADomain(''); setACustomDomain('');
       setCoverFile(null); if (coverPreview) URL.revokeObjectURL(coverPreview); setCoverPreview(null);
@@ -510,8 +520,8 @@ function GalleryTab() {
       fd.append('artist', eaArtist);
       fd.append('domain', eaDomain === '__other__' ? eaCustomDomain : eaDomain);
       fd.append('featured', String(eaFeatured));
-      if (eaFile) fd.append('file', eaFile);
-      if (eaCoverFile) fd.append('cover', eaCoverFile);
+      if (eaFile) fd.append('file', await compressImage(eaFile));
+      if (eaCoverFile) fd.append('cover', await compressImage(eaCoverFile));
       await updateArtwork(editArtwork.id, fd);
       if (eaCoverPreview) { URL.revokeObjectURL(eaCoverPreview); setEaCoverPreview(null); }
       setEditArtwork(null);
@@ -617,12 +627,12 @@ function GalleryTab() {
       updateBulkItem(item.id, { status: 'uploading' });
       try {
         const fd = new FormData();
-        fd.append('file', item.file);
+        fd.append('file', await compressImage(item.file));
         fd.append('title', item.title.trim() || item.file.name);
         fd.append('artist', item.artist.trim());
         fd.append('domain', item.domain === '__other__' ? (item.customDomain || 'General') : (item.domain || domainTitles[0] || 'General'));
         fd.append('featured', String(item.featured));
-        if (item.coverFile) fd.append('cover', item.coverFile);
+        if (item.coverFile) fd.append('cover', await compressImage(item.coverFile));
         await uploadArtwork(fd);
         updateBulkItem(item.id, { status: 'done' });
       } catch (err) {
