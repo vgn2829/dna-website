@@ -115,6 +115,19 @@ export async function initSchema(): Promise<void> {
       unique_id     TEXT NOT NULL,
       registered_at TEXT NOT NULL
     );
+  `);
+
+  await pool.query(`
+    ALTER TABLE student_sessions
+    ADD COLUMN IF NOT EXISTS name TEXT DEFAULT NULL
+  `);
+
+  await pool.query(`
+    ALTER TABLE student_sessions
+    ADD COLUMN IF NOT EXISTS email TEXT DEFAULT NULL
+  `);
+
+  await pool.query(`
 
     CREATE TABLE IF NOT EXISTS student_watched_videos (
       roll_number TEXT NOT NULL,

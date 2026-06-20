@@ -28,37 +28,59 @@ const sessionLimiter = rateLimit({
 });
 
 const sessionSchema = z.object({
-  rollNumber: z.string().regex(/^[0-9]{2}[a-zA-Z0-9]{4,6}$/i, 'Invalid IITK roll number').transform(s => s.trim().toUpperCase()),
+  rollNumber: z.string().regex(/^[0-9]{2}[a-zA-Z0-9]{4,6}$/i, 'Invalid roll number format').transform(s => s.trim().toUpperCase()),
+  name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name too long').trim(),
+  email: z.string().email('Invalid email address').refine(e => e.toLowerCase().endsWith('@iitk.ac.in'), 'Only @iitk.ac.in email addresses are allowed').transform(e => e.toLowerCase()),
 });
 
 studentsRouter.post('/sessions', sessionLimiter, async (req, res) => {
   const parsed = sessionSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid roll number' }); return; }
 
-  const roll = parsed.data.rollNumber;
-  let rows = await query<{ roll_number: string; unique_id: string; registered_at: string }>(
-    'SELECT * FROM student_sessions WHERE roll_number=$1', [roll]
+  const { rollNumber: roll, name, email } = parsed.data;
+
+  let existingRows = await query<{ roll_number: string; unique_id: string; registered_at: string }>(
+    'SELECT roll_number, unique_id, registered_at FROM student_sessions WHERE roll_number=$1', [roll]
   );
 
-  if (rows.length === 0) {
+  let uniqueId: string;
+  let registeredAt: string;
+
+  if (existingRows.length === 0) {
     const suffix = uuidv4().slice(0, 4).toUpperCase();
-    const uniqueId = `IITK-DnA-${roll}-${suffix}`;
-    const registeredAt = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    uniqueId = `IITK-DnA-${roll}-${suffix}`;
+    registeredAt = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
     await query(
-      'INSERT INTO student_sessions(roll_number,unique_id,registered_at) VALUES($1,$2,$3)',
-      [roll, uniqueId, registeredAt]
+      `INSERT INTO student_sessions(roll_number,unique_id,registered_at,name,email)
+       VALUES($1,$2,$3,$4,$5)
+       ON CONFLICT (roll_number) DO UPDATE SET name=EXCLUDED.name, email=EXCLUDED.email`,
+      [roll, uniqueId, registeredAt, name, email]
     );
-    rows = [{ roll_number: roll, unique_id: uniqueId, registered_at: registeredAt }];
+  } else {
+    uniqueId = existingRows[0].unique_id;
+    registeredAt = existingRows[0].registered_at;
+    await query(
+      'UPDATE student_sessions SET name=$1, email=$2 WHERE roll_number=$3',
+      [name, email, roll]
+    );
   }
 
-  const session = rows[0];
   const watched = await query<{ video_id: string }>('SELECT video_id FROM student_watched_videos WHERE roll_number=$1', [roll]);
   const quizzes = await query<{ domain_id: string }>('SELECT domain_id FROM student_completed_quizzes WHERE roll_number=$1', [roll]);
 
   res.json({
-    session: { rollNumber: session.roll_number, uniqueId: session.unique_id, registeredAt: session.registered_at },
+    session: { rollNumber: roll, uniqueId, registeredAt, name, email },
     progress: { watchedVideos: watched.map(r => r.video_id), completedQuizzes: quizzes.map(r => r.domain_id) },
   });
+});
+
+studentsRouter.get('/:roll/profile', progressReadLimiter, async (req, res) => {
+  const roll = req.params.roll.trim().toUpperCase();
+  const rows = await query<{ roll_number: string; name: string | null }>(
+    'SELECT roll_number, name FROM student_sessions WHERE roll_number=$1', [roll]
+  );
+  if (rows.length === 0) { res.status(404).json({ error: 'Student not found' }); return; }
+  res.json({ rollNumber: rows[0].roll_number, name: rows[0].name });
 });
 
 studentsRouter.get('/:roll/progress', progressReadLimiter, async (req, res) => {

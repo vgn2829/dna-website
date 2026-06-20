@@ -9,6 +9,7 @@ import { artworksRouter } from './routes/artworks';
 import { domainsRouter } from './routes/domains';
 import { studentsRouter } from './routes/students';
 import { teamRouter }    from './routes/team';
+import notifyRouter     from './routes/notify';
 
 export function createApp() {
   const app = express();
@@ -62,6 +63,7 @@ export function createApp() {
   app.use('/api/domains',  domainsRouter);
   app.use('/api/students', studentsRouter);
   app.use('/api/team',     teamRouter);
+  app.use('/api/notify',   notifyRouter);
 
   app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 
