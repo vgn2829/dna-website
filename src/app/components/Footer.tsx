@@ -1,4 +1,4 @@
-import { Instagram, Linkedin, Mail, Youtube } from 'lucide-react';
+import { Instagram, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router';
 
 const COLS = [
@@ -24,9 +24,7 @@ const COLS = [
 
 const SOCIAL = [
   { icon: Instagram, href: 'https://www.instagram.com/dnaiitk/', label: 'Instagram' },
-  { icon: Linkedin,  href: '#', label: 'LinkedIn' },
-  { icon: Youtube,   href: '#', label: 'YouTube' },
-  { icon: Mail,      href: '#', label: 'Email' },
+  { icon: Mail,      href: 'mailto:designandanimationclub.iitk@gmail.com', label: 'Email' },
 ];
 
 export function Footer() {
