@@ -34,6 +34,11 @@ export default function BoardPage() {
   const [addingMember, setAddingMember] = useState(false);
   const [memberError, setMemberError] = useState('');
 
+  const [showShare, setShowShare] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [updatingVisibility, setUpdatingVisibility] = useState(false);
+  const [updatingEditMode, setUpdatingEditMode] = useState(false);
+
   const isOwner = board?.owner_roll === studentSession?.rollNumber;
   const isMember = board
     ? (isOwner || board.members.some(m => m.roll_number === studentSession?.rollNumber))
@@ -95,6 +100,53 @@ export default function BoardPage() {
       } : prev);
     } catch {
       // silent fail
+    }
+  };
+
+  const shareUrl = `${window.location.origin}/moodboards/${board?.id}`;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = shareUrl;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleVisibilityToggle = async () => {
+    if (!board || !studentSession?.rollNumber) return;
+    setUpdatingVisibility(true);
+    const newVisibility = board.visibility === 'private' ? 'shared' : 'private';
+    try {
+      const updated = await api.boards.update(board.id, studentSession.rollNumber, { visibility: newVisibility });
+      setBoard(prev => prev ? { ...prev, visibility: updated.visibility } : prev);
+    } catch {
+      console.error('Failed to update visibility');
+    } finally {
+      setUpdatingVisibility(false);
+    }
+  };
+
+  const handleEditModeToggle = async () => {
+    if (!board || !studentSession?.rollNumber) return;
+    setUpdatingEditMode(true);
+    const newMode = board.edit_mode === 'members_only' ? 'anyone' : 'members_only';
+    try {
+      const updated = await api.boards.update(board.id, studentSession.rollNumber, { edit_mode: newMode });
+      setBoard(prev => prev ? { ...prev, edit_mode: updated.edit_mode } : prev);
+    } catch {
+      console.error('Failed to update edit mode');
+    } finally {
+      setUpdatingEditMode(false);
     }
   };
 
@@ -225,6 +277,24 @@ export default function BoardPage() {
               </div>
             )}
 
+            <button
+              onClick={() => setShowShare(true)}
+              style={{
+                padding: '5px 12px',
+                background: '#E91E8C',
+                border: 'none',
+                borderRadius: 100,
+                color: '#fff',
+                fontSize: 12,
+                fontWeight: 600,
+                fontFamily: 'var(--font-body)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Share
+            </button>
+
             {isOwner && (
               <button
                 onClick={() => setShowMembers(true)}
@@ -262,6 +332,242 @@ export default function BoardPage() {
           />
         </div>
       </div>
+
+      {/* Share modal */}
+      <AnimatePresence>
+        {showShare && board && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed', inset: 0,
+              zIndex: 9999,
+              background: 'rgba(0,0,0,0.7)',
+              backdropFilter: 'blur(8px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 24,
+            }}
+            onClick={() => setShowShare(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 24, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16 }}
+              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: '100%', maxWidth: 420,
+                background: 'var(--color-surface-1)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 20,
+                padding: '28px 24px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 20,
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{
+                  margin: 0, fontSize: 18, fontWeight: 700,
+                  color: 'var(--color-ink)',
+                  fontFamily: 'var(--font-display)',
+                  letterSpacing: '-0.3px',
+                }}>
+                  Share Board
+                </h3>
+                <button
+                  onClick={() => setShowShare(false)}
+                  style={{
+                    width: 32, height: 32,
+                    borderRadius: '50%',
+                    border: '1px solid var(--color-border)',
+                    background: 'none',
+                    color: 'var(--color-ink-muted)',
+                    fontSize: 18, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Visibility toggle */}
+              {isOwner && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <p style={{
+                    margin: 0, fontSize: 11, fontWeight: 600,
+                    color: 'var(--color-ink-muted)',
+                    letterSpacing: '0.06em', textTransform: 'uppercase',
+                    fontFamily: 'var(--font-body)',
+                  }}>
+                    Visibility
+                  </p>
+                  <div style={{
+                    display: 'flex', gap: 0,
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 10, overflow: 'hidden',
+                  }}>
+                    {([
+                      { value: 'private', label: 'Private' },
+                      { value: 'shared', label: 'Shared' },
+                    ] as const).map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => { if (board.visibility !== opt.value) handleVisibilityToggle(); }}
+                        disabled={updatingVisibility}
+                        style={{
+                          flex: 1, padding: '10px 0',
+                          background: board.visibility === opt.value ? '#E91E8C' : 'none',
+                          border: 'none',
+                          color: board.visibility === opt.value ? '#fff' : 'var(--color-ink-muted)',
+                          fontSize: 13,
+                          fontWeight: board.visibility === opt.value ? 600 : 400,
+                          fontFamily: 'var(--font-body)',
+                          cursor: updatingVisibility ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p style={{
+                    margin: 0, fontSize: 11,
+                    color: 'var(--color-ink-muted)',
+                    fontFamily: 'var(--font-body)',
+                    lineHeight: 1.5,
+                  }}>
+                    {board.visibility === 'private'
+                      ? 'Only you and invited collaborators can access this board.'
+                      : 'Anyone with the link can view this board.'
+                    }
+                  </p>
+                </div>
+              )}
+
+              <div style={{ height: 1, background: 'var(--color-border)' }} />
+
+              {/* Edit mode toggle */}
+              {isOwner && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <p style={{
+                    margin: 0, fontSize: 11, fontWeight: 600,
+                    color: 'var(--color-ink-muted)',
+                    letterSpacing: '0.06em', textTransform: 'uppercase',
+                    fontFamily: 'var(--font-body)',
+                  }}>
+                    Who can edit?
+                  </p>
+                  <div style={{
+                    display: 'flex', gap: 0,
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 10, overflow: 'hidden',
+                  }}>
+                    {([
+                      { value: 'members_only', label: 'Invited only' },
+                      { value: 'anyone', label: 'Anyone with link' },
+                    ] as const).map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => { if (board.edit_mode !== opt.value) handleEditModeToggle(); }}
+                        disabled={updatingEditMode}
+                        style={{
+                          flex: 1, padding: '10px 0',
+                          background: board.edit_mode === opt.value ? '#E91E8C' : 'none',
+                          border: 'none',
+                          color: board.edit_mode === opt.value ? '#fff' : 'var(--color-ink-muted)',
+                          fontSize: 12,
+                          fontWeight: board.edit_mode === opt.value ? 600 : 400,
+                          fontFamily: 'var(--font-body)',
+                          cursor: updatingEditMode ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p style={{
+                    margin: 0, fontSize: 11,
+                    color: 'var(--color-ink-muted)',
+                    fontFamily: 'var(--font-body)',
+                    lineHeight: 1.5,
+                  }}>
+                    {board.edit_mode === 'members_only'
+                      ? 'Only invited collaborators can edit the canvas.'
+                      : 'Anyone with the link can edit the canvas.'
+                    }
+                  </p>
+                </div>
+              )}
+
+              <div style={{ height: 1, background: 'var(--color-border)' }} />
+
+              {/* Copy link */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <p style={{
+                  margin: 0, fontSize: 11, fontWeight: 600,
+                  color: 'var(--color-ink-muted)',
+                  letterSpacing: '0.06em', textTransform: 'uppercase',
+                  fontFamily: 'var(--font-body)',
+                }}>
+                  Board Link
+                </p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{
+                    flex: 1, padding: '10px 12px',
+                    background: 'var(--color-canvas)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    color: 'var(--color-ink-muted)',
+                    fontFamily: 'var(--font-mono, monospace)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {shareUrl}
+                  </div>
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleCopy}
+                    style={{
+                      padding: '10px 16px',
+                      background: copied ? '#22c55e' : '#E91E8C',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      fontFamily: 'var(--font-body)',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      transition: 'background 0.2s ease',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {copied ? 'Copied!' : 'Copy Link'}
+                  </motion.button>
+                </div>
+                {board.visibility === 'private' && (
+                  <p style={{
+                    margin: 0, fontSize: 11,
+                    color: '#E91E8C',
+                    fontFamily: 'var(--font-body)',
+                  }}>
+                    Board is private — only invited members can open this link.
+                    Set to Shared to let anyone view it.
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Collaborators panel */}
       <AnimatePresence>

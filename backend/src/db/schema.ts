@@ -371,6 +371,14 @@ export async function initSchema(): Promise<void> {
   console.log('Backfilled room_id for existing boards');
 
   await pool.query(`
+    ALTER TABLE boards
+    ADD COLUMN IF NOT EXISTS edit_mode
+    TEXT NOT NULL DEFAULT 'members_only'
+  `);
+
+  console.log('boards.edit_mode migration done');
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS board_members (
       board_id    TEXT NOT NULL REFERENCES boards(id)
                   ON DELETE CASCADE,

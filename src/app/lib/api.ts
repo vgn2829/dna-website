@@ -69,6 +69,7 @@ export interface Board {
   description: string | null;
   visibility: 'private' | 'shared';
   room_id: string | null;
+  edit_mode: 'members_only' | 'anyone';
   item_count: number;
   member_count: number;
   created_at: string;
@@ -226,7 +227,7 @@ export const api = {
       request<Board[]>('GET', '/boards/shared'),
     create: (roll: string, data: { name: string; description?: string; visibility?: 'private' | 'shared' }) =>
       request<Board>('POST', '/boards', { body: data, roll }),
-    update: (id: string, roll: string, data: { name?: string; description?: string; visibility?: 'private' | 'shared' }) =>
+    update: (id: string, roll: string, data: { name?: string; description?: string; visibility?: 'private' | 'shared'; edit_mode?: 'members_only' | 'anyone' }) =>
       request<Board>('PUT', `/boards/${id}`, { body: data, roll }),
     getBoard: (id: string, roll?: string) =>
       request<BoardDetail>('GET', `/boards/${id}`, { roll }),

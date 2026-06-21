@@ -212,6 +212,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       name: z.string().min(1).max(100).optional(),
       description: z.string().max(300).optional(),
       visibility: z.enum(['private', 'shared']).optional(),
+      edit_mode: z.enum(['members_only', 'anyone']).optional(),
     });
 
     const parsed = schema.parse(req.body);
@@ -222,6 +223,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     if (parsed.name !== undefined) { fields.push(`name = $${i++}`); values.push(parsed.name); }
     if (parsed.description !== undefined) { fields.push(`description = $${i++}`); values.push(parsed.description); }
     if (parsed.visibility !== undefined) { fields.push(`visibility = $${i++}`); values.push(parsed.visibility); }
+    if (parsed.edit_mode !== undefined) { fields.push(`edit_mode = $${i++}`); values.push(parsed.edit_mode); }
 
     if (fields.length === 0) {
       return res.status(400).json({ error: 'Nothing to update' });
