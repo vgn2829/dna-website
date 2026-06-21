@@ -6,6 +6,18 @@ import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
 
+function verifyPublicMeetToken(token: string): boolean {
+  try {
+    const payload = JSON.parse(Buffer.from(token, 'base64').toString('utf8')) as {
+      type: string;
+      exp: number;
+    };
+    return payload.type === 'public_meet' && payload.exp > Date.now();
+  } catch {
+    return false;
+  }
+}
+
 const sessionSchema = z.object({
   title: z.string().min(1).max(200),
   host: z.string().min(1).max(100),
@@ -119,6 +131,59 @@ router.get('/', requireAdmin, async (req, res) => {
     `);
     res.json(result.rows);
   } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/public', async (req, res) => {
+  try {
+    const { token, ...body } = req.body as { token?: string } & Record<string, unknown>;
+    if (!token || !verifyPublicMeetToken(token)) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    const parsed = sessionSchema.parse(body);
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    const result = await pool.query(`
+      INSERT INTO live_sessions
+        (id, title, host, meet_link, scheduled_at,
+         status, audience_group_id, description, created_at)
+      VALUES ($1,$2,$3,$4,$5,'upcoming',$6,$7,$8)
+      RETURNING *
+    `, [
+      id, parsed.title, parsed.host, parsed.meet_link,
+      parsed.scheduled_at,
+      parsed.audience_group_id ?? null,
+      parsed.description ?? null,
+      now,
+    ]);
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: err.errors });
+    }
+    console.error('Public create session error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.delete('/public/:id', async (req, res) => {
+  try {
+    const { token } = req.body as { token?: string };
+    if (!token || !verifyPublicMeetToken(token)) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const result = await pool.query(
+      `DELETE FROM live_sessions WHERE id = $1 AND created_at >= $2 RETURNING id`,
+      [req.params.id, cutoff]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found or too old to delete' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Public delete session error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

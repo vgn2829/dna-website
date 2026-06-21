@@ -402,4 +402,22 @@ export async function initSchema(): Promise<void> {
       created_at    TEXT NOT NULL
     )
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key         TEXT PRIMARY KEY,
+      value       TEXT NOT NULL,
+      updated_at  TEXT NOT NULL
+    )
+  `);
+
+  const settingsCount = await pool.query('SELECT COUNT(*) FROM app_settings');
+  if (parseInt((settingsCount.rows[0] as { count: string }).count) === 0) {
+    const now = new Date().toISOString();
+    await pool.query(`
+      INSERT INTO app_settings (key, value, updated_at)
+      VALUES ('public_meet_enabled', 'false', $1), ('public_meet_passcode', 'DNA2025', $1)
+    `, [now]);
+    console.log('App settings seeded');
+  }
 }
