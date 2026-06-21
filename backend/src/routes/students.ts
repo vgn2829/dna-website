@@ -67,6 +67,17 @@ studentsRouter.post('/sessions', sessionLimiter, async (req, res) => {
     );
   }
 
+  const groupCheck = await query<{ group_id: string }>(
+    'SELECT group_id FROM audience_group_members WHERE roll_number = $1',
+    [roll]
+  );
+  if (groupCheck.length > 0) {
+    console.log(
+      `Student ${roll} linked to groups:`,
+      groupCheck.map((r) => r.group_id).join(', ')
+    );
+  }
+
   const watched = await query<{ video_id: string }>('SELECT video_id FROM student_watched_videos WHERE roll_number=$1', [roll]);
   const quizzes = await query<{ domain_id: string }>('SELECT domain_id FROM student_completed_quizzes WHERE roll_number=$1', [roll]);
 
