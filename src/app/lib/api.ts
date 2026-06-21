@@ -1,5 +1,26 @@
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '') + '/api';
 
+export interface LiveSession {
+  id: string;
+  title: string;
+  host: string;
+  meet_link: string | null;
+  scheduled_at: string;
+  status: 'upcoming' | 'live' | 'ended';
+  audience_group_id: string | null;
+  audience_name: string | null;
+  description: string | null;
+  created_at: string;
+  canAccess: boolean;
+}
+
+export interface AudienceGroup {
+  id: string;
+  name: string;
+  description: string | null;
+  member_count: number;
+}
+
 export interface EmailTemplate {
   id: string;
   name: string;
@@ -139,5 +160,33 @@ export const api = {
     markVideoWatched:   (roll: string, videoId: string) => request<void>('POST', `/students/${roll}/progress/videos/${videoId}`, { roll }),
     unmarkVideoWatched: (roll: string, videoId: string) => request<void>('DELETE', `/students/${roll}/progress/videos/${videoId}`, { roll }),
     completeQuiz:       (roll: string, domainId: string) => request<void>('POST', `/students/${roll}/progress/quizzes/${domainId}`, { roll }),
+  },
+  liveSessions: {
+    getActive: (roll?: string) =>
+      request<LiveSession[]>('GET', '/live-sessions/active', { roll }),
+    getAll: () =>
+      request<LiveSession[]>('GET', '/live-sessions', { admin: true }),
+    getGroups: () =>
+      request<AudienceGroup[]>('GET', '/live-sessions/groups', { admin: true }),
+    create: (data: {
+      title: string;
+      host: string;
+      meet_link: string;
+      scheduled_at: string;
+      audience_group_id: string | null;
+      description?: string;
+    }) => request<LiveSession>('POST', '/live-sessions', { body: data, admin: true }),
+    updateStatus: (id: string, status: string) =>
+      request<LiveSession>('PUT', `/live-sessions/${id}/status`, { body: { status }, admin: true }),
+    update: (id: string, data: Partial<{
+      title: string;
+      host: string;
+      meet_link: string;
+      scheduled_at: string;
+      audience_group_id: string | null;
+      description: string;
+    }>) => request<LiveSession>('PUT', `/live-sessions/${id}`, { body: data, admin: true }),
+    delete: (id: string) =>
+      request<void>('DELETE', `/live-sessions/${id}`, { admin: true }),
   },
 };

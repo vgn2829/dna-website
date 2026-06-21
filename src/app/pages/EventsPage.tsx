@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { MapPin, Clock, Users, Calendar, List, CheckCircle2 } from 'lucide-react';
 import { useAppData } from '../context/AppDataContext';
 import { useStudent } from '../context/StudentContext';
+import { api, LiveSession } from '../lib/api';
 
 // ISO dates (YYYY-MM-DD) are parsed as UTC midnight by spec; appending T12:00
 // forces local-time parsing so .getDate() returns the correct calendar day.
@@ -164,6 +165,13 @@ export function EventsPage() {
   const { studentSession, openRollModal } = useStudent();
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('all');
+  const [liveSessions, setLiveSessions] = useState<LiveSession[]>([]);
+
+  useEffect(() => {
+    api.liveSessions.getActive(studentSession?.rollNumber)
+      .then(setLiveSessions)
+      .catch(() => {});
+  }, [studentSession?.rollNumber]);
 
   if (loading) {
     return (
@@ -204,6 +212,76 @@ export function EventsPage() {
             <span style={{ color: 'var(--color-ink-muted)' }}>Workshops</span>
           </h1>
         </motion.div>
+
+        {/* Live & Upcoming Sessions */}
+        {liveSessions.length > 0 && (
+          <div style={{ marginBottom: 40 }}>
+            <p style={{
+              fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
+              textTransform: 'uppercase', color: '#E91E8C',
+              fontFamily: 'var(--font-body)', marginBottom: 16,
+            }}>
+              Live & Upcoming Sessions
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {liveSessions.map(s => (
+                <div key={s.id} style={{
+                  border: s.status === 'live' ? '1px solid #E91E8C' : '1px solid var(--color-border)',
+                  borderRadius: 14, padding: '16px 20px',
+                  background: s.status === 'live' ? 'rgba(233,30,140,0.06)' : 'var(--color-surface)',
+                  display: 'flex', justifyContent: 'space-between',
+                  alignItems: 'center', gap: 16,
+                }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {s.status === 'live' && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#E91E8C', fontFamily: 'var(--font-body)' }}>
+                          ● LIVE
+                        </span>
+                      )}
+                      <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+                        {s.title}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                      {s.host} ·{' '}
+                      {new Date(s.scheduled_at).toLocaleString('en-IN', {
+                        day: 'numeric', month: 'short',
+                        hour: '2-digit', minute: '2-digit', hour12: true,
+                      })}
+                    </span>
+                    {s.description && (
+                      <span style={{ fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                        {s.description}
+                      </span>
+                    )}
+                  </div>
+
+                  {s.canAccess && s.meet_link ? (
+                    <a
+                      href={s.meet_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        flexShrink: 0, padding: '8px 18px', borderRadius: 100,
+                        background: '#E91E8C', color: '#fff',
+                        fontSize: 13, fontWeight: 600,
+                        fontFamily: 'var(--font-body)',
+                        textDecoration: 'none', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {s.status === 'live' ? 'Join Meet' : 'View'}
+                    </a>
+                  ) : s.audience_group_id && s.audience_group_id !== 'all_students' ? (
+                    <span style={{ fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', flexShrink: 0 }}>
+                      Team only
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Controls */}
         <div className="flex flex-col sm:flex-row gap-3 mb-8">

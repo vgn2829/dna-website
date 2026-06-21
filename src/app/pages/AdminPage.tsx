@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail } from 'lucide-react';
+import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
 import { api, setAdminToken, clearAdminToken } from '../lib/api';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
@@ -121,7 +121,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-type Tab = 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings' | 'announcements';
+type Tab = 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings' | 'announcements' | 'sessions';
 
 // ── Academy tab ──────────────────────────────────────────────────────────────
 function AcademyTab() {
@@ -1898,6 +1898,336 @@ function AnnouncementsTab() {
   );
 }
 
+// ── Sessions tab ──────────────────────────────────────────────────────────────
+function SessionsTab() {
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({
+    title: '',
+    host: '',
+    meet_link: '',
+    scheduled_at: '',
+    audience_group_id: 'all_students',
+    description: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = async () => {
+    try {
+      const [s, g] = await Promise.all([
+        api.liveSessions.getAll(),
+        api.liveSessions.getGroups(),
+      ]);
+      setSessions(s);
+      setGroups(g);
+    } catch {
+      setError('Failed to load sessions');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleCreate = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      await api.liveSessions.create({
+        ...form,
+        audience_group_id:
+          form.audience_group_id === 'all_students'
+            ? null
+            : form.audience_group_id,
+      });
+      setShowForm(false);
+      setForm({
+        title: '', host: '', meet_link: '',
+        scheduled_at: '', audience_group_id: 'all_students',
+        description: '',
+      });
+      await load();
+    } catch {
+      setError('Failed to create session');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleStatus = async (id: string, status: string) => {
+    try {
+      await api.liveSessions.updateStatus(id, status);
+      await load();
+    } catch {
+      setError('Failed to update status');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this session?')) return;
+    try {
+      await api.liveSessions.delete(id);
+      await load();
+    } catch {
+      setError('Failed to delete session');
+    }
+  };
+
+  const statusColor = (status: string) => {
+    if (status === 'live') return '#22c55e';
+    if (status === 'upcoming') return '#E91E8C';
+    return 'var(--color-ink-muted)';
+  };
+
+  const statusLabel = (status: string) => {
+    if (status === 'live') return '● Live';
+    if (status === 'upcoming') return '◆ Upcoming';
+    return 'Ended';
+  };
+
+  if (loading) return (
+    <p style={{ color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', fontSize: 14 }}>
+      Loading...
+    </p>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h2 style={{
+            margin: '0 0 4px', fontSize: 22, fontWeight: 700,
+            color: 'var(--color-ink)',
+            fontFamily: 'var(--font-display)',
+            letterSpacing: '-0.5px',
+          }}>
+            Live Sessions
+          </h2>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+            Schedule Google Meet sessions for students.
+          </p>
+        </div>
+        <button className="btn-primary" onClick={() => setShowForm(true)}>
+          + New Session
+        </button>
+      </div>
+
+      {error && (
+        <p style={{ color: '#ef4444', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
+          {error}
+        </p>
+      )}
+
+      {/* Create form */}
+      {showForm && (
+        <div style={{
+          border: '1px solid var(--color-border)',
+          borderRadius: 16, padding: 24,
+          background: 'var(--color-surface)',
+          display: 'flex', flexDirection: 'column', gap: 16,
+        }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
+            New Session
+          </h3>
+
+          {[
+            { label: 'Session Title', key: 'title', placeholder: 'e.g. Typography Workshop' },
+            { label: 'Host Name', key: 'host', placeholder: 'e.g. Arjun Kumar' },
+            { label: 'Google Meet Link', key: 'meet_link', placeholder: 'https://meet.google.com/xxx-xxxx-xxx' },
+          ].map(({ label, key, placeholder }) => (
+            <div key={key}>
+              <label style={{
+                display: 'block', fontSize: 11, fontWeight: 600,
+                color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
+                textTransform: 'uppercase', marginBottom: 6,
+                fontFamily: 'var(--font-body)',
+              }}>
+                {label}
+              </label>
+              <input
+                className="input-base"
+                type="text"
+                placeholder={placeholder}
+                value={(form as any)[key]}
+                onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
+                style={{ width: '100%', boxSizing: 'border-box' }}
+              />
+            </div>
+          ))}
+
+          <div>
+            <label style={{
+              display: 'block', fontSize: 11, fontWeight: 600,
+              color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
+              textTransform: 'uppercase', marginBottom: 6,
+              fontFamily: 'var(--font-body)',
+            }}>
+              Date & Time
+            </label>
+            <input
+              className="input-base"
+              type="datetime-local"
+              value={form.scheduled_at}
+              onChange={e => setForm(prev => ({ ...prev, scheduled_at: e.target.value }))}
+              style={{ width: '100%', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          <div>
+            <label style={{
+              display: 'block', fontSize: 11, fontWeight: 600,
+              color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
+              textTransform: 'uppercase', marginBottom: 6,
+              fontFamily: 'var(--font-body)',
+            }}>
+              Audience
+            </label>
+            <select
+              className="input-base"
+              value={form.audience_group_id}
+              onChange={e => setForm(prev => ({ ...prev, audience_group_id: e.target.value }))}
+              style={{ width: '100%', boxSizing: 'border-box' }}
+            >
+              {groups.map(g => (
+                <option key={g.id} value={g.id}>
+                  {g.name}{g.member_count > 0 ? ` (${g.member_count} members)` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label style={{
+              display: 'block', fontSize: 11, fontWeight: 600,
+              color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
+              textTransform: 'uppercase', marginBottom: 6,
+              fontFamily: 'var(--font-body)',
+            }}>
+              Description (optional)
+            </label>
+            <textarea
+              className="input-base"
+              value={form.description}
+              onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
+              rows={3}
+              placeholder="What will this session cover?"
+              style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              className="btn-primary"
+              onClick={handleCreate}
+              disabled={saving || !form.title || !form.host || !form.meet_link || !form.scheduled_at}
+            >
+              {saving ? 'Creating...' : 'Create Session'}
+            </button>
+            <button className="btn-secondary" onClick={() => setShowForm(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Sessions list */}
+      {sessions.length === 0 ? (
+        <div style={{
+          textAlign: 'center', padding: '48px 0',
+          color: 'var(--color-ink-muted)',
+          fontFamily: 'var(--font-body)', fontSize: 14,
+        }}>
+          No sessions yet. Create your first one.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {sessions.map(s => (
+            <div key={s.id} style={{
+              border: '1px solid var(--color-border)',
+              borderRadius: 14, padding: '18px 20px',
+              background: 'var(--color-surface)',
+              display: 'flex', justifyContent: 'space-between',
+              alignItems: 'flex-start', gap: 16,
+            }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: statusColor(s.status), fontFamily: 'var(--font-body)' }}>
+                    {statusLabel(s.status)}
+                  </span>
+                  {s.audience_name && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
+                      textTransform: 'uppercase', padding: '2px 8px', borderRadius: 100,
+                      background: 'rgba(233,30,140,0.1)', color: '#E91E8C',
+                      fontFamily: 'var(--font-body)',
+                    }}>
+                      {s.audience_name}
+                    </span>
+                  )}
+                </div>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+                  {s.title}
+                </p>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                  {s.host} ·{' '}
+                  {new Date(s.scheduled_at).toLocaleString('en-IN', {
+                    day: 'numeric', month: 'short',
+                    hour: '2-digit', minute: '2-digit', hour12: true,
+                  })}
+                </p>
+                <a
+                  href={s.meet_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: 12, color: '#E91E8C', fontFamily: 'var(--font-body)', textDecoration: 'none', wordBreak: 'break-all' }}
+                >
+                  {s.meet_link}
+                </a>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+                {s.status === 'upcoming' && (
+                  <button
+                    className="btn-primary"
+                    style={{ fontSize: 12, padding: '6px 14px' }}
+                    onClick={() => handleStatus(s.id, 'live')}
+                  >
+                    Go Live
+                  </button>
+                )}
+                {s.status === 'live' && (
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: '6px 14px' }}
+                    onClick={() => handleStatus(s.id, 'ended')}
+                  >
+                    End Session
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDelete(s.id)}
+                  style={{
+                    fontSize: 12, padding: '6px 14px',
+                    background: 'none', border: '1px solid rgba(239,68,68,0.3)',
+                    borderRadius: 100, color: '#ef4444',
+                    cursor: 'pointer', fontFamily: 'var(--font-body)',
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main AdminPage ─────────────────────────────────────────────────────────────
 export function AdminPage() {
   const [authed, setAuthed] = useState(false);
@@ -1913,6 +2243,7 @@ export function AdminPage() {
     { id: 'comments',      label: 'Comments',      icon: MessageSquare },
     { id: 'settings',      label: 'Settings',      icon: Settings },
     { id: 'announcements', label: 'Announcements', icon: Mail },
+    { id: 'sessions',      label: 'Sessions',      icon: Radio },
   ];
 
   return (
@@ -1954,6 +2285,7 @@ export function AdminPage() {
           {tab === 'comments' && <motion.div key="comments"  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><CommentsTab /></motion.div>}
           {tab === 'settings'      && <motion.div key="settings"      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><SettingsTab /></motion.div>}
           {tab === 'announcements' && <motion.div key="announcements" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><AnnouncementsTab /></motion.div>}
+          {tab === 'sessions'      && <motion.div key="sessions"      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><SessionsTab /></motion.div>}
         </AnimatePresence>
       </div>
     </div>

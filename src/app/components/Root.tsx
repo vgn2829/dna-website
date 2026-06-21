@@ -5,6 +5,7 @@ import { Footer } from './Footer';
 import { RollModal } from './RollModal';
 import { BackToTop } from './BackToTop';
 import JoinPrompt from './JoinPrompt';
+import LiveSessionBanner from './LiveSessionBanner';
 import { ThemeProvider } from '../context/ThemeContext';
 import { StudentProvider, useStudent } from '../context/StudentContext';
 import { AppDataProvider } from '../context/AppDataContext';
@@ -27,6 +28,7 @@ export function Root() {
       <StudentProvider>
         <AppDataProvider>
           <div className="min-h-screen" style={{ background: 'var(--color-canvas)', color: 'var(--color-ink)' }}>
+            <LiveSessionBanner />
             <Navigation />
             <RollModal />
             <SessionGate />
