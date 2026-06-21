@@ -14,7 +14,6 @@ const COLS = [
       { label: 'Events',         path: '/events'         },
       { label: 'Design Studio',  path: '/design-studio'  },
       { label: 'Moodboards',     path: '/moodboards'     },
-      { label: 'Resources',      path: '/resources'      },
       { label: 'Team',           path: '/team'           },
     ],
   },
