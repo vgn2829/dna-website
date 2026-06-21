@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { label: 'Events',   path: '/events' },
   { label: 'Team',     path: '/team' },
   { label: 'Design Studio', path: '/design-studio' }, // PALETTE_STUDIO_FEATURE
+  { label: 'Moodboards', path: '/moodboards' },
 ];
 
 export function Navigation() {
