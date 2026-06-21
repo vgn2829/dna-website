@@ -245,6 +245,12 @@ export const api = {
       request<{ success: boolean; name: string | null }>('POST', `/boards/${boardId}/members`, { body: { roll_number: memberRoll }, roll }),
     removeMember: (boardId: string, roll: string, memberRoll: string) =>
       request<{ success: boolean }>('DELETE', `/boards/${boardId}/members/${memberRoll}`, { roll }),
+    adminGetAll: () =>
+      request<Board[]>('GET', '/boards/admin/all', { admin: true }),
+    adminDelete: (id: string) =>
+      request<{ success: boolean }>('DELETE', `/boards/admin/${id}`, { admin: true }),
+    adminUpdate: (id: string, data: { visibility?: 'private' | 'shared'; edit_mode?: 'members_only' | 'anyone' }) =>
+      request<Board>('PUT', `/boards/admin/${id}`, { body: data, admin: true }),
   },
   liveSessions: {
     getActive: (roll?: string) =>

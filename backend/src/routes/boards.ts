@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { pool } from '../db/client';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { requireAdmin } from '../middleware/adminAuth';
 
 const router = Router();
 
@@ -90,6 +91,92 @@ router.get('/shared', async (req: Request, res: Response) => {
     `);
     res.json(result.rows);
   } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/boards/admin/all
+// Returns all boards from all users (admin only)
+router.get('/admin/all', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        b.*,
+        COUNT(DISTINCT bi.id)::int as item_count,
+        COUNT(DISTINCT bm.roll_number)::int as member_count
+      FROM boards b
+      LEFT JOIN board_items bi ON bi.board_id = b.id
+      LEFT JOIN board_members bm ON bm.board_id = b.id
+      GROUP BY b.id
+      ORDER BY b.created_at DESC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Admin get boards error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/boards/admin/:id
+// Admin can delete any board
+router.delete('/admin/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM boards WHERE id = $1 RETURNING id',
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Board not found' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Admin delete board error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/boards/admin/:id
+// Admin can update visibility/edit_mode of any board
+router.put('/admin/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const schema = z.object({
+      visibility: z.enum(['private', 'shared']).optional(),
+      edit_mode: z.enum(['members_only', 'anyone']).optional(),
+    });
+    const parsed = schema.parse(req.body);
+
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    let i = 1;
+
+    if (parsed.visibility !== undefined) {
+      fields.push(`visibility = $${i++}`);
+      values.push(parsed.visibility);
+    }
+    if (parsed.edit_mode !== undefined) {
+      fields.push(`edit_mode = $${i++}`);
+      values.push(parsed.edit_mode);
+    }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ error: 'Nothing to update' });
+    }
+
+    values.push(req.params.id);
+    const result = await pool.query(`
+      UPDATE boards SET ${fields.join(', ')}
+      WHERE id = $${i} RETURNING *
+    `, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Board not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: err.errors });
+    }
     res.status(500).json({ error: 'Internal server error' });
   }
 });

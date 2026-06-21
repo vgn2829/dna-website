@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio } from 'lucide-react';
+import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
 import { api, setAdminToken, clearAdminToken, type SessionJoins } from '../lib/api';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
@@ -121,7 +121,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-type Tab = 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings' | 'announcements' | 'sessions';
+type Tab = 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings' | 'announcements' | 'sessions' | 'moodboards';
 
 // ── Academy tab ──────────────────────────────────────────────────────────────
 function AcademyTab() {
@@ -2435,6 +2435,248 @@ function SessionsTab() {
   );
 }
 
+// ── Moodboards tab ────────────────────────────────────────────────────────────
+function MoodboardsAdminTab() {
+  const [boards, setBoards] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [error, setError] = useState('');
+  const [updating, setUpdating] = useState<string | null>(null);
+
+  const load = async () => {
+    try {
+      const data = await api.boards.adminGetAll();
+      setBoards(data);
+    } catch {
+      setError('Failed to load boards');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleDelete = async (board: any) => {
+    if (!confirm(
+      `Delete "${board.name}" by ${board.owner_name ?? board.owner_roll}? This cannot be undone.`
+    )) return;
+    try {
+      await api.boards.adminDelete(board.id);
+      setBoards(prev => prev.filter(b => b.id !== board.id));
+    } catch {
+      setError('Failed to delete board');
+    }
+  };
+
+  const handleVisibility = async (board: any) => {
+    setUpdating(board.id + '_vis');
+    const newVal = board.visibility === 'private' ? 'shared' : 'private';
+    try {
+      const updated = await api.boards.adminUpdate(board.id, { visibility: newVal });
+      setBoards(prev => prev.map(b => b.id === board.id ? { ...b, visibility: updated.visibility } : b));
+    } catch {
+      setError('Failed to update visibility');
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const handleEditMode = async (board: any) => {
+    setUpdating(board.id + '_edit');
+    const newVal = board.edit_mode === 'members_only' ? 'anyone' : 'members_only';
+    try {
+      const updated = await api.boards.adminUpdate(board.id, { edit_mode: newVal });
+      setBoards(prev => prev.map(b => b.id === board.id ? { ...b, edit_mode: updated.edit_mode } : b));
+    } catch {
+      setError('Failed to update edit mode');
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const filtered = boards.filter(b =>
+    b.name.toLowerCase().includes(search.toLowerCase()) ||
+    (b.owner_name ?? '').toLowerCase().includes(search.toLowerCase()) ||
+    b.owner_roll.includes(search)
+  );
+
+  const formatDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-IN', {
+      day: 'numeric', month: 'short', year: 'numeric',
+    });
+
+  if (loading) return (
+    <p style={{ color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', fontSize: 14 }}>
+      Loading...
+    </p>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.5px' }}>
+            Moodboards
+          </h2>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+            {boards.length} board{boards.length !== 1 ? 's' : ''} created by students
+          </p>
+        </div>
+        <input
+          className="input-base"
+          type="text"
+          placeholder="Search by name or owner..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ width: 240 }}
+        />
+      </div>
+
+      {error && (
+        <p style={{ color: '#ef4444', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
+          {error}
+        </p>
+      )}
+
+      {filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', fontSize: 14 }}>
+          {search ? 'No boards match your search.' : 'No boards created yet.'}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {filtered.map(board => (
+            <div key={board.id} style={{
+              border: '1px solid var(--color-border)',
+              borderRadius: 14, padding: '16px 18px',
+              background: 'var(--color-surface)',
+              display: 'flex', justifyContent: 'space-between',
+              alignItems: 'center', gap: 16, flexWrap: 'wrap',
+            }}>
+              {/* Left — board info */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+                    {board.name}
+                  </p>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+                    padding: '2px 8px', borderRadius: 100,
+                    background: board.visibility === 'shared' ? 'rgba(233,30,140,0.1)' : 'rgba(255,255,255,0.06)',
+                    color: board.visibility === 'shared' ? '#E91E8C' : 'var(--color-ink-muted)',
+                    fontFamily: 'var(--font-body)',
+                  }}>
+                    {board.visibility}
+                  </span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+                    padding: '2px 8px', borderRadius: 100,
+                    background: board.edit_mode === 'anyone' ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.04)',
+                    color: board.edit_mode === 'anyone' ? '#22c55e' : 'var(--color-ink-muted)',
+                    fontFamily: 'var(--font-body)',
+                  }}>
+                    {board.edit_mode === 'anyone' ? 'Anyone edits' : 'Members only'}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                  by {board.owner_name ?? board.owner_roll}
+                  {' · '}
+                  {board.item_count} items
+                  {' · '}
+                  {board.member_count > 0 ? `${board.member_count + 1} collaborators · ` : ''}
+                  {formatDate(board.created_at)}
+                </p>
+              </div>
+
+              {/* Right — controls */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+                {/* Visibility toggle */}
+                <div style={{ display: 'flex', gap: 0, border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
+                  {(['private', 'shared'] as const).map(v => (
+                    <button
+                      key={v}
+                      onClick={() => { if (board.visibility !== v) handleVisibility(board); }}
+                      disabled={updating === board.id + '_vis'}
+                      style={{
+                        padding: '5px 10px',
+                        background: board.visibility === v ? '#E91E8C' : 'none',
+                        border: 'none',
+                        color: board.visibility === v ? '#fff' : 'var(--color-ink-muted)',
+                        fontSize: 11,
+                        fontWeight: board.visibility === v ? 600 : 400,
+                        fontFamily: 'var(--font-body)',
+                        cursor: updating === board.id + '_vis' ? 'not-allowed' : 'pointer',
+                        textTransform: 'capitalize',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Edit mode toggle */}
+                <div style={{ display: 'flex', gap: 0, border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
+                  {([
+                    { value: 'members_only', label: 'Members' },
+                    { value: 'anyone', label: 'Anyone' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => { if (board.edit_mode !== opt.value) handleEditMode(board); }}
+                      disabled={updating === board.id + '_edit'}
+                      style={{
+                        padding: '5px 10px',
+                        background: board.edit_mode === opt.value ? '#E91E8C' : 'none',
+                        border: 'none',
+                        color: board.edit_mode === opt.value ? '#fff' : 'var(--color-ink-muted)',
+                        fontSize: 11,
+                        fontWeight: board.edit_mode === opt.value ? 600 : 400,
+                        fontFamily: 'var(--font-body)',
+                        cursor: updating === board.id + '_edit' ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Open board link */}
+                <a
+                  href={`/moodboards/${board.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    padding: '5px 12px', background: 'none',
+                    border: '1px solid var(--color-border)', borderRadius: 8,
+                    color: 'var(--color-ink-muted)', fontSize: 11,
+                    fontFamily: 'var(--font-body)', textDecoration: 'none', whiteSpace: 'nowrap',
+                  }}
+                >
+                  Open ↗
+                </a>
+
+                {/* Delete */}
+                <button
+                  onClick={() => handleDelete(board)}
+                  style={{
+                    padding: '5px 12px', background: 'none',
+                    border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8,
+                    color: '#ef4444', fontSize: 11,
+                    fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main AdminPage ─────────────────────────────────────────────────────────────
 export function AdminPage() {
   const [authed, setAuthed] = useState(false);
@@ -2451,6 +2693,7 @@ export function AdminPage() {
     { id: 'settings',      label: 'Settings',      icon: Settings },
     { id: 'announcements', label: 'Announcements', icon: Mail },
     { id: 'sessions',      label: 'Sessions',      icon: Radio },
+    { id: 'moodboards',   label: 'Moodboards',   icon: Layout },
   ];
 
   return (
@@ -2493,6 +2736,7 @@ export function AdminPage() {
           {tab === 'settings'      && <motion.div key="settings"      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><SettingsTab /></motion.div>}
           {tab === 'announcements' && <motion.div key="announcements" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><AnnouncementsTab /></motion.div>}
           {tab === 'sessions'      && <motion.div key="sessions"      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><SessionsTab /></motion.div>}
+          {tab === 'moodboards'   && <motion.div key="moodboards"   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><MoodboardsAdminTab /></motion.div>}
         </AnimatePresence>
       </div>
     </div>
