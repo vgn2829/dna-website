@@ -378,11 +378,14 @@ export function GalleryPage() {
   const { artworks, likeArtwork, loading, error } = useAppData();
   const domainTitles = useMemo(() => {
     const unique = [...new Set(
-      artworks.map(a => a.domain).filter(d => d?.trim())
+      artworks
+        .map(a => a.domain?.trim().toUpperCase())
+        .filter(Boolean)
+        .filter(d => d !== '')
     )].sort();
-    return ['All', ...unique];
+    return ['ALL', ...unique];
   }, [artworks]);
-  const [filter, setFilter] = useState('All');
+  const [filter, setFilter] = useState('ALL');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [burstIds, setBurstIds] = useState<Set<string>>(new Set());
   const forceUpper = localStorage.getItem('forceUppercase') !== 'false';
@@ -414,7 +417,7 @@ export function GalleryPage() {
     );
   }
 
-  const filtered = filter === 'All' ? artworks : artworks.filter(a => a.domain === filter);
+  const filtered = filter === 'ALL' ? artworks : artworks.filter(a => a.domain?.trim().toUpperCase() === filter);
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-canvas)', paddingTop: '6rem', paddingBottom: '5rem' }}>

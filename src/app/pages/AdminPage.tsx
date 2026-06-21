@@ -460,7 +460,7 @@ function GalleryTab() {
   // Featured star toggling
   const [togglingFeatured, setTogglingFeatured] = useState<Set<string>>(new Set());
 
-  const domainTitles = Object.values(domains).map(d => d.title);
+  const domainTitles = Object.values(domains).map(d => d.title.toUpperCase());
   const featuredCount = artworks.filter(a => a.featured).length;
 
   const [bulkQueue, setBulkQueue] = useState<BulkItem[]>([]);
@@ -793,8 +793,8 @@ function GalleryTab() {
                         <input
                           className="input-base"
                           value={item.customDomain}
-                          onChange={e => updateBulkItem(item.id, { customDomain: e.target.value })}
-                          placeholder="Enter domain name"
+                          onChange={e => updateBulkItem(item.id, { customDomain: e.target.value.toUpperCase() })}
+                          placeholder="ENTER CUSTOM DOMAIN..."
                           disabled={item.status === 'uploading' || item.status === 'done'}
                           style={{ marginTop: 6, width: '100%', fontSize: 12, boxSizing: 'border-box' }}
                           maxLength={100}
@@ -897,7 +897,7 @@ function GalleryTab() {
                   <option value="__other__">Other (specify)...</option>
                 </select>
                 {aDomain === '__other__' && (
-                  <input value={aCustomDomain} onChange={e => setACustomDomain(e.target.value)} placeholder="Enter domain name" maxLength={100} className="input-base mt-2" />
+                  <input value={aCustomDomain} onChange={e => setACustomDomain(e.target.value.toUpperCase())} placeholder="ENTER CUSTOM DOMAIN..." maxLength={100} className="input-base mt-2" />
                 )}
               </div>
               {uploadError && <p className="type-micro" style={{ color: '#e5484d' }}>{uploadError}</p>}
@@ -959,7 +959,7 @@ function GalleryTab() {
                   <option value="__other__">Other (specify)...</option>
                 </select>
                 {eaDomain === '__other__' && (
-                  <input value={eaCustomDomain} onChange={e => setEaCustomDomain(e.target.value)} placeholder="Enter domain name" maxLength={100} className="input-base mt-2" />
+                  <input value={eaCustomDomain} onChange={e => setEaCustomDomain(e.target.value.toUpperCase())} placeholder="ENTER CUSTOM DOMAIN..." maxLength={100} className="input-base mt-2" />
                 )}
               </div>
               <label className="flex items-center gap-2 type-body-sm cursor-pointer">
