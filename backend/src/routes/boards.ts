@@ -1,333 +1,455 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { pool } from '../db/client';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
 
-(async () => {
+// Helper: check if roll is board member or owner
+async function canAccess(boardId: string, roll: string): Promise<boolean> {
+  const result = await pool.query(`
+    SELECT 1 FROM boards
+    WHERE id = $1 AND (
+      owner_roll = $2
+      OR visibility = 'shared'
+    )
+    UNION
+    SELECT 1 FROM board_members
+    WHERE board_id = $1 AND roll_number = $2
+  `, [boardId, roll]);
+  return result.rows.length > 0;
+}
+
+async function isOwner(boardId: string, roll: string): Promise<boolean> {
+  const result = await pool.query(
+    'SELECT 1 FROM boards WHERE id = $1 AND owner_roll = $2',
+    [boardId, roll]
+  );
+  return result.rows.length > 0;
+}
+
+async function isMember(boardId: string, roll: string): Promise<boolean> {
+  const result = await pool.query(`
+    SELECT 1 FROM boards
+    WHERE id = $1 AND owner_roll = $2
+    UNION
+    SELECT 1 FROM board_members
+    WHERE board_id = $1 AND roll_number = $2
+  `, [boardId, roll]);
+  return result.rows.length > 0;
+}
+
+// GET /api/boards
+// Returns boards owned by or shared with this student
+router.get('/', async (req: Request, res: Response) => {
   try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS boards (
-        id          TEXT PRIMARY KEY,
-        owner_roll  TEXT NOT NULL,
-        name        TEXT NOT NULL,
-        description TEXT,
-        visibility  TEXT NOT NULL DEFAULT 'private',
-        created_at  TEXT NOT NULL
-      )
-    `);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS board_members (
-        board_id    TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
-        roll_number TEXT NOT NULL,
-        added_at    TEXT NOT NULL,
-        PRIMARY KEY (board_id, roll_number)
-      )
-    `);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS board_items (
-        id            TEXT PRIMARY KEY,
-        board_id      TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
-        added_by_roll TEXT NOT NULL,
-        image_url     TEXT NOT NULL,
-        note          TEXT,
-        source_url    TEXT,
-        added_at      TEXT NOT NULL
-      )
-    `);
-  } catch (err) {
-    console.error('Board tables init error:', err);
-  }
-})();
+    const roll = req.headers['x-roll-number'] as string;
+    if (!roll) {
+      return res.status(401).json({ error: 'Roll number required' });
+    }
 
-const boardSchema = z.object({
-  name: z.string().min(1).max(100),
-  description: z.string().max(500).optional(),
-  visibility: z.enum(['private', 'shared']).default('private'),
-});
-
-const itemSchema = z.object({
-  image_url: z.string().min(1),
-  note: z.string().max(500).optional(),
-  source_url: z.string().optional(),
-});
-
-// GET / — list boards owned by or shared with the roll
-router.get('/', async (req, res) => {
-  const roll = req.headers['x-roll-number'] as string | undefined;
-  if (!roll) return res.status(401).json({ error: 'Roll number required' });
-
-  try {
     const result = await pool.query(`
       SELECT DISTINCT
-        b.id, b.owner_roll, b.name, b.description,
-        b.visibility, b.created_at,
-        ss.name as owner_name,
-        COUNT(bi.id)::int as item_count
+        b.*,
+        COUNT(bi.id)::int as item_count,
+        COUNT(bm.roll_number)::int as member_count
       FROM boards b
-      LEFT JOIN student_sessions ss ON b.owner_roll = ss.roll_number
-      LEFT JOIN board_items bi ON b.id = bi.board_id
-      LEFT JOIN board_members bm ON b.id = bm.board_id
-      WHERE b.owner_roll = $1 OR bm.roll_number = $1
-      GROUP BY b.id, ss.name
+      LEFT JOIN board_items bi ON bi.board_id = b.id
+      LEFT JOIN board_members bm ON bm.board_id = b.id
+      WHERE b.owner_roll = $1
+        OR b.id IN (
+          SELECT board_id FROM board_members
+          WHERE roll_number = $1
+        )
+      GROUP BY b.id
       ORDER BY b.created_at DESC
     `, [roll]);
 
     res.json(result.rows);
   } catch (err) {
-    console.error('List boards error:', err);
+    console.error('Get boards error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// POST / — create a board
-router.post('/', async (req, res) => {
-  const roll = req.headers['x-roll-number'] as string | undefined;
-  if (!roll) return res.status(401).json({ error: 'Roll number required' });
-
+// GET /api/boards/shared
+// Returns all shared boards (for discovery)
+router.get('/shared', async (req: Request, res: Response) => {
   try {
-    const parsed = boardSchema.parse(req.body);
-    const id = uuidv4();
-    const now = new Date().toISOString();
-
     const result = await pool.query(`
-      INSERT INTO boards (id, owner_roll, name, description, visibility, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *
-    `, [id, roll, parsed.name, parsed.description ?? null, parsed.visibility, now]);
-
-    res.status(201).json({ ...result.rows[0], item_count: 0, owner_name: null });
+      SELECT
+        b.*,
+        COUNT(bi.id)::int as item_count,
+        COUNT(bm.roll_number)::int as member_count
+      FROM boards b
+      LEFT JOIN board_items bi ON bi.board_id = b.id
+      LEFT JOIN board_members bm ON bm.board_id = b.id
+      WHERE b.visibility = 'shared'
+      GROUP BY b.id
+      ORDER BY b.created_at DESC
+    `);
+    res.json(result.rows);
   } catch (err) {
-    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
-    console.error('Create board error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// GET /:id — get board detail with items and members
-router.get('/:id', async (req, res) => {
-  const roll = req.headers['x-roll-number'] as string | undefined;
-
+// GET /api/boards/:id
+// Returns board with items and members
+router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const boardResult = await pool.query(`
-      SELECT b.*, ss.name as owner_name
-      FROM boards b
-      LEFT JOIN student_sessions ss ON b.owner_roll = ss.roll_number
-      WHERE b.id = $1
-    `, [req.params.id]);
+    const roll = req.headers['x-roll-number'] as string;
 
-    if (boardResult.rows.length === 0) return res.status(404).json({ error: 'Board not found' });
+    const boardResult = await pool.query(
+      'SELECT * FROM boards WHERE id = $1',
+      [req.params.id]
+    );
+
+    if (boardResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Board not found' });
+    }
 
     const board = boardResult.rows[0];
 
+    // Private boards: owner + members only; shared boards: everyone (even guests)
     if (board.visibility === 'private') {
-      if (!roll) return res.status(403).json({ error: 'Private board' });
-      if (board.owner_roll !== roll) {
-        const memberCheck = await pool.query(
-          'SELECT 1 FROM board_members WHERE board_id = $1 AND roll_number = $2',
-          [req.params.id, roll]
-        );
-        if (memberCheck.rows.length === 0) return res.status(403).json({ error: 'Private board' });
+      if (!roll) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      const access = await isMember(board.id, roll);
+      if (!access) {
+        return res.status(403).json({ error: 'Access denied' });
       }
     }
 
-    const [itemsResult, membersResult] = await Promise.all([
-      pool.query(`
-        SELECT bi.*, ss.name as added_by_name
-        FROM board_items bi
-        LEFT JOIN student_sessions ss ON bi.added_by_roll = ss.roll_number
-        WHERE bi.board_id = $1
-        ORDER BY bi.added_at DESC
-      `, [req.params.id]),
-      pool.query(`
-        SELECT bm.roll_number, bm.added_at, ss.name
-        FROM board_members bm
-        LEFT JOIN student_sessions ss ON bm.roll_number = ss.roll_number
-        WHERE bm.board_id = $1
-        ORDER BY bm.added_at ASC
-      `, [req.params.id]),
-    ]);
+    const itemsResult = await pool.query(`
+      SELECT * FROM board_items
+      WHERE board_id = $1
+      ORDER BY created_at DESC
+    `, [req.params.id]);
 
-    res.json({ ...board, items: itemsResult.rows, members: membersResult.rows });
+    const membersResult = await pool.query(`
+      SELECT roll_number, name, added_at
+      FROM board_members
+      WHERE board_id = $1
+      ORDER BY added_at ASC
+    `, [req.params.id]);
+
+    res.json({
+      ...board,
+      items: itemsResult.rows,
+      members: membersResult.rows,
+    });
   } catch (err) {
     console.error('Get board error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// DELETE /:id — delete board (owner only)
-router.delete('/:id', async (req, res) => {
-  const roll = req.headers['x-roll-number'] as string | undefined;
-  if (!roll) return res.status(401).json({ error: 'Roll number required' });
-
+// POST /api/boards
+// Create a new board
+router.post('/', async (req: Request, res: Response) => {
   try {
-    const boardCheck = await pool.query('SELECT owner_roll FROM boards WHERE id = $1', [req.params.id]);
-    if (boardCheck.rows.length === 0) return res.status(404).json({ error: 'Board not found' });
-    if (boardCheck.rows[0].owner_roll !== roll) return res.status(403).json({ error: 'Not the owner' });
-
-    await pool.query('DELETE FROM boards WHERE id = $1', [req.params.id]);
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Delete board error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// GET /:id/items — list items
-router.get('/:id/items', async (req, res) => {
-  const roll = req.headers['x-roll-number'] as string | undefined;
-
-  try {
-    const boardResult = await pool.query('SELECT * FROM boards WHERE id = $1', [req.params.id]);
-    if (boardResult.rows.length === 0) return res.status(404).json({ error: 'Board not found' });
-
-    const board = boardResult.rows[0];
-
-    if (board.visibility === 'private') {
-      if (!roll) return res.status(403).json({ error: 'Private board' });
-      if (board.owner_roll !== roll) {
-        const memberCheck = await pool.query(
-          'SELECT 1 FROM board_members WHERE board_id = $1 AND roll_number = $2',
-          [req.params.id, roll]
-        );
-        if (memberCheck.rows.length === 0) return res.status(403).json({ error: 'Private board' });
-      }
+    const roll = req.headers['x-roll-number'] as string;
+    if (!roll) {
+      return res.status(401).json({ error: 'Roll number required' });
     }
 
-    const result = await pool.query(`
-      SELECT bi.*, ss.name as added_by_name
-      FROM board_items bi
-      LEFT JOIN student_sessions ss ON bi.added_by_roll = ss.roll_number
-      WHERE bi.board_id = $1
-      ORDER BY bi.added_at DESC
-    `, [req.params.id]);
+    const schema = z.object({
+      name: z.string().min(1).max(100),
+      description: z.string().max(300).optional(),
+      visibility: z.enum(['private', 'shared']).default('private'),
+    });
 
-    res.json(result.rows);
-  } catch (err) {
-    console.error('Get items error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+    const parsed = schema.parse(req.body);
 
-// POST /:id/items — add item (owner or member)
-router.post('/:id/items', async (req, res) => {
-  const roll = req.headers['x-roll-number'] as string | undefined;
-  if (!roll) return res.status(401).json({ error: 'Roll number required' });
+    const studentResult = await pool.query(
+      'SELECT name FROM student_sessions WHERE roll_number = $1',
+      [roll]
+    );
+    const ownerName = (studentResult.rows[0] as { name: string } | undefined)?.name ?? null;
 
-  try {
-    const boardResult = await pool.query('SELECT * FROM boards WHERE id = $1', [req.params.id]);
-    if (boardResult.rows.length === 0) return res.status(404).json({ error: 'Board not found' });
-
-    const board = boardResult.rows[0];
-
-    if (board.owner_roll !== roll) {
-      const memberCheck = await pool.query(
-        'SELECT 1 FROM board_members WHERE board_id = $1 AND roll_number = $2',
-        [req.params.id, roll]
-      );
-      if (memberCheck.rows.length === 0) return res.status(403).json({ error: 'Not a member' });
-    }
-
-    const parsed = itemSchema.parse(req.body);
     const id = uuidv4();
     const now = new Date().toISOString();
 
     const result = await pool.query(`
-      INSERT INTO board_items (id, board_id, added_by_roll, image_url, note, source_url, added_at)
+      INSERT INTO boards
+        (id, name, description, owner_roll,
+         owner_name, visibility, created_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
-    `, [id, req.params.id, roll, parsed.image_url, parsed.note ?? null, parsed.source_url || null, now]);
+    `, [
+      id, parsed.name, parsed.description ?? null,
+      roll, ownerName, parsed.visibility, now,
+    ]);
 
-    const nameResult = await pool.query(
-      'SELECT name FROM student_sessions WHERE roll_number = $1', [roll]
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: err.errors });
+    }
+    console.error('Create board error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/boards/:id
+// Update board name/description/visibility (owner only)
+router.put('/:id', async (req: Request, res: Response) => {
+  try {
+    const roll = req.headers['x-roll-number'] as string;
+    if (!roll) {
+      return res.status(401).json({ error: 'Roll number required' });
+    }
+
+    const owner = await isOwner(req.params.id, roll);
+    if (!owner) {
+      return res.status(403).json({ error: 'Only owner can update board' });
+    }
+
+    const schema = z.object({
+      name: z.string().min(1).max(100).optional(),
+      description: z.string().max(300).optional(),
+      visibility: z.enum(['private', 'shared']).optional(),
+    });
+
+    const parsed = schema.parse(req.body);
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    let i = 1;
+
+    if (parsed.name !== undefined) { fields.push(`name = $${i++}`); values.push(parsed.name); }
+    if (parsed.description !== undefined) { fields.push(`description = $${i++}`); values.push(parsed.description); }
+    if (parsed.visibility !== undefined) { fields.push(`visibility = $${i++}`); values.push(parsed.visibility); }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ error: 'Nothing to update' });
+    }
+
+    values.push(req.params.id);
+    const result = await pool.query(`
+      UPDATE boards SET ${fields.join(', ')}
+      WHERE id = $${i} RETURNING *
+    `, values);
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/boards/:id
+// Delete board (owner only)
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    const roll = req.headers['x-roll-number'] as string;
+    if (!roll) {
+      return res.status(401).json({ error: 'Roll number required' });
+    }
+
+    const owner = await isOwner(req.params.id, roll);
+    if (!owner) {
+      return res.status(403).json({ error: 'Only owner can delete board' });
+    }
+
+    await pool.query('DELETE FROM boards WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/boards/:id/members
+// Add collaborator by roll number (owner only)
+router.post('/:id/members', async (req: Request, res: Response) => {
+  try {
+    const roll = req.headers['x-roll-number'] as string;
+    if (!roll) {
+      return res.status(401).json({ error: 'Roll number required' });
+    }
+
+    const owner = await isOwner(req.params.id, roll);
+    if (!owner) {
+      return res.status(403).json({ error: 'Only owner can add members' });
+    }
+
+    const { roll_number } = req.body as { roll_number?: string };
+    if (!roll_number) {
+      return res.status(400).json({ error: 'Roll number required' });
+    }
+
+    const studentResult = await pool.query(
+      'SELECT name FROM student_sessions WHERE roll_number = $1',
+      [roll_number]
     );
 
-    res.status(201).json({ ...result.rows[0], added_by_name: nameResult.rows[0]?.name ?? null });
+    if (studentResult.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Student not found — they must register first',
+      });
+    }
+
+    const memberName = (studentResult.rows[0] as { name: string } | undefined)?.name ?? null;
+    const now = new Date().toISOString();
+
+    await pool.query(`
+      INSERT INTO board_members (board_id, roll_number, name, added_at)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT DO NOTHING
+    `, [req.params.id, roll_number, memberName, now]);
+
+    res.json({ success: true, name: memberName });
   } catch (err) {
-    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/boards/:id/members/:roll
+// Remove collaborator (owner only)
+router.delete('/:id/members/:roll', async (req: Request, res: Response) => {
+  try {
+    const roll = req.headers['x-roll-number'] as string;
+    if (!roll) {
+      return res.status(401).json({ error: 'Roll number required' });
+    }
+
+    const owner = await isOwner(req.params.id, roll);
+    if (!owner) {
+      return res.status(403).json({ error: 'Only owner can remove members' });
+    }
+
+    await pool.query(
+      'DELETE FROM board_members WHERE board_id = $1 AND roll_number = $2',
+      [req.params.id, req.params.roll]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/boards/:id/items
+// Add item to board (owner + members)
+router.post('/:id/items', async (req: Request, res: Response) => {
+  try {
+    const roll = req.headers['x-roll-number'] as string;
+    if (!roll) {
+      return res.status(401).json({ error: 'Roll number required' });
+    }
+
+    const access = await isMember(req.params.id, roll);
+    if (!access) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const schema = z.object({
+      image_url: z.string().min(1),
+      note: z.string().max(500).optional(),
+      source_url: z.string().optional(),
+    });
+
+    const parsed = schema.parse(req.body);
+
+    const studentResult = await pool.query(
+      'SELECT name FROM student_sessions WHERE roll_number = $1',
+      [roll]
+    );
+    const addedByName = (studentResult.rows[0] as { name: string } | undefined)?.name ?? null;
+
+    const id = uuidv4();
+    const now = new Date().toISOString();
+
+    const result = await pool.query(`
+      INSERT INTO board_items
+        (id, board_id, image_url, note,
+         source_url, added_by_roll, added_by_name, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *
+    `, [
+      id, req.params.id,
+      parsed.image_url,
+      parsed.note ?? null,
+      parsed.source_url ?? null,
+      roll,
+      addedByName,
+      now,
+    ]);
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: err.errors });
+    }
     console.error('Add item error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// DELETE /:id/items/:itemId — delete item (board owner or item owner)
-router.delete('/:id/items/:itemId', async (req, res) => {
-  const roll = req.headers['x-roll-number'] as string | undefined;
-  if (!roll) return res.status(401).json({ error: 'Roll number required' });
-
+// DELETE /api/boards/:id/items/:itemId
+// Delete item (item owner or board owner)
+router.delete('/:id/items/:itemId', async (req: Request, res: Response) => {
   try {
-    const boardResult = await pool.query('SELECT owner_roll FROM boards WHERE id = $1', [req.params.id]);
-    if (boardResult.rows.length === 0) return res.status(404).json({ error: 'Board not found' });
+    const roll = req.headers['x-roll-number'] as string;
+    if (!roll) {
+      return res.status(401).json({ error: 'Roll number required' });
+    }
 
     const itemResult = await pool.query(
-      'SELECT added_by_roll FROM board_items WHERE id = $1 AND board_id = $2',
+      'SELECT * FROM board_items WHERE id = $1 AND board_id = $2',
       [req.params.itemId, req.params.id]
     );
-    if (itemResult.rows.length === 0) return res.status(404).json({ error: 'Item not found' });
 
-    const isOwner = boardResult.rows[0].owner_roll === roll;
-    const isItemOwner = itemResult.rows[0].added_by_roll === roll;
+    if (itemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
 
-    if (!isOwner && !isItemOwner) return res.status(403).json({ error: 'Not authorized' });
+    const item = itemResult.rows[0] as { added_by_roll: string };
+    const owner = await isOwner(req.params.id, roll);
+
+    if (item.added_by_roll !== roll && !owner) {
+      return res.status(403).json({ error: 'Cannot delete this item' });
+    }
 
     await pool.query('DELETE FROM board_items WHERE id = $1', [req.params.itemId]);
+
     res.json({ success: true });
   } catch (err) {
-    console.error('Delete item error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// POST /:id/members — add member (owner only)
-router.post('/:id/members', async (req, res) => {
-  const roll = req.headers['x-roll-number'] as string | undefined;
-  if (!roll) return res.status(401).json({ error: 'Roll number required' });
-
+// GET /api/boards/:id/items
+// Get only items (for polling)
+router.get('/:id/items', async (req: Request, res: Response) => {
   try {
-    const boardResult = await pool.query('SELECT owner_roll FROM boards WHERE id = $1', [req.params.id]);
-    if (boardResult.rows.length === 0) return res.status(404).json({ error: 'Board not found' });
-    if (boardResult.rows[0].owner_roll !== roll) return res.status(403).json({ error: 'Not the owner' });
+    const roll = req.headers['x-roll-number'] as string;
 
-    const parsed = z.object({ roll_number: z.string().min(1) }).parse(req.body);
-
-    const studentResult = await pool.query(
-      'SELECT name FROM student_sessions WHERE roll_number = $1', [parsed.roll_number]
+    const boardResult = await pool.query(
+      'SELECT * FROM boards WHERE id = $1',
+      [req.params.id]
     );
-    if (studentResult.rows.length === 0) return res.status(404).json({ error: 'Student not found — they must register first' });
 
-    const now = new Date().toISOString();
-    await pool.query(`
-      INSERT INTO board_members (board_id, roll_number, added_at)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (board_id, roll_number) DO NOTHING
-    `, [req.params.id, parsed.roll_number, now]);
+    if (boardResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Board not found' });
+    }
 
-    res.json({ name: studentResult.rows[0].name });
+    const board = boardResult.rows[0] as { visibility: string; id: string };
+
+    if (board.visibility === 'private') {
+      if (!roll) return res.status(403).json({ error: 'Access denied' });
+      const access = await isMember(board.id, roll);
+      if (!access) return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const result = await pool.query(`
+      SELECT * FROM board_items
+      WHERE board_id = $1
+      ORDER BY created_at DESC
+    `, [req.params.id]);
+
+    res.json(result.rows);
   } catch (err) {
-    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
-    console.error('Add member error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// DELETE /:id/members/:memberRoll — remove member (owner only)
-router.delete('/:id/members/:memberRoll', async (req, res) => {
-  const roll = req.headers['x-roll-number'] as string | undefined;
-  if (!roll) return res.status(401).json({ error: 'Roll number required' });
-
-  try {
-    const boardResult = await pool.query('SELECT owner_roll FROM boards WHERE id = $1', [req.params.id]);
-    if (boardResult.rows.length === 0) return res.status(404).json({ error: 'Board not found' });
-    if (boardResult.rows[0].owner_roll !== roll) return res.status(403).json({ error: 'Not the owner' });
-
-    await pool.query(
-      'DELETE FROM board_members WHERE board_id = $1 AND roll_number = $2',
-      [req.params.id, req.params.memberRoll]
-    );
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Remove member error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

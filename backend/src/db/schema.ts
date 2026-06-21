@@ -342,4 +342,41 @@ export async function initSchema(): Promise<void> {
 
     console.log('Audience groups seeded with 45 team members');
   }
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS boards (
+      id           TEXT PRIMARY KEY,
+      name         TEXT NOT NULL,
+      description  TEXT,
+      owner_roll   TEXT NOT NULL,
+      owner_name   TEXT,
+      visibility   TEXT NOT NULL DEFAULT 'private',
+      created_at   TEXT NOT NULL
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS board_members (
+      board_id    TEXT NOT NULL REFERENCES boards(id)
+                  ON DELETE CASCADE,
+      roll_number TEXT NOT NULL,
+      name        TEXT,
+      added_at    TEXT NOT NULL,
+      PRIMARY KEY (board_id, roll_number)
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS board_items (
+      id            TEXT PRIMARY KEY,
+      board_id      TEXT NOT NULL REFERENCES boards(id)
+                    ON DELETE CASCADE,
+      image_url     TEXT NOT NULL,
+      note          TEXT,
+      source_url    TEXT,
+      added_by_roll TEXT NOT NULL,
+      added_by_name TEXT,
+      created_at    TEXT NOT NULL
+    )
+  `);
 }
