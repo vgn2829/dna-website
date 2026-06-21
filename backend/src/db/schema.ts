@@ -356,6 +356,21 @@ export async function initSchema(): Promise<void> {
   `);
 
   await pool.query(`
+    ALTER TABLE boards
+    ADD COLUMN IF NOT EXISTS room_id TEXT
+  `);
+
+  console.log('boards.room_id migration done');
+
+  await pool.query(`
+    UPDATE boards
+    SET room_id = gen_random_uuid()::text
+    WHERE room_id IS NULL
+  `);
+
+  console.log('Backfilled room_id for existing boards');
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS board_members (
       board_id    TEXT NOT NULL REFERENCES boards(id)
                   ON DELETE CASCADE,

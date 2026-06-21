@@ -170,17 +170,18 @@ router.post('/', async (req: Request, res: Response) => {
     const ownerName = (studentResult.rows[0] as { name: string } | undefined)?.name ?? null;
 
     const id = uuidv4();
+    const roomId = uuidv4();
     const now = new Date().toISOString();
 
     const result = await pool.query(`
       INSERT INTO boards
         (id, name, description, owner_roll,
-         owner_name, visibility, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+         owner_name, visibility, room_id, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `, [
       id, parsed.name, parsed.description ?? null,
-      roll, ownerName, parsed.visibility, now,
+      roll, ownerName, parsed.visibility, roomId, now,
     ]);
 
     res.status(201).json(result.rows[0]);
