@@ -11,6 +11,7 @@ import { studentsRouter } from './routes/students';
 import { teamRouter }    from './routes/team';
 import notifyRouter      from './routes/notify';
 import liveSessionsRouter from './routes/liveSessions';
+import boardsRouter from './routes/boards';
 
 export function createApp() {
   const app = express();
@@ -66,6 +67,7 @@ export function createApp() {
   app.use('/api/team',     teamRouter);
   app.use('/api/notify',        notifyRouter);
   app.use('/api/live-sessions', liveSessionsRouter);
+  app.use('/api/boards',       boardsRouter);
 
   app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 

@@ -10,6 +10,8 @@ import { AcademyPage } from './pages/AcademyPage';
 import { AdminPage } from './pages/AdminPage';
 import { PalettePage } from './pages/PalettePage'; // PALETTE_STUDIO_FEATURE
 import DesignStudio from './pages/DesignStudioPage';
+import MoodboardsPage from './pages/MoodboardsPage';
+import BoardPage from './pages/BoardPage';
 
 export const router = createBrowserRouter([
   {
@@ -25,6 +27,8 @@ export const router = createBrowserRouter([
       { path: 'palette', Component: PalettePage }, // PALETTE_STUDIO_FEATURE
       { path: 'design-studio', Component: DesignStudio },
       { path: 'admin', Component: AdminPage },
+      { path: 'moodboards', Component: MoodboardsPage },
+      { path: 'moodboards/:id', Component: BoardPage },
     ],
   },
 ]);

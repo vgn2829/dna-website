@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Heart, MessageCircle, X, ZoomIn, ZoomOut, Send, FileText, Play, ExternalLink } from 'lucide-react';
 import { useAppData, type Artwork } from '../context/AppDataContext';
 import { useStudent } from '../context/StudentContext';
+import { api, type Board } from '../lib/api';
 
 const DOMAIN_COLORS: Record<string, string> = {
   'UI/UX Design': '#007AFF', Photoshop: '#BF5AF2', Illustrator: '#FF9F0A', '3D Animation': '#FF375F',
@@ -376,6 +377,11 @@ function MediaThumbnail({ art }: { art: Artwork }) {
 
 export function GalleryPage() {
   const { artworks, likeArtwork, loading, error } = useAppData();
+  const { studentSession } = useStudent();
+  const [savingArtwork, setSavingArtwork] = useState<Artwork | null>(null);
+  const [myBoards, setMyBoards] = useState<Board[]>([]);
+  const [boardsLoaded, setBoardsLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
   const domainTitles = useMemo(() => {
     const unique = [...new Set(
       artworks
@@ -399,6 +405,37 @@ export function GalleryPage() {
     }
     likeArtwork(id);
   }, [likeArtwork, artworks]);
+
+  const handleSaveToBoard = async (artwork: Artwork) => {
+    if (!studentSession?.rollNumber) return;
+    setSavingArtwork(artwork);
+    if (!boardsLoaded) {
+      try {
+        const boards = await api.boards.getMyBoards(studentSession.rollNumber);
+        setMyBoards(boards);
+        setBoardsLoaded(true);
+      } catch {
+        setMyBoards([]);
+      }
+    }
+  };
+
+  const handleSaveToSelectedBoard = async (boardId: string) => {
+    if (!savingArtwork || !studentSession?.rollNumber) return;
+    setSaving(true);
+    try {
+      await api.boards.addItem(boardId, studentSession.rollNumber, {
+        image_url: savingArtwork.coverUrl ?? savingArtwork.mediaUrl,
+        note: savingArtwork.title,
+        source_url: `https://dna-website-two.vercel.app/gallery`,
+      });
+      setSavingArtwork(null);
+    } catch {
+      // Silent fail
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -478,6 +515,17 @@ export function GalleryPage() {
                         <Heart size={11} fill={art.likedByUser ? '#ff4d6d' : 'none'} style={{ color: art.likedByUser ? '#ff4d6d' : '#fff' }} />
                         <span className="tabular-nums">{art.likes}</span>
                       </button>
+                      {/* Save button — bottom-left, visible on hover/touch */}
+                      {studentSession && (
+                        <button
+                          onClick={e => { e.stopPropagation(); handleSaveToBoard(art); }}
+                          title="Save to Moodboard"
+                          className="absolute bottom-3 left-3 opacity-0 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity"
+                          style={{ background: 'rgba(0,0,0,0.55)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 16, padding: '4px 8px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}
+                        >
+                          ◈
+                        </button>
+                      )}
                     </div>
                     {/* Text area below image — always visible, never overlapped */}
                     <div style={{ padding: '20px 20px 24px' }}>
@@ -498,6 +546,68 @@ export function GalleryPage() {
 
       <AnimatePresence>
         {selectedId && <ArtworkModal artworkId={selectedId} onClose={() => setSelectedId(null)} />}
+      </AnimatePresence>
+
+      {/* Save to moodboard picker */}
+      <AnimatePresence>
+        {savingArtwork && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+            onClick={() => setSavingArtwork(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 24, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16 }}
+              onClick={e => e.stopPropagation()}
+              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 20, padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '80vh', overflowY: 'auto' }}
+            >
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
+                Save to Moodboard
+              </h3>
+
+              {myBoards.length === 0 ? (
+                <div>
+                  <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                    You don't have any boards yet.
+                  </p>
+                  <a
+                    href="/moodboards"
+                    style={{ display: 'inline-block', padding: '8px 16px', background: '#E91E8C', color: '#fff', borderRadius: 100, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', textDecoration: 'none' }}
+                  >
+                    Create a Board
+                  </a>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {myBoards.map(board => (
+                    <button
+                      key={board.id}
+                      onClick={() => handleSaveToSelectedBoard(board.id)}
+                      disabled={saving}
+                      style={{ width: '100%', textAlign: 'left', padding: '12px 14px', border: '1px solid var(--color-border)', borderRadius: 10, background: 'var(--color-canvas)', cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                    >
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+                        {board.name}
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                        {board.item_count} items
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={() => setSavingArtwork(null)}
+                style={{ padding: '10px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 100, fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );

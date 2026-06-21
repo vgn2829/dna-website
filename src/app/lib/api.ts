@@ -44,6 +44,46 @@ export interface PastSession {
   description: string | null;
 }
 
+export interface BoardMember {
+  roll_number: string;
+  name: string | null;
+  added_at: string;
+}
+
+export interface BoardItem {
+  id: string;
+  board_id: string;
+  added_by_roll: string;
+  added_by_name: string | null;
+  image_url: string;
+  note: string | null;
+  source_url: string | null;
+  added_at: string;
+}
+
+export interface Board {
+  id: string;
+  owner_roll: string;
+  owner_name: string | null;
+  name: string;
+  description: string | null;
+  visibility: 'private' | 'shared';
+  item_count: number;
+  created_at: string;
+}
+
+export interface BoardDetail {
+  id: string;
+  owner_roll: string;
+  owner_name: string | null;
+  name: string;
+  description: string | null;
+  visibility: 'private' | 'shared';
+  created_at: string;
+  items: BoardItem[];
+  members: BoardMember[];
+}
+
 export interface EmailTemplate {
   id: string;
   name: string;
@@ -183,6 +223,26 @@ export const api = {
     markVideoWatched:   (roll: string, videoId: string) => request<void>('POST', `/students/${roll}/progress/videos/${videoId}`, { roll }),
     unmarkVideoWatched: (roll: string, videoId: string) => request<void>('DELETE', `/students/${roll}/progress/videos/${videoId}`, { roll }),
     completeQuiz:       (roll: string, domainId: string) => request<void>('POST', `/students/${roll}/progress/quizzes/${domainId}`, { roll }),
+  },
+  boards: {
+    getMyBoards: (roll: string) =>
+      request<Board[]>('GET', '/boards', { roll }),
+    create: (roll: string, data: { name: string; description?: string; visibility?: 'private' | 'shared' }) =>
+      request<Board>('POST', '/boards', { body: data, roll }),
+    getBoard: (id: string, roll?: string) =>
+      request<BoardDetail>('GET', `/boards/${id}`, { roll }),
+    delete: (id: string, roll: string) =>
+      request<{ success: boolean }>('DELETE', `/boards/${id}`, { roll }),
+    getItems: (id: string, roll?: string) =>
+      request<BoardItem[]>('GET', `/boards/${id}/items`, { roll }),
+    addItem: (boardId: string, roll: string, data: { image_url: string; note?: string; source_url?: string }) =>
+      request<BoardItem>('POST', `/boards/${boardId}/items`, { body: data, roll }),
+    deleteItem: (boardId: string, itemId: string, roll: string) =>
+      request<{ success: boolean }>('DELETE', `/boards/${boardId}/items/${itemId}`, { roll }),
+    addMember: (boardId: string, roll: string, memberRoll: string) =>
+      request<{ name: string | null }>('POST', `/boards/${boardId}/members`, { body: { roll_number: memberRoll }, roll }),
+    removeMember: (boardId: string, roll: string, memberRoll: string) =>
+      request<{ success: boolean }>('DELETE', `/boards/${boardId}/members/${memberRoll}`, { roll }),
   },
   liveSessions: {
     getActive: (roll?: string) =>
