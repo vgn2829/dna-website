@@ -144,21 +144,6 @@ export function Navigation() {
                 </button>
               )}
 
-              {/* Admin — subtle icon-only link so it doesn't crowd the bar */}
-              <button
-                onClick={() => navigate('/admin')}
-                className="btn-secondary"
-                style={{
-                  minHeight: 34,
-                  padding: '6px 13px',
-                  fontSize: 13,
-                  background: isActive('/admin') ? 'var(--color-surface-2)' : 'var(--color-surface-1)',
-                  color: isActive('/admin') ? 'var(--color-ink)' : 'var(--color-ink-muted)',
-                }}
-                title="Admin"
-              >
-                Admin
-              </button>
             </div>
 
             {/* Theme toggle — all breakpoints */}
@@ -196,7 +181,7 @@ export function Navigation() {
             style={{ background: 'var(--color-canvas)' }}
           >
             <nav className="flex flex-col px-5 pt-4 gap-0.5">
-              {[...NAV_LINKS, { label: 'Admin', path: '/admin' }].map(link => (
+              {NAV_LINKS.map(link => (
                 <button
                   key={link.path}
                   onClick={() => navigate(link.path)}

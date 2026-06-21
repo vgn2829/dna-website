@@ -80,6 +80,11 @@ export interface BoardDetail extends Board {
   members: BoardMember[];
 }
 
+export interface AppSettings {
+  public_meet_enabled: string;
+  public_meet_passcode?: string;
+}
+
 export interface EmailTemplate {
   id: string;
   name: string;
@@ -287,5 +292,39 @@ export const api = {
       request<{ count: number }>('GET', `/live-sessions/${sessionId}/joins/count`),
     getPast: () =>
       request<PastSession[]>('GET', '/live-sessions/past', { admin: true }),
+    createPublic: (
+      token: string,
+      roll: string,
+      data: {
+        title: string;
+        host: string;
+        meet_link: string;
+        scheduled_at: string;
+        audience_group_id: string | null;
+        description?: string;
+      }
+    ) =>
+      request<LiveSession>(
+        'POST', '/live-sessions/public',
+        { body: { token, ...data }, roll }
+      ),
+    deletePublic: (id: string, token: string) =>
+      request<{ success: boolean }>(
+        'DELETE', `/live-sessions/public/${id}`,
+        { body: { token } }
+      ),
+  },
+  settings: {
+    getPublic: () =>
+      request<Record<string, string>>('GET', '/settings/public'),
+    getAll: () =>
+      request<Record<string, string>>('GET', '/settings', { admin: true }),
+    update: (data: Record<string, string>) =>
+      request<{ success: boolean }>('PUT', '/settings', { body: data, admin: true }),
+    verifyPasscode: (passcode: string) =>
+      request<{ success: boolean; token: string }>(
+        'POST', '/settings/verify-passcode',
+        { body: { passcode } }
+      ),
   },
 };

@@ -16,7 +16,6 @@ const COLS = [
     heading: 'Club',
     links: [
       { label: 'About DnA', path: '/' },
-      { label: 'Admin', path: '/admin' },
       { label: 'Join Us', path: '/events' },
     ],
   },
@@ -193,15 +192,32 @@ export function Footer() {
           flexWrap: 'wrap',
           gap: 12,
         }}>
-          <p style={{
-            fontSize: 12,
-            color: 'var(--color-ink-muted)',
-            margin: 0,
-            letterSpacing: '-0.12px',
-            fontFamily: 'var(--font-body)',
-          }}>
-            © {new Date().getFullYear()} Design &amp; Animation Club, IIT Kanpur
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <p style={{
+              fontSize: 12,
+              color: 'var(--color-ink-muted)',
+              margin: 0,
+              letterSpacing: '-0.12px',
+              fontFamily: 'var(--font-body)',
+            }}>
+              © {new Date().getFullYear()} Design &amp; Animation Club, IIT Kanpur
+            </p>
+            <a
+              href="/admin"
+              style={{
+                fontSize: 11,
+                color: 'var(--color-ink-muted)',
+                textDecoration: 'none',
+                opacity: 0.4,
+                fontFamily: 'var(--font-body)',
+                transition: 'opacity 0.2s ease',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '0.8')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}
+            >
+              Admin
+            </a>
+          </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <span style={{

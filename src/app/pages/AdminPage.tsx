@@ -1607,46 +1607,175 @@ function CommentsTab() {
 
 // ── Settings tab ─────────────────────────────────────────────────────────────
 function SettingsTab() {
-  const [forceUpper, setForceUpperState] = useState(() => localStorage.getItem('forceUppercase') !== 'false');
+  const [settings, setSettings] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+  const [newPasscode, setNewPasscode] = useState('');
+  const [showPasscode, setShowPasscode] = useState(false);
 
-  const toggle = () => {
-    const next = !forceUpper;
-    localStorage.setItem('forceUppercase', next ? 'true' : 'false');
-    setForceUpperState(next);
+  useEffect(() => {
+    api.settings.getAll()
+      .then(setSettings)
+      .catch(() => setError('Failed to load settings'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleToggleMeet = async () => {
+    setSaving(true);
+    const newVal = settings.public_meet_enabled === 'true' ? 'false' : 'true';
+    try {
+      await api.settings.update({ public_meet_enabled: newVal });
+      setSettings(prev => ({ ...prev, public_meet_enabled: newVal }));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setError('Failed to update setting');
+    } finally {
+      setSaving(false);
+    }
   };
 
+  const handleUpdatePasscode = async () => {
+    if (!newPasscode.trim()) return;
+    setSaving(true);
+    try {
+      await api.settings.update({ public_meet_passcode: newPasscode.trim() });
+      setSettings(prev => ({ ...prev, public_meet_passcode: newPasscode.trim() }));
+      setNewPasscode('');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setError('Failed to update passcode');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return (
+    <p style={{ color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', fontSize: 14 }}>
+      Loading settings...
+    </p>
+  );
+
+  const isMeetEnabled = settings.public_meet_enabled === 'true';
+
   return (
-    <div className="card p-6 space-y-6" style={{ maxWidth: 480 }}>
-      <h2 className="type-headline">Gallery Settings</h2>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-        <div>
-          <p className="type-body-sm" style={{ fontWeight: 600 }}>Force uppercase titles &amp; artist names</p>
-          <p className="type-micro" style={{ color: 'var(--color-ink-muted)', marginTop: 2 }}>
-            {forceUpper
-              ? 'ON — titles and artist names are uppercased in forms and displays.'
-              : 'OFF — text is shown as entered.'}
-          </p>
-          {!forceUpper && (
-            <p className="type-micro" style={{ color: '#e5a000', marginTop: 4 }}>
-              Note: existing artworks uploaded while ON are already stored uppercase.
-            </p>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={toggle}
-          style={{
-            flexShrink: 0,
-            width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
-            background: forceUpper ? 'var(--color-accent-blue)' : 'var(--color-surface-2)',
-          }}
-        >
-          <span style={{
-            position: 'absolute', top: 3, left: forceUpper ? 22 : 3, width: 18, height: 18,
-            borderRadius: '50%', background: '#fff', transition: 'left 0.2s', display: 'block',
-          }} />
-        </button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+      <div>
+        <h2 style={{
+          margin: '0 0 4px', fontSize: 22, fontWeight: 700,
+          color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.5px',
+        }}>
+          Settings
+        </h2>
+        <p style={{ margin: 0, fontSize: 14, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+          Configure website features and access controls.
+        </p>
       </div>
+
+      {error && (
+        <p style={{ color: '#ef4444', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
+          {error}
+        </p>
+      )}
+
+      <div style={{ border: '1px solid var(--color-border)', borderRadius: 16, overflow: 'hidden' }}>
+        <div style={{
+          padding: '20px 24px', borderBottom: '1px solid var(--color-border)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16,
+        }}>
+          <div>
+            <p style={{ margin: '0 0 2px', fontSize: 15, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+              Public Meet Scheduler
+            </p>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+              Show a "Schedule a Meet" option in the footer for coordinators with the passcode.
+            </p>
+          </div>
+          <button
+            onClick={handleToggleMeet}
+            disabled={saving}
+            style={{
+              width: 48, height: 26, borderRadius: 100,
+              background: isMeetEnabled ? '#E91E8C' : 'var(--color-border)',
+              border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
+              position: 'relative', transition: 'background 0.2s ease', flexShrink: 0,
+            }}
+          >
+            <div style={{
+              position: 'absolute', top: 3, left: isMeetEnabled ? 26 : 3,
+              width: 20, height: 20, borderRadius: '50%', background: '#fff',
+              transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+            }} />
+          </button>
+        </div>
+
+        <div style={{
+          padding: '20px 24px',
+          opacity: isMeetEnabled ? 1 : 0.5,
+          pointerEvents: isMeetEnabled ? 'all' : 'none',
+        }}>
+          <p style={{
+            margin: '0 0 12px', fontSize: 11, fontWeight: 600,
+            color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
+            textTransform: 'uppercase', fontFamily: 'var(--font-body)',
+          }}>
+            Current Passcode
+          </p>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16 }}>
+            <code style={{
+              padding: '8px 16px', background: 'var(--color-canvas)',
+              border: '1px solid var(--color-border)', borderRadius: 8,
+              fontSize: 16, fontWeight: 700, letterSpacing: '0.1em', color: '#E91E8C',
+              fontFamily: 'var(--font-mono, monospace)',
+            }}>
+              {showPasscode ? (settings.public_meet_passcode ?? 'DNA2025') : '••••••••'}
+            </code>
+            <button
+              onClick={() => setShowPasscode(p => !p)}
+              style={{ fontSize: 12, color: 'var(--color-ink-muted)', background: 'none', border: 'none', fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+            >
+              {showPasscode ? 'Hide' : 'Show'}
+            </button>
+          </div>
+          <p style={{
+            margin: '0 0 8px', fontSize: 11, fontWeight: 600,
+            color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
+            textTransform: 'uppercase', fontFamily: 'var(--font-body)',
+          }}>
+            Change Passcode
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              className="input-base"
+              type="text"
+              placeholder="New passcode"
+              value={newPasscode}
+              onChange={e => setNewPasscode(e.target.value)}
+              style={{ width: 200 }}
+            />
+            <button
+              className="btn-primary"
+              onClick={handleUpdatePasscode}
+              disabled={saving || !newPasscode.trim()}
+              style={{ fontSize: 13 }}
+            >
+              {saving ? 'Saving...' : 'Update'}
+            </button>
+          </div>
+          <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+            Share this passcode with coordinators who need to schedule meets.
+          </p>
+        </div>
+      </div>
+
+      {saved && (
+        <p style={{ color: '#22c55e', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
+          Settings saved
+        </p>
+      )}
     </div>
   );
 }
