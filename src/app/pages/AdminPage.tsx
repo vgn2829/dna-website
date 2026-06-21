@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
-import { api, setAdminToken, clearAdminToken } from '../lib/api';
+import { api, setAdminToken, clearAdminToken, type SessionJoins } from '../lib/api';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
 import imageCompression from 'browser-image-compression';
 
@@ -1899,7 +1899,12 @@ function AnnouncementsTab() {
 }
 
 // ── Sessions tab ──────────────────────────────────────────────────────────────
+type SessionSubTab = 'active' | 'past';
+
 function SessionsTab() {
+  const [subTab, setSubTab] = useState<SessionSubTab>('active');
+
+  // Active tab state
   const [sessions, setSessions] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1914,6 +1919,13 @@ function SessionsTab() {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Past tab state
+  const [pastSessions, setPastSessions] = useState<any[]>([]);
+  const [pastLoading, setPastLoading] = useState(false);
+  const [selectedPast, setSelectedPast] = useState<string | null>(null);
+  const [joins, setJoins] = useState<SessionJoins | null>(null);
+  const [joinsLoading, setJoinsLoading] = useState(false);
 
   const load = async () => {
     try {
@@ -1931,6 +1943,26 @@ function SessionsTab() {
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (subTab === 'past') {
+      setPastLoading(true);
+      api.liveSessions.getPast()
+        .then(setPastSessions)
+        .catch(() => {})
+        .finally(() => setPastLoading(false));
+    }
+  }, [subTab]);
+
+  useEffect(() => {
+    if (!selectedPast) return;
+    setJoinsLoading(true);
+    setJoins(null);
+    api.liveSessions.getJoins(selectedPast)
+      .then(setJoins)
+      .catch(() => {})
+      .finally(() => setJoinsLoading(false));
+  }, [selectedPast]);
 
   const handleCreate = async () => {
     setSaving(true);
@@ -2011,217 +2043,392 @@ function SessionsTab() {
             Schedule Google Meet sessions for students.
           </p>
         </div>
-        <button className="btn-primary" onClick={() => setShowForm(true)}>
-          + New Session
-        </button>
+        {subTab === 'active' && (
+          <button className="btn-primary" onClick={() => setShowForm(true)}>
+            + New Session
+          </button>
+        )}
       </div>
 
-      {error && (
-        <p style={{ color: '#ef4444', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
-          {error}
-        </p>
-      )}
-
-      {/* Create form */}
-      {showForm && (
-        <div style={{
-          border: '1px solid var(--color-border)',
-          borderRadius: 16, padding: 24,
-          background: 'var(--color-surface)',
-          display: 'flex', flexDirection: 'column', gap: 16,
-        }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
-            New Session
-          </h3>
-
-          {[
-            { label: 'Session Title', key: 'title', placeholder: 'e.g. Typography Workshop' },
-            { label: 'Host Name', key: 'host', placeholder: 'e.g. Arjun Kumar' },
-            { label: 'Google Meet Link', key: 'meet_link', placeholder: 'https://meet.google.com/xxx-xxxx-xxx' },
-          ].map(({ label, key, placeholder }) => (
-            <div key={key}>
-              <label style={{
-                display: 'block', fontSize: 11, fontWeight: 600,
-                color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-                textTransform: 'uppercase', marginBottom: 6,
-                fontFamily: 'var(--font-body)',
-              }}>
-                {label}
-              </label>
-              <input
-                className="input-base"
-                type="text"
-                placeholder={placeholder}
-                value={(form as any)[key]}
-                onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
-                style={{ width: '100%', boxSizing: 'border-box' }}
-              />
-            </div>
-          ))}
-
-          <div>
-            <label style={{
-              display: 'block', fontSize: 11, fontWeight: 600,
-              color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-              textTransform: 'uppercase', marginBottom: 6,
+      {/* Sub-tab navigation */}
+      <div style={{
+        display: 'flex',
+        gap: 4,
+        borderBottom: '1px solid var(--color-border)',
+        marginBottom: 8,
+      }}>
+        {(['active', 'past'] as SessionSubTab[]).map(t => (
+          <button
+            key={t}
+            onClick={() => {
+              setSubTab(t);
+              setSelectedPast(null);
+              setJoins(null);
+            }}
+            style={{
+              padding: '8px 16px',
+              background: 'none',
+              border: 'none',
+              borderBottom: subTab === t ? '2px solid #E91E8C' : '2px solid transparent',
+              color: subTab === t ? '#E91E8C' : 'var(--color-ink-muted)',
+              fontSize: 13,
+              fontWeight: subTab === t ? 600 : 400,
               fontFamily: 'var(--font-body)',
-            }}>
-              Date & Time
-            </label>
-            <input
-              className="input-base"
-              type="datetime-local"
-              value={form.scheduled_at}
-              onChange={e => setForm(prev => ({ ...prev, scheduled_at: e.target.value }))}
-              style={{ width: '100%', boxSizing: 'border-box' }}
-            />
-          </div>
+              cursor: 'pointer',
+              marginBottom: -1,
+            }}
+          >
+            {t === 'active' ? 'Active & Upcoming' : 'Past Sessions'}
+          </button>
+        ))}
+      </div>
 
-          <div>
-            <label style={{
-              display: 'block', fontSize: 11, fontWeight: 600,
-              color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-              textTransform: 'uppercase', marginBottom: 6,
-              fontFamily: 'var(--font-body)',
-            }}>
-              Audience
-            </label>
-            <select
-              className="input-base"
-              value={form.audience_group_id}
-              onChange={e => setForm(prev => ({ ...prev, audience_group_id: e.target.value }))}
-              style={{ width: '100%', boxSizing: 'border-box' }}
-            >
-              {groups.map(g => (
-                <option key={g.id} value={g.id}>
-                  {g.name}{g.member_count > 0 ? ` (${g.member_count} members)` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+      {/* Active tab */}
+      {subTab === 'active' && (
+        <>
+          {error && (
+            <p style={{ color: '#ef4444', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
+              {error}
+            </p>
+          )}
 
-          <div>
-            <label style={{
-              display: 'block', fontSize: 11, fontWeight: 600,
-              color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-              textTransform: 'uppercase', marginBottom: 6,
-              fontFamily: 'var(--font-body)',
-            }}>
-              Description (optional)
-            </label>
-            <textarea
-              className="input-base"
-              value={form.description}
-              onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
-              rows={3}
-              placeholder="What will this session cover?"
-              style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button
-              className="btn-primary"
-              onClick={handleCreate}
-              disabled={saving || !form.title || !form.host || !form.meet_link || !form.scheduled_at}
-            >
-              {saving ? 'Creating...' : 'Create Session'}
-            </button>
-            <button className="btn-secondary" onClick={() => setShowForm(false)}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Sessions list */}
-      {sessions.length === 0 ? (
-        <div style={{
-          textAlign: 'center', padding: '48px 0',
-          color: 'var(--color-ink-muted)',
-          fontFamily: 'var(--font-body)', fontSize: 14,
-        }}>
-          No sessions yet. Create your first one.
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {sessions.map(s => (
-            <div key={s.id} style={{
+          {/* Create form */}
+          {showForm && (
+            <div style={{
               border: '1px solid var(--color-border)',
-              borderRadius: 14, padding: '18px 20px',
+              borderRadius: 16, padding: 24,
               background: 'var(--color-surface)',
-              display: 'flex', justifyContent: 'space-between',
-              alignItems: 'flex-start', gap: 16,
+              display: 'flex', flexDirection: 'column', gap: 16,
             }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: statusColor(s.status), fontFamily: 'var(--font-body)' }}>
-                    {statusLabel(s.status)}
-                  </span>
-                  {s.audience_name && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
-                      textTransform: 'uppercase', padding: '2px 8px', borderRadius: 100,
-                      background: 'rgba(233,30,140,0.1)', color: '#E91E8C',
-                      fontFamily: 'var(--font-body)',
-                    }}>
-                      {s.audience_name}
-                    </span>
-                  )}
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
+                New Session
+              </h3>
+
+              {[
+                { label: 'Session Title', key: 'title', placeholder: 'e.g. Typography Workshop' },
+                { label: 'Host Name', key: 'host', placeholder: 'e.g. Arjun Kumar' },
+                { label: 'Google Meet Link', key: 'meet_link', placeholder: 'https://meet.google.com/xxx-xxxx-xxx' },
+              ].map(({ label, key, placeholder }) => (
+                <div key={key}>
+                  <label style={{
+                    display: 'block', fontSize: 11, fontWeight: 600,
+                    color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
+                    textTransform: 'uppercase', marginBottom: 6,
+                    fontFamily: 'var(--font-body)',
+                  }}>
+                    {label}
+                  </label>
+                  <input
+                    className="input-base"
+                    type="text"
+                    placeholder={placeholder}
+                    value={(form as any)[key]}
+                    onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
+                    style={{ width: '100%', boxSizing: 'border-box' }}
+                  />
                 </div>
-                <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
-                  {s.title}
-                </p>
-                <p style={{ margin: 0, fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-                  {s.host} ·{' '}
-                  {new Date(s.scheduled_at).toLocaleString('en-IN', {
-                    day: 'numeric', month: 'short',
-                    hour: '2-digit', minute: '2-digit', hour12: true,
-                  })}
-                </p>
-                <a
-                  href={s.meet_link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ fontSize: 12, color: '#E91E8C', fontFamily: 'var(--font-body)', textDecoration: 'none', wordBreak: 'break-all' }}
-                >
-                  {s.meet_link}
-                </a>
+              ))}
+
+              <div>
+                <label style={{
+                  display: 'block', fontSize: 11, fontWeight: 600,
+                  color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
+                  textTransform: 'uppercase', marginBottom: 6,
+                  fontFamily: 'var(--font-body)',
+                }}>
+                  Date & Time
+                </label>
+                <input
+                  className="input-base"
+                  type="datetime-local"
+                  value={form.scheduled_at}
+                  onChange={e => setForm(prev => ({ ...prev, scheduled_at: e.target.value }))}
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-                {s.status === 'upcoming' && (
-                  <button
-                    className="btn-primary"
-                    style={{ fontSize: 12, padding: '6px 14px' }}
-                    onClick={() => handleStatus(s.id, 'live')}
-                  >
-                    Go Live
-                  </button>
-                )}
-                {s.status === 'live' && (
-                  <button
-                    className="btn-secondary"
-                    style={{ fontSize: 12, padding: '6px 14px' }}
-                    onClick={() => handleStatus(s.id, 'ended')}
-                  >
-                    End Session
-                  </button>
-                )}
-                <button
-                  onClick={() => handleDelete(s.id)}
-                  style={{
-                    fontSize: 12, padding: '6px 14px',
-                    background: 'none', border: '1px solid rgba(239,68,68,0.3)',
-                    borderRadius: 100, color: '#ef4444',
-                    cursor: 'pointer', fontFamily: 'var(--font-body)',
-                  }}
+              <div>
+                <label style={{
+                  display: 'block', fontSize: 11, fontWeight: 600,
+                  color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
+                  textTransform: 'uppercase', marginBottom: 6,
+                  fontFamily: 'var(--font-body)',
+                }}>
+                  Audience
+                </label>
+                <select
+                  className="input-base"
+                  value={form.audience_group_id}
+                  onChange={e => setForm(prev => ({ ...prev, audience_group_id: e.target.value }))}
+                  style={{ width: '100%', boxSizing: 'border-box' }}
                 >
-                  Delete
+                  {groups.map(g => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}{g.member_count > 0 ? ` (${g.member_count} members)` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{
+                  display: 'block', fontSize: 11, fontWeight: 600,
+                  color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
+                  textTransform: 'uppercase', marginBottom: 6,
+                  fontFamily: 'var(--font-body)',
+                }}>
+                  Description (optional)
+                </label>
+                <textarea
+                  className="input-base"
+                  value={form.description}
+                  onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
+                  rows={3}
+                  placeholder="What will this session cover?"
+                  style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  className="btn-primary"
+                  onClick={handleCreate}
+                  disabled={saving || !form.title || !form.host || !form.meet_link || !form.scheduled_at}
+                >
+                  {saving ? 'Creating...' : 'Create Session'}
+                </button>
+                <button className="btn-secondary" onClick={() => setShowForm(false)}>
+                  Cancel
                 </button>
               </div>
             </div>
-          ))}
+          )}
+
+          {/* Sessions list */}
+          {sessions.length === 0 ? (
+            <div style={{
+              textAlign: 'center', padding: '48px 0',
+              color: 'var(--color-ink-muted)',
+              fontFamily: 'var(--font-body)', fontSize: 14,
+            }}>
+              No sessions yet. Create your first one.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {sessions.map(s => (
+                <div key={s.id} style={{
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 14, padding: '18px 20px',
+                  background: 'var(--color-surface)',
+                  display: 'flex', justifyContent: 'space-between',
+                  alignItems: 'flex-start', gap: 16,
+                }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: statusColor(s.status), fontFamily: 'var(--font-body)' }}>
+                        {statusLabel(s.status)}
+                      </span>
+                      {s.audience_name && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
+                          textTransform: 'uppercase', padding: '2px 8px', borderRadius: 100,
+                          background: 'rgba(233,30,140,0.1)', color: '#E91E8C',
+                          fontFamily: 'var(--font-body)',
+                        }}>
+                          {s.audience_name}
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+                      {s.title}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                      {s.host} ·{' '}
+                      {new Date(s.scheduled_at).toLocaleString('en-IN', {
+                        day: 'numeric', month: 'short',
+                        hour: '2-digit', minute: '2-digit', hour12: true,
+                      })}
+                    </p>
+                    <a
+                      href={s.meet_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: 12, color: '#E91E8C', fontFamily: 'var(--font-body)', textDecoration: 'none', wordBreak: 'break-all' }}
+                    >
+                      {s.meet_link}
+                    </a>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+                    {s.status === 'upcoming' && (
+                      <button
+                        className="btn-primary"
+                        style={{ fontSize: 12, padding: '6px 14px' }}
+                        onClick={() => handleStatus(s.id, 'live')}
+                      >
+                        Go Live
+                      </button>
+                    )}
+                    {s.status === 'live' && (
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 12, padding: '6px 14px' }}
+                        onClick={() => handleStatus(s.id, 'ended')}
+                      >
+                        End Session
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDelete(s.id)}
+                      style={{
+                        fontSize: 12, padding: '6px 14px',
+                        background: 'none', border: '1px solid rgba(239,68,68,0.3)',
+                        borderRadius: 100, color: '#ef4444',
+                        cursor: 'pointer', fontFamily: 'var(--font-body)',
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Past Sessions tab */}
+      {subTab === 'past' && (
+        <div style={{ display: 'flex', gap: 20 }}>
+          {/* Left — past sessions list */}
+          <div style={{ flex: '0 0 280px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {pastLoading ? (
+              <p style={{ fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                Loading...
+              </p>
+            ) : pastSessions.length === 0 ? (
+              <p style={{ fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                No past sessions yet.
+              </p>
+            ) : pastSessions.map(s => (
+              <button
+                key={s.id}
+                onClick={() => setSelectedPast(s.id)}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '14px 16px',
+                  borderRadius: 12,
+                  border: selectedPast === s.id ? '1px solid #E91E8C' : '1px solid var(--color-border)',
+                  background: selectedPast === s.id ? 'rgba(233,30,140,0.06)' : 'var(--color-surface)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 4,
+                }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+                  {s.title}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                  {new Date(s.scheduled_at).toLocaleDateString('en-IN', {
+                    day: 'numeric', month: 'short', year: 'numeric',
+                  })}
+                </span>
+                <span style={{
+                  fontSize: 11,
+                  color: s.join_count > 0 ? '#E91E8C' : 'var(--color-ink-muted)',
+                  fontFamily: 'var(--font-body)',
+                  fontWeight: s.join_count > 0 ? 600 : 400,
+                }}>
+                  {s.join_count} clicked to join
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Right — attendee detail */}
+          <div style={{
+            flex: 1,
+            border: '1px solid var(--color-border)',
+            borderRadius: 14,
+            overflow: 'hidden',
+            minHeight: 200,
+          }}>
+            {!selectedPast ? (
+              <div style={{
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 40,
+                color: 'var(--color-ink-muted)',
+                fontFamily: 'var(--font-body)',
+                fontSize: 13,
+                textAlign: 'center',
+              }}>
+                Select a session to see who joined
+              </div>
+            ) : joinsLoading ? (
+              <div style={{ padding: 24, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', fontSize: 13 }}>
+                Loading attendees...
+              </div>
+            ) : joins ? (
+              <div>
+                <div style={{
+                  padding: '16px 20px',
+                  borderBottom: '1px solid var(--color-border)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}>
+                  <div>
+                    <p style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+                      {pastSessions.find(s => s.id === selectedPast)?.title}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                      {joins.count} student{joins.count !== 1 ? 's' : ''} clicked to join
+                    </p>
+                  </div>
+                </div>
+
+                {joins.joins.length === 0 ? (
+                  <p style={{ padding: '24px 20px', margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                    No one clicked to join this session.
+                  </p>
+                ) : (
+                  <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+                    {joins.joins.map((j, i) => (
+                      <div
+                        key={j.roll_number}
+                        style={{
+                          padding: '12px 20px',
+                          borderBottom: i < joins.joins.length - 1 ? '1px solid var(--color-border)' : 'none',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+                            {j.name ?? 'Unknown'}
+                          </span>
+                          <span style={{ fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                            {j.roll_number}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', whiteSpace: 'nowrap' }}>
+                          {new Date(j.joined_at).toLocaleTimeString('en-IN', {
+                            hour: '2-digit', minute: '2-digit', hour12: true,
+                          })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
     </div>

@@ -7,6 +7,7 @@ export default function LiveSessionBanner() {
   const { studentSession } = useStudent();
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [dismissed, setDismissed] = useState<string[]>([]);
+  const [joinCount, setJoinCount] = useState<number>(0);
 
   useEffect(() => {
     const fetchSessions = async () => {
@@ -27,9 +28,27 @@ export default function LiveSessionBanner() {
 
   const visible = sessions.filter(s => !dismissed.includes(s.id));
 
+  const primary = visible.find(s => s.status === 'live') ?? visible[0];
+
+  useEffect(() => {
+    if (primary?.status === 'live') {
+      api.liveSessions.getJoinCount(primary.id)
+        .then(d => setJoinCount(d.count))
+        .catch(() => {});
+
+      const interval = setInterval(() => {
+        api.liveSessions.getJoinCount(primary.id)
+          .then(d => setJoinCount(d.count))
+          .catch(() => {});
+      }, 30000);
+      return () => clearInterval(interval);
+    } else {
+      setJoinCount(0);
+    }
+  }, [primary?.id, primary?.status]);
+
   if (visible.length === 0) return null;
 
-  const primary = visible.find(s => s.status === 'live') ?? visible[0];
   const isLive = primary.status === 'live';
 
   const formatTime = (iso: string) => {
@@ -126,6 +145,16 @@ export default function LiveSessionBanner() {
             }}>
               Hosted by {primary.host}
             </span>
+            {isLive && joinCount > 0 && (
+              <span style={{
+                fontSize: 12,
+                color: 'rgba(255,255,255,0.75)',
+                fontFamily: 'var(--font-body)',
+                whiteSpace: 'nowrap',
+              }}>
+                · {joinCount} joined
+              </span>
+            )}
 
             {primary.audience_group_id &&
              primary.audience_group_id !== 'all_students' && (
@@ -150,9 +179,14 @@ export default function LiveSessionBanner() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {primary.canAccess && primary.meet_link ? (
             <a
-              href={primary.meet_link}
+              href={primary.meet_link ?? '#'}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => {
+                if (studentSession?.rollNumber && primary.meet_link) {
+                  api.liveSessions.trackJoin(primary.id, studentSession.rollNumber).catch(() => {});
+                }
+              }}
               style={{
                 padding: '6px 16px',
                 borderRadius: 100,
@@ -165,7 +199,7 @@ export default function LiveSessionBanner() {
                 whiteSpace: 'nowrap',
               }}
             >
-              {isLive ? 'Join Meet' : 'Add to calendar'}
+              {isLive ? 'Join Meet' : 'View'}
             </a>
           ) : primary.audience_group_id &&
             primary.audience_group_id !== 'all_students' &&

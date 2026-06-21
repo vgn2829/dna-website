@@ -262,6 +262,11 @@ export function EventsPage() {
                       href={s.meet_link}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() => {
+                        if (studentSession?.rollNumber && s.meet_link) {
+                          api.liveSessions.trackJoin(s.id, studentSession.rollNumber).catch(() => {});
+                        }
+                      }}
                       style={{
                         flexShrink: 0, padding: '8px 18px', borderRadius: 100,
                         background: '#E91E8C', color: '#fff',

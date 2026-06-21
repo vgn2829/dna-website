@@ -21,6 +21,29 @@ export interface AudienceGroup {
   member_count: number;
 }
 
+export interface SessionJoin {
+  roll_number: string;
+  name: string | null;
+  joined_at: string;
+}
+
+export interface SessionJoins {
+  session_id: string;
+  count: number;
+  joins: SessionJoin[];
+}
+
+export interface PastSession {
+  id: string;
+  title: string;
+  host: string;
+  scheduled_at: string;
+  status: string;
+  audience_name: string | null;
+  join_count: number;
+  description: string | null;
+}
+
 export interface EmailTemplate {
   id: string;
   name: string;
@@ -188,5 +211,13 @@ export const api = {
     }>) => request<LiveSession>('PUT', `/live-sessions/${id}`, { body: data, admin: true }),
     delete: (id: string) =>
       request<void>('DELETE', `/live-sessions/${id}`, { admin: true }),
+    trackJoin: (sessionId: string, roll: string) =>
+      request<{ success: boolean }>('POST', `/live-sessions/${sessionId}/join`, { roll }),
+    getJoins: (sessionId: string) =>
+      request<SessionJoins>('GET', `/live-sessions/${sessionId}/joins`, { admin: true }),
+    getJoinCount: (sessionId: string) =>
+      request<{ count: number }>('GET', `/live-sessions/${sessionId}/joins/count`),
+    getPast: () =>
+      request<PastSession[]>('GET', '/live-sessions/past', { admin: true }),
   },
 };
