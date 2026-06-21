@@ -68,6 +68,7 @@ export interface Board {
   name: string;
   description: string | null;
   visibility: 'private' | 'shared';
+  room_id: string | null;
   item_count: number;
   member_count: number;
   created_at: string;
@@ -231,6 +232,8 @@ export const api = {
       request<BoardDetail>('GET', `/boards/${id}`, { roll }),
     delete: (id: string, roll: string) =>
       request<{ success: boolean }>('DELETE', `/boards/${id}`, { roll }),
+    // Board items API — kept for potential future use
+    // Currently the canvas uses Excalidraw for content
     getItems: (id: string, roll?: string) =>
       request<BoardItem[]>('GET', `/boards/${id}/items`, { roll }),
     addItem: (boardId: string, roll: string, data: { image_url: string; note?: string; source_url?: string }) =>
