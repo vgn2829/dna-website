@@ -466,7 +466,15 @@ function GalleryTab() {
   const [bulkQueue, setBulkQueue] = useState<BulkItem[]>([]);
   const [bulkUploading, setBulkUploading] = useState(false);
   const [bulkMode, setBulkMode] = useState(false);
-  const [forceUpper] = useState(() => localStorage.getItem('forceUppercase') !== 'false');
+  const [forceUpper, setForceUpper] = useState(() => localStorage.getItem('forceUppercase') !== 'false');
+
+  useEffect(() => {
+    const handleStorage = () => {
+      setForceUpper(localStorage.getItem('forceUppercase') !== 'false');
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   const MAX_MB = 50;
   const ALLOWED_EXT = ['jpg','jpeg','png','webp','gif','pdf','mp4'];
@@ -1614,6 +1622,9 @@ function SettingsTab() {
   const [error, setError] = useState('');
   const [newPasscode, setNewPasscode] = useState('');
   const [showPasscode, setShowPasscode] = useState(false);
+  const [forceUppercase, setForceUppercase] = useState<boolean>(
+    localStorage.getItem('forceUppercase') !== 'false'
+  );
 
   useEffect(() => {
     api.settings.getAll()
@@ -1651,6 +1662,13 @@ function SettingsTab() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleToggleCaps = () => {
+    const newVal = !forceUppercase;
+    setForceUppercase(newVal);
+    localStorage.setItem('forceUppercase', newVal ? 'true' : 'false');
+    window.dispatchEvent(new Event('storage'));
   };
 
   if (loading) return (
@@ -1768,6 +1786,52 @@ function SettingsTab() {
           <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
             Share this passcode with coordinators who need to schedule meets.
           </p>
+        </div>
+      </div>
+
+      {/* Force Uppercase in Gallery */}
+      <div style={{ border: '1px solid var(--color-border)', borderRadius: 16, overflow: 'hidden' }}>
+        <div style={{
+          padding: '20px 24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 16,
+        }}>
+          <div>
+            <p style={{
+              margin: '0 0 2px', fontSize: 15, fontWeight: 600,
+              color: 'var(--color-ink)', fontFamily: 'var(--font-body)',
+            }}>
+              Force Uppercase in Gallery
+            </p>
+            <p style={{
+              margin: 0, fontSize: 13,
+              color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)',
+            }}>
+              Automatically capitalise artwork titles and artist names when uploading.
+              Currently{' '}
+              <strong style={{ color: forceUppercase ? '#E91E8C' : 'var(--color-ink-muted)' }}>
+                {forceUppercase ? 'ON' : 'OFF'}
+              </strong>.
+            </p>
+          </div>
+          <button
+            onClick={handleToggleCaps}
+            style={{
+              width: 48, height: 26, borderRadius: 100,
+              background: forceUppercase ? '#E91E8C' : 'var(--color-border)',
+              border: 'none', cursor: 'pointer',
+              position: 'relative', transition: 'background 0.2s ease', flexShrink: 0,
+            }}
+          >
+            <div style={{
+              position: 'absolute', top: 3,
+              left: forceUppercase ? 26 : 3,
+              width: 20, height: 20, borderRadius: '50%', background: '#fff',
+              transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+            }} />
+          </button>
         </div>
       </div>
 

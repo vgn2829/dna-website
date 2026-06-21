@@ -9,18 +9,21 @@ const COLS = [
   {
     heading: 'Explore',
     links: [
-      { label: 'Academy', path: '/academy' },
-      { label: 'Gallery', path: '/gallery' },
-      { label: 'Events', path: '/events' },
-      { label: 'Resources', path: '/resources' },
-      { label: 'Team', path: '/team' },
+      { label: 'Academy',        path: '/academy'        },
+      { label: 'Gallery',        path: '/gallery'        },
+      { label: 'Events',         path: '/events'         },
+      { label: 'Design Studio',  path: '/design-studio'  },
+      { label: 'Moodboards',     path: '/moodboards'     },
+      { label: 'Resources',      path: '/resources'      },
+      { label: 'Team',           path: '/team'           },
     ],
   },
   {
     heading: 'Club',
     links: [
-      { label: 'About DnA', path: '/' },
-      { label: 'Join Us', path: '/events' },
+      { label: 'About DnA', path: '/'       },
+      { label: 'Join Us',   path: '/events' },
+      { label: 'Admin',     path: '/admin'  },
     ],
   },
 ];
@@ -349,21 +352,6 @@ export function Footer() {
               }}>
                 © {new Date().getFullYear()} Design &amp; Animation Club, IIT Kanpur
               </p>
-              <a
-                href="/admin"
-                style={{
-                  fontSize: 11,
-                  color: 'var(--color-ink-muted)',
-                  textDecoration: 'none',
-                  opacity: 0.4,
-                  fontFamily: 'var(--font-body)',
-                  transition: 'opacity 0.2s ease',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.opacity = '0.8')}
-                onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}
-              >
-                Admin
-              </a>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
