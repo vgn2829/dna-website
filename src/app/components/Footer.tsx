@@ -1,5 +1,9 @@
+import { useState, useEffect } from 'react';
 import { Instagram, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router';
+import { motion, AnimatePresence } from 'motion/react';
+import { api, type LiveSession } from '../lib/api';
+import { useStudent } from '../context/StudentContext';
 
 const COLS = [
   {
@@ -26,74 +30,260 @@ const SOCIAL = [
   { icon: Mail,      href: 'mailto:designandanimationclub.iitk@gmail.com', label: 'Email' },
 ];
 
+const PUBLIC_TOKEN_KEY = 'dna_public_meet_token';
+
 export function Footer() {
   const navigate = useNavigate();
+  const { studentSession } = useStudent();
+
+  const [meetEnabled, setMeetEnabled] = useState(false);
+
+  // Passcode entry modal
+  const [showMeetEntry, setShowMeetEntry] = useState(false);
+  const [passcodeInput, setPasscodeInput] = useState('');
+  const [passcodeError, setPasscodeError] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [publicToken, setPublicToken] = useState<string | null>(null);
+
+  // Scheduler modal
+  const [showScheduler, setShowScheduler] = useState(false);
+  const [sessions, setSessions] = useState<LiveSession[]>([]);
+  const [form, setForm] = useState({ title: '', host: '', meet_link: '', scheduled_at: '', description: '' });
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+
+  useEffect(() => {
+    api.settings.getPublic().then(s => {
+      setMeetEnabled(s['public_meet_enabled'] === 'true');
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const raw = localStorage.getItem(PUBLIC_TOKEN_KEY);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(atob(raw.split('.')[0] ?? ''));
+      if (parsed.exp && Date.now() < parsed.exp) {
+        setPublicToken(raw);
+      } else {
+        localStorage.removeItem(PUBLIC_TOKEN_KEY);
+      }
+    } catch {
+      localStorage.removeItem(PUBLIC_TOKEN_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!showScheduler || !studentSession || !publicToken) return;
+    api.liveSessions.getActive(studentSession.rollNumber).then(setSessions).catch(() => {});
+  }, [showScheduler, studentSession, publicToken]);
+
+  const handleVerifyPasscode = async () => {
+    if (!passcodeInput.trim()) return;
+    setVerifying(true);
+    setPasscodeError('');
+    try {
+      const result = await api.settings.verifyPasscode(passcodeInput.trim());
+      if (result.success && result.token) {
+        localStorage.setItem(PUBLIC_TOKEN_KEY, result.token);
+        setPublicToken(result.token);
+        setShowMeetEntry(false);
+        setPasscodeInput('');
+        setShowScheduler(true);
+      } else {
+        setPasscodeError('Incorrect passcode. Try again.');
+      }
+    } catch {
+      setPasscodeError('Incorrect passcode. Try again.');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleCreateSession = async () => {
+    if (!studentSession || !publicToken || !form.title || !form.host || !form.meet_link || !form.scheduled_at) return;
+    setCreating(true);
+    setCreateError('');
+    try {
+      const session = await api.liveSessions.createPublic(publicToken, studentSession.rollNumber, {
+        title: form.title,
+        host: form.host,
+        meet_link: form.meet_link,
+        scheduled_at: form.scheduled_at,
+        audience_group_id: null,
+        description: form.description || undefined,
+      });
+      setSessions(prev => [session, ...prev]);
+      setForm({ title: '', host: '', meet_link: '', scheduled_at: '', description: '' });
+    } catch (e: unknown) {
+      setCreateError(e instanceof Error ? e.message : 'Failed to create session');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDeleteSession = async (id: string) => {
+    if (!publicToken) return;
+    try {
+      await api.liveSessions.deletePublic(id, publicToken);
+      setSessions(prev => prev.filter(s => s.id !== id));
+    } catch {}
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '10px 12px',
+    background: 'var(--color-canvas)',
+    border: '1px solid var(--color-border)',
+    borderRadius: 8,
+    fontSize: 13,
+    color: 'var(--color-ink)',
+    fontFamily: 'var(--font-body)',
+    outline: 'none',
+    boxSizing: 'border-box',
+  };
 
   return (
-    <footer
-      style={{
-        width: '100%',
-        background: 'var(--color-canvas)',
-        borderTop: '1px solid var(--color-hairline-soft)',
-        padding: '64px 0',
-      }}
-    >
-      <div style={{ maxWidth: 1440, margin: '0 auto', width: '100%', padding: '0 48px', boxSizing: 'border-box' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 40, marginBottom: 48 }}>
+    <>
+      <footer
+        style={{
+          width: '100%',
+          background: 'var(--color-canvas)',
+          borderTop: '1px solid var(--color-hairline-soft)',
+          padding: '64px 0',
+        }}
+      >
+        <div style={{ maxWidth: 1440, margin: '0 auto', width: '100%', padding: '0 48px', boxSizing: 'border-box' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 40, marginBottom: 48 }}>
 
-          {/* Brand column */}
-          <div>
-            <p
-              className="text-base font-semibold mb-3"
-              style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.5px', color: 'var(--color-ink)' }}
-            >
-              IITK DnA
-            </p>
-            <p className="type-caption mb-6" style={{ maxWidth: 200 }}>
-              IIT Kanpur's community for digital and animation
-            </p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {SOCIAL.map(s => {
-                const Icon = s.icon;
-                return (
-                  <a
-                    key={s.label}
-                    href={s.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={s.label}
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: '50%',
-                      background: 'var(--color-surface-1)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'var(--color-ink-muted)',
-                      textDecoration: 'none',
-                      flexShrink: 0,
-                      transition: 'background 0.2s, color 0.2s',
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.background = 'var(--color-surface-2)';
-                      e.currentTarget.style.color = 'var(--color-ink)';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.background = 'var(--color-surface-1)';
-                      e.currentTarget.style.color = 'var(--color-ink-muted)';
-                    }}
-                  >
-                    <Icon size={16} />
-                  </a>
-                );
-              })}
+            {/* Brand column */}
+            <div>
+              <p
+                className="text-base font-semibold mb-3"
+                style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.5px', color: 'var(--color-ink)' }}
+              >
+                IITK DnA
+              </p>
+              <p className="type-caption mb-6" style={{ maxWidth: 200 }}>
+                IIT Kanpur's community for digital and animation
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {SOCIAL.map(s => {
+                  const Icon = s.icon;
+                  return (
+                    <a
+                      key={s.label}
+                      href={s.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={s.label}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: '50%',
+                        background: 'var(--color-surface-1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--color-ink-muted)',
+                        textDecoration: 'none',
+                        flexShrink: 0,
+                        transition: 'background 0.2s, color 0.2s',
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.background = 'var(--color-surface-2)';
+                        e.currentTarget.style.color = 'var(--color-ink)';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.background = 'var(--color-surface-1)';
+                        e.currentTarget.style.color = 'var(--color-ink-muted)';
+                      }}
+                    >
+                      <Icon size={16} />
+                    </a>
+                  );
+                })}
+              </div>
             </div>
-          </div>
 
-          {/* Link columns */}
-          {COLS.map(col => (
-            <div key={col.heading}>
+            {/* Link columns */}
+            {COLS.map(col => (
+              <div key={col.heading}>
+                <p style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--color-ink)',
+                  letterSpacing: '-0.13px',
+                  lineHeight: 1.20,
+                  marginBottom: 16,
+                  fontFamily: 'var(--font-body)',
+                }}>
+                  {col.heading}
+                </p>
+                <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {col.links.map(link => (
+                    <li key={link.label}>
+                      <button
+                        onClick={() => navigate(link.path)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontSize: 13,
+                          fontWeight: 500,
+                          letterSpacing: '-0.13px',
+                          lineHeight: 1.20,
+                          color: 'var(--color-ink-muted)',
+                          textDecoration: 'none',
+                          transition: 'color 0.15s',
+                          fontFamily: 'var(--font-body)',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-ink)')}
+                        onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-ink-muted)')}
+                      >
+                        {link.label}
+                      </button>
+                    </li>
+                  ))}
+                  {col.heading === 'Club' && meetEnabled && studentSession && (
+                    <li>
+                      <button
+                        onClick={() => {
+                          if (publicToken) {
+                            setShowScheduler(true);
+                          } else {
+                            setPasscodeInput('');
+                            setPasscodeError('');
+                            setShowMeetEntry(true);
+                          }
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontSize: 13,
+                          fontWeight: 500,
+                          letterSpacing: '-0.13px',
+                          lineHeight: 1.20,
+                          color: '#E91E8C',
+                          transition: 'opacity 0.15s',
+                          fontFamily: 'var(--font-body)',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.opacity = '0.75')}
+                        onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                      >
+                        Schedule a Meet
+                      </button>
+                    </li>
+                  )}
+                </ul>
+              </div>
+            ))}
+
+            {/* Contact column */}
+            <div>
               <p style={{
                 fontSize: 13,
                 fontWeight: 600,
@@ -103,171 +293,304 @@ export function Footer() {
                 marginBottom: 16,
                 fontFamily: 'var(--font-body)',
               }}>
-                {col.heading}
+                Contact
               </p>
               <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {col.links.map(link => (
-                  <li key={link.label}>
-                    <button
-                      onClick={() => navigate(link.path)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: 0,
-                        fontSize: 13,
-                        fontWeight: 500,
-                        letterSpacing: '-0.13px',
-                        lineHeight: 1.20,
-                        color: 'var(--color-ink-muted)',
-                        textDecoration: 'none',
-                        transition: 'color 0.15s',
-                        fontFamily: 'var(--font-body)',
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-ink)')}
-                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-ink-muted)')}
-                    >
-                      {link.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-
-          {/* Contact column */}
-          <div>
-            <p style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: 'var(--color-ink)',
-              letterSpacing: '-0.13px',
-              lineHeight: 1.20,
-              marginBottom: 16,
-              fontFamily: 'var(--font-body)',
-            }}>
-              Contact
-            </p>
-            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <li>
-                <a
-                  href="mailto:designandanimationclub.iitk@gmail.com"
-                  style={{
+                <li>
+                  <a
+                    href="mailto:designandanimationclub.iitk@gmail.com"
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 500,
+                      letterSpacing: '-0.13px',
+                      lineHeight: 1.20,
+                      color: 'var(--color-accent-blue)',
+                      textDecoration: 'none',
+                      fontFamily: 'var(--font-body)',
+                    }}
+                  >
+                    designandanimationclub.iitk@gmail.com
+                  </a>
+                </li>
+                <li>
+                  <p style={{
                     fontSize: 13,
                     fontWeight: 500,
                     letterSpacing: '-0.13px',
                     lineHeight: 1.20,
-                    color: 'var(--color-accent-blue)',
-                    textDecoration: 'none',
+                    color: 'var(--color-ink-muted)',
                     fontFamily: 'var(--font-body)',
-                  }}
-                >
-                  designandanimationclub.iitk@gmail.com
-                </a>
-              </li>
-              <li>
-                <p style={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  letterSpacing: '-0.13px',
-                  lineHeight: 1.20,
-                  color: 'var(--color-ink-muted)',
-                  fontFamily: 'var(--font-body)',
-                }}>
-                  Room No. 210, Indian Institute of Technology Kanpur, Kalyanpur, Kanpur, Uttar Pradesh 208016
-                </p>
-              </li>
-            </ul>
+                  }}>
+                    Room No. 210, Indian Institute of Technology Kanpur, Kalyanpur, Kanpur, Uttar Pradesh 208016
+                  </p>
+                </li>
+              </ul>
+            </div>
           </div>
-        </div>
 
-        {/* Bottom bar — copyright left, designer credit right */}
-        <div style={{
-          borderTop: '1px solid var(--color-hairline)',
-          marginTop: 48,
-          paddingTop: 24,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 12,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <p style={{
-              fontSize: 12,
-              color: 'var(--color-ink-muted)',
-              margin: 0,
-              letterSpacing: '-0.12px',
-              fontFamily: 'var(--font-body)',
-            }}>
-              © {new Date().getFullYear()} Design &amp; Animation Club, IIT Kanpur
-            </p>
-            <a
-              href="/admin"
-              style={{
-                fontSize: 11,
+          {/* Bottom bar — copyright left, designer credit right */}
+          <div style={{
+            borderTop: '1px solid var(--color-hairline)',
+            marginTop: 48,
+            paddingTop: 24,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <p style={{
+                fontSize: 12,
                 color: 'var(--color-ink-muted)',
-                textDecoration: 'none',
-                opacity: 0.4,
+                margin: 0,
+                letterSpacing: '-0.12px',
                 fontFamily: 'var(--font-body)',
-                transition: 'opacity 0.2s ease',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = '0.8')}
-              onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}
-            >
-              Admin
-            </a>
-          </div>
+              }}>
+                © {new Date().getFullYear()} Design &amp; Animation Club, IIT Kanpur
+              </p>
+              <a
+                href="/admin"
+                style={{
+                  fontSize: 11,
+                  color: 'var(--color-ink-muted)',
+                  textDecoration: 'none',
+                  opacity: 0.4,
+                  fontFamily: 'var(--font-body)',
+                  transition: 'opacity 0.2s ease',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '0.8')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}
+              >
+                Admin
+              </a>
+            </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <span style={{
-              fontSize: 12,
-              color: 'var(--color-ink-muted)',
-              letterSpacing: '-0.12px',
-              fontFamily: 'var(--font-body)',
-            }}>
-              Designed &amp; Developed by{' '}
-              <span style={{ color: 'var(--color-ink)', fontWeight: 600 }}>Venugopal</span>
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{
+                fontSize: 12,
+                color: 'var(--color-ink-muted)',
+                letterSpacing: '-0.12px',
+                fontFamily: 'var(--font-body)',
+              }}>
+                Designed &amp; Developed by{' '}
+                <span style={{ color: 'var(--color-ink)', fontWeight: 600 }}>Venugopal</span>
+              </span>
 
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <a href="https://www.instagram.com/venugopal29_/"
-                target="_blank" rel="noopener noreferrer"
-                style={{ color: 'var(--color-ink-muted)', display: 'flex', transition: 'color 0.2s' }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#E1306C')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-ink-muted)')}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
-                  <circle cx="12" cy="12" r="4"/>
-                  <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
-                </svg>
-              </a>
-              <a href="https://www.linkedin.com/in/venugopal29/"
-                target="_blank" rel="noopener noreferrer"
-                style={{ color: 'var(--color-ink-muted)', display: 'flex', transition: 'color 0.2s' }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#0A66C2')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-ink-muted)')}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/>
-                  <rect x="2" y="9" width="4" height="12"/>
-                  <circle cx="4" cy="4" r="2"/>
-                </svg>
-              </a>
-              <a href="tel:+917019080178"
-                style={{ color: 'var(--color-ink-muted)', display: 'flex', transition: 'color 0.2s' }}
-                onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-ink)')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-ink-muted)')}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.56 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
-                </svg>
-              </a>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <a href="https://www.instagram.com/venugopal29_/"
+                  target="_blank" rel="noopener noreferrer"
+                  style={{ color: 'var(--color-ink-muted)', display: 'flex', transition: 'color 0.2s' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#E1306C')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-ink-muted)')}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                    <circle cx="12" cy="12" r="4"/>
+                    <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
+                  </svg>
+                </a>
+                <a href="https://www.linkedin.com/in/venugopal29/"
+                  target="_blank" rel="noopener noreferrer"
+                  style={{ color: 'var(--color-ink-muted)', display: 'flex', transition: 'color 0.2s' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#0A66C2')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-ink-muted)')}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/>
+                    <rect x="2" y="9" width="4" height="12"/>
+                    <circle cx="4" cy="4" r="2"/>
+                  </svg>
+                </a>
+                <a href="tel:+917019080178"
+                  style={{ color: 'var(--color-ink-muted)', display: 'flex', transition: 'color 0.2s' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-ink)')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-ink-muted)')}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.56 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                  </svg>
+                </a>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </footer>
+      </footer>
+
+      {/* Passcode entry modal */}
+      <AnimatePresence>
+        {showMeetEntry && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, zIndex: 9100, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+            onClick={() => setShowMeetEntry(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              onClick={e => e.stopPropagation()}
+              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 20, padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.3px' }}>
+                  Coordinator Access
+                </h3>
+                <button
+                  onClick={() => setShowMeetEntry(false)}
+                  style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-ink-muted)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  ×
+                </button>
+              </div>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', lineHeight: 1.5 }}>
+                Enter the coordinator passcode to schedule a public meet session.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <input
+                  type="password"
+                  placeholder="Passcode"
+                  value={passcodeInput}
+                  onChange={e => { setPasscodeInput(e.target.value); setPasscodeError(''); }}
+                  onKeyDown={e => { if (e.key === 'Enter') handleVerifyPasscode(); }}
+                  style={inputStyle}
+                  autoFocus
+                />
+                {passcodeError && (
+                  <p style={{ margin: 0, fontSize: 12, color: '#ef4444', fontFamily: 'var(--font-body)' }}>{passcodeError}</p>
+                )}
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={handleVerifyPasscode}
+                disabled={verifying || !passcodeInput.trim()}
+                style={{ padding: '13px 0', background: '#E91E8C', color: '#fff', border: 'none', borderRadius: 100, fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: verifying ? 'not-allowed' : 'pointer', opacity: verifying ? 0.7 : 1 }}
+              >
+                {verifying ? 'Verifying…' : 'Continue'}
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Scheduler modal */}
+      <AnimatePresence>
+        {showScheduler && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, zIndex: 9100, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+            onClick={() => setShowScheduler(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 24, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16 }}
+              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+              onClick={e => e.stopPropagation()}
+              style={{ width: '100%', maxWidth: 480, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 20, padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 20, maxHeight: '90vh', overflowY: 'auto' }}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.3px' }}>
+                  Schedule a Meet
+                </h3>
+                <button
+                  onClick={() => setShowScheduler(false)}
+                  style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-ink-muted)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Create form */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)' }}>
+                  New Session
+                </p>
+                <input
+                  type="text"
+                  placeholder="Title *"
+                  value={form.title}
+                  onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                  style={inputStyle}
+                />
+                <input
+                  type="text"
+                  placeholder="Host name *"
+                  value={form.host}
+                  onChange={e => setForm(f => ({ ...f, host: e.target.value }))}
+                  style={inputStyle}
+                />
+                <input
+                  type="url"
+                  placeholder="Meet link *"
+                  value={form.meet_link}
+                  onChange={e => setForm(f => ({ ...f, meet_link: e.target.value }))}
+                  style={inputStyle}
+                />
+                <input
+                  type="datetime-local"
+                  value={form.scheduled_at}
+                  onChange={e => setForm(f => ({ ...f, scheduled_at: e.target.value }))}
+                  style={inputStyle}
+                />
+                <input
+                  type="text"
+                  placeholder="Description (optional)"
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  style={inputStyle}
+                />
+                {createError && (
+                  <p style={{ margin: 0, fontSize: 12, color: '#ef4444', fontFamily: 'var(--font-body)' }}>{createError}</p>
+                )}
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={handleCreateSession}
+                  disabled={creating || !form.title || !form.host || !form.meet_link || !form.scheduled_at}
+                  style={{ padding: '13px 0', background: '#E91E8C', color: '#fff', border: 'none', borderRadius: 100, fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: creating ? 'not-allowed' : 'pointer', opacity: creating ? 0.7 : 1, marginTop: 4 }}
+                >
+                  {creating ? 'Scheduling…' : 'Schedule Session'}
+                </motion.button>
+              </div>
+
+              {/* Existing sessions */}
+              {sessions.length > 0 && (
+                <>
+                  <div style={{ height: 1, background: 'var(--color-border)' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)' }}>
+                      Upcoming Sessions
+                    </p>
+                    {sessions.map(s => (
+                      <div
+                        key={s.id}
+                        style={{ padding: '12px 14px', background: 'var(--color-canvas)', border: '1px solid var(--color-border)', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: '0 0 2px', fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {s.title}
+                          </p>
+                          <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                            {new Date(s.scheduled_at).toLocaleString()} · {s.host}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteSession(s.id)}
+                          style={{ flexShrink: 0, padding: '4px 10px', background: 'none', border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444', borderRadius: 6, fontSize: 12, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
