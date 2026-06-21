@@ -1,8 +1,10 @@
 import '@excalidraw/excalidraw/index.css';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { Excalidraw } from '@excalidraw/excalidraw';
+const Excalidraw = lazy(() =>
+  import('@excalidraw/excalidraw').then(m => ({ default: m.Excalidraw }))
+);
 import { api, type BoardDetail } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
 
@@ -313,23 +315,38 @@ export default function BoardPage() {
 
         {/* Excalidraw canvas */}
         <div style={{ flex: 1, position: 'relative' }}>
-          <Excalidraw
-            theme={theme}
-            isCollaborating={isMember}
-            detectScroll={false}
-            handleKeyboardGlobally={true}
-            autoFocus
-            UIOptions={{
-              canvasActions: {
-                changeViewBackgroundColor: true,
-                clearCanvas: isOwner,
-                export: { saveFileToDisk: true },
-                loadScene: false,
-                saveToActiveFile: false,
-                toggleTheme: true,
-              },
-            }}
-          />
+          <Suspense fallback={
+            <div style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: theme === 'dark' ? '#1a1a1a' : '#f8f8f8',
+              color: theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
+              fontFamily: 'var(--font-body)',
+              fontSize: 14,
+            }}>
+              Loading canvas...
+            </div>
+          }>
+            <Excalidraw
+              theme={theme}
+              isCollaborating={isMember}
+              detectScroll={false}
+              handleKeyboardGlobally={true}
+              autoFocus
+              UIOptions={{
+                canvasActions: {
+                  changeViewBackgroundColor: true,
+                  clearCanvas: isOwner,
+                  export: { saveFileToDisk: true },
+                  loadScene: false,
+                  saveToActiveFile: false,
+                  toggleTheme: true,
+                },
+              }}
+            />
+          </Suspense>
         </div>
       </div>
 
