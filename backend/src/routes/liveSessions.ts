@@ -15,6 +15,8 @@ const sessionSchema = z.object({
   description: z.string().max(500).optional(),
 });
 
+// ── Static paths first (must be before /:id routes) ──────────────────────────
+
 router.get('/active', async (req, res) => {
   try {
     const roll = req.headers['x-roll-number'] as string | undefined;
@@ -64,6 +66,30 @@ router.get('/active', async (req, res) => {
   }
 });
 
+router.get('/past', requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        ls.*,
+        ag.name as audience_name,
+        COUNT(sj.roll_number)::int as join_count
+      FROM live_sessions ls
+      LEFT JOIN audience_groups ag
+        ON ls.audience_group_id = ag.id
+      LEFT JOIN session_joins sj
+        ON ls.id = sj.session_id
+      WHERE ls.status = 'ended'
+      GROUP BY ls.id, ag.name
+      ORDER BY ls.scheduled_at DESC
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Get past sessions error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.get('/groups', requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -97,6 +123,45 @@ router.get('/', requireAdmin, async (req, res) => {
   }
 });
 
+// ── Parameterised paths ───────────────────────────────────────────────────────
+
+router.get('/:id/joins', requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        sj.roll_number,
+        sj.name,
+        sj.joined_at
+      FROM session_joins sj
+      WHERE sj.session_id = $1
+      ORDER BY sj.joined_at ASC
+    `, [req.params.id]);
+
+    res.json({
+      session_id: req.params.id,
+      count: result.rows.length,
+      joins: result.rows,
+    });
+  } catch (err) {
+    console.error('Get joins error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/:id/joins/count', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT COUNT(*)::int as count
+      FROM session_joins
+      WHERE session_id = $1
+    `, [req.params.id]);
+
+    res.json({ count: result.rows[0].count });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.post('/', requireAdmin, async (req, res) => {
   try {
     const parsed = sessionSchema.parse(req.body);
@@ -124,6 +189,53 @@ router.post('/', requireAdmin, async (req, res) => {
     }
     console.error('Create session error:', err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/:id/join', async (req, res) => {
+  try {
+    const roll = req.headers['x-roll-number'] as string;
+    if (!roll) {
+      return res.status(401).json({ error: 'Roll number required' });
+    }
+
+    const sessionCheck = await pool.query(
+      `SELECT id, title, status FROM live_sessions WHERE id = $1`,
+      [req.params.id]
+    );
+
+    if (sessionCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const studentCheck = await pool.query(
+      `SELECT name FROM student_sessions WHERE roll_number = $1`,
+      [roll]
+    );
+
+    const name = (studentCheck.rows[0] as { name: string } | undefined)?.name ?? null;
+
+    await pool.query(`
+      INSERT INTO session_joins
+        (id, session_id, roll_number, name, joined_at)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (session_id, roll_number) DO UPDATE
+        SET joined_at = EXCLUDED.joined_at
+    `, [
+      uuidv4(),
+      req.params.id,
+      roll,
+      name,
+      new Date().toISOString(),
+    ]);
+
+    console.log(`Join tracked: ${name ?? roll} → session ${req.params.id}`);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Join tracking error:', err);
+    // Don't fail loudly — tracking should never block the student from joining
+    res.json({ success: true });
   }
 });
 

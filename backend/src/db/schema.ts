@@ -257,6 +257,18 @@ export async function initSchema(): Promise<void> {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS session_joins (
+      id          TEXT PRIMARY KEY,
+      session_id  TEXT NOT NULL REFERENCES live_sessions(id)
+                  ON DELETE CASCADE,
+      roll_number TEXT NOT NULL,
+      name        TEXT,
+      joined_at   TEXT NOT NULL,
+      UNIQUE(session_id, roll_number)
+    )
+  `);
+
   const groupCount = await pool.query(
     'SELECT COUNT(*) FROM audience_groups'
   );
