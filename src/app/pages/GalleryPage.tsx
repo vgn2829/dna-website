@@ -446,7 +446,6 @@ export function GalleryPage() {
         <motion.div layout className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 space-y-0">
           <AnimatePresence>
             {filtered.map((art, i) => {
-              const domainColor = DOMAIN_COLORS[art.domain] ?? '#007AFF';
               const hasBurst = burstIds.has(art.id);
               const aspects = ['aspect-[3/4]', 'aspect-square', 'aspect-[4/5]', 'aspect-[2/3]'];
               const aspect = aspects[i % aspects.length];
@@ -463,8 +462,11 @@ export function GalleryPage() {
                     <div className={`${aspect} relative`} style={{ overflow: 'hidden', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0' }}>
                       <MediaThumbnail art={art} />
                       {/* Domain badge — top-right of image, always visible */}
-                      <span className="type-micro absolute px-2 py-0.5 rounded-full"
-                        style={{ top: 10, right: 10, background: `${domainColor}30`, color: domainColor, backdropFilter: 'blur(4px)' }}>
+                      <span className="type-caption" style={{
+                        position: 'absolute', top: 12, right: 12,
+                        background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)',
+                        padding: '3px 10px', borderRadius: 'var(--radius-pill)', color: '#fff', zIndex: 1,
+                      }}>
                         {art.domain}
                       </span>
                       {/* Like button — bottom-right, visible on hover/touch */}
