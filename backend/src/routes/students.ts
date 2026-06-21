@@ -34,6 +34,69 @@ const sessionSchema = z.object({
   email: z.string().email('Invalid email address').refine(e => e.toLowerCase().endsWith('@iitk.ac.in'), 'Only @iitk.ac.in email addresses are allowed').transform(e => e.toLowerCase()),
 });
 
+studentsRouter.get('/:roll/exists', async (req, res) => {
+  try {
+    const roll = req.params.roll.trim().toUpperCase();
+    const rows = await query<{ roll_number: string; name: string | null; email: string | null }>(
+      'SELECT roll_number, name, email FROM student_sessions WHERE roll_number = $1',
+      [roll]
+    );
+
+    if (rows.length === 0) {
+      res.json({ exists: false, hasProfile: false });
+      return;
+    }
+
+    const row = rows[0];
+    const hasProfile = !!(row.name && row.email);
+    res.json({ exists: true, hasProfile });
+  } catch (err) {
+    console.error('Exists check error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+studentsRouter.post('/sessions/login', async (req, res) => {
+  try {
+    const { rollNumber } = req.body;
+    if (!rollNumber) {
+      res.status(400).json({ error: 'Roll number required' });
+      return;
+    }
+
+    const roll = String(rollNumber).trim().toUpperCase();
+    const rows = await query<{
+      roll_number: string;
+      unique_id: string;
+      registered_at: string;
+      name: string;
+      email: string;
+    }>(
+      `SELECT roll_number, unique_id, registered_at, name, email
+       FROM student_sessions
+       WHERE roll_number = $1 AND name IS NOT NULL AND email IS NOT NULL`,
+      [roll]
+    );
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: 'Student not found or incomplete profile' });
+      return;
+    }
+
+    const row = rows[0];
+    res.json({
+      rollNumber: row.roll_number,
+      uniqueId: row.unique_id,
+      registeredAt: row.registered_at,
+      name: row.name,
+      email: row.email,
+    });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 studentsRouter.post('/sessions', sessionLimiter, async (req, res) => {
   const parsed = sessionSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid roll number' }); return; }

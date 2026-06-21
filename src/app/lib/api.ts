@@ -217,6 +217,16 @@ export const api = {
       request<{ success: boolean; sent: number }>('POST', '/notify/announce', { body: data, admin: true }),
   },
   students: {
+    checkExists: (roll: string) =>
+      request<{ exists: boolean; hasProfile: boolean }>('GET', `/students/${roll}/exists`),
+    loginExisting: (rollNumber: string) =>
+      request<{
+        rollNumber: string;
+        uniqueId: string;
+        registeredAt: string;
+        name: string;
+        email: string;
+      }>('POST', '/students/sessions/login', { body: { rollNumber } }),
     createSession: (rollNumber: string, name: string, email: string) =>
       request<{ session: { rollNumber: string; uniqueId: string; registeredAt: string; name: string; email: string }; progress: { watchedVideos: string[]; completedQuizzes: string[] } }>('POST', '/students/sessions', { body: { rollNumber, name, email } }),
     getStudentProfile: (roll: string) =>

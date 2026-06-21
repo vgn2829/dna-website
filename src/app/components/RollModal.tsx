@@ -1,51 +1,89 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ArrowRight } from 'lucide-react';
+import { X } from 'lucide-react';
+import { api } from '../lib/api';
 import { useStudent, hasSeenWelcome, markWelcomeSeen } from '../context/StudentContext';
 import WelcomeOverlay from './WelcomeOverlay';
 
-const IITK_ROLL_REGEX = /^[0-9]{2}[a-zA-Z0-9]{4,6}$/;
-
 export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => void }) {
   const { isRollModalOpen, closeRollModal, login } = useStudent();
-  const [rollInput, setRollInput] = useState('');
+
+  type ModalStep = 'roll' | 'profile';
+  const [step, setStep] = useState<ModalStep>('roll');
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState('');
+
+  const [roll, setRoll] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState<string | null>(null);
-  const [shake, setShake] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [newUserName, setNewUserName] = useState('');
   const [newUserRoll, setNewUserRoll] = useState('');
+  const [shake, setShake] = useState(false);
 
-  const isValidName  = (n: string) => n.trim().length >= 2 && n.trim().length <= 100;
-  const isValidEmail = (e: string) => e.endsWith('@iitk.ac.in') && e.includes('@');
-  const isValidRoll  = IITK_ROLL_REGEX.test(rollInput.trim());
-
-  const handleSubmit = async (e: React.SyntheticEvent) => {
-    e.preventDefault();
-    const trimmed = rollInput.trim();
-    if (!isValidRoll || !isValidName(name) || !isValidEmail(email)) {
-      setError('Please fill all fields correctly');
-      setShake(true);
-      setTimeout(() => setShake(false), 450);
-      return;
+  useEffect(() => {
+    if (!isRollModalOpen) {
+      setStep('roll');
+      setRoll('');
+      setName('');
+      setEmail('');
+      setCheckError('');
+      setChecking(false);
     }
-    setSubmitting(true);
+  }, [isRollModalOpen]);
+
+  const handleRollContinue = async () => {
+    if (!roll.trim()) return;
+    setChecking(true);
+    setCheckError('');
     try {
-      const session = await login(trimmed, name.trim(), email.trim());
-      setNewUserName(name.trim());
-      setNewUserRoll(session.rollNumber);
-      setSuccess(session.uniqueId);
-      onSuccess?.(session.uniqueId);
-      if (!hasSeenWelcome(session.rollNumber)) {
-        setTimeout(() => { setSuccess(null); setShowWelcome(true); }, 1000);
+      const { exists, hasProfile } = await api.students.checkExists(roll.trim());
+      if (exists && hasProfile) {
+        await handleSubmitRoll(roll.trim());
       } else {
-        setTimeout(() => { setSuccess(null); setRollInput(''); setName(''); setEmail(''); setError(''); closeRollModal(); }, 1800);
+        setStep('profile');
       }
     } catch {
-      setError('Could not connect — please try again');
+      setCheckError('Could not verify roll number. Try again.');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleSubmitRoll = async (rollNumber: string) => {
+    try {
+      const data = await api.students.loginExisting(rollNumber);
+      login(data.rollNumber, data.uniqueId, data.registeredAt, data.name, data.email);
+      onSuccess?.(data.uniqueId);
+      closeRollModal();
+    } catch {
+      setStep('profile');
+    }
+  };
+
+  const handleFullSubmit = async () => {
+    if (!roll || !name.trim() || !email.endsWith('@iitk.ac.in')) return;
+    setSubmitting(true);
+    try {
+      const data = await api.students.createSession(roll.trim(), name.trim(), email.trim());
+      login(
+        data.session.rollNumber,
+        data.session.uniqueId,
+        data.session.registeredAt,
+        data.session.name ?? name.trim(),
+        data.session.email ?? email.trim(),
+      );
+      onSuccess?.(data.session.uniqueId);
+      setNewUserName(name.trim());
+      setNewUserRoll(roll.trim());
+      if (!hasSeenWelcome(roll.trim())) {
+        setShowWelcome(true);
+      } else {
+        closeRollModal();
+      }
+    } catch (err) {
+      console.error('Registration error:', err);
       setShake(true);
       setTimeout(() => setShake(false), 450);
     } finally {
@@ -53,12 +91,21 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
     }
   };
 
-  const handleClose = () => { setRollInput(''); setName(''); setEmail(''); setError(''); setSuccess(null); closeRollModal(); };
+  const handleClose = () => {
+    setStep('roll');
+    setRoll('');
+    setName('');
+    setEmail('');
+    setCheckError('');
+    closeRollModal();
+  };
 
   const handleWelcomeDone = () => {
     markWelcomeSeen(newUserRoll);
     setShowWelcome(false);
-    setRollInput(''); setName(''); setEmail(''); setError('');
+    setRoll('');
+    setName('');
+    setEmail('');
     closeRollModal();
   };
 
@@ -67,137 +114,206 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
       <AnimatePresence>
         {isRollModalOpen && !showWelcome && (
           <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50"
-            style={{ background: 'rgba(0,0,0,0.75)' }}
-            onClick={handleClose}
-          />
-
-          {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+            {/* Backdrop */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.93, y: 16 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.93, y: 16 }}
-              transition={{ type: 'spring', damping: 28, stiffness: 340 }}
-              className="pointer-events-auto w-full max-w-sm"
-              style={{
-                background: 'var(--color-surface-1)',
-                borderRadius: 'var(--radius-xxl)',
-                boxShadow: 'var(--shadow-level-2)',
-                padding: '2rem',
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-              <motion.div
-                animate={shake ? { x: [-10, 10, -8, 8, 0] } : { x: 0 }}
-                transition={{ duration: 0.35 }}
-              >
-                {/* Header */}
-                <div className="flex items-start justify-between mb-6">
-                  <div>
-                    <h2 className="type-headline mb-1">Link Your Profile</h2>
-                    <p className="type-caption">Connect your IITK roll number</p>
-                  </div>
-                  <button onClick={handleClose} className="btn-icon" style={{ width: 32, height: 32 }}>
-                    <X size={15} />
-                  </button>
-                </div>
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50"
+              style={{ background: 'rgba(0,0,0,0.75)' }}
+              onClick={handleClose}
+            />
 
-                <AnimatePresence mode="wait">
-                  {success ? (
-                    <motion.div
-                      key="success"
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-center py-6 space-y-3"
-                    >
-                      <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center"
-                        style={{ background: 'rgba(62,207,95,0.12)' }}>
-                        <span style={{ color: '#3ecf5f', fontSize: 22 }}>✓</span>
-                      </div>
-                      <p className="type-headline">Profile Linked!</p>
-                      <p className="type-micro font-mono break-all" style={{ color: 'var(--color-ink-muted)' }}>{success}</p>
-                    </motion.div>
-                  ) : (
-                    <motion.form
-                      key="form"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      onSubmit={handleSubmit}
-                      className="space-y-4"
-                    >
-                      <div>
-                        <label className="type-micro block mb-2">Roll Number</label>
-                        <input
-                          type="text"
-                          value={rollInput}
-                          onChange={e => { setRollInput(e.target.value); setError(''); }}
-                          placeholder="e.g. 230182"
-                          maxLength={9}
-                          className="input-base font-mono text-xl tracking-widest"
-                          autoFocus
-                        />
-                      </div>
-                      <div>
-                        <label className="type-micro block mb-2">Full Name</label>
-                        <input
-                          type="text"
-                          value={name}
-                          onChange={e => { setName(e.target.value); setError(''); }}
-                          placeholder="e.g. Rahul Kumar"
-                          maxLength={100}
-                          className="input-base"
-                          style={{ width: '100%', boxSizing: 'border-box' }}
-                        />
-                      </div>
-                      <div>
-                        <label className="type-micro block mb-2">IITK Email</label>
-                        <input
-                          type="email"
-                          value={email}
-                          onChange={e => { setEmail(e.target.value.toLowerCase()); setError(''); }}
-                          placeholder="email@iitk.ac.in"
-                          className="input-base"
-                          style={{ width: '100%', boxSizing: 'border-box' }}
-                        />
-                        {email && !isValidEmail(email) && (
-                          <p className="type-micro mt-1" style={{ color: '#e5484d' }}>
-                            Must be an @iitk.ac.in email address
-                          </p>
-                        )}
-                      </div>
-                      {error && (
-                        <motion.p
-                          initial={{ opacity: 0, y: -4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="type-micro"
-                          style={{ color: '#e5484d' }}
-                        >
-                          {error}
-                        </motion.p>
-                      )}
-                      <p className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>
-                        Your IITK email is used to identify you. Progress and activity saves to your account — no password needed.
-                      </p>
-                      <button
-                        type="submit"
-                        disabled={submitting || !isValidRoll || !isValidName(name) || !isValidEmail(email)}
-                        className="btn-primary w-full justify-center gap-2"
-                        style={{ opacity: (submitting || !isValidRoll || !isValidName(name) || !isValidEmail(email)) ? 0.6 : 1 }}
+            {/* Modal */}
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.93, y: 16 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.93, y: 16 }}
+                transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+                className="pointer-events-auto w-full max-w-sm"
+                style={{
+                  background: 'var(--color-surface-1)',
+                  borderRadius: 'var(--radius-xxl)',
+                  boxShadow: 'var(--shadow-level-2)',
+                  padding: '2rem',
+                }}
+                onClick={e => e.stopPropagation()}
+              >
+                <motion.div
+                  animate={shake ? { x: [-10, 10, -8, 8, 0] } : { x: 0 }}
+                  transition={{ duration: 0.35 }}
+                >
+                  {/* Header */}
+                  <div className="flex items-start justify-between mb-6">
+                    <div>
+                      <h2 className="type-headline mb-1">Link Your Profile</h2>
+                      <p className="type-caption">Connect your IITK roll number</p>
+                    </div>
+                    <button onClick={handleClose} className="btn-icon" style={{ width: 32, height: 32 }}>
+                      <X size={15} />
+                    </button>
+                  </div>
+
+                  <AnimatePresence mode="wait">
+                    {step === 'roll' && (
+                      <motion.div
+                        key="roll"
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        transition={{ duration: 0.2 }}
+                        style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
                       >
-                        {submitting ? 'Linking…' : <><span>Generate My Tracker ID</span><ArrowRight size={13} /></>}
-                      </button>
-                    </motion.form>
-                  )}
-                </AnimatePresence>
+                        <div>
+                          <p style={{
+                            margin: '0 0 6px', fontSize: 11, fontWeight: 600,
+                            color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
+                            textTransform: 'uppercase', fontFamily: 'var(--font-body)',
+                          }}>
+                            Roll Number
+                          </p>
+                          <input
+                            className="input-base"
+                            type="text"
+                            placeholder="e.g. 230182"
+                            value={roll}
+                            onChange={e => { setRoll(e.target.value); setCheckError(''); }}
+                            onKeyDown={e => { if (e.key === 'Enter') handleRollContinue(); }}
+                            maxLength={9}
+                            style={{ width: '100%', boxSizing: 'border-box' }}
+                            autoFocus
+                          />
+                          {checkError && (
+                            <p style={{ margin: '6px 0 0', fontSize: 12, color: '#ef4444', fontFamily: 'var(--font-body)' }}>
+                              {checkError}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={handleRollContinue}
+                          disabled={checking || !roll.trim()}
+                          style={{
+                            width: '100%', padding: '13px 20px',
+                            background: '#E91E8C', color: '#fff',
+                            border: 'none', borderRadius: 100,
+                            fontSize: 14, fontWeight: 600,
+                            fontFamily: 'var(--font-body)',
+                            cursor: checking || !roll.trim() ? 'not-allowed' : 'pointer',
+                            opacity: checking || !roll.trim() ? 0.6 : 1,
+                          }}
+                        >
+                          {checking ? 'Checking...' : 'Continue'}
+                        </button>
+                      </motion.div>
+                    )}
+
+                    {step === 'profile' && (
+                      <motion.div
+                        key="profile"
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 10 }}
+                        transition={{ duration: 0.2 }}
+                        style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+                      >
+                        {/* Confirmed roll number */}
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '10px 14px',
+                          background: 'rgba(34,197,94,0.08)',
+                          border: '1px solid rgba(34,197,94,0.2)',
+                          borderRadius: 8,
+                        }}>
+                          <span style={{ fontSize: 13, color: '#22c55e', fontFamily: 'var(--font-body)' }}>✓</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+                            {roll}
+                          </span>
+                          <button
+                            onClick={() => { setStep('roll'); setName(''); setEmail(''); }}
+                            style={{
+                              marginLeft: 'auto', fontSize: 11,
+                              color: 'var(--color-ink-muted)',
+                              background: 'none', border: 'none',
+                              fontFamily: 'var(--font-body)', cursor: 'pointer',
+                            }}
+                          >
+                            Change
+                          </button>
+                        </div>
+
+                        {/* Full Name */}
+                        <div>
+                          <label style={{
+                            display: 'block', fontSize: 11, fontWeight: 600,
+                            color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
+                            textTransform: 'uppercase', marginBottom: 6,
+                            fontFamily: 'var(--font-body)',
+                          }}>
+                            Full Name
+                          </label>
+                          <input
+                            className="input-base"
+                            type="text"
+                            placeholder="e.g. Rahul Kumar"
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                            maxLength={100}
+                            style={{ width: '100%', boxSizing: 'border-box' }}
+                            autoFocus
+                          />
+                        </div>
+
+                        {/* IITK Email */}
+                        <div>
+                          <label style={{
+                            display: 'block', fontSize: 11, fontWeight: 600,
+                            color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
+                            textTransform: 'uppercase', marginBottom: 6,
+                            fontFamily: 'var(--font-body)',
+                          }}>
+                            IITK Email
+                          </label>
+                          <input
+                            className="input-base"
+                            type="email"
+                            placeholder="rollno@iitk.ac.in"
+                            value={email}
+                            onChange={e => setEmail(e.target.value.toLowerCase())}
+                            style={{ width: '100%', boxSizing: 'border-box' }}
+                          />
+                          {email && !email.endsWith('@iitk.ac.in') && (
+                            <p style={{ fontSize: 11, color: '#ef4444', margin: '4px 0 0', fontFamily: 'var(--font-body)' }}>
+                              Must be an @iitk.ac.in email address
+                            </p>
+                          )}
+                        </div>
+
+                        <p className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>
+                          Your IITK email is used to identify you. Progress and activity saves to your account — no password needed.
+                        </p>
+
+                        <button
+                          onClick={handleFullSubmit}
+                          disabled={submitting || !name.trim() || !email.endsWith('@iitk.ac.in')}
+                          style={{
+                            width: '100%', padding: '13px 20px',
+                            background: '#E91E8C', color: '#fff',
+                            border: 'none', borderRadius: 100,
+                            fontSize: 14, fontWeight: 600,
+                            fontFamily: 'var(--font-body)',
+                            cursor: submitting ? 'not-allowed' : 'pointer',
+                            opacity: submitting || !name.trim() || !email.endsWith('@iitk.ac.in') ? 0.6 : 1,
+                          }}
+                        >
+                          {submitting ? 'Joining...' : 'Join DnA Club'}
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
               </motion.div>
-            </motion.div>
-          </div>
+            </div>
           </>
         )}
       </AnimatePresence>

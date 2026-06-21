@@ -20,7 +20,7 @@ interface StudentContextValue {
   isRollModalOpen: boolean;
   openRollModal: () => void;
   closeRollModal: () => void;
-  login: (rollNumber: string, name: string, email: string) => Promise<StudentSession>;
+  login: (rollNumber: string, uniqueId: string, registeredAt: string, name: string, email: string) => void;
   logout: () => void;
   markVideoWatched: (videoId: string) => void;
   unmarkVideoWatched: (videoId: string) => void;
@@ -64,19 +64,16 @@ export function StudentProvider({ children }: { children: React.ReactNode }) {
   const openRollModal  = useCallback(() => setIsRollModalOpen(true), []);
   const closeRollModal = useCallback(() => setIsRollModalOpen(false), []);
 
-  const login = useCallback(async (rollNumber: string, name: string, email: string): Promise<StudentSession> => {
-    const { session: raw, progress } = await api.students.createSession(rollNumber, name, email);
-    const session: StudentSession = {
-      rollNumber: raw.rollNumber,
-      uniqueId: raw.uniqueId,
-      registeredAt: raw.registeredAt,
-      name: raw.name ?? name,
-      email: raw.email ?? email,
-    };
+  const login = useCallback((
+    rollNumber: string,
+    uniqueId: string,
+    registeredAt: string,
+    name: string,
+    email: string,
+  ): void => {
+    const session: StudentSession = { rollNumber, uniqueId, registeredAt, name, email };
     setStudentSession(session);
-    setStudentProgress(progress);
-    persist(session, progress);
-    return session;
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   }, []);
 
   const logout = useCallback(() => {
