@@ -35,7 +35,7 @@ export default defineConfig({
   assetsInclude: ['**/*.svg', '**/*.csv'],
 
   optimizeDeps: {
-    include: ['@excalidraw/excalidraw'],
+    include: ['tldraw'],
     esbuildOptions: {
       define: {
         global: 'globalThis',

@@ -494,7 +494,3 @@
   }
 }
 
-/* Hide Excalidraw's built-in collab button — we use our own Invite system */
-.collab-button {
-  display: none !important;
-}
