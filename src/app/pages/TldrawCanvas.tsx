@@ -26,7 +26,7 @@ export function TldrawCanvas({
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef<string>('');
   const onSaveRef = useRef(onSave);
-  const initialDataRef = useRef(initialData);
+  const initialDataRef = useRef<unknown>(initialData);
   const snapshotLoadedRef = useRef(false);
 
   useEffect(() => {
@@ -34,9 +34,9 @@ export function TldrawCanvas({
   }, [onSave]);
 
   useEffect(() => {
-    if (editorRef.current) {
-      editorRef.current.user.updateUserPreferences({ colorScheme: theme });
-    }
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.user.updateUserPreferences({ colorScheme: theme });
   }, [theme]);
 
   const handleSave = useCallback(() => {
@@ -81,12 +81,8 @@ export function TldrawCanvas({
   return (
     <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
       <Tldraw
-        // No custom assets prop — tldraw's default handling stores images as base64
-        // dataURLs directly in the snapshot, which persists correctly across reloads.
-        // A custom assetStore.resolve() returning null caused the crash:
-        // "asset.props.src: Expected string, got undefined"
         hideUi={readOnly}
-        forceMobile={false}
+        autoFocus
         inferDarkMode={false}
         onMount={(editor: Editor) => {
           editorRef.current = editor;
@@ -96,42 +92,19 @@ export function TldrawCanvas({
           if (initialDataRef.current && !snapshotLoadedRef.current) {
             snapshotLoadedRef.current = true;
             try {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const snap = initialDataRef.current as any;
-
-              // Strip image assets with no src before loading — these crash tldraw
-              // with "Expected string, got undefined" during schema validation.
-              if (snap?.store && typeof snap.store === 'object') {
-                const cleanStore: Record<string, unknown> = {};
-                for (const [key, record] of Object.entries(
-                  snap.store as Record<string, unknown>
-                )) {
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  const r = record as any;
-                  if (r?.typeName === 'asset' && r?.type === 'image' && !r?.props?.src) {
-                    console.warn('Skipping asset with no src:', key);
-                    continue;
-                  }
-                  cleanStore[key] = record;
-                }
-                snap.store = cleanStore;
-              }
-
-              editor.store.loadSnapshot(
-                snap as Parameters<typeof editor.store.loadSnapshot>[0]
-              );
-
-              // Fit view to content so user sees their work, not an empty corner
+              const snap = initialDataRef.current as Parameters<
+                typeof editor.store.loadSnapshot
+              >[0];
+              editor.store.loadSnapshot(snap);
               setTimeout(() => {
                 try {
                   editor.zoomToFit({ animation: { duration: 200 } });
                 } catch {
-                  // zoomToFit may throw on an empty canvas — safe to ignore
+                  // empty canvas — ignore
                 }
-              }, 150);
+              }, 200);
             } catch (err) {
               console.warn('Failed to load snapshot:', err);
-              // Start fresh rather than crashing
             }
           }
 
