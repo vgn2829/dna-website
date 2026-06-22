@@ -266,6 +266,16 @@ export const api = {
       request<{ success: boolean }>('DELETE', `/boards/admin/${id}`, { admin: true }),
     adminUpdate: (id: string, data: { visibility?: 'private' | 'shared'; edit_mode?: 'members_only' | 'anyone' }) =>
       request<Board>('PUT', `/boards/admin/${id}`, { body: data, admin: true }),
+    saveCanvas: (boardId: string, roll: string, canvasData: string) =>
+      request<{ success: boolean }>(
+        'PUT', `/boards/${boardId}/canvas`,
+        { body: { canvas_data: canvasData }, roll }
+      ),
+    loadCanvas: (boardId: string, roll?: string) =>
+      request<{ canvas_data: string | null }>(
+        'GET', `/boards/${boardId}/canvas`,
+        roll ? { roll } : {}
+      ),
   },
   liveSessions: {
     getActive: (roll?: string) =>

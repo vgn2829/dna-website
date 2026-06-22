@@ -1,5 +1,5 @@
 import '@excalidraw/excalidraw/index.css';
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 const Excalidraw = lazy(() =>
@@ -7,6 +7,7 @@ const Excalidraw = lazy(() =>
 );
 import { api, type BoardDetail } from '../lib/api';
 import { clearBoardsCache } from './MoodboardsPage';
+import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import { useStudent } from '../context/StudentContext';
 
 // Theme key matches ThemeContext.tsx: localStorage key 'dna-theme',
@@ -42,6 +43,13 @@ export default function BoardPage() {
   const [updatingVisibility, setUpdatingVisibility] = useState(false);
   const [updatingEditMode, setUpdatingEditMode] = useState(false);
 
+  const excalidrawApiRef = useRef<ExcalidrawImperativeAPI | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedRef = useRef<string>('');
+  const [canvasLoading, setCanvasLoading] = useState(true);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [initialData, setInitialData] = useState<any>(null);
+
   const isOwner = board?.owner_roll === studentSession?.rollNumber;
   const isMember = board
     ? (isOwner || board.members.some(m => m.roll_number === studentSession?.rollNumber))
@@ -62,14 +70,116 @@ export default function BoardPage() {
     try {
       const data = await api.boards.getBoard(id, studentSession?.rollNumber);
       setBoard(data);
-    } catch {
-      setError('Failed to load board.');
+
+      // Load saved canvas state
+      try {
+        const canvasResult = await api.boards.loadCanvas(
+          id, studentSession?.rollNumber
+        );
+
+        if (canvasResult.canvas_data) {
+          const parsed = JSON.parse(canvasResult.canvas_data);
+          setInitialData({
+            elements: parsed.elements ?? [],
+            appState: {
+              ...(parsed.appState ?? {}),
+              collaborators: new Map(),
+            },
+            files: parsed.files ?? {},
+          });
+        }
+      } catch {
+        // Canvas load failed — start with empty canvas
+        console.log('No saved canvas or failed to load');
+      } finally {
+        setCanvasLoading(false);
+      }
+    } catch (err: unknown) {
+      const e = err as { status?: number };
+      if (e?.status === 403) {
+        setError('This board is private.');
+      } else if (e?.status === 404) {
+        setError('Board not found.');
+      } else {
+        setError('Failed to load board.');
+      }
+      setCanvasLoading(false);
     } finally {
       setLoading(false);
     }
   }, [id, studentSession?.rollNumber]);
 
   useEffect(() => { loadBoard(); }, [loadBoard]);
+
+  const saveCanvas = useCallback(async () => {
+    if (!id || !studentSession?.rollNumber) return;
+    if (!excalidrawApiRef.current) return;
+
+    try {
+      const elements = excalidrawApiRef.current.getSceneElements();
+      const appState = excalidrawApiRef.current.getAppState();
+      const files = excalidrawApiRef.current.getFiles();
+
+      const canvasData = JSON.stringify({
+        elements,
+        appState: {
+          viewBackgroundColor: appState.viewBackgroundColor,
+          zoom: appState.zoom,
+          scrollX: appState.scrollX,
+          scrollY: appState.scrollY,
+          gridSize: appState.gridSize,
+          theme: appState.theme,
+        },
+        files,
+      });
+
+      if (canvasData === lastSavedRef.current) return;
+      lastSavedRef.current = canvasData;
+
+      await api.boards.saveCanvas(id, studentSession.rollNumber, canvasData);
+      console.log('Canvas saved');
+    } catch (err) {
+      console.error('Failed to save canvas:', err);
+    }
+  }, [id, studentSession?.rollNumber]);
+
+  const handleExcalidrawChange = useCallback(() => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+    saveTimerRef.current = setTimeout(() => {
+      saveCanvas();
+    }, 3000);
+  }, [saveCanvas]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        if (saveTimerRef.current) {
+          clearTimeout(saveTimerRef.current);
+        }
+        saveCanvas();
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+      saveCanvas();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [saveCanvas]);
 
   const handleAddMember = async () => {
     if (!id || !studentSession?.rollNumber || !memberRoll.trim()) return;
@@ -328,9 +438,9 @@ export default function BoardPage() {
 
         {/* Excalidraw canvas */}
         <div style={{ flex: 1, position: 'relative' }}>
-          <Suspense fallback={
+          {canvasLoading ? (
             <div style={{
-              flex: 1,
+              position: 'absolute', inset: 0,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -338,28 +448,57 @@ export default function BoardPage() {
               color: theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
               fontFamily: 'var(--font-body)',
               fontSize: 14,
+              gap: 10,
+              flexDirection: 'column',
             }}>
-              Loading canvas...
+              <div style={{
+                width: 20, height: 20,
+                border: '2px solid currentColor',
+                borderTopColor: 'transparent',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite',
+              }} />
+              Restoring canvas...
             </div>
-          }>
-            <Excalidraw
-              theme={theme}
-              isCollaborating={isMember}
-              detectScroll={false}
-              handleKeyboardGlobally={true}
-              autoFocus
-              UIOptions={{
-                canvasActions: {
-                  changeViewBackgroundColor: true,
-                  clearCanvas: isOwner,
-                  export: { saveFileToDisk: true },
-                  loadScene: false,
-                  saveToActiveFile: false,
-                  toggleTheme: true,
-                },
-              }}
-            />
-          </Suspense>
+          ) : (
+            <Suspense fallback={
+              <div style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: theme === 'dark' ? '#1a1a1a' : '#f8f8f8',
+                color: theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
+                fontFamily: 'var(--font-body)',
+                fontSize: 14,
+              }}>
+                Loading canvas...
+              </div>
+            }>
+              <Excalidraw
+                theme={theme}
+                excalidrawAPI={(excalidrawApi) => {
+                  excalidrawApiRef.current = excalidrawApi;
+                }}
+                initialData={initialData}
+                onChange={handleExcalidrawChange}
+                isCollaborating={isMember}
+                detectScroll={false}
+                handleKeyboardGlobally={true}
+                autoFocus
+                UIOptions={{
+                  canvasActions: {
+                    changeViewBackgroundColor: true,
+                    clearCanvas: isOwner,
+                    export: { saveFileToDisk: true },
+                    loadScene: false,
+                    saveToActiveFile: false,
+                    toggleTheme: true,
+                  },
+                }}
+              />
+            </Suspense>
+          )}
         </div>
       </div>
 
