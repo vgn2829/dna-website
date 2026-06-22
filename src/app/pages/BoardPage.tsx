@@ -81,13 +81,40 @@ export default function BoardPage() {
 
         if (canvasResult.canvas_data) {
           const parsed = JSON.parse(canvasResult.canvas_data);
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const restoredFiles: Record<string, any> = {};
+          for (const [fileId, fileData] of Object.entries(parsed.files ?? {})) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const f = fileData as any;
+            if (f.url) {
+              try {
+                const imgRes = await fetch(f.url as string);
+                const blob = await imgRes.blob();
+                const dataURL = await new Promise<string>(resolve => {
+                  const reader = new FileReader();
+                  reader.onload = () => resolve(reader.result as string);
+                  reader.readAsDataURL(blob);
+                });
+                restoredFiles[fileId] = {
+                  id: fileId,
+                  dataURL,
+                  mimeType: f.mimeType,
+                  created: f.created ?? Date.now(),
+                };
+              } catch {
+                console.warn(`Failed to restore file ${fileId}`);
+              }
+            }
+          }
+
           setInitialData({
             elements: parsed.elements ?? [],
             appState: {
               ...(parsed.appState ?? {}),
               collaborators: new Map(),
             },
-            files: parsed.files ?? {},
+            files: restoredFiles,
           });
         }
       } catch {
@@ -113,6 +140,34 @@ export default function BoardPage() {
 
   useEffect(() => { loadBoard(); }, [loadBoard]);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const uploadCanvasFile = useCallback(async (fileId: string, file: any): Promise<string | null> => {
+    if (!id || !studentSession?.rollNumber) return null;
+    try {
+      const response = await fetch(file.dataURL as string);
+      const blob = await response.blob();
+
+      const formData = new FormData();
+      formData.append('file', blob, `${fileId}.png`);
+      formData.append('fileId', fileId);
+
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL ?? ''}/api/boards/${id}/canvas-files`,
+        {
+          method: 'POST',
+          headers: { 'X-Roll-Number': studentSession.rollNumber },
+          body: formData,
+        }
+      );
+
+      if (!res.ok) return null;
+      const data = await res.json() as { url: string };
+      return data.url;
+    } catch {
+      return null;
+    }
+  }, [id, studentSession?.rollNumber]);
+
   const saveCanvas = useCallback(async () => {
     if (!id || !studentSession?.rollNumber) return;
     if (!excalidrawApiRef.current) return;
@@ -122,7 +177,31 @@ export default function BoardPage() {
 
       const elements = excalidrawApiRef.current.getSceneElements();
       const appState = excalidrawApiRef.current.getAppState();
-      const files = excalidrawApiRef.current.getFiles();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const files = excalidrawApiRef.current.getFiles() as Record<string, any>;
+
+      const processedFiles: Record<string, { id: string; mimeType: string; url: string; created: number }> = {};
+
+      for (const [fileId, file] of Object.entries(files)) {
+        if (typeof file.dataURL === 'string' && file.dataURL.startsWith('http')) {
+          processedFiles[fileId] = {
+            id: fileId,
+            mimeType: file.mimeType as string,
+            url: file.dataURL,
+            created: file.created as number,
+          };
+        } else if (file.dataURL) {
+          const url = await uploadCanvasFile(fileId, file);
+          if (url) {
+            processedFiles[fileId] = {
+              id: fileId,
+              mimeType: file.mimeType as string,
+              url,
+              created: file.created as number,
+            };
+          }
+        }
+      }
 
       const canvasData = JSON.stringify({
         elements,
@@ -134,7 +213,7 @@ export default function BoardPage() {
           gridSize: appState.gridSize,
           theme: appState.theme,
         },
-        files,
+        files: processedFiles,
       });
 
       if (canvasData === lastSavedRef.current) {
@@ -153,7 +232,7 @@ export default function BoardPage() {
       setSaveStatus('error');
       setTimeout(() => setSaveStatus('idle'), 3000);
     }
-  }, [id, studentSession?.rollNumber]);
+  }, [id, studentSession?.rollNumber, uploadCanvasFile]);
 
   const handleExcalidrawChange = useCallback(() => {
     if (saveTimerRef.current) {

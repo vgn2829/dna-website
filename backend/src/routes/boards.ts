@@ -3,8 +3,15 @@ import { pool } from '../db/client';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { requireAdmin } from '../middleware/adminAuth';
+import multer from 'multer';
+import { getStorage } from '../storage';
 
 const router = Router();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
 
 // Helper: check if roll is board member or owner
 async function canAccess(boardId: string, roll: string): Promise<boolean> {
@@ -612,6 +619,38 @@ router.get('/:id/items', async (req: Request, res: Response) => {
 
     res.json(result.rows);
   } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/boards/:id/canvas-files
+// Upload a canvas image file to storage; returns the public URL
+router.post('/:id/canvas-files', upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const roll = req.headers['x-roll-number'] as string;
+    if (!roll) {
+      return res.status(401).json({ error: 'Roll number required' });
+    }
+
+    const access = await isMember(req.params.id, roll);
+    if (!access) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    const fileId = (req.body.fileId as string | undefined) ?? `canvas_${Date.now()}`;
+    const ext = req.file.mimetype.split('/')[1] ?? 'png';
+    const storagePath = `canvas-files/${req.params.id}/${fileId}.${ext}`;
+
+    await getStorage().upload(storagePath, req.file.buffer, req.file.mimetype);
+    const url = getStorage().getPublicUrl(storagePath);
+
+    res.json({ fileId, url });
+  } catch (err) {
+    console.error('Canvas file upload error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
