@@ -9,6 +9,21 @@ interface WelcomeOverlayProps {
 const FEATURES = [
   {
     symbol: '◆',
+    title: 'Design Studio',
+    desc: 'A set of creative tools — generate colour palettes, pair fonts, check contrast, and more.',
+  },
+  {
+    symbol: '◆',
+    title: 'Academy',
+    desc: 'Watch curated videos and track your learning progress across design domains.',
+  },
+  {
+    symbol: '◆',
+    title: 'Moodboards',
+    desc: 'Create collaborative visual boards. Add images, sketch ideas, and share with your team.',
+  },
+  {
+    symbol: '◆',
     title: 'Gallery',
     desc: 'Explore artwork, illustrations, and animations from DnA Club members.',
   },
@@ -16,16 +31,6 @@ const FEATURES = [
     symbol: '◆',
     title: 'Like & Comment',
     desc: 'React to posts and share your thoughts directly on any artwork.',
-  },
-  {
-    symbol: '◆',
-    title: 'Design Studio',
-    desc: 'A set of creative tools — generate palettes, pair fonts, build mood boards, and more.',
-  },
-  {
-    symbol: '◆',
-    title: 'Academy',
-    desc: 'Watch curated videos and track your learning progress across design domains.',
   },
 ];
 

@@ -5,11 +5,11 @@ export function DesignStudioCard() {
   const navigate = useNavigate();
 
   const tools = [
-    { icon: '',   label: 'Palette Studio' },
-    { icon: 'Aa', label: 'Font Pairing' },
-    { icon: '◑',  label: 'Contrast Checker' },
-    { icon: '↔',  label: 'Image Converter' },
-    { icon: '⊞',  label: 'Grid Calculator' },
+    { icon: '',   label: 'Palette Studio',   tab: 'palette'  },
+    { icon: 'Aa', label: 'Font Pairing',     tab: 'font'     },
+    { icon: '◑',  label: 'Contrast Checker', tab: 'contrast' },
+    { icon: '↔',  label: 'Image Converter',  tab: 'image'    },
+    { icon: '⊞',  label: 'Grid Calculator',  tab: 'grid'     },
   ];
 
   return (
@@ -56,8 +56,9 @@ export function DesignStudioCard() {
             }}
           >
             {tools.map((t) => (
-              <span
+              <button
                 key={t.label}
+                onClick={() => navigate('/design-studio', { state: { tab: t.tab } })}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -70,11 +71,21 @@ export function DesignStudioCard() {
                   fontWeight: 500,
                   color: 'var(--color-ink-muted)',
                   fontFamily: 'var(--font-body)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLElement).style.color = 'var(--color-ink)';
+                  (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-2)';
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.color = 'var(--color-ink-muted)';
+                  (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-1)';
                 }}
               >
                 {t.icon && <span style={{ fontSize: 14 }}>{t.icon}</span>}
                 {t.label}
-              </span>
+              </button>
             ))}
           </div>
 

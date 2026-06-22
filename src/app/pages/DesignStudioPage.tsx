@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useLocation } from "react-router";
 import PaletteStudio from "../components/PaletteStudio";
 
 const T = {
@@ -1196,7 +1197,10 @@ const SUBTITLES: Record<string,string> = {
 
 // ── Shell ─────────────────────────────────────────────────────────────────────
 export default function DesignStudio() {
-  const [active, setActive] = useState("palette");
+  const location = useLocation();
+  const [active, setActive] = useState(
+    (location.state as { tab?: string } | null)?.tab ?? 'palette'
+  );
   const Tool = TOOLS.find(t => t.id === active)!.comp;
   return (
     <div style={{minHeight:"100vh",background:T.canvas,fontFamily:"var(--font-body)",color:T.ink,paddingTop:"56px"}}>

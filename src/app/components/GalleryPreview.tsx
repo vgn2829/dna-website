@@ -1,3 +1,4 @@
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router';
@@ -43,7 +44,31 @@ export function GalleryPreview() {
   const navigate = useNavigate();
   const { artworks, loading } = useAppData();
 
-  const nonFeatured = artworks.filter(a => !a.featured);
+  const shuffled = useMemo(() => {
+    const nonFeatured = artworks.filter(a => !a.featured);
+    const arr = [...nonFeatured];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }, [artworks]);
+
+  const getCount = () => {
+    if (window.innerWidth >= 1024) return 8;
+    if (window.innerWidth >= 640) return 6;
+    return 4;
+  };
+
+  const [count, setCount] = useState(getCount);
+
+  useEffect(() => {
+    const handleResize = () => setCount(getCount());
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const displayArtworks = shuffled.slice(0, count);
 
   return (
     <section id="gallery" style={{ background: 'var(--color-canvas)', padding: '96px 0' }}>
@@ -65,11 +90,11 @@ export function GalleryPreview() {
         <div style={{ marginBottom: 48 }}>
           {loading ? (
             <p className="type-caption text-center" style={{ color: 'var(--color-ink-muted)', padding: '48px 0' }}>Loading…</p>
-          ) : nonFeatured.length === 0 ? (
+          ) : displayArtworks.length === 0 ? (
             <p className="type-caption text-center" style={{ color: 'var(--color-ink-muted)', padding: '48px 0' }}>No artworks yet</p>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-              {nonFeatured.map((a, i) => <ArtworkCard key={a.id} a={a} i={i} />)}
+              {displayArtworks.map((a, i) => <ArtworkCard key={a.id} a={a} i={i} />)}
             </div>
           )}
         </div>
