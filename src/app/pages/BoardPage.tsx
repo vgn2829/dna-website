@@ -43,6 +43,8 @@ export default function BoardPage() {
   const [updatingVisibility, setUpdatingVisibility] = useState(false);
   const [updatingEditMode, setUpdatingEditMode] = useState(false);
 
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
   const excalidrawApiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef<string>('');
@@ -116,6 +118,8 @@ export default function BoardPage() {
     if (!excalidrawApiRef.current) return;
 
     try {
+      setSaveStatus('saving');
+
       const elements = excalidrawApiRef.current.getSceneElements();
       const appState = excalidrawApiRef.current.getAppState();
       const files = excalidrawApiRef.current.getFiles();
@@ -133,13 +137,21 @@ export default function BoardPage() {
         files,
       });
 
-      if (canvasData === lastSavedRef.current) return;
+      if (canvasData === lastSavedRef.current) {
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+        return;
+      }
       lastSavedRef.current = canvasData;
 
       await api.boards.saveCanvas(id, studentSession.rollNumber, canvasData);
-      console.log('Canvas saved');
+
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err) {
       console.error('Failed to save canvas:', err);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 3000);
     }
   }, [id, studentSession?.rollNumber]);
 
@@ -349,6 +361,24 @@ export default function BoardPage() {
             }}>
               {board.name}
             </p>
+            {saveStatus !== 'idle' && (
+              <span style={{
+                fontSize: 11,
+                fontFamily: 'var(--font-body)',
+                color: saveStatus === 'error'
+                  ? '#ef4444'
+                  : saveStatus === 'saving'
+                    ? (theme === 'dark'
+                      ? 'rgba(255,255,255,0.4)'
+                      : 'rgba(0,0,0,0.4)')
+                    : '#22c55e',
+                whiteSpace: 'nowrap',
+              }}>
+                {saveStatus === 'saving' && 'Saving...'}
+                {saveStatus === 'saved' && 'Saved'}
+                {saveStatus === 'error' && 'Save failed — try again'}
+              </span>
+            )}
             <span style={{
               fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
               padding: '2px 8px', borderRadius: 100, flexShrink: 0, fontFamily: 'var(--font-body)',
