@@ -4,6 +4,38 @@ import { motion, AnimatePresence } from 'motion/react';
 import { api, type Board } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
 
+const CACHE_KEY_MY = 'dna_boards_mine';
+const CACHE_KEY_SHARED = 'dna_boards_shared';
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
+function readCache<T>(key: string): T | null {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL_MS) {
+      sessionStorage.removeItem(key);
+      return null;
+    }
+    return data as T;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache<T>(key: string, data: T): void {
+  try {
+    sessionStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
+  } catch {
+    // sessionStorage full or unavailable — silent fail
+  }
+}
+
+export function clearBoardsCache(): void {
+  sessionStorage.removeItem(CACHE_KEY_MY);
+  sessionStorage.removeItem(CACHE_KEY_SHARED);
+}
+
 type Tab = 'mine' | 'shared';
 
 function BoardCard({ board, onClick, onMenuOpen, ownerRoll }: {
@@ -124,18 +156,38 @@ export default function MoodboardsPage() {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
+    const cached = readCache<Board[]>(CACHE_KEY_SHARED);
+    if (cached) {
+      setSharedBoards(cached);
+      setSharedLoading(false);
+      // Still re-fetch in background to stay fresh
+      api.boards.getShared()
+        .then(data => { setSharedBoards(data); writeCache(CACHE_KEY_SHARED, data); })
+        .catch(() => {});
+      return;
+    }
     setSharedLoading(true);
     api.boards.getShared()
-      .then(setSharedBoards)
+      .then(data => { setSharedBoards(data); writeCache(CACHE_KEY_SHARED, data); })
       .catch(() => {})
       .finally(() => setSharedLoading(false));
   }, []);
 
   useEffect(() => {
     if (!studentSession?.rollNumber) return;
+    const cached = readCache<Board[]>(CACHE_KEY_MY);
+    if (cached) {
+      setMyBoards(cached);
+      setMyLoading(false);
+      // Still re-fetch in background to stay fresh
+      api.boards.getMyBoards(studentSession.rollNumber)
+        .then(data => { setMyBoards(data); writeCache(CACHE_KEY_MY, data); })
+        .catch(() => {});
+      return;
+    }
     setMyLoading(true);
     api.boards.getMyBoards(studentSession.rollNumber)
-      .then(setMyBoards)
+      .then(data => { setMyBoards(data); writeCache(CACHE_KEY_MY, data); })
       .catch(() => {})
       .finally(() => setMyLoading(false));
   }, [studentSession?.rollNumber]);
@@ -152,6 +204,7 @@ export default function MoodboardsPage() {
       });
       setMyBoards(prev => [board, ...prev]);
       if (form.visibility === 'shared') setSharedBoards(prev => [board, ...prev]);
+      clearBoardsCache();
       setShowCreate(false);
       setForm({ name: '', description: '', visibility: 'private' });
       navigate(`/moodboards/${board.id}`);
@@ -239,6 +292,7 @@ export default function MoodboardsPage() {
     try {
       await api.boards.delete(board.id, studentSession.rollNumber);
       setMyBoards(prev => prev.filter(b => b.id !== board.id));
+      clearBoardsCache();
       setConfirmDeleteBoard(null);
     } catch {
       console.error('Failed to delete board');

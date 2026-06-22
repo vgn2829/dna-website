@@ -6,6 +6,7 @@ const Excalidraw = lazy(() =>
   import('@excalidraw/excalidraw').then(m => ({ default: m.Excalidraw }))
 );
 import { api, type BoardDetail } from '../lib/api';
+import { clearBoardsCache } from './MoodboardsPage';
 import { useStudent } from '../context/StudentContext';
 
 // Theme key matches ThemeContext.tsx: localStorage key 'dna-theme',
@@ -174,7 +175,13 @@ export default function BoardPage() {
         {error || 'Board not found.'}
       </p>
       <button
-        onClick={() => navigate('/moodboards')}
+        onClick={() => {
+          if (window.history.state?.idx > 0) {
+            navigate(-1);
+          } else {
+            navigate('/moodboards');
+          }
+        }}
         style={{ padding: '10px 20px', background: '#E91E8C', color: '#fff', border: 'none', borderRadius: 100, fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
       >
         Back to Moodboards
@@ -207,7 +214,13 @@ export default function BoardPage() {
         }}>
           {/* Left — back */}
           <button
-            onClick={() => navigate('/moodboards')}
+            onClick={() => {
+              if (window.history.state?.idx > 0) {
+                navigate(-1);
+              } else {
+                navigate('/moodboards');
+              }
+            }}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               background: 'none', border: 'none', color: textMuted,
