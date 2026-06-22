@@ -16,13 +16,23 @@ html, body {
   to { transform: rotate(360deg); }
 }
 
-/* Ensure tldraw fills its container and its UI panels stay visible */
+/* tldraw canvas fixes */
+/* Let tldraw manage its own layout fully */
+/* Do NOT override .tlui-layout position or height — tldraw's grid layout depends on them */
+
 .tl-container {
-  position: relative;
+  width: 100% !important;
+  height: 100% !important;
 }
 
-.tlui-layout {
-  position: relative !important;
-  height: 100% !important;
-  width: 100% !important;
+/* Fix toolbar z-index above our top bar */
+.tlui-toolbar {
+  z-index: 10 !important;
+}
+
+/* Fix menus and popups appearing above our board page top bar (z-index 10) */
+.tlui-popover__content,
+.tlui-menu__content,
+.tlui-context-menu__content {
+  z-index: 20 !important;
 }
