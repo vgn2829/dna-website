@@ -1,4 +1,5 @@
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '') + '/api';
+export const API_BASE = BASE;
 
 export interface LiveSession {
   id: string;
@@ -83,6 +84,19 @@ export interface BoardDetail extends Board {
 export interface AppSettings {
   public_meet_enabled: string;
   public_meet_passcode?: string;
+}
+
+export interface CoordinatorMember {
+  id: number;
+  name: string;
+  roll_number: string;
+  designation: string;
+  photo_url: string | null;
+  year: string | null;
+  approved: boolean;
+  in_group: boolean;
+  email: string | null;
+  registered_at: string | null;
 }
 
 export interface EmailTemplate {
@@ -333,6 +347,17 @@ export const api = {
         'DELETE', `/live-sessions/public/${id}`,
         { body: { token } }
       ),
+  },
+  coordinators: {
+    getAll: () =>
+      request<CoordinatorMember[]>('GET', '/coordinators', { admin: true }),
+    setApproval: (roll: string, approved: boolean) =>
+      request<{ success: boolean; approved: boolean }>(
+        'PUT', `/coordinators/${roll}/approve`,
+        { body: { approved }, admin: true }
+      ),
+    check: (roll: string) =>
+      request<{ canSchedule: boolean }>('GET', `/coordinators/check/${roll}`),
   },
   settings: {
     getPublic: () =>

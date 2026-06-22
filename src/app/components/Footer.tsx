@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Instagram, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { api, type LiveSession } from '../lib/api';
+import { api, type LiveSession, API_BASE } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
 
 const COLS = [
@@ -32,20 +32,12 @@ const SOCIAL = [
   { icon: Mail,      href: 'mailto:designandanimationclub.iitk@gmail.com', label: 'Email' },
 ];
 
-const PUBLIC_TOKEN_KEY = 'dna_public_meet_token';
-
 export function Footer() {
   const navigate = useNavigate();
   const { studentSession } = useStudent();
 
   const [meetEnabled, setMeetEnabled] = useState(false);
-
-  // Passcode entry modal
-  const [showMeetEntry, setShowMeetEntry] = useState(false);
-  const [passcodeInput, setPasscodeInput] = useState('');
-  const [passcodeError, setPasscodeError] = useState('');
-  const [verifying, setVerifying] = useState(false);
-  const [publicToken, setPublicToken] = useState<string | null>(null);
+  const [canSchedule, setCanSchedule] = useState(false);
 
   // Scheduler modal
   const [showScheduler, setShowScheduler] = useState(false);
@@ -61,60 +53,36 @@ export function Footer() {
   }, []);
 
   useEffect(() => {
-    const raw = localStorage.getItem(PUBLIC_TOKEN_KEY);
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(atob(raw.split('.')[0] ?? ''));
-      if (parsed.exp && Date.now() < parsed.exp) {
-        setPublicToken(raw);
-      } else {
-        localStorage.removeItem(PUBLIC_TOKEN_KEY);
-      }
-    } catch {
-      localStorage.removeItem(PUBLIC_TOKEN_KEY);
-    }
-  }, []);
+    if (!studentSession?.rollNumber) { setCanSchedule(false); return; }
+    api.coordinators.check(studentSession.rollNumber)
+      .then(r => setCanSchedule(r.canSchedule))
+      .catch(() => setCanSchedule(false));
+  }, [studentSession?.rollNumber]);
 
   useEffect(() => {
-    if (!showScheduler || !studentSession || !publicToken) return;
+    if (!showScheduler || !canSchedule || !studentSession) return;
     api.liveSessions.getActive(studentSession.rollNumber).then(setSessions).catch(() => {});
-  }, [showScheduler, studentSession, publicToken]);
-
-  const handleVerifyPasscode = async () => {
-    if (!passcodeInput.trim()) return;
-    setVerifying(true);
-    setPasscodeError('');
-    try {
-      const result = await api.settings.verifyPasscode(passcodeInput.trim());
-      if (result.success && result.token) {
-        localStorage.setItem(PUBLIC_TOKEN_KEY, result.token);
-        setPublicToken(result.token);
-        setShowMeetEntry(false);
-        setPasscodeInput('');
-        setShowScheduler(true);
-      } else {
-        setPasscodeError('Incorrect passcode. Try again.');
-      }
-    } catch {
-      setPasscodeError('Incorrect passcode. Try again.');
-    } finally {
-      setVerifying(false);
-    }
-  };
+  }, [showScheduler, canSchedule, studentSession]);
 
   const handleCreateSession = async () => {
-    if (!studentSession || !publicToken || !form.title || !form.host || !form.meet_link || !form.scheduled_at) return;
+    if (!studentSession || !form.title || !form.host || !form.meet_link || !form.scheduled_at) return;
     setCreating(true);
     setCreateError('');
     try {
-      const session = await api.liveSessions.createPublic(publicToken, studentSession.rollNumber, {
-        title: form.title,
-        host: form.host,
-        meet_link: form.meet_link,
-        scheduled_at: form.scheduled_at,
-        audience_group_id: null,
-        description: form.description || undefined,
+      const res = await fetch(`${API_BASE}/live-sessions/coordinator`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Roll-Number': studentSession.rollNumber },
+        body: JSON.stringify({
+          title: form.title,
+          host: form.host,
+          meet_link: form.meet_link,
+          scheduled_at: form.scheduled_at,
+          audience_group_id: null,
+          description: form.description || undefined,
+        }),
       });
+      if (!res.ok) throw new Error('Failed to create session');
+      const session = await res.json() as LiveSession;
       setSessions(prev => [session, ...prev]);
       setForm({ title: '', host: '', meet_link: '', scheduled_at: '', description: '' });
     } catch (e: unknown) {
@@ -125,9 +93,12 @@ export function Footer() {
   };
 
   const handleDeleteSession = async (id: string) => {
-    if (!publicToken) return;
+    if (!studentSession) return;
     try {
-      await api.liveSessions.deletePublic(id, publicToken);
+      await fetch(`${API_BASE}/live-sessions/coordinator/${id}`, {
+        method: 'DELETE',
+        headers: { 'X-Roll-Number': studentSession.rollNumber },
+      });
       setSessions(prev => prev.filter(s => s.id !== id));
     } catch {}
   };
@@ -248,18 +219,10 @@ export function Footer() {
                       </button>
                     </li>
                   ))}
-                  {col.heading === 'Club' && meetEnabled && studentSession && (
+                  {col.heading === 'Club' && meetEnabled && studentSession && canSchedule && (
                     <li>
                       <button
-                        onClick={() => {
-                          if (publicToken) {
-                            setShowScheduler(true);
-                          } else {
-                            setPasscodeInput('');
-                            setPasscodeError('');
-                            setShowMeetEntry(true);
-                          }
-                        }}
+                        onClick={() => setShowScheduler(true)}
                         style={{
                           background: 'none',
                           border: 'none',
@@ -403,63 +366,6 @@ export function Footer() {
           </div>
         </div>
       </footer>
-
-      {/* Passcode entry modal */}
-      <AnimatePresence>
-        {showMeetEntry && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            style={{ position: 'fixed', inset: 0, zIndex: 9100, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
-            onClick={() => setShowMeetEntry(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 12 }}
-              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 20, padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.3px' }}>
-                  Coordinator Access
-                </h3>
-                <button
-                  onClick={() => setShowMeetEntry(false)}
-                  style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-ink-muted)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  ×
-                </button>
-              </div>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', lineHeight: 1.5 }}>
-                Enter the coordinator passcode to schedule a public meet session.
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <input
-                  type="password"
-                  placeholder="Passcode"
-                  value={passcodeInput}
-                  onChange={e => { setPasscodeInput(e.target.value); setPasscodeError(''); }}
-                  onKeyDown={e => { if (e.key === 'Enter') handleVerifyPasscode(); }}
-                  style={inputStyle}
-                  autoFocus
-                />
-                {passcodeError && (
-                  <p style={{ margin: 0, fontSize: 12, color: '#ef4444', fontFamily: 'var(--font-body)' }}>{passcodeError}</p>
-                )}
-              </div>
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={handleVerifyPasscode}
-                disabled={verifying || !passcodeInput.trim()}
-                style={{ padding: '13px 0', background: '#E91E8C', color: '#fff', border: 'none', borderRadius: 100, fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: verifying ? 'not-allowed' : 'pointer', opacity: verifying ? 0.7 : 1 }}
-              >
-                {verifying ? 'Verifying…' : 'Continue'}
-              </motion.button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Scheduler modal */}
       <AnimatePresence>

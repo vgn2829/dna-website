@@ -1,10 +1,25 @@
-import { Router } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import { pool } from '../db/client';
 import { requireAdmin } from '../middleware/adminAuth';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
+
+async function requireCoordinator(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const roll = req.headers['x-roll-number'] as string | undefined;
+  if (!roll) { res.status(401).json({ error: 'Roll number required' }); return; }
+  try {
+    const result = await pool.query(`
+      SELECT 1 FROM audience_group_members
+      WHERE group_id = 'coordinators' AND roll_number = $1 AND approved = true
+    `, [roll]);
+    if (result.rows.length === 0) { res.status(403).json({ error: 'Access denied' }); return; }
+    next();
+  } catch {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
 
 function verifyPublicMeetToken(token: string): boolean {
   try {
@@ -184,6 +199,51 @@ router.delete('/public/:id', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('Public delete session error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/coordinator', requireCoordinator, async (req, res) => {
+  try {
+    const parsed = sessionSchema.parse(req.body);
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    const result = await pool.query(`
+      INSERT INTO live_sessions
+        (id, title, host, meet_link, scheduled_at,
+         status, audience_group_id, description, created_at)
+      VALUES ($1,$2,$3,$4,$5,'upcoming',$6,$7,$8)
+      RETURNING *
+    `, [
+      id, parsed.title, parsed.host, parsed.meet_link,
+      parsed.scheduled_at,
+      parsed.audience_group_id ?? null,
+      parsed.description ?? null,
+      now,
+    ]);
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: err.errors });
+    }
+    console.error('Coordinator create session error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.delete('/coordinator/:id', requireCoordinator, async (req, res) => {
+  try {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const result = await pool.query(
+      `DELETE FROM live_sessions WHERE id = $1 AND created_at >= $2 RETURNING id`,
+      [req.params.id, cutoff]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found or too old to delete' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Coordinator delete session error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

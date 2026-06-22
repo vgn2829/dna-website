@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
-import { api, setAdminToken, clearAdminToken, type SessionJoins } from '../lib/api';
+import { api, setAdminToken, clearAdminToken, type SessionJoins, type CoordinatorMember } from '../lib/api';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
 import imageCompression from 'browser-image-compression';
 
@@ -1626,11 +1626,23 @@ function SettingsTab() {
     localStorage.getItem('forceUppercase') !== 'false'
   );
 
+  const [coordinators, setCoordinators] = useState<CoordinatorMember[]>([]);
+  const [coordLoading, setCoordLoading] = useState(false);
+  const [coordError, setCoordError] = useState('');
+
   useEffect(() => {
     api.settings.getAll()
       .then(setSettings)
       .catch(() => setError('Failed to load settings'))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    setCoordLoading(true);
+    api.coordinators.getAll()
+      .then(setCoordinators)
+      .catch(() => setCoordError('Failed to load coordinators'))
+      .finally(() => setCoordLoading(false));
   }, []);
 
   const handleToggleMeet = async () => {
@@ -1669,6 +1681,17 @@ function SettingsTab() {
     setForceUppercase(newVal);
     localStorage.setItem('forceUppercase', newVal ? 'true' : 'false');
     window.dispatchEvent(new Event('storage'));
+  };
+
+  const handleToggleCoordinator = async (roll: string, currentlyApproved: boolean) => {
+    try {
+      await api.coordinators.setApproval(roll, !currentlyApproved);
+      setCoordinators(prev =>
+        prev.map(c => c.roll_number === roll ? { ...c, approved: !currentlyApproved } : c)
+      );
+    } catch {
+      setCoordError('Failed to update coordinator approval');
+    }
   };
 
   if (loading) return (
@@ -1786,6 +1809,57 @@ function SettingsTab() {
           <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
             Share this passcode with coordinators who need to schedule meets.
           </p>
+        </div>
+      </div>
+
+      {/* Coordinator Access */}
+      <div style={{ border: '1px solid var(--color-border)', borderRadius: 16, overflow: 'hidden' }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--color-border)' }}>
+          <p style={{ margin: '0 0 2px', fontSize: 15, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+            Coordinator Access
+          </p>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+            Approve coordinators to schedule public meet sessions. Approved coordinators see "Schedule a Meet" in the footer.
+          </p>
+        </div>
+        <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {coordError && (
+            <p style={{ margin: 0, fontSize: 13, color: '#ef4444', fontFamily: 'var(--font-body)' }}>{coordError}</p>
+          )}
+          {coordLoading ? (
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>Loading coordinators…</p>
+          ) : coordinators.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+              No coordinators found. Add team members with designation "Coordinator" first.
+            </p>
+          ) : coordinators.map(c => (
+            <div key={c.roll_number} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--color-hairline)' }}>
+              <div>
+                <p style={{ margin: '0 0 2px', fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+                  {c.name}
+                </p>
+                <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                  {c.roll_number}{c.email ? ` · ${c.email}` : ''}
+                </p>
+              </div>
+              <button
+                onClick={() => handleToggleCoordinator(c.roll_number, c.approved)}
+                style={{
+                  width: 48, height: 26, borderRadius: 100, flexShrink: 0,
+                  background: c.approved ? '#E91E8C' : 'var(--color-border)',
+                  border: 'none', cursor: 'pointer',
+                  position: 'relative', transition: 'background 0.2s ease',
+                }}
+              >
+                <div style={{
+                  position: 'absolute', top: 3,
+                  left: c.approved ? 26 : 3,
+                  width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                  transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                }} />
+              </button>
+            </div>
+          ))}
         </div>
       </div>
 
