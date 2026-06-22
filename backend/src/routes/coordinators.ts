@@ -4,31 +4,22 @@ import { requireAdmin } from '../middleware/adminAuth';
 
 const router = Router();
 
-// GET /api/coordinators
-// Returns all team members with Coordinator designation, with their approval status
-// Admin only
+// GET /api/coordinators — admin only
 router.get('/', requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT
-        tm.id,
-        tm.name,
-        tm.roll_number,
-        tm.designation,
-        tm.photo_url,
-        tm.year,
-        COALESCE(agm.approved, false) as approved,
-        COALESCE(agm.roll_number IS NOT NULL, false) as in_group,
+        agm.roll_number,
+        agm.name,
+        agm.approved,
+        agm.added_at,
         ss.email,
         ss.registered_at
-      FROM team_members tm
-      LEFT JOIN audience_group_members agm
-        ON agm.roll_number = tm.roll_number
-        AND agm.group_id = 'coordinators'
+      FROM audience_group_members agm
       LEFT JOIN student_sessions ss
-        ON ss.roll_number = tm.roll_number
-      WHERE TRIM(tm.designation) = 'Coordinator'
-      ORDER BY tm.name ASC
+        ON ss.roll_number = agm.roll_number
+      WHERE agm.group_id = 'coordinators'
+      ORDER BY agm.name ASC
     `);
 
     res.json(result.rows);
@@ -38,9 +29,42 @@ router.get('/', requireAdmin, async (req, res) => {
   }
 });
 
-// PUT /api/coordinators/:roll/approve
-// Toggle approval status for a coordinator
-// Admin only
+// POST /api/coordinators — manually add a coordinator, admin only
+router.post('/', requireAdmin, async (req, res) => {
+  try {
+    const { roll_number, name } = req.body as { roll_number?: string; name?: string };
+
+    if (!roll_number?.trim() || !name?.trim()) {
+      return res.status(400).json({ error: 'roll_number and name are required' });
+    }
+
+    const now = new Date().toISOString();
+
+    await pool.query(`
+      INSERT INTO audience_group_members
+        (group_id, roll_number, name,
+         added_at, approved)
+      VALUES ('coordinators', $1, $2, $3, false)
+      ON CONFLICT (group_id, roll_number)
+      DO UPDATE SET name = EXCLUDED.name
+    `, [roll_number.trim(), name.trim(), now]);
+
+    res.json({
+      success: true,
+      roll_number: roll_number.trim(),
+      name: name.trim(),
+      approved: false,
+      added_at: now,
+      email: null,
+      registered_at: null,
+    });
+  } catch (err) {
+    console.error('Add coordinator error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/coordinators/:roll/approve — toggle approval, admin only
 router.put('/:roll/approve', requireAdmin, async (req, res) => {
   try {
     const { roll } = req.params;
@@ -50,19 +74,17 @@ router.put('/:roll/approve', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'approved must be a boolean' });
     }
 
-    await pool.query(`
-      INSERT INTO audience_group_members
-        (group_id, roll_number, name, added_at, approved)
-      VALUES (
-        'coordinators',
-        $1,
-        (SELECT name FROM team_members WHERE roll_number = $1 LIMIT 1),
-        $2,
-        $3
-      )
-      ON CONFLICT (group_id, roll_number)
-      DO UPDATE SET approved = EXCLUDED.approved
-    `, [roll, new Date().toISOString(), approved]);
+    const result = await pool.query(`
+      UPDATE audience_group_members
+      SET approved = $1
+      WHERE group_id = 'coordinators'
+        AND roll_number = $2
+      RETURNING *
+    `, [approved, roll]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Coordinator not found' });
+    }
 
     console.log(`Coordinator ${roll} ${approved ? 'approved' : 'revoked'}`);
 
@@ -73,19 +95,32 @@ router.put('/:roll/approve', requireAdmin, async (req, res) => {
   }
 });
 
-// GET /api/coordinators/check/:roll
-// Public — checks if a roll number is an approved coordinator
+// DELETE /api/coordinators/:roll — remove coordinator, admin only
+router.delete('/:roll', requireAdmin, async (req, res) => {
+  try {
+    await pool.query(`
+      DELETE FROM audience_group_members
+      WHERE group_id = 'coordinators'
+        AND roll_number = $1
+    `, [req.params.roll]);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete coordinator error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/coordinators/check/:roll — public, no auth required
 router.get('/check/:roll', async (req, res) => {
   try {
-    const { roll } = req.params;
-
     const result = await pool.query(`
-      SELECT agm.approved
-      FROM audience_group_members agm
-      WHERE agm.group_id = 'coordinators'
-        AND agm.roll_number = $1
-        AND agm.approved = true
-    `, [roll]);
+      SELECT approved
+      FROM audience_group_members
+      WHERE group_id = 'coordinators'
+        AND roll_number = $1
+        AND approved = true
+    `, [req.params.roll]);
 
     res.json({ canSchedule: result.rows.length > 0 });
   } catch (err) {

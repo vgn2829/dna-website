@@ -457,4 +457,26 @@ export async function initSchema(): Promise<void> {
   `);
 
   console.log('audience_group_members.approved migration done');
+
+  const coordinatorMembers = [
+    { roll: '240007', name: 'Aaditya Kini'    },
+    { roll: '240039', name: 'Abhishek'         },
+    { roll: '240511', name: 'Kanak'            },
+    { roll: '240280', name: 'Boddupally Uthai' },
+    { roll: '231140', name: 'Venu'             },
+    { roll: '230265', name: 'Ayush Rai'        },
+  ];
+
+  for (const m of coordinatorMembers) {
+    await pool.query(`
+      INSERT INTO audience_group_members
+        (group_id, roll_number, name,
+         added_at, approved)
+      VALUES ('coordinators', $1, $2, $3, false)
+      ON CONFLICT (group_id, roll_number)
+      DO NOTHING
+    `, [m.roll, m.name, new Date().toISOString()]);
+  }
+
+  console.log('6 coordinators seeded');
 }
