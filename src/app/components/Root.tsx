@@ -18,28 +18,38 @@ function SessionGate() {
 
 export function Root() {
   const { pathname } = useLocation();
+  const isBoardPage = pathname.startsWith('/moodboards/') && pathname !== '/moodboards';
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [pathname]);
+    if (!isBoardPage) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [pathname, isBoardPage]);
 
   return (
     <ThemeProvider>
       <StudentProvider>
         <AppDataProvider>
-          <div className="min-h-screen" style={{ background: 'var(--color-canvas)', color: 'var(--color-ink)' }}>
-            <LiveSessionBanner />
-            <Navigation />
+          <div
+            className="min-h-screen"
+            style={{ background: 'var(--color-canvas)', color: 'var(--color-ink)' }}
+          >
+            {!isBoardPage && <LiveSessionBanner />}
+            {!isBoardPage && <Navigation />}
             <RollModal />
             <SessionGate />
 
-            {/* 56px nav offset */}
-            <main style={{ paddingTop: '56px' }}>
+            {isBoardPage ? (
               <Outlet />
-            </main>
-
-            <Footer />
-            <BackToTop />
+            ) : (
+              <>
+                <main style={{ paddingTop: '56px' }}>
+                  <Outlet />
+                </main>
+                <Footer />
+                <BackToTop />
+              </>
+            )}
           </div>
         </AppDataProvider>
       </StudentProvider>

@@ -243,7 +243,7 @@ export default function BoardPage() {
   return (
     <>
       {/* Full-screen canvas */}
-      <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', flexDirection: 'column' }}>
 
         {/* Top bar */}
         <div style={{
@@ -372,7 +372,7 @@ export default function BoardPage() {
         </div>
 
         {/* Canvas area */}
-        <div style={{ flex: 1, position: 'relative' }}>
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
           {canvasLoading ? (
             <div style={{
               position: 'absolute', inset: 0,

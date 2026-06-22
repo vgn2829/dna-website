@@ -154,7 +154,6 @@
     letter-spacing: -0.15px;
     background: var(--color-canvas);
     color: var(--color-ink);
-    overflow-x: hidden;
     /* Inter Variable OpenType character variants — brand voice */
     font-feature-settings: "cv01" 1, "cv05" 1, "cv09" 1, "cv11" 1,
                            "ss03" 1, "ss07" 1, "dlig" 1;

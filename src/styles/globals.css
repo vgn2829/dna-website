@@ -3,13 +3,13 @@ html, body {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  overflow-x: hidden;
 }
 
 #root {
   width: 100%;
   min-height: 100vh;
   display: block;
+  overflow-x: hidden;
 }
 
 @keyframes spin {
