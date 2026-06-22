@@ -1173,7 +1173,7 @@ function Preview({ palette: p }) {
   return (
     <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
       {/* Dashboard card */}
-      <div style={{ background: p.bg, border: `1px solid ${p.border}`, borderRadius: 14, padding: 22, width: 400, flexShrink: 0 }}>
+      <div style={{ background: p.bg, border: `1px solid ${p.border}`, borderRadius: 'var(--radius-lg)', padding: 22, width: 400, flexShrink: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
           <div>
             <div style={{ color: p.textMuted, fontSize: 9, textTransform: "uppercase", letterSpacing: ".12em", marginBottom: 2 }}>Overview</div>
@@ -1188,13 +1188,13 @@ function Preview({ palette: p }) {
             { label: "Pending", val: "6",  col: p.warning },
             { label: "Issues",  val: "2",  col: p.error   },
           ].map((stat) => (
-            <div key={stat.label} style={{ background: p.surface, border: `1px solid ${p.border}`, borderRadius: 8, padding: "9px 11px" }}>
+            <div key={stat.label} style={{ background: p.surface, border: `1px solid ${p.border}`, borderRadius: 'var(--radius-sm)', padding: "9px 11px" }}>
               <div style={{ color: p.textMuted, fontSize: 8, textTransform: "uppercase", letterSpacing: ".1em", opacity: .5, marginBottom: 2 }}>{stat.label}</div>
               <div style={{ color: stat.col, fontSize: 18, fontWeight: 800 }}>{stat.val}</div>
             </div>
           ))}
         </div>
-        <div style={{ background: p.surfaceElevated, border: `1px solid ${p.border}`, borderRadius: 8, padding: "10px 12px", marginBottom: 12 }}>
+        <div style={{ background: p.surfaceElevated, border: `1px solid ${p.border}`, borderRadius: 'var(--radius-sm)', padding: "10px 12px", marginBottom: 12 }}>
           <div style={{ color: p.text, fontSize: 11, fontWeight: 600, marginBottom: 7 }}>Recent Activity</div>
           {[
             { msg: "Deploy to production succeeded", type: "success" },
@@ -1225,7 +1225,7 @@ function Preview({ palette: p }) {
 
       {/* Typography + semantic cards */}
       <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minWidth: 260 }}>
-        <div style={{ background: p.bg, border: `1px solid ${p.border}`, borderRadius: 14, padding: 22 }}>
+        <div style={{ background: p.bg, border: `1px solid ${p.border}`, borderRadius: 'var(--radius-lg)', padding: 22 }}>
           <div style={{ color: p.textMuted, fontSize: 9, letterSpacing: ".16em", textTransform: "uppercase", marginBottom: 10 }}>Typography</div>
           <div style={{ color: p.primary, fontSize: 22, fontWeight: 900, letterSpacing: "-.025em", lineHeight: 1.1, marginBottom: 4 }}>Display Heading</div>
           <div style={{ color: p.text, fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Section Title</div>
@@ -1237,11 +1237,11 @@ function Preview({ palette: p }) {
               { bg: p.secondary, fg: p.bg,         label: "Secondary" },
               { bg: p.accent,    fg: p.bg,         label: "Accent"    },
             ].map((t) => (
-              <div key={t.label} style={{ background: t.bg, color: t.fg, padding: "3px 10px", borderRadius: 20, fontSize: 9, fontWeight: 700 }}>{t.label}</div>
+              <div key={t.label} style={{ background: t.bg, color: t.fg, padding: "3px 10px", borderRadius: 'var(--radius-xl)', fontSize: 9, fontWeight: 700 }}>{t.label}</div>
             ))}
           </div>
         </div>
-        <div style={{ background: p.bg, border: `1px solid ${p.border}`, borderRadius: 14, padding: 22 }}>
+        <div style={{ background: p.bg, border: `1px solid ${p.border}`, borderRadius: 'var(--radius-lg)', padding: 22 }}>
           <div style={{ color: p.textMuted, fontSize: 9, letterSpacing: ".16em", textTransform: "uppercase", marginBottom: 10 }}>Semantic States</div>
           {[
             { label: "Success", color: p.success, bg: p.successBg, msg: "Deploy completed"     },

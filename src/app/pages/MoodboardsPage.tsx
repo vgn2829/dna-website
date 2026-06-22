@@ -49,7 +49,7 @@ function BoardCard({ board, onClick, onMenuOpen, ownerRoll }: {
       onClick={onClick}
       style={{
         border: '1px solid var(--color-border)',
-        borderRadius: 16,
+        borderRadius: 'var(--radius-lg)',
         overflow: 'hidden',
         background: 'var(--color-surface-1)',
         cursor: 'pointer',
@@ -110,7 +110,7 @@ function BoardCard({ board, onClick, onMenuOpen, ownerRoll }: {
           </h3>
           <span style={{
             fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-            padding: '2px 8px', borderRadius: 100, flexShrink: 0, fontFamily: 'var(--font-body)',
+            padding: '2px 8px', borderRadius: 'var(--radius-pill)', flexShrink: 0, fontFamily: 'var(--font-body)',
             background: board.visibility === 'shared' ? 'rgba(233,30,140,0.1)' : 'rgba(128,128,128,0.1)',
             color: board.visibility === 'shared' ? 'var(--color-brand)' : 'var(--color-ink-muted)',
           }}>
@@ -318,14 +318,14 @@ export default function MoodboardsPage() {
           {studentSession ? (
             <button
               onClick={() => setShowCreate(true)}
-              style={{ padding: '10px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 100, fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+              style={{ padding: '10px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
             >
               + New Board
             </button>
           ) : (
             <button
               onClick={openRollModal}
-              style={{ padding: '10px 20px', background: 'var(--color-surface-1)', color: 'var(--color-ink)', border: 'none', borderRadius: 100, fontSize: 14, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+              style={{ padding: '10px 20px', background: 'var(--color-surface-1)', color: 'var(--color-ink)', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
             >
               Sign in to create boards
             </button>
@@ -365,7 +365,7 @@ export default function MoodboardsPage() {
           </p>
           <button
             onClick={openRollModal}
-            style={{ padding: '12px 24px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 100, fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+            style={{ padding: '12px 24px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
           >
             Enter Roll Number
           </button>
@@ -380,7 +380,7 @@ export default function MoodboardsPage() {
           {tab === 'mine' && (
             <button
               onClick={() => setShowCreate(true)}
-              style={{ padding: '12px 24px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 100, fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+              style={{ padding: '12px 24px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
             >
               + New Board
             </button>
@@ -415,7 +415,7 @@ export default function MoodboardsPage() {
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 20, padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}
+              style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}
             >
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.3px' }}>
                 New Moodboard
@@ -445,7 +445,7 @@ export default function MoodboardsPage() {
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
                   Visibility
                 </label>
-                <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
                   {(['private', 'shared'] as const).map(v => (
                     <button
                       key={v}
@@ -472,13 +472,13 @@ export default function MoodboardsPage() {
                 <button
                   onClick={handleCreate}
                   disabled={creating || !form.name.trim()}
-                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 100, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: creating || !form.name.trim() ? 'not-allowed' : 'pointer', opacity: creating || !form.name.trim() ? 0.6 : 1 }}
+                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: creating || !form.name.trim() ? 'not-allowed' : 'pointer', opacity: creating || !form.name.trim() ? 0.6 : 1 }}
                 >
                   {creating ? 'Creating...' : 'Create Board'}
                 </button>
                 <button
                   onClick={() => setShowCreate(false)}
-                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 100, fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
                 >
                   Cancel
                 </button>
@@ -505,7 +505,7 @@ export default function MoodboardsPage() {
                 zIndex: 8001,
                 background: 'var(--color-surface-1)',
                 border: '1px solid var(--color-border)',
-                borderRadius: 12,
+                borderRadius: 'var(--radius-md)',
                 padding: 6,
                 minWidth: 160,
                 boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
@@ -521,7 +521,7 @@ export default function MoodboardsPage() {
                   style={{
                     width: '100%', textAlign: 'left',
                     padding: '8px 12px', background: 'none',
-                    border: 'none', borderRadius: 8,
+                    border: 'none', borderRadius: 'var(--radius-sm)',
                     fontSize: 13,
                     color: item.danger ? 'var(--color-error)' : 'var(--color-ink)',
                     fontFamily: 'var(--font-body)', cursor: 'pointer',
@@ -551,7 +551,7 @@ export default function MoodboardsPage() {
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 420, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 20, padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 20, maxHeight: '90vh', overflowY: 'auto' }}
+              style={{ width: '100%', maxWidth: 420, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 20, maxHeight: '90vh', overflowY: 'auto' }}
             >
               {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -578,7 +578,7 @@ export default function MoodboardsPage() {
                 <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)' }}>
                   Visibility
                 </p>
-                <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
                   {([{ value: 'private', label: 'Private' }, { value: 'shared', label: 'Shared' }] as const).map(opt => (
                     <button
                       key={opt.value}
@@ -608,7 +608,7 @@ export default function MoodboardsPage() {
                 <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)' }}>
                   Who can edit?
                 </p>
-                <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
                   {([{ value: 'members_only', label: 'Invited only' }, { value: 'anyone', label: 'Anyone with link' }] as const).map(opt => (
                     <button
                       key={opt.value}
@@ -638,13 +638,13 @@ export default function MoodboardsPage() {
                   Board Link
                 </p>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{ flex: 1, padding: '10px 12px', background: 'var(--color-canvas)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono, monospace)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ flex: 1, padding: '10px 12px', background: 'var(--color-canvas)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono, monospace)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {window.location.origin}/moodboards/{showCardShare.id}
                   </div>
                   <motion.button
                     whileTap={{ scale: 0.95 }}
                     onClick={() => handleCardCopyLink(showCardShare)}
-                    style={{ padding: '10px 14px', background: cardCopied ? 'var(--color-success)' : 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, transition: 'background 0.2s ease' }}
+                    style={{ padding: '10px 14px', background: cardCopied ? 'var(--color-success)' : 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, transition: 'background 0.2s ease' }}
                   >
                     {cardCopied ? 'Copied!' : 'Copy'}
                   </motion.button>
@@ -671,7 +671,7 @@ export default function MoodboardsPage() {
                   <button
                     onClick={() => handleCardInvite(showCardShare)}
                     disabled={inviting || !inviteRoll.trim()}
-                    style={{ padding: '0 16px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: inviting ? 'not-allowed' : 'pointer', opacity: inviting ? 0.6 : 1, whiteSpace: 'nowrap' }}
+                    style={{ padding: '0 16px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: inviting ? 'not-allowed' : 'pointer', opacity: inviting ? 0.6 : 1, whiteSpace: 'nowrap' }}
                   >
                     {inviting ? '...' : 'Invite'}
                   </button>
@@ -700,7 +700,7 @@ export default function MoodboardsPage() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 20, padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}
+              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}
             >
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
                 Delete "{confirmDeleteBoard.name}"?
@@ -712,13 +712,13 @@ export default function MoodboardsPage() {
                 <button
                   onClick={() => handleCardDelete(confirmDeleteBoard)}
                   disabled={deleting}
-                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-error)', color: '#fff', border: 'none', borderRadius: 100, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: deleting ? 'not-allowed' : 'pointer' }}
+                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-error)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: deleting ? 'not-allowed' : 'pointer' }}
                 >
                   {deleting ? 'Deleting...' : 'Delete'}
                 </button>
                 <button
                   onClick={() => setConfirmDeleteBoard(null)}
-                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 100, fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
                 >
                   Cancel
                 </button>

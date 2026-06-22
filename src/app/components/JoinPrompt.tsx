@@ -70,7 +70,7 @@ export default function JoinPrompt() {
               maxWidth: 480,
               background: 'var(--color-surface-1)',
               border: '1px solid var(--color-hairline)',
-              borderRadius: 20,
+              borderRadius: 'var(--radius-xl)',
               padding: '28px 28px',
               display: 'flex',
               flexDirection: 'column',
@@ -128,7 +128,7 @@ export default function JoinPrompt() {
                 onClick={handleRegister}
                 style={{
                   flex: 1, padding: '12px 20px', background: 'var(--color-brand)', color: '#fff',
-                  border: 'none', borderRadius: 100, fontSize: 13, fontWeight: 600,
+                  border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600,
                   fontFamily: 'var(--font-body)', cursor: 'pointer', letterSpacing: '0.02em',
                 }}
               >
@@ -139,7 +139,7 @@ export default function JoinPrompt() {
                 style={{
                   flex: 1, padding: '12px 20px', background: 'none',
                   color: 'var(--color-ink-muted)', border: '1px solid var(--color-hairline)',
-                  borderRadius: 100, fontSize: 13, fontWeight: 500,
+                  borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 500,
                   fontFamily: 'var(--font-body)', cursor: 'pointer',
                 }}
               >

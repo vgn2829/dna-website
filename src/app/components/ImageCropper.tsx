@@ -249,8 +249,8 @@ export function ImageCropperPortal() {
                 />
               </div>
               <div style={{ padding: '10px 12px' }}>
-                <div style={{ height: 10, width: '70%', borderRadius: 4, background: 'var(--color-surface-2)', marginBottom: 6 }} />
-                <div style={{ height: 8, width: '50%', borderRadius: 4, background: 'var(--color-surface-2)' }} />
+                <div style={{ height: 10, width: '70%', borderRadius: 'var(--radius-xs)', background: 'var(--color-surface-2)', marginBottom: 6 }} />
+                <div style={{ height: 8, width: '50%', borderRadius: 'var(--radius-xs)', background: 'var(--color-surface-2)' }} />
               </div>
             </div>
             <p style={{ fontSize: 10, color: 'var(--color-ink-muted)', margin: 0, fontFamily: 'var(--font-body)', textAlign: 'center', maxWidth: 140, lineHeight: 1.4 }}>

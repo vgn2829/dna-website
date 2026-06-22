@@ -118,7 +118,7 @@ function MediaViewer({ artwork, onAspectRatio, isMobile }: { artwork: Artwork; o
         src={pdfViewerUrl}
         width="100%"
         height={isMobile ? '400px' : '600px'}
-        style={{ border: 'none', borderRadius: 8, display: 'block', minHeight: isMobile ? '400px' : '600px' }}
+        style={{ border: 'none', borderRadius: 'var(--radius-sm)', display: 'block', minHeight: isMobile ? '400px' : '600px' }}
         title={artwork.title}
         onError={() => setPdfLoadFailed(true)}
       />
@@ -521,7 +521,7 @@ export function GalleryPage() {
                           onClick={e => { e.stopPropagation(); handleSaveToBoard(art); }}
                           title="Save to Moodboard"
                           className="absolute bottom-3 left-3 opacity-0 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity"
-                          style={{ background: 'rgba(0,0,0,0.55)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 16, padding: '4px 8px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}
+                          style={{ background: 'rgba(0,0,0,0.55)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 16, padding: '4px 8px', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}
                         >
                           ◈
                         </button>
@@ -561,7 +561,7 @@ export function GalleryPage() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16 }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 20, padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '80vh', overflowY: 'auto' }}
+              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '80vh', overflowY: 'auto' }}
             >
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
                 Save to Moodboard
@@ -574,7 +574,7 @@ export function GalleryPage() {
                   </p>
                   <a
                     href="/moodboards"
-                    style={{ display: 'inline-block', padding: '8px 16px', background: 'var(--color-brand)', color: '#fff', borderRadius: 100, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', textDecoration: 'none' }}
+                    style={{ display: 'inline-block', padding: '8px 16px', background: 'var(--color-brand)', color: '#fff', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', textDecoration: 'none' }}
                   >
                     Create a Board
                   </a>
@@ -586,7 +586,7 @@ export function GalleryPage() {
                       key={board.id}
                       onClick={() => handleSaveToSelectedBoard(board.id)}
                       disabled={saving}
-                      style={{ width: '100%', textAlign: 'left', padding: '12px 14px', border: '1px solid var(--color-border)', borderRadius: 10, background: 'var(--color-canvas)', cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                      style={{ width: '100%', textAlign: 'left', padding: '12px 14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-canvas)', cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                     >
                       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
                         {board.name}
@@ -601,7 +601,7 @@ export function GalleryPage() {
 
               <button
                 onClick={() => setSavingArtwork(null)}
-                style={{ padding: '10px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 100, fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                style={{ padding: '10px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
               >
                 Cancel
               </button>

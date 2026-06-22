@@ -108,7 +108,7 @@ export function Footer() {
     padding: '10px 12px',
     background: 'var(--color-canvas)',
     border: '1px solid var(--color-border)',
-    borderRadius: 8,
+    borderRadius: 'var(--radius-sm)',
     fontSize: 13,
     color: 'var(--color-ink)',
     fontFamily: 'var(--font-body)',
@@ -381,7 +381,7 @@ export function Footer() {
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 480, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 20, padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 20, maxHeight: '90vh', overflowY: 'auto' }}
+              style={{ width: '100%', maxWidth: 480, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 20, maxHeight: '90vh', overflowY: 'auto' }}
             >
               {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -442,7 +442,7 @@ export function Footer() {
                   whileTap={{ scale: 0.97 }}
                   onClick={handleCreateSession}
                   disabled={creating || !form.title || !form.host || !form.meet_link || !form.scheduled_at}
-                  style={{ padding: '13px 0', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 100, fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: creating ? 'not-allowed' : 'pointer', opacity: creating ? 0.7 : 1, marginTop: 4 }}
+                  style={{ padding: '13px 0', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: creating ? 'not-allowed' : 'pointer', opacity: creating ? 0.7 : 1, marginTop: 4 }}
                 >
                   {creating ? 'Scheduling…' : 'Schedule Session'}
                 </motion.button>
@@ -459,7 +459,7 @@ export function Footer() {
                     {sessions.map(s => (
                       <div
                         key={s.id}
-                        style={{ padding: '12px 14px', background: 'var(--color-canvas)', border: '1px solid var(--color-border)', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}
+                        style={{ padding: '12px 14px', background: 'var(--color-canvas)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{ margin: '0 0 2px', fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -471,7 +471,7 @@ export function Footer() {
                         </div>
                         <button
                           onClick={() => handleDeleteSession(s.id)}
-                          style={{ flexShrink: 0, padding: '4px 10px', background: 'none', border: '1px solid rgba(239,68,68,0.4)', color: 'var(--color-error)', borderRadius: 6, fontSize: 12, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                          style={{ flexShrink: 0, padding: '4px 10px', background: 'none', border: '1px solid rgba(239,68,68,0.4)', color: 'var(--color-error)', borderRadius: 'var(--radius-sm)', fontSize: 12, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
                         >
                           Remove
                         </button>

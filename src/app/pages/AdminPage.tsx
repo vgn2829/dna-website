@@ -991,7 +991,7 @@ function GalleryTab() {
                   }} />
               </div>
               {editArtwork.mediaType === 'image' && editArtwork.mediaUrl && (
-                <img src={editArtwork.mediaUrl} alt="current" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--color-hairline)' }} />
+                <img src={editArtwork.mediaUrl} alt="current" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-hairline)' }} />
               )}
 
               {/* Cover image — for video / PDF only */}
@@ -1000,7 +1000,7 @@ function GalleryTab() {
                   <label className="type-micro block mb-2">Cover Image</label>
                   {(eaCoverPreview || editArtwork.coverUrl) && (
                     <img src={eaCoverPreview ?? editArtwork.coverUrl!} alt="cover"
-                      style={{ width: 80, height: 108, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--color-hairline)', marginBottom: 8, display: 'block' }} />
+                      style={{ width: 80, height: 108, objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-hairline)', marginBottom: 8, display: 'block' }} />
                   )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 'var(--radius-pill)', background: 'var(--color-surface-2)', border: '1px solid var(--color-hairline)', cursor: 'pointer', fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
@@ -1272,7 +1272,7 @@ function TeamTab() {
                 <button
                   type="button"
                   onClick={() => resetGroupToAlpha(groupKey)}
-                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 100, background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)', border: '1px solid var(--color-hairline)', cursor: 'pointer', fontFamily: 'var(--font-body)' }}
+                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 'var(--radius-pill)', background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)', border: '1px solid var(--color-hairline)', cursor: 'pointer', fontFamily: 'var(--font-body)' }}
                 >
                   Reset to A–Z
                 </button>
@@ -1722,7 +1722,7 @@ function SettingsTab() {
         </p>
       )}
 
-      <div style={{ border: '1px solid var(--color-border)', borderRadius: 16, overflow: 'hidden' }}>
+      <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
         <div style={{
           padding: '20px 24px', borderBottom: '1px solid var(--color-border)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16,
@@ -1739,7 +1739,7 @@ function SettingsTab() {
             onClick={handleToggleMeet}
             disabled={saving}
             style={{
-              width: 48, height: 26, borderRadius: 100,
+              width: 48, height: 26, borderRadius: 'var(--radius-pill)',
               background: isMeetEnabled ? 'var(--color-brand)' : 'var(--color-border)',
               border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
               position: 'relative', transition: 'background 0.2s ease', flexShrink: 0,
@@ -1768,7 +1768,7 @@ function SettingsTab() {
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16 }}>
             <code style={{
               padding: '8px 16px', background: 'var(--color-canvas)',
-              border: '1px solid var(--color-border)', borderRadius: 8,
+              border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
               fontSize: 16, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-brand)',
               fontFamily: 'var(--font-mono, monospace)',
             }}>
@@ -1813,7 +1813,7 @@ function SettingsTab() {
       </div>
 
       {/* Coordinator Access */}
-      <div style={{ border: '1px solid var(--color-border)', borderRadius: 16, overflow: 'hidden' }}>
+      <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
         <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--color-border)' }}>
           <p style={{ margin: '0 0 2px', fontSize: 15, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
             Coordinator Access
@@ -1845,7 +1845,7 @@ function SettingsTab() {
               <button
                 onClick={() => handleToggleCoordinator(c.roll_number, c.approved)}
                 style={{
-                  width: 48, height: 26, borderRadius: 100, flexShrink: 0,
+                  width: 48, height: 26, borderRadius: 'var(--radius-pill)', flexShrink: 0,
                   background: c.approved ? 'var(--color-brand)' : 'var(--color-border)',
                   border: 'none', cursor: 'pointer',
                   position: 'relative', transition: 'background 0.2s ease',
@@ -1864,7 +1864,7 @@ function SettingsTab() {
       </div>
 
       {/* Force Uppercase in Gallery */}
-      <div style={{ border: '1px solid var(--color-border)', borderRadius: 16, overflow: 'hidden' }}>
+      <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
         <div style={{
           padding: '20px 24px',
           display: 'flex',
@@ -1893,7 +1893,7 @@ function SettingsTab() {
           <button
             onClick={handleToggleCaps}
             style={{
-              width: 48, height: 26, borderRadius: 100,
+              width: 48, height: 26, borderRadius: 'var(--radius-pill)',
               background: forceUppercase ? 'var(--color-brand)' : 'var(--color-border)',
               border: 'none', cursor: 'pointer',
               position: 'relative', transition: 'background 0.2s ease', flexShrink: 0,
@@ -1971,7 +1971,7 @@ function TemplateEditor({ templateId, variables }: TemplateEditorProps) {
             <code
               key={v}
               onClick={() => setBody(prev => prev + v)}
-              style={{ padding: '3px 10px', borderRadius: 100, background: 'rgba(233,30,140,0.12)', color: 'var(--color-brand)', fontSize: 12, fontFamily: 'var(--font-mono, monospace)', border: '1px solid rgba(233,30,140,0.2)', cursor: 'pointer' }}
+              style={{ padding: '3px 10px', borderRadius: 'var(--radius-pill)', background: 'rgba(233,30,140,0.12)', color: 'var(--color-brand)', fontSize: 12, fontFamily: 'var(--font-mono, monospace)', border: '1px solid rgba(233,30,140,0.2)', cursor: 'pointer' }}
             >
               {v}
             </code>
@@ -2006,7 +2006,7 @@ function TemplateEditor({ templateId, variables }: TemplateEditorProps) {
         <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)' }}>
           Preview
         </p>
-        <div style={{ border: '1px solid var(--color-hairline)', borderRadius: 12, overflow: 'hidden', background: 'var(--color-canvas)' }}>
+        <div style={{ border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: 'var(--color-canvas)' }}>
           <div style={{ background: 'var(--color-brand)', padding: '16px 24px' }}>
             <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-body)' }}>Design & Animation Club, IIT Kanpur</p>
           </div>
@@ -2046,7 +2046,7 @@ function CustomAnnouncement() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ padding: '12px 16px', borderRadius: 8, background: 'rgba(233,30,140,0.08)', border: '1px solid rgba(233,30,140,0.2)' }}>
+      <div style={{ padding: '12px 16px', borderRadius: 'var(--radius-sm)', background: 'rgba(233,30,140,0.08)', border: '1px solid rgba(233,30,140,0.2)' }}>
         <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', lineHeight: 1.6 }}>
           This sends a one-time custom email to all registered students. Use it for announcements not tied to a specific artwork or event.
         </p>
@@ -2078,7 +2078,7 @@ function CustomAnnouncement() {
           <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)' }}>
             Preview
           </p>
-          <div style={{ border: '1px solid var(--color-hairline)', borderRadius: 12, overflow: 'hidden', background: 'var(--color-canvas)' }}>
+          <div style={{ border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: 'var(--color-canvas)' }}>
             <div style={{ background: 'var(--color-brand)', padding: '16px 24px' }}>
               <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-body)' }}>Design & Animation Club, IIT Kanpur</p>
             </div>
@@ -2098,7 +2098,7 @@ function CustomAnnouncement() {
           Send to All Students
         </button>
       ) : (
-        <div style={{ padding: 16, borderRadius: 10, border: '1px solid rgba(233,30,140,0.3)', background: 'rgba(233,30,140,0.06)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ padding: 16, borderRadius: 'var(--radius-md)', border: '1px solid rgba(233,30,140,0.3)', background: 'rgba(233,30,140,0.06)', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--color-ink)', fontFamily: 'var(--font-body)', fontWeight: 600 }}>
             Send this announcement to all registered students?
           </p>
@@ -2363,7 +2363,7 @@ function SessionsTab() {
           {showForm && (
             <div style={{
               border: '1px solid var(--color-border)',
-              borderRadius: 16, padding: 24,
+              borderRadius: 'var(--radius-lg)', padding: 24,
               background: 'var(--color-surface)',
               display: 'flex', flexDirection: 'column', gap: 16,
             }}>
@@ -2485,7 +2485,7 @@ function SessionsTab() {
               {sessions.map(s => (
                 <div key={s.id} style={{
                   border: '1px solid var(--color-border)',
-                  borderRadius: 14, padding: '18px 20px',
+                  borderRadius: 'var(--radius-lg)', padding: '18px 20px',
                   background: 'var(--color-surface)',
                   display: 'flex', justifyContent: 'space-between',
                   alignItems: 'flex-start', gap: 16,
@@ -2498,7 +2498,7 @@ function SessionsTab() {
                       {s.audience_name && (
                         <span style={{
                           fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
-                          textTransform: 'uppercase', padding: '2px 8px', borderRadius: 100,
+                          textTransform: 'uppercase', padding: '2px 8px', borderRadius: 'var(--radius-pill)',
                           background: 'rgba(233,30,140,0.1)', color: 'var(--color-brand)',
                           fontFamily: 'var(--font-body)',
                         }}>
@@ -2550,7 +2550,7 @@ function SessionsTab() {
                       style={{
                         fontSize: 12, padding: '6px 14px',
                         background: 'none', border: '1px solid rgba(239,68,68,0.3)',
-                        borderRadius: 100, color: 'var(--color-error)',
+                        borderRadius: 'var(--radius-pill)', color: 'var(--color-error)',
                         cursor: 'pointer', fontFamily: 'var(--font-body)',
                       }}
                     >
@@ -2585,7 +2585,7 @@ function SessionsTab() {
                   width: '100%',
                   textAlign: 'left',
                   padding: '14px 16px',
-                  borderRadius: 12,
+                  borderRadius: 'var(--radius-md)',
                   border: selectedPast === s.id ? '1px solid var(--color-brand)' : '1px solid var(--color-border)',
                   background: selectedPast === s.id ? 'rgba(233,30,140,0.06)' : 'var(--color-surface)',
                   cursor: 'pointer',
@@ -2618,7 +2618,7 @@ function SessionsTab() {
           <div style={{
             flex: 1,
             border: '1px solid var(--color-border)',
-            borderRadius: 14,
+            borderRadius: 'var(--radius-lg)',
             overflow: 'hidden',
             minHeight: 200,
           }}>
@@ -2814,7 +2814,7 @@ function MoodboardsAdminTab() {
           {filtered.map(board => (
             <div key={board.id} style={{
               border: '1px solid var(--color-border)',
-              borderRadius: 14, padding: '16px 18px',
+              borderRadius: 'var(--radius-lg)', padding: '16px 18px',
               background: 'var(--color-surface)',
               display: 'flex', justifyContent: 'space-between',
               alignItems: 'center', gap: 16, flexWrap: 'wrap',
@@ -2827,7 +2827,7 @@ function MoodboardsAdminTab() {
                   </p>
                   <span style={{
                     fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-                    padding: '2px 8px', borderRadius: 100,
+                    padding: '2px 8px', borderRadius: 'var(--radius-pill)',
                     background: board.visibility === 'shared' ? 'rgba(233,30,140,0.1)' : 'rgba(255,255,255,0.06)',
                     color: board.visibility === 'shared' ? 'var(--color-brand)' : 'var(--color-ink-muted)',
                     fontFamily: 'var(--font-body)',
@@ -2836,7 +2836,7 @@ function MoodboardsAdminTab() {
                   </span>
                   <span style={{
                     fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-                    padding: '2px 8px', borderRadius: 100,
+                    padding: '2px 8px', borderRadius: 'var(--radius-pill)',
                     background: board.edit_mode === 'anyone' ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.04)',
                     color: board.edit_mode === 'anyone' ? 'var(--color-success)' : 'var(--color-ink-muted)',
                     fontFamily: 'var(--font-body)',
@@ -2857,7 +2857,7 @@ function MoodboardsAdminTab() {
               {/* Right — controls */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
                 {/* Visibility toggle */}
-                <div style={{ display: 'flex', gap: 0, border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', gap: 0, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
                   {(['private', 'shared'] as const).map(v => (
                     <button
                       key={v}
@@ -2882,7 +2882,7 @@ function MoodboardsAdminTab() {
                 </div>
 
                 {/* Edit mode toggle */}
-                <div style={{ display: 'flex', gap: 0, border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', gap: 0, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
                   {([
                     { value: 'members_only', label: 'Members' },
                     { value: 'anyone', label: 'Anyone' },
@@ -2915,7 +2915,7 @@ function MoodboardsAdminTab() {
                   rel="noopener noreferrer"
                   style={{
                     padding: '5px 12px', background: 'none',
-                    border: '1px solid var(--color-border)', borderRadius: 8,
+                    border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
                     color: 'var(--color-ink-muted)', fontSize: 11,
                     fontFamily: 'var(--font-body)', textDecoration: 'none', whiteSpace: 'nowrap',
                   }}
@@ -2928,7 +2928,7 @@ function MoodboardsAdminTab() {
                   onClick={() => handleDelete(board)}
                   style={{
                     padding: '5px 12px', background: 'none',
-                    border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8,
+                    border: '1px solid rgba(239,68,68,0.3)', borderRadius: 'var(--radius-sm)',
                     color: 'var(--color-error)', fontSize: 11,
                     fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
                   }}

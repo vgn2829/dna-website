@@ -196,7 +196,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                           style={{
                             width: '100%', padding: '13px 20px',
                             background: 'var(--color-brand)', color: '#fff',
-                            border: 'none', borderRadius: 100,
+                            border: 'none', borderRadius: 'var(--radius-pill)',
                             fontSize: 14, fontWeight: 600,
                             fontFamily: 'var(--font-body)',
                             cursor: checking || !roll.trim() ? 'not-allowed' : 'pointer',
@@ -223,7 +223,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                           padding: '10px 14px',
                           background: 'rgba(34,197,94,0.08)',
                           border: '1px solid rgba(34,197,94,0.2)',
-                          borderRadius: 8,
+                          borderRadius: 'var(--radius-sm)',
                         }}>
                           <span style={{ fontSize: 13, color: 'var(--color-success)', fontFamily: 'var(--font-body)' }}>✓</span>
                           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
@@ -299,7 +299,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                           style={{
                             width: '100%', padding: '13px 20px',
                             background: 'var(--color-brand)', color: '#fff',
-                            border: 'none', borderRadius: 100,
+                            border: 'none', borderRadius: 'var(--radius-pill)',
                             fontSize: 14, fontWeight: 600,
                             fontFamily: 'var(--font-body)',
                             cursor: submitting ? 'not-allowed' : 'pointer',

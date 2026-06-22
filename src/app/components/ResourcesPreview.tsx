@@ -32,10 +32,10 @@ export function ResourcesPreview() {
           {loading ? (
             Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="card" style={{ padding: 28, opacity: 0.35 }}>
-                <div style={{ height: 24, width: 80, background: 'var(--color-surface-2)', borderRadius: 8, marginBottom: 20 }} />
-                <div style={{ height: 22, width: '55%', background: 'var(--color-surface-2)', borderRadius: 6, marginBottom: 8 }} />
-                <div style={{ height: 14, width: '80%', background: 'var(--color-surface-2)', borderRadius: 6, marginBottom: 4 }} />
-                <div style={{ height: 14, width: '65%', background: 'var(--color-surface-2)', borderRadius: 6, marginBottom: 28 }} />
+                <div style={{ height: 24, width: 80, background: 'var(--color-surface-2)', borderRadius: 'var(--radius-sm)', marginBottom: 20 }} />
+                <div style={{ height: 22, width: '55%', background: 'var(--color-surface-2)', borderRadius: 'var(--radius-sm)', marginBottom: 8 }} />
+                <div style={{ height: 14, width: '80%', background: 'var(--color-surface-2)', borderRadius: 'var(--radius-sm)', marginBottom: 4 }} />
+                <div style={{ height: 14, width: '65%', background: 'var(--color-surface-2)', borderRadius: 'var(--radius-sm)', marginBottom: 28 }} />
                 <div style={{ height: 3, background: 'var(--color-surface-2)', borderRadius: 99 }} />
               </div>
             ))

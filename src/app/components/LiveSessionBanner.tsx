@@ -164,7 +164,7 @@ export default function LiveSessionBanner() {
                 letterSpacing: '0.06em',
                 textTransform: 'uppercase',
                 padding: '2px 8px',
-                borderRadius: 100,
+                borderRadius: 'var(--radius-pill)',
                 background: isLive ? 'rgba(255,255,255,0.2)' : 'rgba(233,30,140,0.1)',
                 color: isLive ? '#fff' : 'var(--color-brand)',
                 fontFamily: 'var(--font-body)',
@@ -189,7 +189,7 @@ export default function LiveSessionBanner() {
               }}
               style={{
                 padding: '6px 16px',
-                borderRadius: 100,
+                borderRadius: 'var(--radius-pill)',
                 background: isLive ? '#fff' : 'var(--color-brand)',
                 color: isLive ? 'var(--color-brand)' : '#fff',
                 fontSize: 12,

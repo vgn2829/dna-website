@@ -383,7 +383,7 @@ export default function BoardPage() {
             navigate('/moodboards');
           }
         }}
-        style={{ padding: '10px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 100, fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+        style={{ padding: '10px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
       >
         Back to Moodboards
       </button>
@@ -426,7 +426,7 @@ export default function BoardPage() {
               display: 'flex', alignItems: 'center', gap: 6,
               background: 'none', border: 'none', color: textMuted,
               fontSize: 13, fontFamily: 'var(--font-body)',
-              cursor: 'pointer', padding: '4px 8px', borderRadius: 6, whiteSpace: 'nowrap',
+              cursor: 'pointer', padding: '4px 8px', borderRadius: 'var(--radius-sm)', whiteSpace: 'nowrap',
             }}
           >
             ← Boards
@@ -460,7 +460,7 @@ export default function BoardPage() {
             )}
             <span style={{
               fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-              padding: '2px 8px', borderRadius: 100, flexShrink: 0, fontFamily: 'var(--font-body)',
+              padding: '2px 8px', borderRadius: 'var(--radius-pill)', flexShrink: 0, fontFamily: 'var(--font-body)',
               background: board.visibility === 'shared'
                 ? 'rgba(233,30,140,0.15)'
                 : theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
@@ -517,7 +517,7 @@ export default function BoardPage() {
                 padding: '5px 12px',
                 background: 'var(--color-brand)',
                 border: 'none',
-                borderRadius: 100,
+                borderRadius: 'var(--radius-pill)',
                 color: '#fff',
                 fontSize: 12,
                 fontWeight: 600,
@@ -534,7 +534,7 @@ export default function BoardPage() {
                 onClick={() => setShowMembers(true)}
                 style={{
                   padding: '5px 12px', background: 'none',
-                  border: `1px solid ${inviteBdr}`, borderRadius: 100,
+                  border: `1px solid ${inviteBdr}`, borderRadius: 'var(--radius-pill)',
                   color: inviteColor, fontSize: 12,
                   fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
                 }}
@@ -640,7 +640,7 @@ export default function BoardPage() {
                 width: '100%', maxWidth: 420,
                 background: 'var(--color-surface-1)',
                 border: '1px solid var(--color-border)',
-                borderRadius: 20,
+                borderRadius: 'var(--radius-xl)',
                 padding: '28px 24px',
                 display: 'flex',
                 flexDirection: 'column',
@@ -687,7 +687,7 @@ export default function BoardPage() {
                   <div style={{
                     display: 'flex', gap: 0,
                     border: '1px solid var(--color-border)',
-                    borderRadius: 10, overflow: 'hidden',
+                    borderRadius: 'var(--radius-md)', overflow: 'hidden',
                   }}>
                     {([
                       { value: 'private', label: 'Private' },
@@ -743,7 +743,7 @@ export default function BoardPage() {
                   <div style={{
                     display: 'flex', gap: 0,
                     border: '1px solid var(--color-border)',
-                    borderRadius: 10, overflow: 'hidden',
+                    borderRadius: 'var(--radius-md)', overflow: 'hidden',
                   }}>
                     {([
                       { value: 'members_only', label: 'Invited only' },
@@ -800,7 +800,7 @@ export default function BoardPage() {
                     flex: 1, padding: '10px 12px',
                     background: 'var(--color-canvas)',
                     border: '1px solid var(--color-border)',
-                    borderRadius: 8,
+                    borderRadius: 'var(--radius-sm)',
                     fontSize: 12,
                     color: 'var(--color-ink-muted)',
                     fontFamily: 'var(--font-mono, monospace)',
@@ -818,7 +818,7 @@ export default function BoardPage() {
                       background: copied ? 'var(--color-success)' : 'var(--color-brand)',
                       color: '#fff',
                       border: 'none',
-                      borderRadius: 8,
+                      borderRadius: 'var(--radius-sm)',
                       fontSize: 12,
                       fontWeight: 600,
                       fontFamily: 'var(--font-body)',
@@ -868,7 +868,7 @@ export default function BoardPage() {
               style={{
                 width: '100%', maxWidth: 400,
                 background: 'var(--color-surface-1)', border: '1px solid var(--color-border)',
-                borderRadius: 20, padding: '28px 24px',
+                borderRadius: 'var(--radius-xl)', padding: '28px 24px',
                 display: 'flex', flexDirection: 'column', gap: 20,
                 maxHeight: '80vh', overflowY: 'auto',
               }}
@@ -981,7 +981,7 @@ export default function BoardPage() {
                       disabled={addingMember || !memberRoll.trim()}
                       style={{
                         padding: '0 16px', background: 'var(--color-brand)', color: '#fff',
-                        border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                        border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 13, fontWeight: 600,
                         fontFamily: 'var(--font-body)',
                         cursor: addingMember ? 'not-allowed' : 'pointer',
                         opacity: addingMember ? 0.6 : 1,

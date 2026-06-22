@@ -227,7 +227,7 @@ export function EventsPage() {
               {liveSessions.map(s => (
                 <div key={s.id} style={{
                   border: s.status === 'live' ? '1px solid var(--color-brand)' : '1px solid var(--color-border)',
-                  borderRadius: 14, padding: '16px 20px',
+                  borderRadius: 'var(--radius-lg)', padding: '16px 20px',
                   background: s.status === 'live' ? 'rgba(233,30,140,0.06)' : 'var(--color-surface)',
                   display: 'flex', justifyContent: 'space-between',
                   alignItems: 'center', gap: 16,
@@ -268,7 +268,7 @@ export function EventsPage() {
                         }
                       }}
                       style={{
-                        flexShrink: 0, padding: '8px 18px', borderRadius: 100,
+                        flexShrink: 0, padding: '8px 18px', borderRadius: 'var(--radius-pill)',
                         background: 'var(--color-brand)', color: '#fff',
                         fontSize: 13, fontWeight: 600,
                         fontFamily: 'var(--font-body)',
