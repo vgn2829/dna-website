@@ -427,4 +427,34 @@ export async function initSchema(): Promise<void> {
     `, [now]);
     console.log('App settings seeded');
   }
+
+  await pool.query(`
+    UPDATE team_members
+    SET designation = TRIM(designation)
+    WHERE designation != TRIM(designation)
+  `);
+  console.log('Fixed trailing spaces in designations');
+
+  await pool.query(`
+    INSERT INTO audience_groups
+      (id, name, description, created_at)
+    VALUES
+      (
+        'coordinators',
+        'Coordinators',
+        'DnA Club coordinators approved for meet scheduling',
+        $1
+      )
+    ON CONFLICT (id) DO NOTHING
+  `, [new Date().toISOString()]);
+
+  console.log('Coordinators group ready');
+
+  await pool.query(`
+    ALTER TABLE audience_group_members
+    ADD COLUMN IF NOT EXISTS approved
+    BOOLEAN NOT NULL DEFAULT false
+  `);
+
+  console.log('audience_group_members.approved migration done');
 }
