@@ -218,7 +218,7 @@ export function EventsPage() {
           <div style={{ marginBottom: 40 }}>
             <p style={{
               fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
-              textTransform: 'uppercase', color: '#E91E8C',
+              textTransform: 'uppercase', color: 'var(--color-brand)',
               fontFamily: 'var(--font-body)', marginBottom: 16,
             }}>
               Live & Upcoming Sessions
@@ -226,7 +226,7 @@ export function EventsPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {liveSessions.map(s => (
                 <div key={s.id} style={{
-                  border: s.status === 'live' ? '1px solid #E91E8C' : '1px solid var(--color-border)',
+                  border: s.status === 'live' ? '1px solid var(--color-brand)' : '1px solid var(--color-border)',
                   borderRadius: 14, padding: '16px 20px',
                   background: s.status === 'live' ? 'rgba(233,30,140,0.06)' : 'var(--color-surface)',
                   display: 'flex', justifyContent: 'space-between',
@@ -235,7 +235,7 @@ export function EventsPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       {s.status === 'live' && (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#E91E8C', fontFamily: 'var(--font-body)' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-brand)', fontFamily: 'var(--font-body)' }}>
                           ● LIVE
                         </span>
                       )}
@@ -269,7 +269,7 @@ export function EventsPage() {
                       }}
                       style={{
                         flexShrink: 0, padding: '8px 18px', borderRadius: 100,
-                        background: '#E91E8C', color: '#fff',
+                        background: 'var(--color-brand)', color: '#fff',
                         fontSize: 13, fontWeight: 600,
                         fontFamily: 'var(--font-body)',
                         textDecoration: 'none', whiteSpace: 'nowrap',

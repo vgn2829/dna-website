@@ -83,7 +83,7 @@ export default function WelcomeOverlay({ name, onDone }: WelcomeOverlayProps) {
               fontWeight: 600,
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
-              color: '#E91E8C',
+              color: 'var(--color-brand)',
               fontFamily: 'var(--font-body)',
             }}>
               Welcome to DnA Club
@@ -124,7 +124,7 @@ export default function WelcomeOverlay({ name, onDone }: WelcomeOverlayProps) {
                 style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}
               >
                 <span style={{
-                  color: '#E91E8C',
+                  color: 'var(--color-brand)',
                   fontSize: 10,
                   marginTop: 4,
                   flexShrink: 0,
@@ -168,7 +168,7 @@ export default function WelcomeOverlay({ name, onDone }: WelcomeOverlayProps) {
               style={{
                 width: '100%',
                 padding: '14px 24px',
-                background: '#E91E8C',
+                background: 'var(--color-brand)',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 100,

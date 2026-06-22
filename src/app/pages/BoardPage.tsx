@@ -383,7 +383,7 @@ export default function BoardPage() {
             navigate('/moodboards');
           }
         }}
-        style={{ padding: '10px 20px', background: '#E91E8C', color: '#fff', border: 'none', borderRadius: 100, fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+        style={{ padding: '10px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 100, fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
       >
         Back to Moodboards
       </button>
@@ -445,12 +445,12 @@ export default function BoardPage() {
                 fontSize: 11,
                 fontFamily: 'var(--font-body)',
                 color: saveStatus === 'error'
-                  ? '#ef4444'
+                  ? 'var(--color-error)'
                   : saveStatus === 'saving'
                     ? (theme === 'dark'
                       ? 'rgba(255,255,255,0.4)'
                       : 'rgba(0,0,0,0.4)')
-                    : '#22c55e',
+                    : 'var(--color-success)',
                 whiteSpace: 'nowrap',
               }}>
                 {saveStatus === 'saving' && 'Saving...'}
@@ -464,7 +464,7 @@ export default function BoardPage() {
               background: board.visibility === 'shared'
                 ? 'rgba(233,30,140,0.15)'
                 : theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-              color: board.visibility === 'shared' ? '#E91E8C'
+              color: board.visibility === 'shared' ? 'var(--color-brand)'
                 : theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
             }}>
               {board.visibility}
@@ -515,7 +515,7 @@ export default function BoardPage() {
               onClick={() => setShowShare(true)}
               style={{
                 padding: '5px 12px',
-                background: '#E91E8C',
+                background: 'var(--color-brand)',
                 border: 'none',
                 borderRadius: 100,
                 color: '#fff',
@@ -699,7 +699,7 @@ export default function BoardPage() {
                         disabled={updatingVisibility}
                         style={{
                           flex: 1, padding: '10px 0',
-                          background: board.visibility === opt.value ? '#E91E8C' : 'none',
+                          background: board.visibility === opt.value ? 'var(--color-brand)' : 'none',
                           border: 'none',
                           color: board.visibility === opt.value ? '#fff' : 'var(--color-ink-muted)',
                           fontSize: 13,
@@ -755,7 +755,7 @@ export default function BoardPage() {
                         disabled={updatingEditMode}
                         style={{
                           flex: 1, padding: '10px 0',
-                          background: board.edit_mode === opt.value ? '#E91E8C' : 'none',
+                          background: board.edit_mode === opt.value ? 'var(--color-brand)' : 'none',
                           border: 'none',
                           color: board.edit_mode === opt.value ? '#fff' : 'var(--color-ink-muted)',
                           fontSize: 12,
@@ -815,7 +815,7 @@ export default function BoardPage() {
                     onClick={handleCopy}
                     style={{
                       padding: '10px 16px',
-                      background: copied ? '#22c55e' : '#E91E8C',
+                      background: copied ? 'var(--color-success)' : 'var(--color-brand)',
                       color: '#fff',
                       border: 'none',
                       borderRadius: 8,
@@ -834,7 +834,7 @@ export default function BoardPage() {
                 {board.visibility === 'private' && (
                   <p style={{
                     margin: 0, fontSize: 11,
-                    color: '#E91E8C',
+                    color: 'var(--color-brand)',
                     fontFamily: 'var(--font-body)',
                   }}>
                     Board is private — only invited members can open this link.
@@ -948,7 +948,7 @@ export default function BoardPage() {
                     {isOwner && (
                       <button
                         onClick={() => handleRemoveMember(m.roll_number)}
-                        style={{ fontSize: 12, color: '#ef4444', background: 'none', border: 'none', fontFamily: 'var(--font-body)', cursor: 'pointer', padding: '4px 8px' }}
+                        style={{ fontSize: 12, color: 'var(--color-error)', background: 'none', border: 'none', fontFamily: 'var(--font-body)', cursor: 'pointer', padding: '4px 8px' }}
                       >
                         Remove
                       </button>
@@ -980,7 +980,7 @@ export default function BoardPage() {
                       onClick={handleAddMember}
                       disabled={addingMember || !memberRoll.trim()}
                       style={{
-                        padding: '0 16px', background: '#E91E8C', color: '#fff',
+                        padding: '0 16px', background: 'var(--color-brand)', color: '#fff',
                         border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
                         fontFamily: 'var(--font-body)',
                         cursor: addingMember ? 'not-allowed' : 'pointer',
@@ -991,7 +991,7 @@ export default function BoardPage() {
                     </button>
                   </div>
                   {memberError && (
-                    <p style={{ margin: 0, fontSize: 12, color: '#ef4444', fontFamily: 'var(--font-body)' }}>
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>
                       {memberError}
                     </p>
                   )}

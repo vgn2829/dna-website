@@ -809,7 +809,7 @@ function GalleryTab() {
                         />
                       )}
                       {item.status === 'error' && item.error && (
-                        <p style={{ fontSize: 11, color: '#ef4444', margin: '4px 0 0', fontFamily: 'var(--font-body)' }}>{item.error}</p>
+                        <p style={{ fontSize: 11, color: 'var(--color-error)', margin: '4px 0 0', fontFamily: 'var(--font-body)' }}>{item.error}</p>
                       )}
                     </div>
                     <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -819,7 +819,7 @@ function GalleryTab() {
                       {item.status === 'capturing' && <span style={{ fontSize: 10, color: 'var(--color-ink-muted)' }}>⏳</span>}
                       {item.status === 'uploading' && <Loader2 size={14} className="animate-spin" style={{ color: 'var(--color-ink-muted)' }} />}
                       {item.status === 'done' && <span style={{ fontSize: 14, color: '#4ade80' }}>✓</span>}
-                      {item.status === 'error' && <span style={{ fontSize: 14, color: '#ef4444' }}>✗</span>}
+                      {item.status === 'error' && <span style={{ fontSize: 14, color: 'var(--color-error)' }}>✗</span>}
                     </div>
                   </div>
                 ))}
@@ -1717,7 +1717,7 @@ function SettingsTab() {
       </div>
 
       {error && (
-        <p style={{ color: '#ef4444', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
+        <p style={{ color: 'var(--color-error)', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
           {error}
         </p>
       )}
@@ -1740,7 +1740,7 @@ function SettingsTab() {
             disabled={saving}
             style={{
               width: 48, height: 26, borderRadius: 100,
-              background: isMeetEnabled ? '#E91E8C' : 'var(--color-border)',
+              background: isMeetEnabled ? 'var(--color-brand)' : 'var(--color-border)',
               border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
               position: 'relative', transition: 'background 0.2s ease', flexShrink: 0,
             }}
@@ -1769,7 +1769,7 @@ function SettingsTab() {
             <code style={{
               padding: '8px 16px', background: 'var(--color-canvas)',
               border: '1px solid var(--color-border)', borderRadius: 8,
-              fontSize: 16, fontWeight: 700, letterSpacing: '0.1em', color: '#E91E8C',
+              fontSize: 16, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-brand)',
               fontFamily: 'var(--font-mono, monospace)',
             }}>
               {showPasscode ? (settings.public_meet_passcode ?? 'DNA2025') : '••••••••'}
@@ -1824,7 +1824,7 @@ function SettingsTab() {
         </div>
         <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {coordError && (
-            <p style={{ margin: 0, fontSize: 13, color: '#ef4444', fontFamily: 'var(--font-body)' }}>{coordError}</p>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>{coordError}</p>
           )}
           {coordLoading ? (
             <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>Loading coordinators…</p>
@@ -1846,7 +1846,7 @@ function SettingsTab() {
                 onClick={() => handleToggleCoordinator(c.roll_number, c.approved)}
                 style={{
                   width: 48, height: 26, borderRadius: 100, flexShrink: 0,
-                  background: c.approved ? '#E91E8C' : 'var(--color-border)',
+                  background: c.approved ? 'var(--color-brand)' : 'var(--color-border)',
                   border: 'none', cursor: 'pointer',
                   position: 'relative', transition: 'background 0.2s ease',
                 }}
@@ -1885,7 +1885,7 @@ function SettingsTab() {
             }}>
               Automatically capitalise artwork titles and artist names when uploading.
               Currently{' '}
-              <strong style={{ color: forceUppercase ? '#E91E8C' : 'var(--color-ink-muted)' }}>
+              <strong style={{ color: forceUppercase ? 'var(--color-brand)' : 'var(--color-ink-muted)' }}>
                 {forceUppercase ? 'ON' : 'OFF'}
               </strong>.
             </p>
@@ -1894,7 +1894,7 @@ function SettingsTab() {
             onClick={handleToggleCaps}
             style={{
               width: 48, height: 26, borderRadius: 100,
-              background: forceUppercase ? '#E91E8C' : 'var(--color-border)',
+              background: forceUppercase ? 'var(--color-brand)' : 'var(--color-border)',
               border: 'none', cursor: 'pointer',
               position: 'relative', transition: 'background 0.2s ease', flexShrink: 0,
             }}
@@ -1910,7 +1910,7 @@ function SettingsTab() {
       </div>
 
       {saved && (
-        <p style={{ color: '#22c55e', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
+        <p style={{ color: 'var(--color-success)', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
           Settings saved
         </p>
       )}
@@ -1971,7 +1971,7 @@ function TemplateEditor({ templateId, variables }: TemplateEditorProps) {
             <code
               key={v}
               onClick={() => setBody(prev => prev + v)}
-              style={{ padding: '3px 10px', borderRadius: 100, background: 'rgba(233,30,140,0.12)', color: '#E91E8C', fontSize: 12, fontFamily: 'var(--font-mono, monospace)', border: '1px solid rgba(233,30,140,0.2)', cursor: 'pointer' }}
+              style={{ padding: '3px 10px', borderRadius: 100, background: 'rgba(233,30,140,0.12)', color: 'var(--color-brand)', fontSize: 12, fontFamily: 'var(--font-mono, monospace)', border: '1px solid rgba(233,30,140,0.2)', cursor: 'pointer' }}
             >
               {v}
             </code>
@@ -2006,21 +2006,21 @@ function TemplateEditor({ templateId, variables }: TemplateEditorProps) {
         <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)' }}>
           Preview
         </p>
-        <div style={{ border: '1px solid var(--color-hairline)', borderRadius: 12, overflow: 'hidden', background: '#0a0a0a' }}>
-          <div style={{ background: '#E91E8C', padding: '16px 24px' }}>
+        <div style={{ border: '1px solid var(--color-hairline)', borderRadius: 12, overflow: 'hidden', background: 'var(--color-canvas)' }}>
+          <div style={{ background: 'var(--color-brand)', padding: '16px 24px' }}>
             <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-body)' }}>Design & Animation Club, IIT Kanpur</p>
           </div>
           <div style={{ padding: 24 }} dangerouslySetInnerHTML={{ __html: body }} />
         </div>
       </div>
 
-      {error && <p style={{ color: '#ef4444', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>{error}</p>}
+      {error && <p style={{ color: 'var(--color-error)', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>{error}</p>}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <button className="btn-primary" onClick={handleSave} disabled={saving || !subject || !body}>
           {saving ? 'Saving...' : 'Save Template'}
         </button>
-        {saved && <span style={{ color: '#22c55e', fontSize: 13, fontFamily: 'var(--font-body)' }}>Template saved</span>}
+        {saved && <span style={{ color: 'var(--color-success)', fontSize: 13, fontFamily: 'var(--font-body)' }}>Template saved</span>}
       </div>
     </div>
   );
@@ -2078,8 +2078,8 @@ function CustomAnnouncement() {
           <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)' }}>
             Preview
           </p>
-          <div style={{ border: '1px solid var(--color-hairline)', borderRadius: 12, overflow: 'hidden', background: '#0a0a0a' }}>
-            <div style={{ background: '#E91E8C', padding: '16px 24px' }}>
+          <div style={{ border: '1px solid var(--color-hairline)', borderRadius: 12, overflow: 'hidden', background: 'var(--color-canvas)' }}>
+            <div style={{ background: 'var(--color-brand)', padding: '16px 24px' }}>
               <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-body)' }}>Design & Animation Club, IIT Kanpur</p>
             </div>
             <div style={{ padding: 24 }} dangerouslySetInnerHTML={{ __html: body }} />
@@ -2088,7 +2088,7 @@ function CustomAnnouncement() {
       )}
 
       {result && (
-        <p style={{ color: result.success ? '#22c55e' : '#ef4444', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
+        <p style={{ color: result.success ? 'var(--color-success)' : 'var(--color-error)', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
           {result.message}
         </p>
       )}
@@ -2143,8 +2143,8 @@ function AnnouncementsTab() {
             onClick={() => setSubTab(t.id)}
             style={{
               padding: '8px 16px', background: 'none', border: 'none',
-              borderBottom: subTab === t.id ? '2px solid #E91E8C' : '2px solid transparent',
-              color: subTab === t.id ? '#E91E8C' : 'var(--color-ink-muted)',
+              borderBottom: subTab === t.id ? '2px solid var(--color-brand)' : '2px solid transparent',
+              color: subTab === t.id ? 'var(--color-brand)' : 'var(--color-ink-muted)',
               fontSize: 13, fontWeight: subTab === t.id ? 600 : 400,
               fontFamily: 'var(--font-body)', cursor: 'pointer',
               marginBottom: -1, transition: 'all 0.15s ease',
@@ -2276,8 +2276,8 @@ function SessionsTab() {
   };
 
   const statusColor = (status: string) => {
-    if (status === 'live') return '#22c55e';
-    if (status === 'upcoming') return '#E91E8C';
+    if (status === 'live') return 'var(--color-success)';
+    if (status === 'upcoming') return 'var(--color-brand)';
     return 'var(--color-ink-muted)';
   };
 
@@ -2336,8 +2336,8 @@ function SessionsTab() {
               padding: '8px 16px',
               background: 'none',
               border: 'none',
-              borderBottom: subTab === t ? '2px solid #E91E8C' : '2px solid transparent',
-              color: subTab === t ? '#E91E8C' : 'var(--color-ink-muted)',
+              borderBottom: subTab === t ? '2px solid var(--color-brand)' : '2px solid transparent',
+              color: subTab === t ? 'var(--color-brand)' : 'var(--color-ink-muted)',
               fontSize: 13,
               fontWeight: subTab === t ? 600 : 400,
               fontFamily: 'var(--font-body)',
@@ -2354,7 +2354,7 @@ function SessionsTab() {
       {subTab === 'active' && (
         <>
           {error && (
-            <p style={{ color: '#ef4444', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
+            <p style={{ color: 'var(--color-error)', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
               {error}
             </p>
           )}
@@ -2499,7 +2499,7 @@ function SessionsTab() {
                         <span style={{
                           fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
                           textTransform: 'uppercase', padding: '2px 8px', borderRadius: 100,
-                          background: 'rgba(233,30,140,0.1)', color: '#E91E8C',
+                          background: 'rgba(233,30,140,0.1)', color: 'var(--color-brand)',
                           fontFamily: 'var(--font-body)',
                         }}>
                           {s.audience_name}
@@ -2520,7 +2520,7 @@ function SessionsTab() {
                       href={s.meet_link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={{ fontSize: 12, color: '#E91E8C', fontFamily: 'var(--font-body)', textDecoration: 'none', wordBreak: 'break-all' }}
+                      style={{ fontSize: 12, color: 'var(--color-brand)', fontFamily: 'var(--font-body)', textDecoration: 'none', wordBreak: 'break-all' }}
                     >
                       {s.meet_link}
                     </a>
@@ -2550,7 +2550,7 @@ function SessionsTab() {
                       style={{
                         fontSize: 12, padding: '6px 14px',
                         background: 'none', border: '1px solid rgba(239,68,68,0.3)',
-                        borderRadius: 100, color: '#ef4444',
+                        borderRadius: 100, color: 'var(--color-error)',
                         cursor: 'pointer', fontFamily: 'var(--font-body)',
                       }}
                     >
@@ -2586,7 +2586,7 @@ function SessionsTab() {
                   textAlign: 'left',
                   padding: '14px 16px',
                   borderRadius: 12,
-                  border: selectedPast === s.id ? '1px solid #E91E8C' : '1px solid var(--color-border)',
+                  border: selectedPast === s.id ? '1px solid var(--color-brand)' : '1px solid var(--color-border)',
                   background: selectedPast === s.id ? 'rgba(233,30,140,0.06)' : 'var(--color-surface)',
                   cursor: 'pointer',
                   display: 'flex',
@@ -2604,7 +2604,7 @@ function SessionsTab() {
                 </span>
                 <span style={{
                   fontSize: 11,
-                  color: s.join_count > 0 ? '#E91E8C' : 'var(--color-ink-muted)',
+                  color: s.join_count > 0 ? 'var(--color-brand)' : 'var(--color-ink-muted)',
                   fontFamily: 'var(--font-body)',
                   fontWeight: s.join_count > 0 ? 600 : 400,
                 }}>
@@ -2800,7 +2800,7 @@ function MoodboardsAdminTab() {
       </div>
 
       {error && (
-        <p style={{ color: '#ef4444', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
+        <p style={{ color: 'var(--color-error)', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>
           {error}
         </p>
       )}
@@ -2829,7 +2829,7 @@ function MoodboardsAdminTab() {
                     fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
                     padding: '2px 8px', borderRadius: 100,
                     background: board.visibility === 'shared' ? 'rgba(233,30,140,0.1)' : 'rgba(255,255,255,0.06)',
-                    color: board.visibility === 'shared' ? '#E91E8C' : 'var(--color-ink-muted)',
+                    color: board.visibility === 'shared' ? 'var(--color-brand)' : 'var(--color-ink-muted)',
                     fontFamily: 'var(--font-body)',
                   }}>
                     {board.visibility}
@@ -2838,7 +2838,7 @@ function MoodboardsAdminTab() {
                     fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
                     padding: '2px 8px', borderRadius: 100,
                     background: board.edit_mode === 'anyone' ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.04)',
-                    color: board.edit_mode === 'anyone' ? '#22c55e' : 'var(--color-ink-muted)',
+                    color: board.edit_mode === 'anyone' ? 'var(--color-success)' : 'var(--color-ink-muted)',
                     fontFamily: 'var(--font-body)',
                   }}>
                     {board.edit_mode === 'anyone' ? 'Anyone edits' : 'Members only'}
@@ -2865,7 +2865,7 @@ function MoodboardsAdminTab() {
                       disabled={updating === board.id + '_vis'}
                       style={{
                         padding: '5px 10px',
-                        background: board.visibility === v ? '#E91E8C' : 'none',
+                        background: board.visibility === v ? 'var(--color-brand)' : 'none',
                         border: 'none',
                         color: board.visibility === v ? '#fff' : 'var(--color-ink-muted)',
                         fontSize: 11,
@@ -2893,7 +2893,7 @@ function MoodboardsAdminTab() {
                       disabled={updating === board.id + '_edit'}
                       style={{
                         padding: '5px 10px',
-                        background: board.edit_mode === opt.value ? '#E91E8C' : 'none',
+                        background: board.edit_mode === opt.value ? 'var(--color-brand)' : 'none',
                         border: 'none',
                         color: board.edit_mode === opt.value ? '#fff' : 'var(--color-ink-muted)',
                         fontSize: 11,
@@ -2929,7 +2929,7 @@ function MoodboardsAdminTab() {
                   style={{
                     padding: '5px 12px', background: 'none',
                     border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8,
-                    color: '#ef4444', fontSize: 11,
+                    color: 'var(--color-error)', fontSize: 11,
                     fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
                   }}
                 >

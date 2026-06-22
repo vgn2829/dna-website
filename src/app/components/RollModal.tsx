@@ -185,7 +185,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                             autoFocus
                           />
                           {checkError && (
-                            <p style={{ margin: '6px 0 0', fontSize: 12, color: '#ef4444', fontFamily: 'var(--font-body)' }}>
+                            <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>
                               {checkError}
                             </p>
                           )}
@@ -195,7 +195,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                           disabled={checking || !roll.trim()}
                           style={{
                             width: '100%', padding: '13px 20px',
-                            background: '#E91E8C', color: '#fff',
+                            background: 'var(--color-brand)', color: '#fff',
                             border: 'none', borderRadius: 100,
                             fontSize: 14, fontWeight: 600,
                             fontFamily: 'var(--font-body)',
@@ -225,7 +225,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                           border: '1px solid rgba(34,197,94,0.2)',
                           borderRadius: 8,
                         }}>
-                          <span style={{ fontSize: 13, color: '#22c55e', fontFamily: 'var(--font-body)' }}>✓</span>
+                          <span style={{ fontSize: 13, color: 'var(--color-success)', fontFamily: 'var(--font-body)' }}>✓</span>
                           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
                             {roll}
                           </span>
@@ -283,7 +283,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                             style={{ width: '100%', boxSizing: 'border-box' }}
                           />
                           {email && !email.endsWith('@iitk.ac.in') && (
-                            <p style={{ fontSize: 11, color: '#ef4444', margin: '4px 0 0', fontFamily: 'var(--font-body)' }}>
+                            <p style={{ fontSize: 11, color: 'var(--color-error)', margin: '4px 0 0', fontFamily: 'var(--font-body)' }}>
                               Must be an @iitk.ac.in email address
                             </p>
                           )}
@@ -298,7 +298,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                           disabled={submitting || !name.trim() || !email.endsWith('@iitk.ac.in')}
                           style={{
                             width: '100%', padding: '13px 20px',
-                            background: '#E91E8C', color: '#fff',
+                            background: 'var(--color-brand)', color: '#fff',
                             border: 'none', borderRadius: 100,
                             fontSize: 14, fontWeight: 600,
                             fontFamily: 'var(--font-body)',

@@ -84,7 +84,7 @@ export default function JoinPrompt() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <p style={{
                   margin: 0, fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
-                  textTransform: 'uppercase', color: '#E91E8C', fontFamily: 'var(--font-body)',
+                  textTransform: 'uppercase', color: 'var(--color-brand)', fontFamily: 'var(--font-body)',
                 }}>
                   Design & Animation Club
                 </p>
@@ -127,7 +127,7 @@ export default function JoinPrompt() {
                 whileTap={{ scale: 0.97 }}
                 onClick={handleRegister}
                 style={{
-                  flex: 1, padding: '12px 20px', background: '#E91E8C', color: '#fff',
+                  flex: 1, padding: '12px 20px', background: 'var(--color-brand)', color: '#fff',
                   border: 'none', borderRadius: 100, fontSize: 13, fontWeight: 600,
                   fontFamily: 'var(--font-body)', cursor: 'pointer', letterSpacing: '0.02em',
                 }}

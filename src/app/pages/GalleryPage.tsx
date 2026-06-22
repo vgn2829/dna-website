@@ -574,7 +574,7 @@ export function GalleryPage() {
                   </p>
                   <a
                     href="/moodboards"
-                    style={{ display: 'inline-block', padding: '8px 16px', background: '#E91E8C', color: '#fff', borderRadius: 100, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', textDecoration: 'none' }}
+                    style={{ display: 'inline-block', padding: '8px 16px', background: 'var(--color-brand)', color: '#fff', borderRadius: 100, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', textDecoration: 'none' }}
                   >
                     Create a Board
                   </a>

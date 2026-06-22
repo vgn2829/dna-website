@@ -92,7 +92,7 @@ export default function LiveSessionBanner() {
           left: 0,
           right: 0,
           zIndex: 8000,
-          background: isLive ? '#E91E8C' : 'var(--color-surface)',
+          background: isLive ? 'var(--color-brand)' : 'var(--color-surface)',
           borderBottom: isLive ? 'none' : '1px solid var(--color-border)',
           padding: '10px 24px',
           display: 'flex',
@@ -166,7 +166,7 @@ export default function LiveSessionBanner() {
                 padding: '2px 8px',
                 borderRadius: 100,
                 background: isLive ? 'rgba(255,255,255,0.2)' : 'rgba(233,30,140,0.1)',
-                color: isLive ? '#fff' : '#E91E8C',
+                color: isLive ? '#fff' : 'var(--color-brand)',
                 fontFamily: 'var(--font-body)',
               }}>
                 {primary.audience_name}
@@ -190,8 +190,8 @@ export default function LiveSessionBanner() {
               style={{
                 padding: '6px 16px',
                 borderRadius: 100,
-                background: isLive ? '#fff' : '#E91E8C',
-                color: isLive ? '#E91E8C' : '#fff',
+                background: isLive ? '#fff' : 'var(--color-brand)',
+                color: isLive ? 'var(--color-brand)' : '#fff',
                 fontSize: 12,
                 fontWeight: 600,
                 fontFamily: 'var(--font-body)',

@@ -232,7 +232,7 @@ export function Footer() {
                           fontWeight: 500,
                           letterSpacing: '-0.13px',
                           lineHeight: 1.20,
-                          color: '#E91E8C',
+                          color: 'var(--color-brand)',
                           transition: 'opacity 0.15s',
                           fontFamily: 'var(--font-body)',
                         }}
@@ -436,13 +436,13 @@ export function Footer() {
                   style={inputStyle}
                 />
                 {createError && (
-                  <p style={{ margin: 0, fontSize: 12, color: '#ef4444', fontFamily: 'var(--font-body)' }}>{createError}</p>
+                  <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>{createError}</p>
                 )}
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   onClick={handleCreateSession}
                   disabled={creating || !form.title || !form.host || !form.meet_link || !form.scheduled_at}
-                  style={{ padding: '13px 0', background: '#E91E8C', color: '#fff', border: 'none', borderRadius: 100, fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: creating ? 'not-allowed' : 'pointer', opacity: creating ? 0.7 : 1, marginTop: 4 }}
+                  style={{ padding: '13px 0', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 100, fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: creating ? 'not-allowed' : 'pointer', opacity: creating ? 0.7 : 1, marginTop: 4 }}
                 >
                   {creating ? 'Scheduling…' : 'Schedule Session'}
                 </motion.button>
@@ -471,7 +471,7 @@ export function Footer() {
                         </div>
                         <button
                           onClick={() => handleDeleteSession(s.id)}
-                          style={{ flexShrink: 0, padding: '4px 10px', background: 'none', border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444', borderRadius: 6, fontSize: 12, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                          style={{ flexShrink: 0, padding: '4px 10px', background: 'none', border: '1px solid rgba(239,68,68,0.4)', color: 'var(--color-error)', borderRadius: 6, fontSize: 12, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
                         >
                           Remove
                         </button>

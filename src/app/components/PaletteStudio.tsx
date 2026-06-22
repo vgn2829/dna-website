@@ -710,14 +710,14 @@ export function deriveVisualPalette(seedHex, harmonyKey = "complementary", palet
 
 const GRADE = (cr) => {
   const n = parseFloat(cr);
-  if (n >= 7.0) return { label: "AAA", color: "#22c55e" };
+  if (n >= 7.0) return { label: "AAA", color: "var(--color-success)" };
   if (n >= 4.5) return { label: "AA",  color: "#84cc16" };
   if (n >= 3.0) return { label: "AA+", color: "#eab308" };
-  return { label: "Fail", color: "#ef4444" };
+  return { label: "Fail", color: "var(--color-error)" };
 };
 
 const SCORE_COLOR = (s) =>
-  s >= 85 ? "#22c55e" : s >= 70 ? "#84cc16" : s >= 55 ? "#eab308" : "#ef4444";
+  s >= 85 ? "var(--color-success)" : s >= 70 ? "#84cc16" : s >= 55 ? "#eab308" : "var(--color-error)";
 
 const ROLES = [
   { key: "bg",             label: "Background",        group: "base"     },
@@ -1276,7 +1276,7 @@ function AccessibilityTab({ palette, fitness }) {
         const bgHex  = palette[keyMap[parts[1]]] || palette.bg;
         const g      = GRADE(data.cr);
         const ap     = parseFloat(data.apca);
-        const apColor = ap >= 75 ? "#22c55e" : ap >= 60 ? "#eab308" : "#ef4444";
+        const apColor = ap >= 75 ? "var(--color-success)" : ap >= 60 ? "#eab308" : "var(--color-error)";
         return (
           <div
             key={name}
