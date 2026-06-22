@@ -181,6 +181,78 @@ router.put('/admin/:id', requireAdmin, async (req: Request, res: Response) => {
   }
 });
 
+// PUT /api/boards/:id/canvas
+// Save Excalidraw canvas state (owner + members)
+router.put('/:id/canvas', async (req: Request, res: Response) => {
+  try {
+    const roll = req.headers['x-roll-number'] as string;
+    if (!roll) {
+      return res.status(401).json({ error: 'Roll number required' });
+    }
+
+    const access = await isMember(req.params.id, roll);
+    if (!access) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { canvas_data } = req.body as { canvas_data?: string };
+    if (!canvas_data) {
+      return res.status(400).json({ error: 'canvas_data is required' });
+    }
+
+    try {
+      JSON.parse(canvas_data);
+    } catch {
+      return res.status(400).json({ error: 'canvas_data must be valid JSON' });
+    }
+
+    await pool.query(`
+      UPDATE boards
+      SET canvas_data = $1
+      WHERE id = $2
+    `, [canvas_data, req.params.id]);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Save canvas error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/boards/:id/canvas
+// Load Excalidraw canvas state
+router.get('/:id/canvas', async (req: Request, res: Response) => {
+  try {
+    const roll = req.headers['x-roll-number'] as string;
+
+    const boardResult = await pool.query(
+      'SELECT visibility, canvas_data FROM boards WHERE id = $1',
+      [req.params.id]
+    );
+
+    if (boardResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Board not found' });
+    }
+
+    const board = boardResult.rows[0] as { visibility: string; canvas_data: string | null };
+
+    if (board.visibility === 'private') {
+      if (!roll) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      const access = await isMember(req.params.id, roll);
+      if (!access) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
+
+    res.json({ canvas_data: board.canvas_data ?? null });
+  } catch (err) {
+    console.error('Load canvas error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/boards/:id
 // Returns board with items and members
 router.get('/:id', async (req: Request, res: Response) => {

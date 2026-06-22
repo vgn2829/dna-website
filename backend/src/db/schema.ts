@@ -379,6 +379,13 @@ export async function initSchema(): Promise<void> {
   console.log('boards.edit_mode migration done');
 
   await pool.query(`
+    ALTER TABLE boards
+    ADD COLUMN IF NOT EXISTS canvas_data TEXT DEFAULT NULL
+  `);
+
+  console.log('boards.canvas_data migration done');
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS board_members (
       board_id    TEXT NOT NULL REFERENCES boards(id)
                   ON DELETE CASCADE,
