@@ -27,6 +27,7 @@ export function TldrawCanvas({
   const lastSavedRef = useRef<string>('');
   const onSaveRef = useRef(onSave);
   const initialDataRef = useRef(initialData);
+  const snapshotLoadedRef = useRef(false);
 
   useEffect(() => {
     onSaveRef.current = onSave;
@@ -92,7 +93,8 @@ export function TldrawCanvas({
 
           editor.user.updateUserPreferences({ colorScheme: theme });
 
-          if (initialDataRef.current) {
+          if (initialDataRef.current && !snapshotLoadedRef.current) {
+            snapshotLoadedRef.current = true;
             try {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const snap = initialDataRef.current as any;

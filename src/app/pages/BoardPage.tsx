@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStudent } from '../context/StudentContext';
@@ -31,7 +31,12 @@ export default function BoardPage() {
   const [theme, setTheme] = useState<'dark' | 'light'>(getSiteTheme);
   const [canvasData, setCanvasData] = useState<unknown>(null);
   const [canvasLoading, setCanvasLoading] = useState(true);
+  const [canvasReady, setCanvasReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  const rollRef = useRef(studentSession?.rollNumber);
+  useEffect(() => { rollRef.current = studentSession?.rollNumber; }, [studentSession?.rollNumber]);
+  const canvasLoadedRef = useRef(false);
 
   const [showShare, setShowShare] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -65,18 +70,22 @@ export default function BoardPage() {
   const loadBoard = useCallback(async () => {
     if (!id) return;
     try {
-      const data = await api.boards.getBoard(id, studentSession?.rollNumber);
+      const data = await api.boards.getBoard(id, rollRef.current);
       setBoard(data);
 
-      try {
-        const canvasResult = await api.boards.loadCanvas(id, studentSession?.rollNumber);
-        if (canvasResult.canvas_data) {
-          setCanvasData(JSON.parse(canvasResult.canvas_data));
+      if (!canvasLoadedRef.current) {
+        try {
+          const canvasResult = await api.boards.loadCanvas(id, rollRef.current);
+          if (canvasResult.canvas_data) {
+            setCanvasData(JSON.parse(canvasResult.canvas_data));
+          }
+        } catch {
+          // No saved canvas — start fresh
+        } finally {
+          canvasLoadedRef.current = true;
+          setCanvasReady(true);
+          setCanvasLoading(false);
         }
-      } catch {
-        // No saved canvas — start fresh
-      } finally {
-        setCanvasLoading(false);
       }
     } catch (err: unknown) {
       const e = err as { status?: number };
@@ -91,7 +100,7 @@ export default function BoardPage() {
     } finally {
       setLoading(false);
     }
-  }, [id, studentSession?.rollNumber]);
+  }, [id]);
 
   useEffect(() => { loadBoard(); }, [loadBoard]);
 
@@ -374,7 +383,7 @@ export default function BoardPage() {
 
         {/* Canvas area */}
         <div style={{ position: 'absolute', top: 48, left: 0, right: 0, bottom: 0 }}>
-          {canvasLoading ? (
+          {!canvasReady ? (
             <div style={{
               position: 'absolute', inset: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
