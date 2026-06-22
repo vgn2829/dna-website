@@ -70,7 +70,7 @@ export function TldrawCanvas({
   }, [handleSave]);
 
   return (
-    <div style={{ position: 'absolute', inset: 0 }}>
+    <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
       <Tldraw
         forceMobile={false}
         hideUi={readOnly}

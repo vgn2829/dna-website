@@ -243,14 +243,15 @@ export default function BoardPage() {
   return (
     <>
       {/* Full-screen canvas */}
-      <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 300 }}>
 
         {/* Top bar */}
         <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0,
           height: 48, background: surfaceBg,
           borderBottom: `1px solid ${borderColor}`,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '0 16px', gap: 16, zIndex: 10, flexShrink: 0,
+          padding: '0 16px', gap: 16, zIndex: 10,
         }}>
           {/* Left — back */}
           <button
@@ -372,7 +373,7 @@ export default function BoardPage() {
         </div>
 
         {/* Canvas area */}
-        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: 48, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}>
           {canvasLoading ? (
             <div style={{
               position: 'absolute', inset: 0,
