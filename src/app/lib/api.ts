@@ -87,14 +87,10 @@ export interface AppSettings {
 }
 
 export interface CoordinatorMember {
-  id: number;
-  name: string;
   roll_number: string;
-  designation: string;
-  photo_url: string | null;
-  year: string | null;
+  name: string;
   approved: boolean;
-  in_group: boolean;
+  added_at: string;
   email: string | null;
   registered_at: string | null;
 }
@@ -351,11 +347,19 @@ export const api = {
   coordinators: {
     getAll: () =>
       request<CoordinatorMember[]>('GET', '/coordinators', { admin: true }),
+
+    add: (roll_number: string, name: string) =>
+      request<CoordinatorMember>('POST', '/coordinators', { body: { roll_number, name }, admin: true }),
+
     setApproval: (roll: string, approved: boolean) =>
       request<{ success: boolean; approved: boolean }>(
         'PUT', `/coordinators/${roll}/approve`,
         { body: { approved }, admin: true }
       ),
+
+    remove: (roll: string) =>
+      request<{ success: boolean }>('DELETE', `/coordinators/${roll}`, { admin: true }),
+
     check: (roll: string) =>
       request<{ canSchedule: boolean }>('GET', `/coordinators/check/${roll}`),
   },

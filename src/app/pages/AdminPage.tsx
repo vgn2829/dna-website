@@ -1627,8 +1627,15 @@ function SettingsTab() {
   );
 
   const [coordinators, setCoordinators] = useState<CoordinatorMember[]>([]);
-  const [coordLoading, setCoordLoading] = useState(false);
-  const [coordError, setCoordError] = useState('');
+  const [coordLoading, setCoordLoading] = useState(true);
+  const [coordUpdating, setCoordUpdating] = useState<string | null>(null);
+  const [removingCoord, setRemovingCoord] = useState<string | null>(null);
+  const [showAddCoord, setShowAddCoord] = useState(false);
+  const [newCoordRoll, setNewCoordRoll] = useState('');
+  const [newCoordName, setNewCoordName] = useState('');
+  const [addingCoord, setAddingCoord] = useState(false);
+  const [addCoordError, setAddCoordError] = useState('');
+  const [coordSearch, setCoordSearch] = useState('');
 
   useEffect(() => {
     api.settings.getAll()
@@ -1638,10 +1645,9 @@ function SettingsTab() {
   }, []);
 
   useEffect(() => {
-    setCoordLoading(true);
     api.coordinators.getAll()
       .then(setCoordinators)
-      .catch(() => setCoordError('Failed to load coordinators'))
+      .catch(() => setError('Failed to load coordinators'))
       .finally(() => setCoordLoading(false));
   }, []);
 
@@ -1683,14 +1689,47 @@ function SettingsTab() {
     window.dispatchEvent(new Event('storage'));
   };
 
-  const handleToggleCoordinator = async (roll: string, currentlyApproved: boolean) => {
+  const handleCoordinatorToggle = async (coord: CoordinatorMember) => {
+    setCoordUpdating(coord.roll_number);
     try {
-      await api.coordinators.setApproval(roll, !currentlyApproved);
-      setCoordinators(prev =>
-        prev.map(c => c.roll_number === roll ? { ...c, approved: !currentlyApproved } : c)
-      );
+      const res = await api.coordinators.setApproval(coord.roll_number, !coord.approved);
+      setCoordinators(prev => prev.map(c =>
+        c.roll_number === coord.roll_number ? { ...c, approved: res.approved } : c
+      ));
     } catch {
-      setCoordError('Failed to update coordinator approval');
+      setError('Failed to update coordinator access');
+    } finally {
+      setCoordUpdating(null);
+    }
+  };
+
+  const handleAddCoordinator = async () => {
+    if (!newCoordRoll.trim() || !newCoordName.trim()) return;
+    setAddingCoord(true);
+    setAddCoordError('');
+    try {
+      const res = await api.coordinators.add(newCoordRoll.trim(), newCoordName.trim());
+      setCoordinators(prev => [...prev, res].sort((a, b) => a.name.localeCompare(b.name)));
+      setNewCoordRoll('');
+      setNewCoordName('');
+      setShowAddCoord(false);
+    } catch {
+      setAddCoordError('Failed to add. Check roll number format.');
+    } finally {
+      setAddingCoord(false);
+    }
+  };
+
+  const handleRemoveCoordinator = async (roll: string) => {
+    if (!confirm('Remove this person from coordinator list?')) return;
+    setRemovingCoord(roll);
+    try {
+      await api.coordinators.remove(roll);
+      setCoordinators(prev => prev.filter(c => c.roll_number !== roll));
+    } catch {
+      setError('Failed to remove coordinator');
+    } finally {
+      setRemovingCoord(null);
     }
   };
 
@@ -1812,52 +1851,312 @@ function SettingsTab() {
         </div>
       </div>
 
-      {/* Coordinator Access */}
-      <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--color-border)' }}>
-          <p style={{ margin: '0 0 2px', fontSize: 15, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
-            Coordinator Access
-          </p>
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-            Approve coordinators to schedule public meet sessions. Approved coordinators see "Schedule a Meet" in the footer.
-          </p>
-        </div>
-        <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {coordError && (
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>{coordError}</p>
-          )}
-          {coordLoading ? (
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>Loading coordinators…</p>
-          ) : coordinators.length === 0 ? (
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-              No coordinators found. Add team members with designation "Coordinator" first.
+      {/* Coordinator Meet Access */}
+      <div style={{
+        border: '1px solid var(--color-hairline)',
+        borderRadius: 'var(--radius-lg)',
+        overflow: 'hidden',
+      }}>
+
+        {/* Header */}
+        <div style={{
+          padding: '20px 24px',
+          borderBottom: '1px solid var(--color-hairline)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 16,
+        }}>
+          <div>
+            <p style={{
+              margin: '0 0 2px', fontSize: 15,
+              fontWeight: 600,
+              color: 'var(--color-ink)',
+              fontFamily: 'var(--font-body)',
+            }}>
+              Meet Scheduler Access
             </p>
-          ) : coordinators.map(c => (
-            <div key={c.roll_number} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--color-hairline)' }}>
-              <div>
-                <p style={{ margin: '0 0 2px', fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
-                  {c.name}
-                </p>
-                <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-                  {c.roll_number}{c.email ? ` · ${c.email}` : ''}
-                </p>
-              </div>
+            <p style={{
+              margin: 0, fontSize: 13,
+              color: 'var(--color-ink-muted)',
+              fontFamily: 'var(--font-body)',
+            }}>
+              Approved coordinators see
+              &quot;Schedule a Meet&quot; in the footer.
+              {' '}
+              <span style={{ color: 'var(--color-brand)' }}>
+                {coordinators.filter(c => c.approved).length}
+              </span>
+              {' of '}
+              {coordinators.length} approved.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowAddCoord(p => !p)}
+            style={{
+              padding: '6px 14px',
+              background: showAddCoord
+                ? 'var(--color-surface-2)'
+                : 'var(--color-brand)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 'var(--radius-pill)',
+              fontSize: 12,
+              fontWeight: 600,
+              fontFamily: 'var(--font-body)',
+              cursor: 'pointer',
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {showAddCoord ? 'Cancel' : '+ Add'}
+          </button>
+        </div>
+
+        {/* Add coordinator form */}
+        {showAddCoord && (
+          <div style={{
+            padding: '16px 24px',
+            borderBottom: '1px solid var(--color-hairline)',
+            background: 'var(--color-canvas)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+          }}>
+            <p style={{
+              margin: 0, fontSize: 11, fontWeight: 600,
+              color: 'var(--color-ink-muted)',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              fontFamily: 'var(--font-body)',
+            }}>
+              Add Coordinator
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                className="input-base"
+                type="text"
+                placeholder="Full name"
+                value={newCoordName}
+                onChange={e => {
+                  setNewCoordName(e.target.value);
+                  setAddCoordError('');
+                }}
+                style={{ flex: 2 }}
+              />
+              <input
+                className="input-base"
+                type="text"
+                placeholder="Roll number"
+                value={newCoordRoll}
+                onChange={e => {
+                  setNewCoordRoll(e.target.value);
+                  setAddCoordError('');
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleAddCoordinator();
+                }}
+                style={{ flex: 1 }}
+              />
               <button
-                onClick={() => handleToggleCoordinator(c.roll_number, c.approved)}
+                onClick={handleAddCoordinator}
+                disabled={addingCoord || !newCoordRoll.trim() || !newCoordName.trim()}
                 style={{
-                  width: 48, height: 26, borderRadius: 'var(--radius-pill)', flexShrink: 0,
-                  background: c.approved ? 'var(--color-brand)' : 'var(--color-border)',
-                  border: 'none', cursor: 'pointer',
-                  position: 'relative', transition: 'background 0.2s ease',
+                  padding: '0 16px',
+                  background: 'var(--color-brand)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  fontFamily: 'var(--font-body)',
+                  cursor: addingCoord ? 'not-allowed' : 'pointer',
+                  opacity: addingCoord ? 0.6 : 1,
+                  whiteSpace: 'nowrap',
                 }}
               >
-                <div style={{
-                  position: 'absolute', top: 3,
-                  left: c.approved ? 26 : 3,
-                  width: 20, height: 20, borderRadius: '50%', background: '#fff',
-                  transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-                }} />
+                {addingCoord ? '...' : 'Add'}
               </button>
+            </div>
+            {addCoordError && (
+              <p style={{
+                margin: 0, fontSize: 12,
+                color: 'var(--color-error)',
+                fontFamily: 'var(--font-body)',
+              }}>
+                {addCoordError}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Search */}
+        {coordinators.length > 5 && (
+          <div style={{
+            padding: '12px 24px',
+            borderBottom: '1px solid var(--color-hairline)',
+          }}>
+            <input
+              className="input-base"
+              type="text"
+              placeholder="Search coordinators..."
+              value={coordSearch}
+              onChange={e => setCoordSearch(e.target.value)}
+              style={{ width: '100%', boxSizing: 'border-box' }}
+            />
+          </div>
+        )}
+
+        {/* Coordinator list */}
+        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+          {coordLoading ? (
+            <p style={{
+              padding: '20px 24px', margin: 0,
+              fontSize: 13,
+              color: 'var(--color-ink-muted)',
+              fontFamily: 'var(--font-body)',
+            }}>
+              Loading...
+            </p>
+          ) : coordinators.length === 0 ? (
+            <p style={{
+              padding: '20px 24px', margin: 0,
+              fontSize: 13,
+              color: 'var(--color-ink-muted)',
+              fontFamily: 'var(--font-body)',
+            }}>
+              No coordinators yet. Click + Add to add one.
+            </p>
+          ) : coordinators
+              .filter(c =>
+                coordSearch === '' ||
+                c.name.toLowerCase().includes(coordSearch.toLowerCase()) ||
+                c.roll_number.includes(coordSearch)
+              )
+              .map((coord, i, arr) => (
+            <div
+              key={coord.roll_number}
+              style={{
+                padding: '12px 24px',
+                borderBottom: i < arr.length - 1
+                  ? '1px solid var(--color-hairline)'
+                  : 'none',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
+              {/* Left — info */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10, minWidth: 0,
+              }}>
+                <div style={{
+                  width: 32, height: 32,
+                  borderRadius: 'var(--radius-full)',
+                  background: `hsl(${parseInt(coord.roll_number.slice(-3)) % 360}, 55%, 40%)`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 13, fontWeight: 700,
+                  color: '#fff',
+                  fontFamily: 'var(--font-body)',
+                  flexShrink: 0,
+                }}>
+                  {coord.name[0].toUpperCase()}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{
+                    margin: 0, fontSize: 13,
+                    fontWeight: 600,
+                    color: 'var(--color-ink)',
+                    fontFamily: 'var(--font-body)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {coord.name}
+                  </p>
+                  <p style={{
+                    margin: 0, fontSize: 11,
+                    color: 'var(--color-ink-muted)',
+                    fontFamily: 'var(--font-body)',
+                  }}>
+                    {coord.roll_number}
+                    {coord.registered_at ? ' · Registered' : ' · Not registered yet'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Right — approve toggle + remove */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10, flexShrink: 0,
+              }}>
+                <span style={{
+                  fontSize: 11,
+                  color: coord.approved ? 'var(--color-success)' : 'var(--color-ink-muted)',
+                  fontFamily: 'var(--font-body)',
+                  fontWeight: coord.approved ? 600 : 400,
+                  whiteSpace: 'nowrap',
+                }}>
+                  {coord.approved ? 'Approved' : 'Not approved'}
+                </span>
+
+                {/* Toggle */}
+                <button
+                  onClick={() => handleCoordinatorToggle(coord)}
+                  disabled={coordUpdating === coord.roll_number}
+                  title={coord.approved ? 'Click to revoke' : 'Click to approve'}
+                  style={{
+                    width: 44, height: 24,
+                    borderRadius: 'var(--radius-pill)',
+                    background: coord.approved ? 'var(--color-brand)' : 'var(--color-hairline)',
+                    border: 'none',
+                    cursor: coordUpdating === coord.roll_number ? 'not-allowed' : 'pointer',
+                    position: 'relative',
+                    transition: 'background 0.2s ease',
+                    flexShrink: 0,
+                    opacity: coordUpdating === coord.roll_number ? 0.6 : 1,
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute',
+                    top: 3,
+                    left: coord.approved ? 23 : 3,
+                    width: 18, height: 18,
+                    borderRadius: 'var(--radius-full)',
+                    background: '#fff',
+                    transition: 'left 0.2s ease',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  }} />
+                </button>
+
+                {/* Remove */}
+                <button
+                  onClick={() => handleRemoveCoordinator(coord.roll_number)}
+                  disabled={removingCoord === coord.roll_number}
+                  title="Remove from list"
+                  style={{
+                    width: 24, height: 24,
+                    borderRadius: 'var(--radius-full)',
+                    border: '1px solid var(--color-hairline)',
+                    background: 'none',
+                    color: 'var(--color-ink-muted)',
+                    fontSize: 14,
+                    cursor: removingCoord === coord.roll_number ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: removingCoord === coord.roll_number ? 0.4 : 1,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
             </div>
           ))}
         </div>
