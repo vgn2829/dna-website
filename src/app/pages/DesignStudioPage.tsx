@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "react-router";
 import PaletteStudio from "../components/PaletteStudio";
+import { HalftoneStudio } from "../components/HalftoneStudio";
 
 const T = {
   get canvas()       { return "var(--color-canvas)"; },
@@ -1185,6 +1186,7 @@ const TOOLS = [
   { id:"contrast", icon:"◑",  label:"Contrast Checker",  comp:ContrastChecker      },
   { id:"image",    icon:"↔",  label:"Image Converter",   comp:ImageConverter       },
   { id:"grid",     icon:"⊞",  label:"Grid Calculator",   comp:GridCalculator       },
+  { id:"halftone", icon:"∷",  label:"Halftone",          comp:HalftoneStudio       },
 ];
 
 const SUBTITLES: Record<string,string> = {
@@ -1193,6 +1195,7 @@ const SUBTITLES: Record<string,string> = {
   contrast: "WCAG AA/AAA live check. When failing, get harmonious color suggestions from color theory.",
   image:    "Convert, resize, and compress images client-side — private, instant, no upload needed.",
   grid:     "9 grid systems from Swiss Modular to Radial and Isometric — built for poster and print design.",
+  halftone: "Convert images into halftone patterns — lines, dots, or squares. Adjust angle, spacing, contrast, brightness, and colors.",
 };
 
 // ── Shell ─────────────────────────────────────────────────────────────────────
