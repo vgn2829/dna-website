@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLocation, useNavigate } from 'react-router';
 import { LogOut, Menu, Moon, Sun, X } from 'lucide-react';
@@ -7,13 +7,13 @@ import { useTheme } from '../context/ThemeContext';
 
 // PALETTE_STUDIO_FEATURE — remove the Palette entry below to disable
 const NAV_LINKS = [
-  { label: 'Home',     path: '/' },
-  { label: 'Academy',  path: '/academy' },
-  { label: 'Gallery',  path: '/gallery' },
-  { label: 'Events',   path: '/events' },
-  { label: 'Team',     path: '/team' },
-  { label: 'Design Studio', path: '/design-studio' }, // PALETTE_STUDIO_FEATURE
-  { label: 'Moodboards', path: '/moodboards' },
+  { label: 'Home',          path: '/'              },
+  { label: 'Academy',       path: '/academy'       },
+  { label: 'Gallery',       path: '/gallery'       },
+  { label: 'Events',        path: '/events'        },
+  { label: 'Team',          path: '/team'          },
+  { label: 'Design Studio', path: '/design-studio' },
+  { label: 'Moodboards',    path: '/moodboards'    },
 ];
 
 export function Navigation() {
@@ -22,199 +22,495 @@ export function Navigation() {
   const { studentSession, openRollModal, logout } = useStudent();
   const { theme, toggle } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
+  // Close menu on route change
   useEffect(() => {
-    const fn = () => setScrolled(window.scrollY > 8);
-    window.addEventListener('scroll', fn, { passive: true });
-    return () => window.removeEventListener('scroll', fn);
-  }, []);
+    setMenuOpen(false);
+  }, [location.pathname]);
 
-  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [menuOpen]);
 
   const isActive = (path: string) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
 
+  const isDark = theme === 'dark';
+
   return (
     <>
-      <header
-        className="fixed top-0 left-0 right-0 z-[200] h-14 transition-all"
+      {/* ── Floating pill container ── */}
+      <div
         style={{
-          background: scrolled ? 'var(--color-nav-blur-bg)' : 'var(--color-canvas)',
-          backdropFilter: scrolled ? 'blur(12px)' : 'none',
-          borderBottom: `1px solid ${scrolled ? 'var(--color-hairline-soft)' : 'transparent'}`,
+          position: 'fixed',
+          top: 12,
+          left: 0,
+          right: 0,
+          zIndex: 200,
+          display: 'flex',
+          justifyContent: 'center',
+          padding: '0 16px',
+          pointerEvents: 'none',
         }}
       >
-        {/*
-         * 3-column grid — each column is independently sized.
-         * Left: wordmark (no-shrink)  |  Center: nav links (auto)  |  Right: actions (no-shrink)
-         * This prevents any column from bleeding into another.
-         */}
         <div
-          className="h-full"
+          ref={menuRef}
           style={{
-            maxWidth: 1440,
-            margin: '0 auto',
-            padding: '0 48px',
-            display: 'grid',
-            gridTemplateColumns: '1fr auto 1fr',
-            alignItems: 'center',
+            pointerEvents: 'all',
+            width: '100%',
+            maxWidth: 1200,
+            position: 'relative',
           }}
         >
-          {/* ── Left: Wordmark ── */}
-          <div className="flex items-center">
-            <button onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', padding: 0, background: 'none', border: 'none' }}>
-              <img
-                src="/logo.png"
-                alt="DnA Club IIT Kanpur"
-                className="h-9 w-auto object-contain"
-              />
-            </button>
-          </div>
-
-          {/* ── Centre: Nav links (desktop) / DnA brand text (mobile) ── */}
-          <div className="flex items-center justify-center">
-          <span
-            className="md:hidden"
+          {/* ── Main pill ── */}
+          <div
             style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 18,
-              fontWeight: 700,
-              color: 'var(--color-ink)',
-              letterSpacing: '-0.5px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '6px 8px 6px 8px',
+              borderRadius: 'var(--radius-pill)',
+              background: 'var(--nav-bg)',
+              backdropFilter: 'var(--nav-blur)',
+              WebkitBackdropFilter: 'var(--nav-blur)',
+              border: '1px solid var(--nav-border)',
+              boxShadow: 'var(--nav-shadow)',
+              gap: 8,
             }}
           >
-            DnA
-          </span>
-          <nav className="hidden md:flex items-center gap-0.5">
-            {NAV_LINKS.map(link => {
-              const active = isActive(link.path);
-              return (
-                <button
-                  key={link.path}
-                  onClick={() => navigate(link.path)}
-                  className="relative px-3.5 py-1.5 rounded-full transition-colors"
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 500,
-                    letterSpacing: '-0.14px',
-                    fontFamily: 'var(--font-body)',
-                    color: active ? 'var(--color-ink)' : 'var(--color-ink-muted)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {active && (
-                    <motion.span
-                      layoutId="nav-pill"
-                      className="absolute inset-0 rounded-full"
-                      style={{ background: 'var(--color-surface-2)' }}
-                      transition={{ type: 'spring', stiffness: 400, damping: 38 }}
-                    />
-                  )}
-                  <span className="relative z-10">{link.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-          </div>
+            {/* ── Left: Logo pill ── */}
+            <button
+              onClick={() => navigate('/')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '4px 12px 4px 4px',
+                borderRadius: 'var(--radius-pill)',
+                background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+                border: 'none',
+                cursor: 'pointer',
+                flexShrink: 0,
+                transition: 'background 0.2s ease',
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLElement).style.background = isDark
+                  ? 'rgba(255,255,255,0.1)'
+                  : 'rgba(0,0,0,0.08)';
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.background = isDark
+                  ? 'rgba(255,255,255,0.06)'
+                  : 'rgba(0,0,0,0.05)';
+              }}
+            >
+              <img
+                src="/logo.png"
+                alt="DnA Club"
+                style={{
+                  height: 28,
+                  width: 28,
+                  objectFit: 'contain',
+                  borderRadius: 'var(--radius-full)',
+                }}
+              />
+              <span
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 15,
+                  fontWeight: 700,
+                  color: 'var(--color-ink)',
+                  letterSpacing: '-0.4px',
+                }}
+                className="hidden sm:inline"
+              >
+                DnA
+              </span>
+            </button>
 
-          {/* ── Right: Session + CTA (desktop) / Hamburger (mobile) ── */}
-          <div className="flex items-center justify-end gap-2">
-            {/* Desktop actions */}
-            <div className="hidden md:flex items-center gap-2">
-              {studentSession ? (
-                <div
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-                  style={{ background: 'var(--color-surface-1)' }}
-                >
-                  <span style={{ fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', fontVariantNumeric: 'tabular-nums', color: 'var(--color-ink)', letterSpacing: '0.02em' }}>
-                    {studentSession.rollNumber}
-                  </span>
-                  <button onClick={logout} title="Log out" style={{ color: 'var(--color-ink-muted)', display: 'flex', alignItems: 'center' }} className="hover:opacity-60 transition-opacity">
-                    <LogOut size={12} />
+            {/* ── Center: Nav links (desktop) ── */}
+            <nav
+              className="hidden md:flex"
+              style={{
+                alignItems: 'center',
+                gap: 2,
+                flex: 1,
+                justifyContent: 'center',
+              }}
+            >
+              {NAV_LINKS.map(link => {
+                const active = isActive(link.path);
+                return (
+                  <button
+                    key={link.path}
+                    onClick={() => navigate(link.path)}
+                    style={{
+                      position: 'relative',
+                      padding: '7px 14px',
+                      borderRadius: 'var(--radius-pill)',
+                      border: 'none',
+                      background: 'none',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      letterSpacing: '-0.13px',
+                      fontFamily: 'var(--font-body)',
+                      color: active ? 'var(--color-ink)' : 'var(--color-ink-muted)',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      transition: 'color 0.15s ease',
+                    }}
+                    onMouseEnter={e => {
+                      if (!active) {
+                        (e.currentTarget as HTMLElement).style.color = 'var(--color-ink)';
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (!active) {
+                        (e.currentTarget as HTMLElement).style.color = 'var(--color-ink-muted)';
+                      }
+                    }}
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId="nav-pill"
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          borderRadius: 'var(--radius-pill)',
+                          background: isDark
+                            ? 'rgba(255,255,255,0.1)'
+                            : 'rgba(0,0,0,0.07)',
+                          zIndex: 0,
+                        }}
+                        transition={{
+                          type: 'spring',
+                          stiffness: 400,
+                          damping: 38,
+                        }}
+                      />
+                    )}
+                    <span style={{ position: 'relative', zIndex: 1 }}>
+                      {link.label}
+                    </span>
                   </button>
-                </div>
-              ) : (
-                <button
-                  onClick={openRollModal}
-                  className="btn-secondary"
-                  style={{ minHeight: 34, padding: '6px 13px', fontSize: 13 }}
-                >
-                  Link roll no.
-                </button>
-              )}
-
-            </div>
-
-            {/* Theme toggle — all breakpoints */}
-            <button
-              onClick={toggle}
-              className="btn-icon"
-              style={{ width: 34, height: 34 }}
-              aria-label="Toggle theme"
-            >
-              {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-            </button>
-
-            {/* Mobile: hamburger */}
-            <button
-              onClick={() => setMenuOpen(o => !o)}
-              className="md:hidden btn-icon"
-              style={{ width: 34, height: 34 }}
-              aria-label="Menu"
-            >
-              {menuOpen ? <X size={15} /> : <Menu size={15} />}
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* ── Mobile menu overlay ── */}
-      <AnimatePresence>
-        {menuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.16 }}
-            className="fixed inset-0 z-[199] flex flex-col pt-14"
-            style={{ background: 'var(--color-canvas)' }}
-          >
-            <nav className="flex flex-col px-5 pt-4 gap-0.5">
-              {NAV_LINKS.map(link => (
-                <button
-                  key={link.path}
-                  onClick={() => navigate(link.path)}
-                  className="text-left px-4 py-3 rounded-xl transition-colors"
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 500,
-                    letterSpacing: '-0.3px',
-                    color: isActive(link.path) ? 'var(--color-ink)' : 'var(--color-ink-muted)',
-                    background: isActive(link.path) ? 'var(--color-surface-1)' : 'transparent',
-                    borderRadius: 'var(--radius-md)',
-                  }}
-                >
-                  {link.label}
-                </button>
-              ))}
+                );
+              })}
             </nav>
 
-            <div className="flex items-center gap-3 px-5 mt-6">
-              {studentSession ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-full" style={{ background: 'var(--color-surface-1)' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)' }}>{studentSession.rollNumber}</span>
-                  <button onClick={logout}><LogOut size={12} style={{ color: 'var(--color-ink-muted)' }} /></button>
-                </div>
-              ) : (
-                <button onClick={() => { setMenuOpen(false); openRollModal(); }} className="btn-secondary">
-                  Link roll no.
-                </button>
-              )}
+            {/* ── Right: User + theme + hamburger ── */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                flexShrink: 0,
+              }}
+            >
+              {/* Student session pill — desktop */}
+              <div className="hidden md:flex items-center">
+                {studentSession ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '6px 14px',
+                      borderRadius: 'var(--radius-pill)',
+                      background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
+                      border: '1px solid var(--nav-border)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                      <span style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        fontFamily: 'var(--font-body)',
+                        color: 'var(--color-ink)',
+                        letterSpacing: '0.02em',
+                        fontVariantNumeric: 'tabular-nums',
+                        lineHeight: 1.2,
+                      }}>
+                        {studentSession.name
+                          ? studentSession.name.split(' ')[0]
+                          : studentSession.rollNumber
+                        }
+                      </span>
+                      {studentSession.name && (
+                        <span style={{
+                          fontSize: 10,
+                          color: 'var(--color-ink-muted)',
+                          fontFamily: 'var(--font-body)',
+                          fontVariantNumeric: 'tabular-nums',
+                          lineHeight: 1,
+                        }}>
+                          {studentSession.rollNumber}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={logout}
+                      title="Log out"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--color-ink-muted)',
+                        cursor: 'pointer',
+                        padding: 0,
+                        opacity: 0.7,
+                        transition: 'opacity 0.15s ease',
+                      }}
+                      onMouseEnter={e => {
+                        (e.currentTarget as HTMLElement).style.opacity = '1';
+                      }}
+                      onMouseLeave={e => {
+                        (e.currentTarget as HTMLElement).style.opacity = '0.7';
+                      }}
+                    >
+                      <LogOut size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={openRollModal}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: 'var(--radius-pill)',
+                      background: 'var(--color-brand)',
+                      color: '#fff',
+                      border: 'none',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      fontFamily: 'var(--font-body)',
+                      cursor: 'pointer',
+                      letterSpacing: '-0.13px',
+                    }}
+                  >
+                    Join
+                  </button>
+                )}
+              </div>
+
+              {/* Theme toggle */}
+              <button
+                onClick={toggle}
+                aria-label="Toggle theme"
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 'var(--radius-full)',
+                  border: '1px solid var(--nav-border)',
+                  background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                  color: 'var(--color-ink-muted)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  flexShrink: 0,
+                }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLElement).style.color = 'var(--color-ink)';
+                  (e.currentTarget as HTMLElement).style.background = isDark
+                    ? 'rgba(255,255,255,0.12)'
+                    : 'rgba(0,0,0,0.08)';
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.color = 'var(--color-ink-muted)';
+                  (e.currentTarget as HTMLElement).style.background = isDark
+                    ? 'rgba(255,255,255,0.06)'
+                    : 'rgba(0,0,0,0.04)';
+                }}
+              >
+                {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+              </button>
+
+              {/* Hamburger — mobile + tablet */}
+              <button
+                onClick={() => setMenuOpen(o => !o)}
+                className="md:hidden"
+                aria-label="Menu"
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 'var(--radius-full)',
+                  border: '1px solid var(--nav-border)',
+                  background: menuOpen
+                    ? isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'
+                    : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                  color: 'var(--color-ink)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  flexShrink: 0,
+                }}
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.span
+                    key={menuOpen ? 'close' : 'open'}
+                    initial={{ opacity: 0, rotate: -90, scale: 0.7 }}
+                    animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                    exit={{ opacity: 0, rotate: 90, scale: 0.7 }}
+                    transition={{ duration: 0.15 }}
+                    style={{ display: 'flex' }}
+                  >
+                    {menuOpen ? <X size={15} /> : <Menu size={15} />}
+                  </motion.span>
+                </AnimatePresence>
+              </button>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+
+          {/* ── Mobile dropdown menu ── */}
+          <AnimatePresence>
+            {menuOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -8, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  left: 0,
+                  right: 0,
+                  borderRadius: 'var(--radius-xxl)',
+                  background: 'var(--nav-bg)',
+                  backdropFilter: 'var(--nav-blur)',
+                  WebkitBackdropFilter: 'var(--nav-blur)',
+                  border: '1px solid var(--nav-border)',
+                  boxShadow: 'var(--nav-shadow)',
+                  padding: 8,
+                  zIndex: 199,
+                  overflow: 'hidden',
+                }}
+              >
+                {/* Nav links */}
+                <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {NAV_LINKS.map((link, i) => {
+                    const active = isActive(link.path);
+                    return (
+                      <motion.button
+                        key={link.path}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.03, duration: 0.2 }}
+                        onClick={() => navigate(link.path)}
+                        style={{
+                          width: '100%',
+                          textAlign: 'left',
+                          padding: '10px 16px',
+                          borderRadius: 'var(--radius-md)',
+                          border: 'none',
+                          background: active
+                            ? isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
+                            : 'none',
+                          fontSize: 15,
+                          fontWeight: active ? 600 : 500,
+                          letterSpacing: '-0.2px',
+                          fontFamily: 'var(--font-body)',
+                          color: active ? 'var(--color-ink)' : 'var(--color-ink-muted)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {link.label}
+                      </motion.button>
+                    );
+                  })}
+                </nav>
+
+                {/* Divider */}
+                <div style={{ height: 1, background: 'var(--nav-border)', margin: '8px 0' }} />
+
+                {/* Session row */}
+                <div style={{
+                  padding: '4px 8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                }}>
+                  {studentSession ? (
+                    <>
+                      <div>
+                        <p style={{
+                          margin: 0,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: 'var(--color-ink)',
+                          fontFamily: 'var(--font-body)',
+                        }}>
+                          {studentSession.name ?? studentSession.rollNumber}
+                        </p>
+                        {studentSession.name && (
+                          <p style={{
+                            margin: 0,
+                            fontSize: 11,
+                            color: 'var(--color-ink-muted)',
+                            fontFamily: 'var(--font-body)',
+                          }}>
+                            {studentSession.rollNumber}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => { logout(); setMenuOpen(false); }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '7px 14px',
+                          borderRadius: 'var(--radius-pill)',
+                          background: 'none',
+                          border: '1px solid var(--nav-border)',
+                          color: 'var(--color-ink-muted)',
+                          fontSize: 13,
+                          fontFamily: 'var(--font-body)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <LogOut size={12} />
+                        Log out
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => { setMenuOpen(false); openRollModal(); }}
+                      style={{
+                        width: '100%',
+                        padding: '10px 16px',
+                        borderRadius: 'var(--radius-pill)',
+                        background: 'var(--color-brand)',
+                        color: '#fff',
+                        border: 'none',
+                        fontSize: 14,
+                        fontWeight: 600,
+                        fontFamily: 'var(--font-body)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Join DnA Club
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
     </>
   );
 }

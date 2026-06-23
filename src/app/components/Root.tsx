@@ -43,7 +43,7 @@ export function Root() {
               <Outlet />
             ) : (
               <>
-                <main style={{ paddingTop: '56px' }}>
+                <main style={{ paddingTop: '72px' }}>
                   <Outlet />
                 </main>
                 <Footer />
