@@ -2,6 +2,23 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Upload, Download, RotateCcw, Loader2 } from 'lucide-react';
 import { processHalftone, HalftoneOptions } from '../lib/halftone-logic';
 
+const MAX_WORK = 700;
+
+const Slider = ({ label, val, min, max, step, suffix, onChange }: {
+  label: string; val: number; min: number; max: number;
+  step: number; suffix: string; onChange: (v: number) => void;
+}) => (
+  <div style={{ marginBottom: 18 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>{label}</span>
+      <span style={{ fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono)' }}>{val}{suffix}</span>
+    </div>
+    <input type="range" min={min} max={max} step={step} value={val}
+      onChange={e => onChange(parseFloat(e.target.value))}
+      style={{ width: '100%', accentColor: 'var(--color-brand)', cursor: 'pointer' }} />
+  </div>
+);
+
 const DEFAULTS: HalftoneOptions = {
   type: 'lines', contrast: 100, brightness: 100, angle: 45,
   frequency: 10, resolution: 4, minWidth: 0, maxWidth: 1,
@@ -37,13 +54,17 @@ export function HalftoneStudio() {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
 
     rafRef.current = requestAnimationFrame(() => {
-      if (!srcDataRef.current || canvas.width !== img.width || canvas.height !== img.height) {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0);
-        srcDataRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const longest = Math.max(img.width, img.height);
+      const scale = longest > MAX_WORK ? MAX_WORK / longest : 1;
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      if (!srcDataRef.current || canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+        ctx.drawImage(img, 0, 0, w, h);
+        srcDataRef.current = ctx.getImageData(0, 0, w, h);
       }
-      processHalftone(ctx, canvas.width, canvas.height, srcDataRef.current, settings);
+      processHalftone(ctx, w, h, srcDataRef.current, settings);
       rafRef.current = null;
     });
 
@@ -65,21 +86,6 @@ export function HalftoneStudio() {
     const f = e.dataTransfer.files?.[0];
     if (f) loadFile(f);
   };
-
-  const Slider = ({ label, val, min, max, step, suffix, onChange }: {
-    label: string; val: number; min: number; max: number;
-    step: number; suffix: string; onChange: (v: number) => void;
-  }) => (
-    <div style={{ marginBottom: 18 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>{label}</span>
-        <span style={{ fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono)' }}>{val}{suffix}</span>
-      </div>
-      <input type="range" min={min} max={max} step={step} value={val}
-        onChange={e => onChange(parseFloat(e.target.value))}
-        style={{ width: '100%', accentColor: 'var(--color-brand)', cursor: 'pointer' }} />
-    </div>
-  );
 
   return (
     <div style={{
