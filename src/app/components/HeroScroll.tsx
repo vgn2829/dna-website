@@ -8,7 +8,7 @@ export default function HeroScroll() {
 
   const { scrollYProgress } = useScroll({
     target: containerRef,
-    offset: ['start end', 'end start'],
+    offset: ['start 0.9', 'end 0.1'],
   });
 
   // Pick up to 6 featured artworks, fill remaining slots with non-featured
@@ -23,7 +23,7 @@ export default function HeroScroll() {
   const rotateX = useTransform(scrollYProgress, [0, 0.5], [20, 0]);
   const scale = useTransform(scrollYProgress, [0, 0.5], [0.95, 1]);
   const translateY = useTransform(scrollYProgress, [0, 0.5], [40, 0]);
-  const opacity = useTransform(scrollYProgress, [0, 0.2], [0, 1]);
+  const opacity = useTransform(scrollYProgress, [0, 0.15], [0, 1]);
 
   if (displayArtworks.length === 0) return null;
 
@@ -44,7 +44,7 @@ export default function HeroScroll() {
           rotateX,
           scale,
           y: translateY,
-          opacity,
+          opacity: 1,
           background: 'var(--color-surface-1)',
           border: '1px solid var(--color-hairline)',
           borderRadius: 'var(--radius-xxl)',
