@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useLocation } from "react-router";
 import PaletteStudio from "../components/PaletteStudio";
 import { HalftoneStudio } from "../components/HalftoneStudio";
+import { SvgConverter } from "../components/SvgConverter";
 
 const T = {
   get canvas()       { return "var(--color-canvas)"; },
@@ -1187,6 +1188,7 @@ const TOOLS = [
   { id:"image",    icon:"↔",  label:"Image Converter",   comp:ImageConverter       },
   { id:"grid",     icon:"⊞",  label:"Grid Calculator",   comp:GridCalculator       },
   { id:"halftone", icon:"∷",  label:"Halftone",          comp:HalftoneStudio       },
+  { id:"svg",      icon:"⬡",  label:"Image → SVG",       comp:SvgConverter         },
 ];
 
 const SUBTITLES: Record<string,string> = {
@@ -1196,6 +1198,7 @@ const SUBTITLES: Record<string,string> = {
   image:    "Convert, resize, and compress images client-side — private, instant, no upload needed.",
   grid:     "9 grid systems from Swiss Modular to Radial and Isometric — built for poster and print design.",
   halftone: "Convert images into halftone patterns — lines, dots, or squares. Adjust angle, spacing, contrast, brightness, and colors.",
+  svg:      "Trace any image into a scalable SVG line drawing — adjust threshold, fill, invert, and edge dilation, then download.",
 };
 
 // ── Shell ─────────────────────────────────────────────────────────────────────
