@@ -85,6 +85,7 @@ export function Navigation() {
               border: '1px solid var(--nav-border)',
               boxShadow: 'var(--nav-shadow)',
               gap: 8,
+              position: 'relative',
             }}
           >
             {/* ── Left: Logo pill ── */}
@@ -94,23 +95,12 @@ export function Navigation() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
-                padding: '4px 12px 4px 4px',
+                padding: '4px 8px 4px 4px',
                 borderRadius: 'var(--radius-pill)',
-                background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+                background: 'none',
                 border: 'none',
                 cursor: 'pointer',
                 flexShrink: 0,
-                transition: 'background 0.2s ease',
-              }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.background = isDark
-                  ? 'rgba(255,255,255,0.1)'
-                  : 'rgba(0,0,0,0.08)';
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.background = isDark
-                  ? 'rgba(255,255,255,0.06)'
-                  : 'rgba(0,0,0,0.05)';
               }}
             >
               <img
@@ -205,6 +195,25 @@ export function Navigation() {
                 );
               })}
             </nav>
+
+            {/* ── Center: DnA text (mobile only) ── */}
+            <span
+              className="md:hidden"
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '50%',
+                transform: 'translate(-50%, -50%)',
+                fontFamily: 'var(--font-display)',
+                fontSize: 16,
+                fontWeight: 700,
+                color: 'var(--color-ink)',
+                letterSpacing: '-0.4px',
+                pointerEvents: 'none',
+              }}
+            >
+              DnA
+            </span>
 
             {/* ── Right: User + theme + hamburger ── */}
             <div
