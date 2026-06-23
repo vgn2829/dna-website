@@ -13,6 +13,8 @@ export function HalftoneStudio() {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [loading, setLoading] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rafRef = useRef<number | null>(null);
+  const srcDataRef = useRef<ImageData | null>(null);
 
   const update = (p: Partial<HalftoneOptions>) => setSettings(s => ({ ...s, ...p }));
 
@@ -21,7 +23,7 @@ export function HalftoneStudio() {
     setLoading(true);
     const url = URL.createObjectURL(file);
     const image = new Image();
-    image.onload = () => { setImg(image); URL.revokeObjectURL(url); setLoading(false); };
+    image.onload = () => { setImg(image); srcDataRef.current = null; URL.revokeObjectURL(url); setLoading(false); };
     image.onerror = () => { setLoading(false); URL.revokeObjectURL(url); };
     image.src = url;
   }, []);
@@ -29,13 +31,25 @@ export function HalftoneStudio() {
   useEffect(() => {
     if (!img || !canvasRef.current) return;
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
-    canvas.width = img.width;
-    canvas.height = img.height;
-    ctx.drawImage(img, 0, 0);
-    const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    processHalftone(ctx, canvas.width, canvas.height, data, settings);
+
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+
+    rafRef.current = requestAnimationFrame(() => {
+      if (!srcDataRef.current || canvas.width !== img.width || canvas.height !== img.height) {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        srcDataRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      }
+      processHalftone(ctx, canvas.width, canvas.height, srcDataRef.current, settings);
+      rafRef.current = null;
+    });
+
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
   }, [img, settings]);
 
   const download = () => {
