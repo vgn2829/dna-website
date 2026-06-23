@@ -174,8 +174,8 @@ export function Navigation() {
                         layoutId="nav-pill"
                         style={{
                           position: 'absolute',
-                          inset: 0,
-                          borderRadius: 'var(--radius-pill)',
+                          inset: 2,
+                          borderRadius: 'var(--radius-full)',
                           background: isDark
                             ? 'rgba(255,255,255,0.1)'
                             : 'rgba(0,0,0,0.07)',
@@ -421,7 +421,11 @@ export function Navigation() {
                           width: '100%',
                           textAlign: 'left',
                           padding: '10px 16px',
-                          borderRadius: 'var(--radius-md)',
+                          borderRadius: i === 0
+                            ? '22px 22px var(--radius-sm) var(--radius-sm)'
+                            : i === NAV_LINKS.length - 1
+                              ? 'var(--radius-sm) var(--radius-sm) 22px 22px'
+                              : 'var(--radius-sm)',
                           border: 'none',
                           background: active
                             ? isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
