@@ -103,6 +103,33 @@ export function Footer() {
     } catch {}
   };
 
+  const handleUpdateSessionStatus = async (id: string, status: 'live' | 'ended') => {
+    if (!studentSession) return;
+    // Optimistic update
+    setSessions(prev => prev.map(s => s.id === id ? { ...s, status } : s));
+    try {
+      await fetch(`${API_BASE}/live-sessions/coordinator/${id}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Roll-Number': studentSession.rollNumber,
+        },
+        body: JSON.stringify({ status }),
+      });
+      // If ended, remove from list after 2 seconds
+      if (status === 'ended') {
+        setTimeout(() => {
+          setSessions(prev => prev.filter(s => s.id !== id));
+        }, 2000);
+      }
+    } catch {
+      // Rollback on failure
+      setSessions(prev => prev.map(s =>
+        s.id === id ? { ...s, status: status === 'live' ? 'upcoming' : 'live' } : s
+      ));
+    }
+  };
+
   const inputStyle: React.CSSProperties = {
     width: '100%',
     padding: '10px 12px',
@@ -459,22 +486,66 @@ export function Footer() {
                     {sessions.map(s => (
                       <div
                         key={s.id}
-                        style={{ padding: '12px 14px', background: 'var(--color-canvas)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}
+                        style={{
+                          padding: '12px 14px',
+                          background: s.status === 'live' ? 'rgba(233,30,140,0.06)' : 'var(--color-canvas)',
+                          border: s.status === 'live' ? '1px solid rgba(233,30,140,0.3)' : '1px solid var(--color-border)',
+                          borderRadius: 'var(--radius-md)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 10,
+                        }}
                       >
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: '0 0 2px', fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {s.title}
-                          </p>
-                          <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-                            {new Date(s.scheduled_at).toLocaleString()} · {s.host}
-                          </p>
+                        {/* Session info */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                              {s.status === 'live' && (
+                                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-brand)', fontFamily: 'var(--font-body)', letterSpacing: '0.06em' }}>
+                                  ● LIVE
+                                </span>
+                              )}
+                              {s.status === 'upcoming' && (
+                                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', letterSpacing: '0.06em' }}>
+                                  ◆ UPCOMING
+                                </span>
+                              )}
+                            </div>
+                            <p style={{ margin: '0 0 2px', fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {s.title}
+                            </p>
+                            <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                              {new Date(s.scheduled_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}
+                              {' · '}{s.host}
+                            </p>
+                          </div>
                         </div>
-                        <button
-                          onClick={() => handleDeleteSession(s.id)}
-                          style={{ flexShrink: 0, padding: '4px 10px', background: 'none', border: '1px solid rgba(239,68,68,0.4)', color: 'var(--color-error)', borderRadius: 'var(--radius-sm)', fontSize: 12, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
-                        >
-                          Remove
-                        </button>
+
+                        {/* Action buttons */}
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {s.status === 'upcoming' && (
+                            <button
+                              onClick={() => handleUpdateSessionStatus(s.id, 'live')}
+                              style={{ flex: 1, padding: '6px 12px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                            >
+                              Go Live
+                            </button>
+                          )}
+                          {s.status === 'live' && (
+                            <button
+                              onClick={() => handleUpdateSessionStatus(s.id, 'ended')}
+                              style={{ flex: 1, padding: '6px 12px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                            >
+                              End Session
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteSession(s.id)}
+                            style={{ padding: '6px 12px', background: 'none', border: '1px solid rgba(239,68,68,0.3)', color: 'var(--color-error)', borderRadius: 'var(--radius-sm)', fontSize: 12, fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>

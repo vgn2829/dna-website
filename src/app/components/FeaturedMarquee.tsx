@@ -90,7 +90,20 @@ export function FeaturedMarquee() {
                     {a.domain}
                   </span>
                   <div style={{ position: 'relative', zIndex: 1, padding: 24 }}>
-                    <h3 className="type-display-md" style={{ color: '#fff', marginBottom: 4 }}>{a.title}</h3>
+                    <h3
+                      className="type-display-md"
+                      style={{
+                        color: '#fff',
+                        marginBottom: 4,
+                        fontSize: 'clamp(14px, 2.5vw, 20px)',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        lineHeight: 1.2,
+                        letterSpacing: '-0.5px',
+                      }}
+                    >{a.title}</h3>
                     <p className="type-caption" style={{ color: 'rgba(255,255,255,0.65)' }}>by {a.artist}</p>
                   </div>
                 </motion.div>
