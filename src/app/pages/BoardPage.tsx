@@ -67,6 +67,20 @@ export default function BoardPage() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const keepAlive = setInterval(async () => {
+      try {
+        await fetch(
+          `${import.meta.env.VITE_API_URL ?? ''}/api/health`,
+          { method: 'GET' }
+        );
+      } catch {
+        // silent fail — keepalive only
+      }
+    }, 10 * 60 * 1000);
+    return () => clearInterval(keepAlive);
+  }, []);
+
   const loadBoard = useCallback(async () => {
     if (!id) return;
     try {

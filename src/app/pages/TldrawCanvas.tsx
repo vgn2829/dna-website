@@ -5,7 +5,10 @@ import {
 } from 'react';
 import {
   Tldraw,
+  getSnapshot,
+  loadSnapshot,
   type Editor,
+  type TLStoreSnapshot,
 } from 'tldraw';
 import 'tldraw/tldraw.css';
 
@@ -43,7 +46,7 @@ export function TldrawCanvas({
     const editor = editorRef.current;
     if (!editor) return;
     try {
-      const snapshot = editor.store.getSnapshot();
+      const snapshot = getSnapshot(editor.store);
       const serialized = JSON.stringify(snapshot);
       if (serialized === lastSavedRef.current) return;
       lastSavedRef.current = serialized;
@@ -78,6 +81,23 @@ export function TldrawCanvas({
     };
   }, [handleSave]);
 
+  useEffect(() => {
+    const onOffline = () => {
+      console.log('Network lost — saving canvas');
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      handleSave();
+    };
+    const onOnline = () => {
+      console.log('Network restored');
+    };
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('online', onOnline);
+    return () => {
+      window.removeEventListener('offline', onOffline);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [handleSave]);
+
   return (
     <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
       <Tldraw
@@ -92,10 +112,8 @@ export function TldrawCanvas({
           if (initialDataRef.current && !snapshotLoadedRef.current) {
             snapshotLoadedRef.current = true;
             try {
-              const snap = initialDataRef.current as Parameters<
-                typeof editor.store.loadSnapshot
-              >[0];
-              editor.store.loadSnapshot(snap);
+              const snap = initialDataRef.current as TLStoreSnapshot;
+              loadSnapshot(editor.store, snap);
               setTimeout(() => {
                 try {
                   editor.zoomToFit({ animation: { duration: 200 } });
