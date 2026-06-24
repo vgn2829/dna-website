@@ -692,8 +692,9 @@ function GalleryTab() {
                   const files = e.target.files;
                   if (!files || files.length === 0) { e.target.value = ''; return; }
                   if (files.length > 1) { await handleBulkFiles(e); return; }
-                  e.target.value = '';
                   const f = files[0];
+                  if (!f) { e.target.value = ''; return; }
+                  e.target.value = '';
                   const parsed = parseFilename(f.name);
                   if (!aTitle || aTitle.trim() === '') setATitle(parsed.title);
                   if (!aArtist || aArtist.trim() === '') setAArtist(parsed.artist);
