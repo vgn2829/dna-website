@@ -14,7 +14,7 @@ async function generateThumb(buffer: Buffer): Promise<{ path: string; url: strin
   try {
     const thumbBuffer = await sharp(buffer)
       .resize({ width: 400, withoutEnlargement: true })
-      .webp({ quality: 75 })
+      .webp({ quality: 60 })
       .toBuffer();
     const thumbPath = `thumbs/${uuidv4()}.webp`;
     await getStorage().upload(thumbPath, thumbBuffer, 'image/webp');

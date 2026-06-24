@@ -50,7 +50,7 @@ async function main() {
 
       const thumbBuffer = await sharp(buffer)
         .resize({ width: 400, withoutEnlargement: true })
-        .webp({ quality: 75 })
+        .webp({ quality: 60 })
         .toBuffer();
 
       const thumbPath = `thumbs/${uuidv4()}.webp`;
