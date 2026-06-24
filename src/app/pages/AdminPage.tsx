@@ -925,7 +925,7 @@ function GalleryTab() {
         {artworks.map(a => (
           <div key={a.id} className="card p-3 flex items-center gap-3" style={{ borderRadius: 'var(--radius-lg)' }}>
             {a.mediaType === 'image' ? (
-              <img src={a.mediaUrl} alt={a.title} className="w-9 h-9 rounded-lg object-cover shrink-0" />
+              <img src={a.coverUrl ?? a.mediaUrl} alt={a.title} className="w-9 h-9 rounded-lg object-cover shrink-0" />
             ) : (
               <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'var(--color-surface-2)' }}>
                 {a.mediaType === 'pdf' ? <span className="type-micro font-bold">PDF</span> : <Video size={14} style={{ color: 'var(--color-ink-muted)' }} />}
