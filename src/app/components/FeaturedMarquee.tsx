@@ -78,6 +78,7 @@ export function FeaturedMarquee() {
                     <img
                       src={a.coverUrl ?? a.mediaUrl}
                       alt={a.title}
+                      loading="lazy"
                       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--radius-xl)' }}
                     />
                   )}
