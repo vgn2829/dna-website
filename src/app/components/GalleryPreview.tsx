@@ -16,7 +16,7 @@ function ArtworkCard({ a, i }: { a: Artwork; i: number }) {
       viewport={{ once: true }}
       transition={{ delay: i * 0.05, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
       whileHover={{ y: -4 }}
-      onClick={() => navigate('/gallery')}
+      onClick={() => navigate(`/gallery?art=${a.id}`)}
     >
       <div style={{ height: 220, position: 'relative', background: 'var(--color-surface-2)', overflow: 'hidden' }}>
         {(a.mediaType === 'image' && a.mediaUrl) || ((a.mediaType === 'video' || a.mediaType === 'pdf') && a.coverUrl) ? (

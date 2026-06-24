@@ -58,7 +58,7 @@ export function FeaturedMarquee() {
               {items.map((a, i) => (
                 <motion.div
                   key={`${a.id}-${i}`}
-                  onClick={() => navigate('/gallery')}
+                  onClick={() => navigate(`/gallery?art=${a.id}`)}
                   whileHover={{ y: -4 }}
                   style={{
                     flexShrink: 0,

@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { Heart, MessageCircle, X, ZoomIn, ZoomOut, Send, FileText, Play, ExternalLink } from 'lucide-react';
 import { useAppData, type Artwork } from '../context/AppDataContext';
@@ -393,8 +394,32 @@ export function GalleryPage() {
   }, [artworks]);
   const [filter, setFilter] = useState('ALL');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [burstIds, setBurstIds] = useState<Set<string>>(new Set());
   const forceUpper = localStorage.getItem('forceUppercase') !== 'false';
+
+  const didDeepLink = useRef(false);
+  useEffect(() => {
+    if (loading || didDeepLink.current) return;
+    const artId = searchParams.get('art');
+    if (!artId) return;
+    didDeepLink.current = true;
+    if (artworks.some(a => a.id === artId)) {
+      setSelectedId(artId);
+    } else {
+      setSearchParams(p => { const n = new URLSearchParams(p); n.delete('art'); return n; }, { replace: true });
+    }
+  }, [loading, artworks, searchParams, setSearchParams]);
+
+  const openArtwork = useCallback((id: string) => {
+    setSelectedId(id);
+    setSearchParams(p => { const n = new URLSearchParams(p); n.set('art', id); return n; }, { replace: true });
+  }, [setSearchParams]);
+
+  const closeModal = useCallback(() => {
+    setSelectedId(null);
+    setSearchParams(p => { const n = new URLSearchParams(p); n.delete('art'); return n; }, { replace: true });
+  }, [setSearchParams]);
 
   const handleLike = useCallback((e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -492,7 +517,7 @@ export function GalleryPage() {
                   initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.94 }}
                   transition={{ delay: i * 0.04 }}
                   className="break-inside-avoid mb-4 cursor-pointer group"
-                  onClick={() => setSelectedId(art.id)}
+                  onClick={() => openArtwork(art.id)}
                 >
                   <div style={{ borderRadius: 'var(--radius-xl)', overflow: 'hidden', background: 'var(--color-surface-1)' }}>
                     {/* Image container */}
@@ -545,7 +570,7 @@ export function GalleryPage() {
       </div>
 
       <AnimatePresence>
-        {selectedId && <ArtworkModal artworkId={selectedId} onClose={() => setSelectedId(null)} />}
+        {selectedId && <ArtworkModal artworkId={selectedId} onClose={closeModal} />}
       </AnimatePresence>
 
       {/* Save to moodboard picker */}
