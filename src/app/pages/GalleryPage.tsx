@@ -354,7 +354,7 @@ function MediaThumbnail({ art }: { art: Artwork }) {
   }
   if (art.mediaType === 'image') {
     return (
-      <img src={thumbUrl(art.mediaUrl)} alt={art.title}
+      <img src={thumbUrl(art.coverUrl ?? art.mediaUrl)} alt={art.title}
         className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
     );
   }
