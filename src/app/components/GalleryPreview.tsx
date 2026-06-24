@@ -21,8 +21,9 @@ function ArtworkCard({ a, i }: { a: Artwork; i: number }) {
       <div style={{ height: 220, position: 'relative', background: 'var(--color-surface-2)', overflow: 'hidden' }}>
         {(a.mediaType === 'image' && a.mediaUrl) || ((a.mediaType === 'video' || a.mediaType === 'pdf') && a.coverUrl) ? (
           <img
-            src={(a.mediaType === 'video' || a.mediaType === 'pdf') && a.coverUrl ? a.coverUrl : a.mediaUrl}
+            src={a.coverUrl ?? a.mediaUrl}
             alt={a.title}
+            loading="lazy"
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
         ) : (
