@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "seed": "tsx src/db/seed.ts",
+    "backfill:thumbs": "tsx scripts/backfill-thumbnails.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
