@@ -3,11 +3,27 @@ import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
+import sharp from 'sharp';
 import { pool, query } from '../db/client';
 import { requireAdmin } from '../middleware/adminAuth';
 import { getStorage } from '../storage';
 
 export const artworksRouter = Router();
+
+async function generateThumb(buffer: Buffer): Promise<{ path: string; url: string } | null> {
+  try {
+    const thumbBuffer = await sharp(buffer)
+      .resize({ width: 400, withoutEnlargement: true })
+      .webp({ quality: 75 })
+      .toBuffer();
+    const thumbPath = `thumbs/${uuidv4()}.webp`;
+    await getStorage().upload(thumbPath, thumbBuffer, 'image/webp');
+    return { path: thumbPath, url: getStorage().getPublicUrl(thumbPath) };
+  } catch (e) {
+    console.error('Thumbnail generation failed, proceeding without thumb:', e);
+    return null;
+  }
+}
 
 const commentLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: 'Too many requests, please slow down.' } });
 const likeLimiter    = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Too many requests, please slow down.' } });
@@ -121,10 +137,17 @@ artworksRouter.post(
 
     await getStorage().upload(storagePath, file.buffer, spec.mime);
 
-    // Handle optional cover image
+    // For image uploads, generate a 400px webp thumbnail stored in cover_url.
+    // For video/PDF, cover_url comes from the frontend-captured cover blob below.
     let coverUrl: string | null = null;
+    if (spec.mediaType === 'image') {
+      const thumb = await generateThumb(file.buffer);
+      coverUrl = thumb?.url ?? null;
+    }
+
+    // Handle optional cover image (video/PDF only path — images use generated thumb above)
     const coverFile = files?.['cover']?.[0];
-    if (coverFile) {
+    if (coverFile && spec.mediaType !== 'image') {
       const coverExt = coverFile.originalname.split('.').pop()?.toLowerCase() ?? '';
       const coverSpec = ALLOWED_EXT[coverExt];
       if (coverSpec && coverSpec.mime.startsWith('image/')) {
@@ -214,10 +237,16 @@ artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount
     sets.push(`original_filename = $${i++}`); vals.push(file.originalname);
     sets.push(`mime_type = $${i++}`); vals.push(spec.mime);
     sets.push(`file_size = $${i++}`); vals.push(file.size);
+
+    // Regenerate thumbnail when the image file is replaced
+    if (spec.mediaType === 'image') {
+      const thumb = await generateThumb(file.buffer);
+      if (thumb) { sets.push(`cover_url = $${i++}`); vals.push(thumb.url); }
+    }
   }
 
   const coverFile = putFiles?.['cover']?.[0];
-  if (coverFile) {
+  if (coverFile && (existing[0].media_type !== 'image')) {
     const coverExt = coverFile.originalname.split('.').pop()?.toLowerCase() ?? '';
     const coverSpec = ALLOWED_EXT[coverExt];
     if (coverSpec && coverSpec.mime.startsWith('image/') && coverSpec.check(coverFile.buffer)) {
