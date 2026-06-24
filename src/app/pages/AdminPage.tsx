@@ -8,11 +8,16 @@ import imageCompression from 'browser-image-compression';
 
 async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith('image/')) return file;
-  return imageCompression(file, {
-    maxSizeMB: 0.5,
-    maxWidthOrHeight: 1920,
-    useWebWorker: true,
-  });
+  try {
+    return await imageCompression(file, {
+      maxSizeMB: 0.5,
+      maxWidthOrHeight: 1920,
+      useWebWorker: true,
+    });
+  } catch (e) {
+    console.warn('Image compression failed, uploading original:', e);
+    return file; // never block the upload because compression failed
+  }
 }
 
 async function captureVideoFirstFrame(file: File): Promise<Blob> {
