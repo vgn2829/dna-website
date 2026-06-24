@@ -9,11 +9,16 @@ import imageCompression from 'browser-image-compression';
 async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith('image/')) return file;
   try {
-    return await imageCompression(file, {
+    const result = await imageCompression(file, {
       maxSizeMB: 0.5,
       maxWidthOrHeight: 1920,
       useWebWorker: true,
     });
+    // browser-image-compression returns a Blob with .name patched on, not a real File.
+    // FormData ignores a patched .name on a plain Blob and sends filename="blob",
+    // which the backend rejects as an unsupported extension. Re-wrap as a true File.
+    if (result instanceof File) return result;
+    return new File([result], file.name, { type: result.type || file.type });
   } catch (e) {
     console.warn('Image compression failed, uploading original:', e);
     return file; // never block the upload because compression failed
