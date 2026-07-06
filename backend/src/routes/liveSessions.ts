@@ -5,6 +5,7 @@ import { requireStudent, optionalStudent } from '../middleware/studentAuth';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import rateLimit from 'express-rate-limit';
+import jwt from 'jsonwebtoken';
 
 const router = Router();
 
@@ -33,11 +34,8 @@ async function requireCoordinator(req: Request, res: Response, next: NextFunctio
 
 function verifyPublicMeetToken(token: string): boolean {
   try {
-    const payload = JSON.parse(Buffer.from(token, 'base64').toString('utf8')) as {
-      type: string;
-      exp: number;
-    };
-    return payload.type === 'public_meet' && payload.exp > Date.now();
+    const payload = jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ['HS256'] }) as { typ?: string };
+    return payload.typ === 'public_meet';
   } catch {
     return false;
   }

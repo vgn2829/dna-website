@@ -436,10 +436,18 @@ export async function initSchema(): Promise<void> {
   const settingsCount = await pool.query('SELECT COUNT(*) FROM app_settings');
   if (parseInt((settingsCount.rows[0] as { count: string }).count) === 0) {
     const now = new Date().toISOString();
+    // Feature ships DISABLED with NO default passcode. It stays unusable until an
+    // admin explicitly sets one (via /settings) or PUBLIC_MEET_PASSCODE is provided.
     await pool.query(`
       INSERT INTO app_settings (key, value, updated_at)
-      VALUES ('public_meet_enabled', 'false', $1), ('public_meet_passcode', 'DNA2025', $1)
+      VALUES ('public_meet_enabled', 'false', $1)
     `, [now]);
+    if (process.env.PUBLIC_MEET_PASSCODE) {
+      await pool.query(`
+        INSERT INTO app_settings (key, value, updated_at)
+        VALUES ('public_meet_passcode', $2, $1)
+      `, [now, process.env.PUBLIC_MEET_PASSCODE]);
+    }
     console.log('App settings seeded');
   }
 
