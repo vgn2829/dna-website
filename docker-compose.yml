@@ -7,8 +7,10 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      JWT_SECRET: ${JWT_SECRET}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      # Fail closed: compose errors out if these secrets are not provided,
+      # rather than silently booting with a weak default.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
       DATA_DIR: /data
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
     volumes:
