@@ -89,6 +89,41 @@ async function sendInBatches(emails: string[], subject: string, html: string): P
   }
 }
 
+export async function sendOtpEmail(email: string, code: string): Promise<void> {
+  if (!process.env.RESEND_API_KEY) {
+    // In dev without email configured, surface the code in logs so the flow is testable.
+    console.log(`[DEV] OTP for ${email}: ${code}`);
+    return;
+  }
+
+  const content = `
+    <h2 style="margin:0 0 12px;font-size:22px;color:#ffffff;">Your verification code</h2>
+    <p style="margin:0 0 16px;color:#cccccc;font-size:15px;line-height:1.7;">
+      Use this code to sign in to DnA Club. It expires in 10 minutes.
+    </p>
+    <div style="font-size:32px;font-weight:700;letter-spacing:8px;color:#ffffff;
+      background:#1a1a1a;border-radius:8px;padding:16px 24px;text-align:center;">
+      ${code.replace(/[^0-9]/g, '')}
+    </div>
+    <p style="margin:16px 0 0;color:#777;font-size:13px;line-height:1.6;">
+      If you did not request this, you can ignore this email.
+    </p>`;
+
+  try {
+    await resend.emails.send({
+      from: 'DnA Club IITK <onboarding@resend.dev>',
+      replyTo: 'designandanimationclub.iitk@gmail.com',
+      to: email,
+      subject: 'Your DnA Club verification code',
+      html: getBaseTemplate(content),
+    });
+    console.log(`OTP email sent to ${email}`);
+  } catch (err) {
+    console.error('Failed to send OTP email:', err);
+    throw err;
+  }
+}
+
 export async function sendWelcomeEmail(name: string, email: string): Promise<void> {
   if (!process.env.RESEND_API_KEY) return;
 

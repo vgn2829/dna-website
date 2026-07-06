@@ -127,6 +127,21 @@ export async function initSchema(): Promise<void> {
     ADD COLUMN IF NOT EXISTS email TEXT DEFAULT NULL
   `);
 
+  // One-time email verification codes for student login (OTP).
+  // code_hash is a bcrypt hash; the plaintext code is never stored.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS student_otps (
+      roll_number TEXT NOT NULL,
+      email       TEXT NOT NULL,
+      code_hash   TEXT NOT NULL,
+      name        TEXT,
+      expires_at  TIMESTAMPTZ NOT NULL,
+      attempts    INT NOT NULL DEFAULT 0,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (roll_number)
+    )
+  `);
+
   await pool.query(`
 
     CREATE TABLE IF NOT EXISTS student_watched_videos (

@@ -104,10 +104,15 @@ export interface EmailTemplate {
 }
 
 const ADMIN_TOKEN_KEY = 'dna_admin_token';
+const STUDENT_TOKEN_KEY = 'dna_student_token';
 
 export function getAdminToken(): string | null  { return sessionStorage.getItem(ADMIN_TOKEN_KEY); }
 export function setAdminToken(token: string)    { sessionStorage.setItem(ADMIN_TOKEN_KEY, token); }
 export function clearAdminToken()               { sessionStorage.removeItem(ADMIN_TOKEN_KEY); }
+
+export function getStudentToken(): string | null { return localStorage.getItem(STUDENT_TOKEN_KEY); }
+export function setStudentToken(token: string)   { localStorage.setItem(STUDENT_TOKEN_KEY, token); }
+export function clearStudentToken()              { localStorage.removeItem(STUDENT_TOKEN_KEY); }
 
 async function request<T>(
   method: string,
@@ -115,8 +120,13 @@ async function request<T>(
   opts: { body?: unknown; roll?: string; admin?: boolean } = {}
 ): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (opts.roll)  headers['X-Roll-Number'] = opts.roll;
-  if (opts.admin) { const tok = getAdminToken(); if (tok) headers['Authorization'] = `Bearer ${tok}`; }
+  // Student identity travels as a signed JWT (Bearer), not a spoofable roll header.
+  // `roll` is retained by callers only to build resource paths.
+  if (opts.admin) {
+    const tok = getAdminToken(); if (tok) headers['Authorization'] = `Bearer ${tok}`;
+  } else if (opts.roll !== undefined) {
+    const tok = getStudentToken(); if (tok) headers['Authorization'] = `Bearer ${tok}`;
+  }
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers,
@@ -125,6 +135,7 @@ async function request<T>(
   if (res.status === 204) return undefined as T;
   const data = await res.json() as T | { error: unknown };
   if (res.status === 401 && opts.admin) { clearAdminToken(); throw new Error('SESSION_EXPIRED'); }
+  if (res.status === 401 && opts.roll !== undefined) { clearStudentToken(); throw new Error('SESSION_EXPIRED'); }
   if (!res.ok) throw new Error(String((data as { error: unknown }).error ?? res.statusText));
   return data as T;
 }
@@ -229,18 +240,18 @@ export const api = {
   students: {
     checkExists: (roll: string) =>
       request<{ exists: boolean; hasProfile: boolean }>('GET', `/students/${roll}/exists`),
-    loginExisting: (rollNumber: string) =>
+    // Step 1: request a 6-digit code by email. New users must pass name + email.
+    requestOtp: (rollNumber: string, opts?: { name?: string; email?: string }) =>
+      request<{ sent: boolean; isNew: boolean; email: string }>(
+        'POST', '/auth/student/request-otp', { body: { rollNumber, ...opts } }),
+    // Step 2: verify the code; on success the server returns a signed student JWT.
+    verifyOtp: (rollNumber: string, code: string) =>
       request<{
-        rollNumber: string;
-        uniqueId: string;
-        registeredAt: string;
-        name: string;
-        email: string;
-      }>('POST', '/students/sessions/login', { body: { rollNumber } }),
-    createSession: (rollNumber: string, name: string, email: string) =>
-      request<{ session: { rollNumber: string; uniqueId: string; registeredAt: string; name: string; email: string }; progress: { watchedVideos: string[]; completedQuizzes: string[] } }>('POST', '/students/sessions', { body: { rollNumber, name, email } }),
-    getStudentProfile: (roll: string) =>
-      request<{ rollNumber: string; name: string }>('GET', `/students/${roll}/profile`),
+        token: string;
+        isNew: boolean;
+        session: { rollNumber: string; uniqueId: string; registeredAt: string; name: string; email: string };
+        progress: { watchedVideos: string[]; completedQuizzes: string[] };
+      }>('POST', '/auth/student/verify-otp', { body: { rollNumber, code } }),
     markVideoWatched:   (roll: string, videoId: string) => request<void>('POST', `/students/${roll}/progress/videos/${videoId}`, { roll }),
     unmarkVideoWatched: (roll: string, videoId: string) => request<void>('DELETE', `/students/${roll}/progress/videos/${videoId}`, { roll }),
     completeQuiz:       (roll: string, domainId: string) => request<void>('POST', `/students/${roll}/progress/quizzes/${domainId}`, { roll }),
@@ -361,7 +372,7 @@ export const api = {
       request<{ success: boolean }>('DELETE', `/coordinators/${roll}`, { admin: true }),
 
     check: (roll: string) =>
-      request<{ canSchedule: boolean }>('GET', `/coordinators/check/${roll}`),
+      request<{ canSchedule: boolean }>('GET', '/coordinators/check', { roll }),
   },
   settings: {
     getPublic: () =>

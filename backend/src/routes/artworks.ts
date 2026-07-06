@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit';
 import sharp from 'sharp';
 import { pool, query } from '../db/client';
 import { requireAdmin } from '../middleware/adminAuth';
+import { requireStudent, optionalStudent } from '../middleware/studentAuth';
 import { getStorage } from '../storage';
 
 export const artworksRouter = Router();
@@ -81,8 +82,8 @@ function formatArtwork(row: ArtworkRow, likedByUser: boolean, comments: CommentR
   };
 }
 
-artworksRouter.get('/', async (req, res) => {
-  const roll = (req.headers['x-roll-number'] as string | undefined)?.trim().toUpperCase();
+artworksRouter.get('/', optionalStudent, async (req, res) => {
+  const roll = req.studentRoll;
   const rows = await query<ArtworkRow>('SELECT * FROM artworks ORDER BY created_at DESC');
   const allComments = await query<CommentRow & { artwork_id: string }>(
     'SELECT id, artwork_id, sender, text, created_at FROM artwork_comments ORDER BY created_at ASC'
@@ -281,9 +282,8 @@ artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount
   res.json(formatArtwork(rows[0], false, allComments));
 });
 
-artworksRouter.post('/:id/like', likeLimiter, async (req, res) => {
-  const roll = (req.headers['x-roll-number'] as string | undefined)?.trim().toUpperCase();
-  if (!roll) { res.status(401).json({ error: 'Roll number required' }); return; }
+artworksRouter.post('/:id/like', likeLimiter, requireStudent, async (req, res) => {
+  const roll = req.studentRoll!;
 
   const rows = await query<{ id: string; likes: number }>('SELECT id, likes FROM artworks WHERE id=$1', [req.params.id]);
   if (rows.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
@@ -318,10 +318,7 @@ const commentSchema = z.object({
   text:   z.string().min(1).max(1000),
 });
 
-artworksRouter.post('/:id/comments', commentLimiter, async (req, res) => {
-  const roll = (req.headers['x-roll-number'] as string | undefined)?.trim().toUpperCase();
-  if (!roll) { res.status(401).json({ error: 'Roll number required' }); return; }
-
+artworksRouter.post('/:id/comments', commentLimiter, requireStudent, async (req, res) => {
   const artwork = await query('SELECT 1 FROM artworks WHERE id=$1', [req.params.id]);
   if (artwork.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
 

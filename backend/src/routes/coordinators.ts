@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../db/client';
 import { requireAdmin } from '../middleware/adminAuth';
+import { requireStudent } from '../middleware/studentAuth';
 
 const router = Router();
 
@@ -111,8 +112,9 @@ router.delete('/:roll', requireAdmin, async (req, res) => {
   }
 });
 
-// GET /api/coordinators/check/:roll — public, no auth required
-router.get('/check/:roll', async (req, res) => {
+// GET /api/coordinators/check — returns whether the *authenticated* student is an
+// approved coordinator. Derives the roll from the verified token (no enumeration).
+router.get('/check', requireStudent, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT approved
@@ -120,7 +122,7 @@ router.get('/check/:roll', async (req, res) => {
       WHERE group_id = 'coordinators'
         AND roll_number = $1
         AND approved = true
-    `, [req.params.roll]);
+    `, [req.studentRoll!]);
 
     res.json({ canSchedule: result.rows.length > 0 });
   } catch (err) {

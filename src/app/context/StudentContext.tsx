@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { api } from '../lib/api';
+import { api, setStudentToken, clearStudentToken } from '../lib/api';
 
 export interface StudentSession {
   rollNumber: string;
@@ -20,7 +20,7 @@ interface StudentContextValue {
   isRollModalOpen: boolean;
   openRollModal: () => void;
   closeRollModal: () => void;
-  login: (rollNumber: string, uniqueId: string, registeredAt: string, name: string, email: string) => void;
+  login: (token: string, session: StudentSession, progress?: StudentProgress) => void;
   logout: () => void;
   markVideoWatched: (videoId: string) => void;
   unmarkVideoWatched: (videoId: string) => void;
@@ -64,19 +64,18 @@ export function StudentProvider({ children }: { children: React.ReactNode }) {
   const openRollModal  = useCallback(() => setIsRollModalOpen(true), []);
   const closeRollModal = useCallback(() => setIsRollModalOpen(false), []);
 
-  const login = useCallback((
-    rollNumber: string,
-    uniqueId: string,
-    registeredAt: string,
-    name: string,
-    email: string,
-  ): void => {
-    const session: StudentSession = { rollNumber, uniqueId, registeredAt, name, email };
+  const login = useCallback((token: string, session: StudentSession, progress?: StudentProgress): void => {
+    setStudentToken(token);
     setStudentSession(session);
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    if (progress) {
+      setStudentProgress(progress);
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+    }
   }, []);
 
   const logout = useCallback(() => {
+    clearStudentToken();
     setStudentSession(null);
     setStudentProgress(EMPTY_PROGRESS);
     localStorage.removeItem(SESSION_KEY);

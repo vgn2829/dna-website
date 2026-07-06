@@ -1,14 +1,24 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { pool } from '../db/client';
 import { requireAdmin } from '../middleware/adminAuth';
+import { requireStudent, optionalStudent } from '../middleware/studentAuth';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import rateLimit from 'express-rate-limit';
 
 const router = Router();
 
+const joinLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: 'Too many requests — please slow down' },
+});
+
+// Must be chained after requireStudent, which populates req.studentRoll from a
+// verified token. The coordinator identity therefore cannot be spoofed.
 async function requireCoordinator(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const roll = req.headers['x-roll-number'] as string | undefined;
-  if (!roll) { res.status(401).json({ error: 'Roll number required' }); return; }
+  const roll = req.studentRoll;
+  if (!roll) { res.status(401).json({ error: 'Sign in required' }); return; }
   try {
     const result = await pool.query(`
       SELECT 1 FROM audience_group_members
@@ -44,9 +54,9 @@ const sessionSchema = z.object({
 
 // ── Static paths first (must be before /:id routes) ──────────────────────────
 
-router.get('/active', async (req, res) => {
+router.get('/active', optionalStudent, async (req, res) => {
   try {
-    const roll = req.headers['x-roll-number'] as string | undefined;
+    const roll = req.studentRoll;
 
     const result = await pool.query(`
       SELECT
@@ -203,7 +213,7 @@ router.delete('/public/:id', async (req, res) => {
   }
 });
 
-router.post('/coordinator', requireCoordinator, async (req, res) => {
+router.post('/coordinator', requireStudent, requireCoordinator, async (req, res) => {
   try {
     const parsed = sessionSchema.parse(req.body);
     const id = uuidv4();
@@ -231,7 +241,7 @@ router.post('/coordinator', requireCoordinator, async (req, res) => {
   }
 });
 
-router.delete('/coordinator/:id', requireCoordinator, async (req, res) => {
+router.delete('/coordinator/:id', requireStudent, requireCoordinator, async (req, res) => {
   try {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const result = await pool.query(
@@ -248,7 +258,7 @@ router.delete('/coordinator/:id', requireCoordinator, async (req, res) => {
   }
 });
 
-router.put('/coordinator/:id/status', requireCoordinator, async (req, res) => {
+router.put('/coordinator/:id/status', requireStudent, requireCoordinator, async (req, res) => {
   try {
     const { status } = req.body as { status?: string };
 
@@ -345,12 +355,9 @@ router.post('/', requireAdmin, async (req, res) => {
   }
 });
 
-router.post('/:id/join', async (req, res) => {
+router.post('/:id/join', requireStudent, joinLimiter, async (req, res) => {
   try {
-    const roll = req.headers['x-roll-number'] as string;
-    if (!roll) {
-      return res.status(401).json({ error: 'Roll number required' });
-    }
+    const roll = req.studentRoll!;
 
     const sessionCheck = await pool.query(
       `SELECT id, title, status FROM live_sessions WHERE id = $1`,
