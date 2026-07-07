@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import { api, setStudentToken, clearStudentToken } from '../lib/api';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { api, setStudentToken, clearStudentToken, getStudentToken } from '../lib/api';
 
 export interface StudentSession {
   rollNumber: string;
@@ -20,6 +20,8 @@ interface StudentContextValue {
   isRollModalOpen: boolean;
   openRollModal: () => void;
   closeRollModal: () => void;
+  needsReverify: boolean;
+  clearReverifyNotice: () => void;
   login: (token: string, session: StudentSession, progress?: StudentProgress) => void;
   logout: () => void;
   markVideoWatched: (videoId: string) => void;
@@ -54,6 +56,8 @@ export function StudentProvider({ children }: { children: React.ReactNode }) {
   const [studentSession, setStudentSession] = useState<StudentSession | null>(loadSession);
   const [studentProgress, setStudentProgress] = useState<StudentProgress>(loadProgress);
   const [isRollModalOpen, setIsRollModalOpen] = useState(false);
+  const [needsReverify, setNeedsReverify] = useState(false);
+  const clearReverifyNotice = useCallback(() => setNeedsReverify(false), []);
 
   const persist = (session: StudentSession | null, progress: StudentProgress) => {
     if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -80,6 +84,20 @@ export function StudentProvider({ children }: { children: React.ReactNode }) {
     setStudentProgress(EMPTY_PROGRESS);
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(PROGRESS_KEY);
+  }, []);
+
+  // Sessions created before token-based auth have a stored profile but no JWT.
+  // Rather than let every student-scoped write silently 401, clear the stale
+  // session on load so the UI shows the sign-in prompt and the user re-verifies
+  // via OTP (which restores their existing profile + progress from the server).
+  useEffect(() => {
+    if (studentSession && !getStudentToken()) {
+      logout();
+      setNeedsReverify(true);
+      setIsRollModalOpen(true);
+    }
+    // Run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const markVideoWatched = useCallback((videoId: string) => {
@@ -123,7 +141,7 @@ export function StudentProvider({ children }: { children: React.ReactNode }) {
   return (
     <StudentContext.Provider value={{
       studentSession, studentProgress, isRollModalOpen,
-      openRollModal, closeRollModal, login, logout,
+      openRollModal, closeRollModal, needsReverify, clearReverifyNotice, login, logout,
       markVideoWatched, unmarkVideoWatched, completeQuiz, totalXP,
     }}>
       {children}

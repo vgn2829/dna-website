@@ -6,7 +6,7 @@ import { useStudent, hasSeenWelcome, markWelcomeSeen } from '../context/StudentC
 import WelcomeOverlay from './WelcomeOverlay';
 
 export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => void }) {
-  const { isRollModalOpen, closeRollModal, login } = useStudent();
+  const { isRollModalOpen, closeRollModal, login, needsReverify, clearReverifyNotice } = useStudent();
 
   type ModalStep = 'roll' | 'profile' | 'otp';
   const [step, setStep] = useState<ModalStep>('roll');
@@ -89,6 +89,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
     try {
       const data = await api.students.verifyOtp(roll.trim(), code);
       login(data.token, data.session, data.progress);
+      clearReverifyNotice();
       onSuccess?.(data.session.uniqueId);
       if (data.isNew) {
         setNewUserName(data.session.name);
@@ -110,6 +111,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
 
   const handleClose = () => {
     resetAll();
+    clearReverifyNotice();
     closeRollModal();
   };
 
@@ -180,6 +182,20 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                       <X size={15} />
                     </button>
                   </div>
+
+                  {needsReverify && (
+                    <div style={{
+                      marginBottom: 16, padding: '10px 14px',
+                      background: 'rgba(233,30,140,0.08)',
+                      border: '1px solid rgba(233,30,140,0.25)',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: 12.5, lineHeight: 1.5,
+                      color: 'var(--color-ink)', fontFamily: 'var(--font-body)',
+                    }}>
+                      We've upgraded sign-in security. Please verify your identity again — your
+                      profile and progress are safe and will be restored.
+                    </div>
+                  )}
 
                   <AnimatePresence mode="wait">
                     {step === 'roll' && (
