@@ -9,31 +9,8 @@ export async function initSchema(): Promise<void> {
     )
   `);
 
-  // Migration: add sequence column + back-fill by insertion order per domain.
-  // ALTER TABLE … ADD COLUMN IF NOT EXISTS is idempotent on re-runs.
-  // The WHERE sequence = 0 guard makes the UPDATE idempotent too.
-  await pool.query(`
-    ALTER TABLE artworks ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT false;
-  `);
-
-  await pool.query(`
-    ALTER TABLE artworks
-    ADD COLUMN IF NOT EXISTS cover_url TEXT DEFAULT NULL
-  `);
-
-  await pool.query(`
-    ALTER TABLE videos ADD COLUMN IF NOT EXISTS sequence INTEGER NOT NULL DEFAULT 0;
-
-    UPDATE videos v
-    SET sequence = sub.rn
-    FROM (
-      SELECT id,
-             ROW_NUMBER() OVER (PARTITION BY domain_id ORDER BY created_at ASC) AS rn
-      FROM videos
-    ) sub
-    WHERE v.id = sub.id AND v.sequence = 0;
-  `);
-
+  // All base tables are created first (below); ALTER TABLE migrations that
+  // reference them run afterwards, so a fresh/empty database bootstraps cleanly.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS admin_config (
       key   TEXT PRIMARY KEY,
@@ -123,6 +100,32 @@ export async function initSchema(): Promise<void> {
       unique_id     TEXT NOT NULL,
       registered_at TEXT NOT NULL
     );
+  `);
+
+  // Column migrations on the tables created above.
+  // ALTER TABLE … ADD COLUMN IF NOT EXISTS is idempotent on re-runs.
+  await pool.query(`
+    ALTER TABLE artworks ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT false;
+  `);
+
+  await pool.query(`
+    ALTER TABLE artworks
+    ADD COLUMN IF NOT EXISTS cover_url TEXT DEFAULT NULL
+  `);
+
+  // Add sequence column + back-fill by insertion order per domain.
+  // The WHERE sequence = 0 guard makes the UPDATE idempotent too.
+  await pool.query(`
+    ALTER TABLE videos ADD COLUMN IF NOT EXISTS sequence INTEGER NOT NULL DEFAULT 0;
+
+    UPDATE videos v
+    SET sequence = sub.rn
+    FROM (
+      SELECT id,
+             ROW_NUMBER() OVER (PARTITION BY domain_id ORDER BY created_at ASC) AS rn
+      FROM videos
+    ) sub
+    WHERE v.id = sub.id AND v.sequence = 0;
   `);
 
   await pool.query(`
