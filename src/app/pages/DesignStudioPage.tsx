@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useLocation } from "react-router";
+import { useLocation, useSearchParams } from "react-router";
 import PaletteStudio from "../components/PaletteStudio";
 import { HalftoneStudio } from "../components/HalftoneStudio";
 import { SvgConverter } from "../components/SvgConverter";
@@ -1204,9 +1204,29 @@ const SUBTITLES: Record<string,string> = {
 // ── Shell ─────────────────────────────────────────────────────────────────────
 export default function DesignStudio() {
   const location = useLocation();
-  const [active, setActive] = useState(
-    (location.state as { tab?: string } | null)?.tab ?? 'palette'
-  );
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const isValidTab = (id: string | null | undefined): id is string =>
+    !!id && TOOLS.some(t => t.id === id);
+
+  // The URL query param is the source of truth for the active tab, so a refresh
+  // or shared /design-studio?tab=grid link opens the right tool.
+  const queryTab = searchParams.get('tab');
+  const active = isValidTab(queryTab) ? queryTab : 'palette';
+
+  const setActive = (id: string) => setSearchParams({ tab: id }, { replace: true });
+
+  // DeepLinks via navigate('/design-studio', { state: { tab } }) still work —
+  // on first load, promote a valid location.state tab into the query param.
+  const stateTab = (location.state as { tab?: string } | null)?.tab;
+  useEffect(() => {
+    if (isValidTab(stateTab) && stateTab !== queryTab) {
+      setSearchParams({ tab: stateTab }, { replace: true });
+    }
+    // Run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const Tool = TOOLS.find(t => t.id === active)!.comp;
   return (
     <div style={{minHeight:"100vh",background:T.canvas,fontFamily:"var(--font-body)",color:T.ink,paddingTop:"56px"}}>
