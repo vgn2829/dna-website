@@ -257,6 +257,12 @@ export const api = {
       }>('POST', '/auth/student/verify-otp', { body: { rollNumber, code } }),
     markVideoWatched:   (roll: string, videoId: string) => request<void>('POST', `/students/${roll}/progress/videos/${videoId}`, { roll }),
     unmarkVideoWatched: (roll: string, videoId: string) => request<void>('DELETE', `/students/${roll}/progress/videos/${videoId}`, { roll }),
+    // Email change (OTP-gated, sent to the NEW address). `roll` is passed only so
+    // the student JWT is attached; the server derives identity from the token.
+    requestEmailChange: (roll: string, email: string) =>
+      request<{ sent: boolean; email: string }>('POST', '/auth/student/change-email/request', { body: { email }, roll }),
+    verifyEmailChange: (roll: string, code: string) =>
+      request<{ success: boolean; email: string }>('POST', '/auth/student/change-email/verify', { body: { code }, roll }),
   },
   boards: {
     getMyBoards: (roll: string) =>

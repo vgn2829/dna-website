@@ -24,6 +24,7 @@ interface StudentContextValue {
   clearReverifyNotice: () => void;
   login: (token: string, session: StudentSession, progress?: StudentProgress) => void;
   logout: () => void;
+  updateEmail: (email: string) => void;
   markVideoWatched: (videoId: string) => void;
   unmarkVideoWatched: (videoId: string) => void;
   completeQuiz: (domainId: string) => void;
@@ -86,6 +87,16 @@ export function StudentProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(PROGRESS_KEY);
   }, []);
 
+  // Reflect a server-confirmed email change in local session state.
+  const updateEmail = useCallback((email: string) => {
+    setStudentSession(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, email };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   // Sessions created before token-based auth have a stored profile but no JWT.
   // Rather than let every student-scoped write silently 401, clear the stale
   // session on load so the UI shows the sign-in prompt and the user re-verifies
@@ -141,7 +152,7 @@ export function StudentProvider({ children }: { children: React.ReactNode }) {
   return (
     <StudentContext.Provider value={{
       studentSession, studentProgress, isRollModalOpen,
-      openRollModal, closeRollModal, needsReverify, clearReverifyNotice, login, logout,
+      openRollModal, closeRollModal, needsReverify, clearReverifyNotice, login, logout, updateEmail,
       markVideoWatched, unmarkVideoWatched, completeQuiz, totalXP,
     }}>
       {children}
