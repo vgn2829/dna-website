@@ -1,6 +1,14 @@
 import { pool } from './client';
 
 export async function initSchema(): Promise<void> {
+  // Tracks one-time migrations so destructive/backfill steps can't silently re-run.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      key        TEXT PRIMARY KEY,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   // Migration: add sequence column + back-fill by insertion order per domain.
   // ALTER TABLE … ADD COLUMN IF NOT EXISTS is idempotent on re-runs.
   // The WHERE sequence = 0 guard makes the UPDATE idempotent too.
@@ -172,13 +180,20 @@ export async function initSchema(): Promise<void> {
     );
   `);
 
-  // Clear old sessions that are missing email (pre-registration-form era)
-  const hasOldEntries = await pool.query(
-    `SELECT COUNT(*) FROM student_sessions WHERE email IS NULL`
+  // One-time cleanup of pre-registration-form sessions (missing email/name).
+  // Guarded by schema_migrations so it runs at most once and only removes the
+  // incomplete rows — it can no longer wipe the whole table on every boot.
+  const clearMigration = 'clear_pre_email_sessions_v1';
+  const alreadyCleared = await pool.query(
+    'SELECT 1 FROM schema_migrations WHERE key = $1', [clearMigration]
   );
-  if (parseInt((hasOldEntries.rows[0] as { count: string }).count) > 0) {
-    await pool.query(`DELETE FROM student_sessions`);
-    console.log('Cleared old student_sessions (missing email/name)');
+  if (alreadyCleared.rows.length === 0) {
+    await pool.query(`DELETE FROM student_sessions WHERE email IS NULL OR name IS NULL`);
+    await pool.query(
+      'INSERT INTO schema_migrations (key) VALUES ($1) ON CONFLICT DO NOTHING',
+      [clearMigration]
+    );
+    console.log('Migration applied: cleared pre-email student_sessions');
   }
 
   await pool.query(`
