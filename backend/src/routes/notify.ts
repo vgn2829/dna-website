@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAdmin } from '../middleware/adminAuth';
-import { sendEventNotification, sendArtworkNotification, sendCustomAnnouncement } from '../services/mailer';
+import { sendEventNotification, sendArtworkNotification, sendCustomAnnouncement, MAIL_FROM } from '../services/mailer';
 import { pool } from '../db/client';
 
 const router = Router();
@@ -33,7 +33,7 @@ router.get('/test-email', requireAdmin, async (req, res) => {
     const resend = new Resend(process.env.RESEND_API_KEY);
 
     const result = await resend.emails.send({
-      from: 'DnA Club IITK <onboarding@resend.dev>',
+      from: MAIL_FROM,
       to: 'designandanimationclub.iitk@gmail.com',
       subject: 'DnA Club — Email Test',
       html: '<p>Email is working correctly via Resend.</p>',
