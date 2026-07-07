@@ -16,6 +16,14 @@ if (hasSupabaseUrl !== hasSupabaseKey) {
   process.exit(1);
 }
 
+// Student login depends on email OTP delivery. Without RESEND_API_KEY the mailer
+// falls back to logging codes to the console — fine for dev, unacceptable in
+// production — so refuse to boot rather than silently ship that fallback.
+if (process.env.NODE_ENV === 'production' && !process.env.RESEND_API_KEY) {
+  console.error('FATAL: RESEND_API_KEY is required in production (OTP email delivery). Refusing to start.');
+  process.exit(1);
+}
+
 import { pool, query } from './db/client';
 import { initSchema } from './db/schema';
 import bcrypt from 'bcryptjs';
