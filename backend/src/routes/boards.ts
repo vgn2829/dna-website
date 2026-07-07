@@ -55,6 +55,22 @@ async function isMember(boardId: string, roll: string): Promise<boolean> {
   return result.rows.length > 0;
 }
 
+// Write access honours edit_mode: owner and members can always edit; when a board
+// is shared with edit_mode='anyone', any signed-in student may edit too.
+async function canEdit(boardId: string, roll: string): Promise<boolean> {
+  const board = await pool.query(
+    'SELECT owner_roll, visibility, edit_mode FROM boards WHERE id = $1', [boardId]
+  );
+  if (board.rows.length === 0) return false;
+  const b = board.rows[0] as { owner_roll: string; visibility: string; edit_mode: string };
+  if (b.owner_roll === roll) return true;
+  if (b.edit_mode === 'anyone' && b.visibility === 'shared') return true;
+  const mem = await pool.query(
+    'SELECT 1 FROM board_members WHERE board_id = $1 AND roll_number = $2', [boardId, roll]
+  );
+  return mem.rows.length > 0;
+}
+
 // GET /api/boards
 // Returns boards owned by or shared with this student
 router.get('/', requireStudent, async (req: Request, res: Response) => {
@@ -187,7 +203,7 @@ router.put('/admin/:id', requireAdmin, async (req: Request, res: Response) => {
     res.json(result.rows[0]);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: 'Invalid request' });
     }
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -199,7 +215,7 @@ router.put('/:id/canvas', requireStudent, async (req: Request, res: Response) =>
   try {
     const roll = req.studentRoll!;
 
-    const access = await isMember(req.params.id, roll);
+    const access = await canEdit(req.params.id, roll);
     if (!access) {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -352,7 +368,7 @@ router.post('/', createBoardLimiter, requireStudent, async (req: Request, res: R
     res.status(201).json(result.rows[0]);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: 'Invalid request' });
     }
     console.error('Create board error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -491,7 +507,7 @@ router.post('/:id/items', requireStudent, async (req: Request, res: Response) =>
   try {
     const roll = req.studentRoll!;
 
-    const access = await isMember(req.params.id, roll);
+    const access = await canEdit(req.params.id, roll);
     if (!access) {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -542,7 +558,7 @@ router.post('/:id/items', requireStudent, async (req: Request, res: Response) =>
     res.status(201).json(result.rows[0]);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: 'Invalid request' });
     }
     console.error('Add item error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -636,7 +652,7 @@ router.post('/:id/canvas-files', requireStudent, upload.single('file'), async (r
       return res.status(400).json({ error: 'Invalid board id' });
     }
 
-    const access = await isMember(req.params.id, roll);
+    const access = await canEdit(req.params.id, roll);
     if (!access) {
       return res.status(403).json({ error: 'Access denied' });
     }
