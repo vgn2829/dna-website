@@ -142,7 +142,7 @@ export function SvgConverter() {
                 {isProcessing ? (
                   <Loader2 size={26} className="animate-spin" style={{ color: 'var(--color-ink-muted)' }} />
                 ) : svgData ? (
-                  <div dangerouslySetInnerHTML={{ __html: svgData }} style={{ maxWidth: '100%', maxHeight: 440, overflow: 'hidden' }} />
+                  <div className="svg-output-preview" dangerouslySetInnerHTML={{ __html: svgData }} />
                 ) : (
                   <span style={{ color: 'var(--color-ink-muted)', fontSize: 13, fontFamily: 'var(--font-body)' }}>No output yet</span>
                 )}
