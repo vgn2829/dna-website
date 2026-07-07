@@ -67,7 +67,7 @@ const memberSchema = z.object({
 
 teamRouter.post('/', requireAdmin, photoUpload.single('photo'), async (req, res) => {
   const parsed = memberSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   let photoPath: string | null = null;
   if (req.file) {
@@ -101,7 +101,7 @@ teamRouter.put('/:id', requireAdmin, photoUpload.single('photo'), async (req, re
   if (existing.length === 0) { res.status(404).json({ error: 'Member not found' }); return; }
 
   const parsed = memberSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   const oldPhotoPath = existing[0].photo_path;
   let newPhotoPath: string | null = null;

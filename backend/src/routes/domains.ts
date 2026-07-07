@@ -95,7 +95,7 @@ const domainCreateSchema = z.object({
 
 domainsRouter.post('/', requireAdmin, async (req, res) => {
   const parsed = domainCreateSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   const { title, fullName, icon, tagline, description, color } = parsed.data;
   const id = await uniqueSlug(slugify(title));
@@ -124,7 +124,7 @@ domainsRouter.put('/:id', requireAdmin, async (req, res) => {
   if (existing.length === 0) { res.status(404).json({ error: 'Domain not found' }); return; }
 
   const parsed = domainUpdateSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   const sets: string[] = [];
   const vals: unknown[] = [];
@@ -172,7 +172,7 @@ domainsRouter.post('/:id/videos', requireAdmin, async (req, res) => {
   if (domain.length === 0) { res.status(404).json({ error: 'Domain not found' }); return; }
 
   const parsed = videoSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   const ytId = normalizeYouTubeId(parsed.data.ytUrl);
   if (!ytId) { res.status(400).json({ error: 'Invalid YouTube URL or ID' }); return; }
@@ -219,7 +219,7 @@ domainsRouter.put('/:id/videos/:videoId', requireAdmin, async (req, res) => {
   if (existing.length === 0) { res.status(404).json({ error: 'Video not found' }); return; }
 
   const parsed = videoUpdateSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   const sets: string[] = [];
   const vals: unknown[] = [];
@@ -247,7 +247,7 @@ const seqPatchSchema = z.object({ sequence: z.coerce.number().int().min(1) });
 
 domainsRouter.patch('/:id/videos/:videoId', requireAdmin, async (req, res) => {
   const parsed = seqPatchSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   const result = await pool.query(
     'UPDATE videos SET sequence=$1 WHERE id=$2 AND domain_id=$3 RETURNING *',

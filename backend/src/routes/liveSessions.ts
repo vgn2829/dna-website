@@ -190,7 +190,7 @@ router.post('/public', async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: 'Invalid request' });
     }
     console.error('Public create session error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -239,7 +239,7 @@ router.post('/coordinator', requireStudent, requireCoordinator, async (req, res)
     res.status(201).json(result.rows[0]);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: 'Invalid request' });
     }
     console.error('Coordinator create session error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -353,7 +353,7 @@ router.post('/', requireAdmin, async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: 'Invalid request' });
     }
     console.error('Create session error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -458,7 +458,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
     res.json(result.rows[0]);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: 'Invalid request' });
     }
     res.status(500).json({ error: 'Internal server error' });
   }

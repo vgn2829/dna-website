@@ -46,7 +46,7 @@ const createSchema = z.object({
 
 eventsRouter.post('/', requireAdmin, async (req, res) => {
   const parsed = createSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   const { title, date, time, location, content, capacity } = parsed.data;
   const id = `evt-${uuidv4().slice(0, 8)}`;
@@ -69,7 +69,18 @@ const updateSchema = z.object({
 
 eventsRouter.put('/:id', requireAdmin, optionalStudent, async (req, res) => {
   const parsed = updateSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
+
+  // Don't let capacity drop below the number of people already registered.
+  if (parsed.data.capacity !== undefined) {
+    const cur = await query<{ registered_count: number }>(
+      'SELECT registered_count FROM events WHERE id=$1', [req.params.id]
+    );
+    if (cur.length && parsed.data.capacity < cur[0].registered_count) {
+      res.status(409).json({ error: `Capacity cannot be below current registrations (${cur[0].registered_count})` });
+      return;
+    }
+  }
 
   const sets: string[] = [];
   const vals: unknown[] = [];

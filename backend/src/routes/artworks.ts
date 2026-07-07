@@ -221,7 +221,7 @@ artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount
     featured: z.enum(['true', 'false']).optional(),
   });
   const parsedBody = putBodySchema.safeParse(req.body);
-  if (!parsedBody.success) { res.status(400).json({ error: parsedBody.error.flatten() }); return; }
+  if (!parsedBody.success) { res.status(400).json({ error: 'Invalid request' }); return; }
   const { title, artist, domain, featured: featuredStr } = parsedBody.data;
 
   const sets: string[] = [];
@@ -338,7 +338,7 @@ artworksRouter.post('/:id/comments', commentLimiter, requireStudent, async (req,
   if (artwork.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
 
   const parsed = commentSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   const id = `c-${uuidv4().slice(0, 8)}`;
   await query('INSERT INTO artwork_comments(id,artwork_id,sender,text) VALUES($1,$2,$3,$4)',

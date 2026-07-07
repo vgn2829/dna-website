@@ -62,7 +62,7 @@ router.put('/', requireAdmin, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: 'Invalid request' });
     }
     console.error('Update settings error:', err);
     res.status(500).json({ error: 'Internal server error' });
