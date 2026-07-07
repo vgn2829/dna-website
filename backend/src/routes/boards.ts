@@ -3,10 +3,18 @@ import { pool } from '../db/client';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { requireAdmin } from '../middleware/adminAuth';
+import { requireStudent, optionalStudent } from '../middleware/studentAuth';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import { getStorage } from '../storage';
 
 const router = Router();
+
+const createBoardLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  message: { error: 'Too many boards created — please slow down' },
+});
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -47,14 +55,27 @@ async function isMember(boardId: string, roll: string): Promise<boolean> {
   return result.rows.length > 0;
 }
 
+// Write access honours edit_mode: owner and members can always edit; when a board
+// is shared with edit_mode='anyone', any signed-in student may edit too.
+async function canEdit(boardId: string, roll: string): Promise<boolean> {
+  const board = await pool.query(
+    'SELECT owner_roll, visibility, edit_mode FROM boards WHERE id = $1', [boardId]
+  );
+  if (board.rows.length === 0) return false;
+  const b = board.rows[0] as { owner_roll: string; visibility: string; edit_mode: string };
+  if (b.owner_roll === roll) return true;
+  if (b.edit_mode === 'anyone' && b.visibility === 'shared') return true;
+  const mem = await pool.query(
+    'SELECT 1 FROM board_members WHERE board_id = $1 AND roll_number = $2', [boardId, roll]
+  );
+  return mem.rows.length > 0;
+}
+
 // GET /api/boards
 // Returns boards owned by or shared with this student
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', requireStudent, async (req: Request, res: Response) => {
   try {
-    const roll = req.headers['x-roll-number'] as string;
-    if (!roll) {
-      return res.status(401).json({ error: 'Roll number required' });
-    }
+    const roll = req.studentRoll!;
 
     const result = await pool.query(`
       SELECT DISTINCT
@@ -182,7 +203,7 @@ router.put('/admin/:id', requireAdmin, async (req: Request, res: Response) => {
     res.json(result.rows[0]);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: 'Invalid request' });
     }
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -190,14 +211,11 @@ router.put('/admin/:id', requireAdmin, async (req: Request, res: Response) => {
 
 // PUT /api/boards/:id/canvas
 // Save Excalidraw canvas state (owner + members)
-router.put('/:id/canvas', async (req: Request, res: Response) => {
+router.put('/:id/canvas', requireStudent, async (req: Request, res: Response) => {
   try {
-    const roll = req.headers['x-roll-number'] as string;
-    if (!roll) {
-      return res.status(401).json({ error: 'Roll number required' });
-    }
+    const roll = req.studentRoll!;
 
-    const access = await isMember(req.params.id, roll);
+    const access = await canEdit(req.params.id, roll);
     if (!access) {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -228,9 +246,9 @@ router.put('/:id/canvas', async (req: Request, res: Response) => {
 
 // GET /api/boards/:id/canvas
 // Load Excalidraw canvas state
-router.get('/:id/canvas', async (req: Request, res: Response) => {
+router.get('/:id/canvas', optionalStudent, async (req: Request, res: Response) => {
   try {
-    const roll = req.headers['x-roll-number'] as string;
+    const roll = req.studentRoll;
 
     const boardResult = await pool.query(
       'SELECT visibility, canvas_data FROM boards WHERE id = $1',
@@ -262,9 +280,9 @@ router.get('/:id/canvas', async (req: Request, res: Response) => {
 
 // GET /api/boards/:id
 // Returns board with items and members
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', optionalStudent, async (req: Request, res: Response) => {
   try {
-    const roll = req.headers['x-roll-number'] as string;
+    const roll = req.studentRoll;
 
     const boardResult = await pool.query(
       'SELECT * FROM boards WHERE id = $1',
@@ -314,12 +332,9 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 // POST /api/boards
 // Create a new board
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', createBoardLimiter, requireStudent, async (req: Request, res: Response) => {
   try {
-    const roll = req.headers['x-roll-number'] as string;
-    if (!roll) {
-      return res.status(401).json({ error: 'Roll number required' });
-    }
+    const roll = req.studentRoll!;
 
     const schema = z.object({
       name: z.string().min(1).max(100),
@@ -353,7 +368,7 @@ router.post('/', async (req: Request, res: Response) => {
     res.status(201).json(result.rows[0]);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: 'Invalid request' });
     }
     console.error('Create board error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -362,12 +377,9 @@ router.post('/', async (req: Request, res: Response) => {
 
 // PUT /api/boards/:id
 // Update board name/description/visibility (owner only)
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', requireStudent, async (req: Request, res: Response) => {
   try {
-    const roll = req.headers['x-roll-number'] as string;
-    if (!roll) {
-      return res.status(401).json({ error: 'Roll number required' });
-    }
+    const roll = req.studentRoll!;
 
     const owner = await isOwner(req.params.id, roll);
     if (!owner) {
@@ -409,12 +421,9 @@ router.put('/:id', async (req: Request, res: Response) => {
 
 // DELETE /api/boards/:id
 // Delete board (owner only)
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireStudent, async (req: Request, res: Response) => {
   try {
-    const roll = req.headers['x-roll-number'] as string;
-    if (!roll) {
-      return res.status(401).json({ error: 'Roll number required' });
-    }
+    const roll = req.studentRoll!;
 
     const owner = await isOwner(req.params.id, roll);
     if (!owner) {
@@ -430,12 +439,9 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
 // POST /api/boards/:id/members
 // Add collaborator by roll number (owner only)
-router.post('/:id/members', async (req: Request, res: Response) => {
+router.post('/:id/members', requireStudent, async (req: Request, res: Response) => {
   try {
-    const roll = req.headers['x-roll-number'] as string;
-    if (!roll) {
-      return res.status(401).json({ error: 'Roll number required' });
-    }
+    const roll = req.studentRoll!;
 
     const owner = await isOwner(req.params.id, roll);
     if (!owner) {
@@ -475,12 +481,9 @@ router.post('/:id/members', async (req: Request, res: Response) => {
 
 // DELETE /api/boards/:id/members/:roll
 // Remove collaborator (owner only)
-router.delete('/:id/members/:roll', async (req: Request, res: Response) => {
+router.delete('/:id/members/:roll', requireStudent, async (req: Request, res: Response) => {
   try {
-    const roll = req.headers['x-roll-number'] as string;
-    if (!roll) {
-      return res.status(401).json({ error: 'Roll number required' });
-    }
+    const roll = req.studentRoll!;
 
     const owner = await isOwner(req.params.id, roll);
     if (!owner) {
@@ -500,22 +503,29 @@ router.delete('/:id/members/:roll', async (req: Request, res: Response) => {
 
 // POST /api/boards/:id/items
 // Add item to board (owner + members)
-router.post('/:id/items', async (req: Request, res: Response) => {
+router.post('/:id/items', requireStudent, async (req: Request, res: Response) => {
   try {
-    const roll = req.headers['x-roll-number'] as string;
-    if (!roll) {
-      return res.status(401).json({ error: 'Roll number required' });
-    }
+    const roll = req.studentRoll!;
 
-    const access = await isMember(req.params.id, roll);
+    const access = await canEdit(req.params.id, roll);
     if (!access) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
+    // Only allow http(s) (and inline data:image/ for pasted images) so stored
+    // URLs can't become javascript:/other-scheme sinks when rendered.
+    const safeUrl = (allowDataImage: boolean) => z.string().min(1).max(2_000_000).refine(u => {
+      if (allowDataImage && /^data:image\//i.test(u)) return true;
+      try {
+        const proto = new URL(u).protocol;
+        return proto === 'https:' || proto === 'http:';
+      } catch { return false; }
+    }, 'URL must be http(s) or a data:image');
+
     const schema = z.object({
-      image_url: z.string().min(1),
+      image_url: safeUrl(true),
       note: z.string().max(500).optional(),
-      source_url: z.string().optional(),
+      source_url: safeUrl(false).optional(),
     });
 
     const parsed = schema.parse(req.body);
@@ -548,7 +558,7 @@ router.post('/:id/items', async (req: Request, res: Response) => {
     res.status(201).json(result.rows[0]);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: 'Invalid request' });
     }
     console.error('Add item error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -557,12 +567,9 @@ router.post('/:id/items', async (req: Request, res: Response) => {
 
 // DELETE /api/boards/:id/items/:itemId
 // Delete item (item owner or board owner)
-router.delete('/:id/items/:itemId', async (req: Request, res: Response) => {
+router.delete('/:id/items/:itemId', requireStudent, async (req: Request, res: Response) => {
   try {
-    const roll = req.headers['x-roll-number'] as string;
-    if (!roll) {
-      return res.status(401).json({ error: 'Roll number required' });
-    }
+    const roll = req.studentRoll!;
 
     const itemResult = await pool.query(
       'SELECT * FROM board_items WHERE id = $1 AND board_id = $2',
@@ -590,9 +597,9 @@ router.delete('/:id/items/:itemId', async (req: Request, res: Response) => {
 
 // GET /api/boards/:id/items
 // Get only items (for polling)
-router.get('/:id/items', async (req: Request, res: Response) => {
+router.get('/:id/items', optionalStudent, async (req: Request, res: Response) => {
   try {
-    const roll = req.headers['x-roll-number'] as string;
+    const roll = req.studentRoll;
 
     const boardResult = await pool.query(
       'SELECT * FROM boards WHERE id = $1',
@@ -625,14 +632,27 @@ router.get('/:id/items', async (req: Request, res: Response) => {
 
 // POST /api/boards/:id/canvas-files
 // Upload a canvas image file to storage; returns the public URL
-router.post('/:id/canvas-files', upload.single('file'), async (req: Request, res: Response) => {
+// Extensions are derived from a validated content-type allowlist, never from the
+// raw client MIME string, so they can't be used to smuggle path characters.
+const CANVAS_MIME_EXT: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/svg+xml': 'svg',
+};
+const UUID_RE = /^[0-9a-fA-F-]{36}$/;
+const FILE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+router.post('/:id/canvas-files', requireStudent, upload.single('file'), async (req: Request, res: Response) => {
   try {
-    const roll = req.headers['x-roll-number'] as string;
-    if (!roll) {
-      return res.status(401).json({ error: 'Roll number required' });
+    const roll = req.studentRoll!;
+
+    if (!UUID_RE.test(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid board id' });
     }
 
-    const access = await isMember(req.params.id, roll);
+    const access = await canEdit(req.params.id, roll);
     if (!access) {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -641,8 +661,17 @@ router.post('/:id/canvas-files', upload.single('file'), async (req: Request, res
       return res.status(400).json({ error: 'No file provided' });
     }
 
-    const fileId = (req.body.fileId as string | undefined) ?? `canvas_${Date.now()}`;
-    const ext = req.file.mimetype.split('/')[1] ?? 'png';
+    const ext = CANVAS_MIME_EXT[req.file.mimetype];
+    if (!ext) {
+      return res.status(400).json({ error: 'Unsupported file type' });
+    }
+
+    const rawFileId = (req.body.fileId as string | undefined) ?? `canvas_${Date.now()}`;
+    if (!FILE_ID_RE.test(rawFileId)) {
+      return res.status(400).json({ error: 'Invalid fileId' });
+    }
+    const fileId = rawFileId;
+
     const storagePath = `canvas-files/${req.params.id}/${fileId}.${ext}`;
 
     await getStorage().upload(storagePath, req.file.buffer, req.file.mimetype);

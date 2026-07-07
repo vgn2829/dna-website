@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit';
 import sharp from 'sharp';
 import { pool, query } from '../db/client';
 import { requireAdmin } from '../middleware/adminAuth';
+import { requireStudent, optionalStudent } from '../middleware/studentAuth';
 import { getStorage } from '../storage';
 
 export const artworksRouter = Router();
@@ -81,8 +82,8 @@ function formatArtwork(row: ArtworkRow, likedByUser: boolean, comments: CommentR
   };
 }
 
-artworksRouter.get('/', async (req, res) => {
-  const roll = (req.headers['x-roll-number'] as string | undefined)?.trim().toUpperCase();
+artworksRouter.get('/', optionalStudent, async (req, res) => {
+  const roll = req.studentRoll;
   const rows = await query<ArtworkRow>('SELECT * FROM artworks ORDER BY created_at DESC');
   const allComments = await query<CommentRow & { artwork_id: string }>(
     'SELECT id, artwork_id, sender, text, created_at FROM artwork_comments ORDER BY created_at ASC'
@@ -122,6 +123,11 @@ artworksRouter.post(
       res.status(400).json({ message: 'File exceeds 50 MB limit' });
       return;
     }
+    // Validate the actual bytes, not just the filename extension.
+    if (!spec.check(file.buffer)) {
+      res.status(400).json({ message: 'File content does not match its extension' });
+      return;
+    }
 
     const bodySchema = z.object({
       title:  z.string().min(1).max(200),
@@ -150,7 +156,7 @@ artworksRouter.post(
     if (coverFile && spec.mediaType !== 'image') {
       const coverExt = coverFile.originalname.split('.').pop()?.toLowerCase() ?? '';
       const coverSpec = ALLOWED_EXT[coverExt];
-      if (coverSpec && coverSpec.mime.startsWith('image/')) {
+      if (coverSpec && coverSpec.mime.startsWith('image/') && coverSpec.check(coverFile.buffer)) {
         try {
           const coverPath = `covers/${uuidv4()}.jpg`;
           console.log('Uploading cover file:', coverFile.originalname, coverFile.size);
@@ -208,7 +214,16 @@ artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount
   const existing = await query<ArtworkRow>('SELECT * FROM artworks WHERE id=$1', [req.params.id]);
   if (existing.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
 
-  const { title, artist, domain, featured: featuredStr } = req.body as Record<string, string>;
+  const putBodySchema = z.object({
+    title:    z.string().min(1).max(200).optional(),
+    artist:   z.string().max(200).optional(),
+    domain:   z.string().min(1).max(100).optional(),
+    featured: z.enum(['true', 'false']).optional(),
+  });
+  const parsedBody = putBodySchema.safeParse(req.body);
+  if (!parsedBody.success) { res.status(400).json({ error: 'Invalid request' }); return; }
+  const { title, artist, domain, featured: featuredStr } = parsedBody.data;
+
   const sets: string[] = [];
   const vals: unknown[] = [];
   let i = 1;
@@ -226,6 +241,7 @@ artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount
     const ext = file.originalname.split('.').pop()?.toLowerCase() ?? '';
     const spec = ALLOWED_EXT[ext];
     if (!spec) { res.status(400).json({ error: 'Unsupported file type' }); return; }
+    if (!spec.check(file.buffer)) { res.status(400).json({ error: 'File content does not match its extension' }); return; }
 
     const safeExt = ext === 'jpeg' ? 'jpg' : ext;
     const storagePath = `gallery/${uuidv4()}.${safeExt}`;
@@ -281,9 +297,8 @@ artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount
   res.json(formatArtwork(rows[0], false, allComments));
 });
 
-artworksRouter.post('/:id/like', likeLimiter, async (req, res) => {
-  const roll = (req.headers['x-roll-number'] as string | undefined)?.trim().toUpperCase();
-  if (!roll) { res.status(401).json({ error: 'Roll number required' }); return; }
+artworksRouter.post('/:id/like', likeLimiter, requireStudent, async (req, res) => {
+  const roll = req.studentRoll!;
 
   const rows = await query<{ id: string; likes: number }>('SELECT id, likes FROM artworks WHERE id=$1', [req.params.id]);
   if (rows.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
@@ -318,15 +333,12 @@ const commentSchema = z.object({
   text:   z.string().min(1).max(1000),
 });
 
-artworksRouter.post('/:id/comments', commentLimiter, async (req, res) => {
-  const roll = (req.headers['x-roll-number'] as string | undefined)?.trim().toUpperCase();
-  if (!roll) { res.status(401).json({ error: 'Roll number required' }); return; }
-
+artworksRouter.post('/:id/comments', commentLimiter, requireStudent, async (req, res) => {
   const artwork = await query('SELECT 1 FROM artworks WHERE id=$1', [req.params.id]);
   if (artwork.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
 
   const parsed = commentSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   const id = `c-${uuidv4().slice(0, 8)}`;
   await query('INSERT INTO artwork_comments(id,artwork_id,sender,text) VALUES($1,$2,$3,$4)',

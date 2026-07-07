@@ -6,9 +6,9 @@ import { useStudent, hasSeenWelcome, markWelcomeSeen } from '../context/StudentC
 import WelcomeOverlay from './WelcomeOverlay';
 
 export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => void }) {
-  const { isRollModalOpen, closeRollModal, login } = useStudent();
+  const { isRollModalOpen, closeRollModal, login, needsReverify, clearReverifyNotice } = useStudent();
 
-  type ModalStep = 'roll' | 'profile';
+  type ModalStep = 'roll' | 'profile' | 'otp';
   const [step, setStep] = useState<ModalStep>('roll');
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState('');
@@ -16,23 +16,31 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
   const [roll, setRoll] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [maskedEmail, setMaskedEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [otpError, setOtpError] = useState('');
   const [showWelcome, setShowWelcome] = useState(false);
   const [newUserName, setNewUserName] = useState('');
   const [newUserRoll, setNewUserRoll] = useState('');
   const [shake, setShake] = useState(false);
 
+  const resetAll = () => {
+    setStep('roll');
+    setRoll(''); setName(''); setEmail(''); setCode('');
+    setMaskedEmail(''); setCheckError(''); setOtpError('');
+    setChecking(false);
+  };
+
   useEffect(() => {
-    if (!isRollModalOpen) {
-      setStep('roll');
-      setRoll('');
-      setName('');
-      setEmail('');
-      setCheckError('');
-      setChecking(false);
-    }
+    if (!isRollModalOpen) resetAll();
   }, [isRollModalOpen]);
 
+  const errMsg = (err: unknown, fallback: string) =>
+    (err instanceof Error && err.message && err.message !== 'SESSION_EXPIRED') ? err.message : fallback;
+
+  // Step 1 → decide new vs existing, and for existing users send the code immediately.
   const handleRollContinue = async () => {
     if (!roll.trim()) return;
     setChecking(true);
@@ -40,50 +48,32 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
     try {
       const { exists, hasProfile } = await api.students.checkExists(roll.trim());
       if (exists && hasProfile) {
-        await handleSubmitRoll(roll.trim());
+        const r = await api.students.requestOtp(roll.trim());
+        setMaskedEmail(r.email);
+        setCode('');
+        setStep('otp');
       } else {
         setStep('profile');
       }
-    } catch {
-      setCheckError('Could not verify roll number. Try again.');
+    } catch (err) {
+      setCheckError(errMsg(err, 'Could not verify roll number. Try again.'));
     } finally {
       setChecking(false);
     }
   };
 
-  const handleSubmitRoll = async (rollNumber: string) => {
-    try {
-      const data = await api.students.loginExisting(rollNumber);
-      login(data.rollNumber, data.uniqueId, data.registeredAt, data.name, data.email);
-      onSuccess?.(data.uniqueId);
-      closeRollModal();
-    } catch {
-      setStep('profile');
-    }
-  };
-
-  const handleFullSubmit = async () => {
+  // Step 2 (new users) → send the code to the email they entered.
+  const handleSendCode = async () => {
     if (!roll || !name.trim() || !email.endsWith('@iitk.ac.in')) return;
     setSubmitting(true);
+    setCheckError('');
     try {
-      const data = await api.students.createSession(roll.trim(), name.trim(), email.trim());
-      login(
-        data.session.rollNumber,
-        data.session.uniqueId,
-        data.session.registeredAt,
-        data.session.name ?? name.trim(),
-        data.session.email ?? email.trim(),
-      );
-      onSuccess?.(data.session.uniqueId);
-      setNewUserName(name.trim());
-      setNewUserRoll(roll.trim());
-      if (!hasSeenWelcome(roll.trim())) {
-        setShowWelcome(true);
-      } else {
-        closeRollModal();
-      }
+      const r = await api.students.requestOtp(roll.trim(), { name: name.trim(), email: email.trim() });
+      setMaskedEmail(r.email);
+      setCode('');
+      setStep('otp');
     } catch (err) {
-      console.error('Registration error:', err);
+      setCheckError(errMsg(err, 'Could not send the code. Try again.'));
       setShake(true);
       setTimeout(() => setShake(false), 450);
     } finally {
@@ -91,23 +81,61 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
     }
   };
 
+  // Step 3 → verify the code; on success we receive a signed token.
+  const handleVerify = async () => {
+    if (!/^[0-9]{6}$/.test(code)) return;
+    setVerifying(true);
+    setOtpError('');
+    try {
+      const data = await api.students.verifyOtp(roll.trim(), code);
+      login(data.token, data.session, data.progress);
+      clearReverifyNotice();
+      onSuccess?.(data.session.uniqueId);
+      if (data.isNew) {
+        setNewUserName(data.session.name);
+        setNewUserRoll(roll.trim());
+        if (!hasSeenWelcome(roll.trim())) {
+          setShowWelcome(true);
+          return;
+        }
+      }
+      closeRollModal();
+    } catch (err) {
+      setOtpError(errMsg(err, 'Incorrect or expired code.'));
+      setShake(true);
+      setTimeout(() => setShake(false), 450);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   const handleClose = () => {
-    setStep('roll');
-    setRoll('');
-    setName('');
-    setEmail('');
-    setCheckError('');
+    resetAll();
+    clearReverifyNotice();
     closeRollModal();
   };
 
   const handleWelcomeDone = () => {
     markWelcomeSeen(newUserRoll);
     setShowWelcome(false);
-    setRoll('');
-    setName('');
-    setEmail('');
+    resetAll();
     closeRollModal();
   };
+
+  const label = {
+    display: 'block', fontSize: 11, fontWeight: 600,
+    color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
+    textTransform: 'uppercase' as const, marginBottom: 6,
+    fontFamily: 'var(--font-body)',
+  };
+  const primaryBtn = (disabled: boolean) => ({
+    width: '100%', padding: '13px 20px',
+    background: 'var(--color-brand)', color: '#fff',
+    border: 'none', borderRadius: 'var(--radius-pill)',
+    fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.6 : 1,
+  });
 
   return (
     <>
@@ -155,6 +183,20 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                     </button>
                   </div>
 
+                  {needsReverify && (
+                    <div style={{
+                      marginBottom: 16, padding: '10px 14px',
+                      background: 'rgba(233,30,140,0.08)',
+                      border: '1px solid rgba(233,30,140,0.25)',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: 12.5, lineHeight: 1.5,
+                      color: 'var(--color-ink)', fontFamily: 'var(--font-body)',
+                    }}>
+                      We've upgraded sign-in security. Please verify your identity again — your
+                      profile and progress are safe and will be restored.
+                    </div>
+                  )}
+
                   <AnimatePresence mode="wait">
                     {step === 'roll' && (
                       <motion.div
@@ -166,13 +208,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                         style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
                       >
                         <div>
-                          <p style={{
-                            margin: '0 0 6px', fontSize: 11, fontWeight: 600,
-                            color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-                            textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                          }}>
-                            Roll Number
-                          </p>
+                          <p style={{ ...label }}>Roll Number</p>
                           <input
                             className="input-base"
                             type="text"
@@ -193,15 +229,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                         <button
                           onClick={handleRollContinue}
                           disabled={checking || !roll.trim()}
-                          style={{
-                            width: '100%', padding: '13px 20px',
-                            background: 'var(--color-brand)', color: '#fff',
-                            border: 'none', borderRadius: 'var(--radius-pill)',
-                            fontSize: 14, fontWeight: 600,
-                            fontFamily: 'var(--font-body)',
-                            cursor: checking || !roll.trim() ? 'not-allowed' : 'pointer',
-                            opacity: checking || !roll.trim() ? 0.6 : 1,
-                          }}
+                          style={primaryBtn(checking || !roll.trim())}
                         >
                           {checking ? 'Checking...' : 'Continue'}
                         </button>
@@ -244,14 +272,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
 
                         {/* Full Name */}
                         <div>
-                          <label style={{
-                            display: 'block', fontSize: 11, fontWeight: 600,
-                            color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-                            textTransform: 'uppercase', marginBottom: 6,
-                            fontFamily: 'var(--font-body)',
-                          }}>
-                            Full Name
-                          </label>
+                          <label style={label}>Full Name</label>
                           <input
                             className="input-base"
                             type="text"
@@ -266,14 +287,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
 
                         {/* IITK Email */}
                         <div>
-                          <label style={{
-                            display: 'block', fontSize: 11, fontWeight: 600,
-                            color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-                            textTransform: 'uppercase', marginBottom: 6,
-                            fontFamily: 'var(--font-body)',
-                          }}>
-                            IITK Email
-                          </label>
+                          <label style={label}>IITK Email</label>
                           <input
                             className="input-base"
                             type="email"
@@ -290,23 +304,73 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                         </div>
 
                         <p className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>
-                          Your IITK email is used to identify you. Progress and activity saves to your account — no password needed.
+                          We'll email a 6-digit code to verify it's you. No password needed.
                         </p>
 
+                        {checkError && (
+                          <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>
+                            {checkError}
+                          </p>
+                        )}
+
                         <button
-                          onClick={handleFullSubmit}
+                          onClick={handleSendCode}
                           disabled={submitting || !name.trim() || !email.endsWith('@iitk.ac.in')}
+                          style={primaryBtn(submitting || !name.trim() || !email.endsWith('@iitk.ac.in'))}
+                        >
+                          {submitting ? 'Sending code...' : 'Send verification code'}
+                        </button>
+                      </motion.div>
+                    )}
+
+                    {step === 'otp' && (
+                      <motion.div
+                        key="otp"
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 10 }}
+                        transition={{ duration: 0.2 }}
+                        style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+                      >
+                        <p className="type-micro" style={{ color: 'var(--color-ink-muted)', margin: 0 }}>
+                          Enter the 6-digit code sent to <strong>{maskedEmail}</strong>.
+                        </p>
+                        <div>
+                          <label style={label}>Verification Code</label>
+                          <input
+                            className="input-base"
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="000000"
+                            value={code}
+                            onChange={e => { setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6)); setOtpError(''); }}
+                            onKeyDown={e => { if (e.key === 'Enter') handleVerify(); }}
+                            maxLength={6}
+                            style={{ width: '100%', boxSizing: 'border-box', letterSpacing: '0.4em', textAlign: 'center', fontSize: 18 }}
+                            autoFocus
+                          />
+                          {otpError && (
+                            <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>
+                              {otpError}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={handleVerify}
+                          disabled={verifying || code.length !== 6}
+                          style={primaryBtn(verifying || code.length !== 6)}
+                        >
+                          {verifying ? 'Verifying...' : 'Verify & Continue'}
+                        </button>
+                        <button
+                          onClick={() => { setStep('roll'); setCode(''); setOtpError(''); }}
                           style={{
-                            width: '100%', padding: '13px 20px',
-                            background: 'var(--color-brand)', color: '#fff',
-                            border: 'none', borderRadius: 'var(--radius-pill)',
-                            fontSize: 14, fontWeight: 600,
-                            fontFamily: 'var(--font-body)',
-                            cursor: submitting ? 'not-allowed' : 'pointer',
-                            opacity: submitting || !name.trim() || !email.endsWith('@iitk.ac.in') ? 0.6 : 1,
+                            fontSize: 12, color: 'var(--color-ink-muted)',
+                            background: 'none', border: 'none',
+                            fontFamily: 'var(--font-body)', cursor: 'pointer',
                           }}
                         >
-                          {submitting ? 'Joining...' : 'Join DnA Club'}
+                          Use a different roll number
                         </button>
                       </motion.div>
                     )}

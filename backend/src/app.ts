@@ -33,7 +33,7 @@ export function createApp() {
       }
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Roll-Number'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   }));
 
   // Serve uploaded files for local dev storage.
@@ -48,10 +48,16 @@ export function createApp() {
     express.static(path.join(__dirname, '../uploads'))
   );
 
-  app.use(express.json({ limit: '50mb' }));
+  // Small global JSON limit to cap request-body DoS. Routes that legitimately
+  // carry large JSON (board canvas state / pasted data images, admin email HTML)
+  // get their own larger parser first — express.json() short-circuits once a body
+  // has been parsed, so the first matching limit wins.
+  app.use('/api/boards', express.json({ limit: '6mb' }));
+  app.use('/api/notify', express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({
     extended: true,
-    limit: '50mb',
+    limit: '100kb',
   }));
 
   const globalLimiter = rateLimit({

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { pool, query } from '../db/client';
 import { requireAdmin } from '../middleware/adminAuth';
+import { requireStudent } from '../middleware/studentAuth';
 
 export const domainsRouter = Router();
 
@@ -28,11 +29,44 @@ domainsRouter.get('/', async (_req, res) => {
         .map(q => {
           let options: string[] = [];
           try { options = JSON.parse(q.options) as string[]; } catch { options = []; }
-          return { q: q.question, options, ans: q.answer_index };
+          // answer_index is NOT sent to clients — quizzes are graded server-side.
+          return { q: q.question, options };
         }),
     };
   }
   res.json(result);
+});
+
+// Server-side quiz grading. Records completion only when the submission passes,
+// so XP/completion can't be self-asserted and answer keys never reach the client.
+const quizSubmitSchema = z.object({
+  answers: z.array(z.number().int().min(0).max(50)).min(1).max(50),
+});
+
+domainsRouter.post('/:id/quiz/submit', requireStudent, async (req, res) => {
+  const parsed = quizSubmitSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid submission' }); return; }
+
+  const questions = await query<QuizRow>(
+    'SELECT * FROM quiz_questions WHERE domain_id=$1 ORDER BY id ASC', [req.params.id]
+  );
+  if (questions.length === 0) { res.status(404).json({ error: 'No quiz for this domain' }); return; }
+  if (parsed.data.answers.length !== questions.length) {
+    res.status(400).json({ error: 'Answer count does not match question count' }); return;
+  }
+
+  const results = questions.map((q, i) => parsed.data.answers[i] === q.answer_index);
+  const correct = results.filter(Boolean).length;
+  const passed = correct === questions.length;
+
+  if (passed) {
+    await query(
+      'INSERT INTO student_completed_quizzes(roll_number,domain_id) VALUES($1,$2) ON CONFLICT DO NOTHING',
+      [req.studentRoll!, req.params.id]
+    );
+  }
+
+  res.json({ passed, correct, total: questions.length, results });
 });
 
 function slugify(name: string): string {
@@ -61,7 +95,7 @@ const domainCreateSchema = z.object({
 
 domainsRouter.post('/', requireAdmin, async (req, res) => {
   const parsed = domainCreateSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   const { title, fullName, icon, tagline, description, color } = parsed.data;
   const id = await uniqueSlug(slugify(title));
@@ -90,7 +124,7 @@ domainsRouter.put('/:id', requireAdmin, async (req, res) => {
   if (existing.length === 0) { res.status(404).json({ error: 'Domain not found' }); return; }
 
   const parsed = domainUpdateSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   const sets: string[] = [];
   const vals: unknown[] = [];
@@ -138,7 +172,7 @@ domainsRouter.post('/:id/videos', requireAdmin, async (req, res) => {
   if (domain.length === 0) { res.status(404).json({ error: 'Domain not found' }); return; }
 
   const parsed = videoSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   const ytId = normalizeYouTubeId(parsed.data.ytUrl);
   if (!ytId) { res.status(400).json({ error: 'Invalid YouTube URL or ID' }); return; }
@@ -185,7 +219,7 @@ domainsRouter.put('/:id/videos/:videoId', requireAdmin, async (req, res) => {
   if (existing.length === 0) { res.status(404).json({ error: 'Video not found' }); return; }
 
   const parsed = videoUpdateSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   const sets: string[] = [];
   const vals: unknown[] = [];
@@ -213,7 +247,7 @@ const seqPatchSchema = z.object({ sequence: z.coerce.number().int().min(1) });
 
 domainsRouter.patch('/:id/videos/:videoId', requireAdmin, async (req, res) => {
   const parsed = seqPatchSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   const result = await pool.query(
     'UPDATE videos SET sequence=$1 WHERE id=$2 AND domain_id=$3 RETURNING *',

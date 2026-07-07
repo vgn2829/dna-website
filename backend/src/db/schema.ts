@@ -1,31 +1,16 @@
 import { pool } from './client';
 
 export async function initSchema(): Promise<void> {
-  // Migration: add sequence column + back-fill by insertion order per domain.
-  // ALTER TABLE … ADD COLUMN IF NOT EXISTS is idempotent on re-runs.
-  // The WHERE sequence = 0 guard makes the UPDATE idempotent too.
+  // Tracks one-time migrations so destructive/backfill steps can't silently re-run.
   await pool.query(`
-    ALTER TABLE artworks ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT false;
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      key        TEXT PRIMARY KEY,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
   `);
 
-  await pool.query(`
-    ALTER TABLE artworks
-    ADD COLUMN IF NOT EXISTS cover_url TEXT DEFAULT NULL
-  `);
-
-  await pool.query(`
-    ALTER TABLE videos ADD COLUMN IF NOT EXISTS sequence INTEGER NOT NULL DEFAULT 0;
-
-    UPDATE videos v
-    SET sequence = sub.rn
-    FROM (
-      SELECT id,
-             ROW_NUMBER() OVER (PARTITION BY domain_id ORDER BY created_at ASC) AS rn
-      FROM videos
-    ) sub
-    WHERE v.id = sub.id AND v.sequence = 0;
-  `);
-
+  // All base tables are created first (below); ALTER TABLE migrations that
+  // reference them run afterwards, so a fresh/empty database bootstraps cleanly.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS admin_config (
       key   TEXT PRIMARY KEY,
@@ -117,6 +102,32 @@ export async function initSchema(): Promise<void> {
     );
   `);
 
+  // Column migrations on the tables created above.
+  // ALTER TABLE … ADD COLUMN IF NOT EXISTS is idempotent on re-runs.
+  await pool.query(`
+    ALTER TABLE artworks ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT false;
+  `);
+
+  await pool.query(`
+    ALTER TABLE artworks
+    ADD COLUMN IF NOT EXISTS cover_url TEXT DEFAULT NULL
+  `);
+
+  // Add sequence column + back-fill by insertion order per domain.
+  // The WHERE sequence = 0 guard makes the UPDATE idempotent too.
+  await pool.query(`
+    ALTER TABLE videos ADD COLUMN IF NOT EXISTS sequence INTEGER NOT NULL DEFAULT 0;
+
+    UPDATE videos v
+    SET sequence = sub.rn
+    FROM (
+      SELECT id,
+             ROW_NUMBER() OVER (PARTITION BY domain_id ORDER BY created_at ASC) AS rn
+      FROM videos
+    ) sub
+    WHERE v.id = sub.id AND v.sequence = 0;
+  `);
+
   await pool.query(`
     ALTER TABLE student_sessions
     ADD COLUMN IF NOT EXISTS name TEXT DEFAULT NULL
@@ -125,6 +136,21 @@ export async function initSchema(): Promise<void> {
   await pool.query(`
     ALTER TABLE student_sessions
     ADD COLUMN IF NOT EXISTS email TEXT DEFAULT NULL
+  `);
+
+  // One-time email verification codes for student login (OTP).
+  // code_hash is a bcrypt hash; the plaintext code is never stored.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS student_otps (
+      roll_number TEXT NOT NULL,
+      email       TEXT NOT NULL,
+      code_hash   TEXT NOT NULL,
+      name        TEXT,
+      expires_at  TIMESTAMPTZ NOT NULL,
+      attempts    INT NOT NULL DEFAULT 0,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (roll_number)
+    )
   `);
 
   await pool.query(`
@@ -157,13 +183,20 @@ export async function initSchema(): Promise<void> {
     );
   `);
 
-  // Clear old sessions that are missing email (pre-registration-form era)
-  const hasOldEntries = await pool.query(
-    `SELECT COUNT(*) FROM student_sessions WHERE email IS NULL`
+  // One-time cleanup of pre-registration-form sessions (missing email/name).
+  // Guarded by schema_migrations so it runs at most once and only removes the
+  // incomplete rows — it can no longer wipe the whole table on every boot.
+  const clearMigration = 'clear_pre_email_sessions_v1';
+  const alreadyCleared = await pool.query(
+    'SELECT 1 FROM schema_migrations WHERE key = $1', [clearMigration]
   );
-  if (parseInt((hasOldEntries.rows[0] as { count: string }).count) > 0) {
-    await pool.query(`DELETE FROM student_sessions`);
-    console.log('Cleared old student_sessions (missing email/name)');
+  if (alreadyCleared.rows.length === 0) {
+    await pool.query(`DELETE FROM student_sessions WHERE email IS NULL OR name IS NULL`);
+    await pool.query(
+      'INSERT INTO schema_migrations (key) VALUES ($1) ON CONFLICT DO NOTHING',
+      [clearMigration]
+    );
+    console.log('Migration applied: cleared pre-email student_sessions');
   }
 
   await pool.query(`
@@ -421,10 +454,18 @@ export async function initSchema(): Promise<void> {
   const settingsCount = await pool.query('SELECT COUNT(*) FROM app_settings');
   if (parseInt((settingsCount.rows[0] as { count: string }).count) === 0) {
     const now = new Date().toISOString();
+    // Feature ships DISABLED with NO default passcode. It stays unusable until an
+    // admin explicitly sets one (via /settings) or PUBLIC_MEET_PASSCODE is provided.
     await pool.query(`
       INSERT INTO app_settings (key, value, updated_at)
-      VALUES ('public_meet_enabled', 'false', $1), ('public_meet_passcode', 'DNA2025', $1)
+      VALUES ('public_meet_enabled', 'false', $1)
     `, [now]);
+    if (process.env.PUBLIC_MEET_PASSCODE) {
+      await pool.query(`
+        INSERT INTO app_settings (key, value, updated_at)
+        VALUES ('public_meet_passcode', $2, $1)
+      `, [now, process.env.PUBLIC_MEET_PASSCODE]);
+    }
     console.log('App settings seeded');
   }
 

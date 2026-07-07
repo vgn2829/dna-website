@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import rateLimit from 'express-rate-limit';
 import { pool, query } from '../db/client';
 import { requireAdmin } from '../middleware/adminAuth';
+import { requireStudent, optionalStudent } from '../middleware/studentAuth';
 
 export const eventsRouter = Router();
 
@@ -22,8 +23,8 @@ function formatEvent(row: EventRow, isRegistered = false) {
   };
 }
 
-eventsRouter.get('/', async (req, res) => {
-  const roll = (req.headers['x-roll-number'] as string | undefined)?.trim().toUpperCase();
+eventsRouter.get('/', optionalStudent, async (req, res) => {
+  const roll = req.studentRoll;
   const rows = await query<EventRow>('SELECT * FROM events ORDER BY date ASC');
   if (!roll) { res.json(rows.map(r => formatEvent(r))); return; }
 
@@ -45,7 +46,7 @@ const createSchema = z.object({
 
 eventsRouter.post('/', requireAdmin, async (req, res) => {
   const parsed = createSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   const { title, date, time, location, content, capacity } = parsed.data;
   const id = `evt-${uuidv4().slice(0, 8)}`;
@@ -66,9 +67,20 @@ const updateSchema = z.object({
   capacity: z.coerce.number().int().min(1).max(10000).optional(),
 });
 
-eventsRouter.put('/:id', requireAdmin, async (req, res) => {
+eventsRouter.put('/:id', requireAdmin, optionalStudent, async (req, res) => {
   const parsed = updateSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
+
+  // Don't let capacity drop below the number of people already registered.
+  if (parsed.data.capacity !== undefined) {
+    const cur = await query<{ registered_count: number }>(
+      'SELECT registered_count FROM events WHERE id=$1', [req.params.id]
+    );
+    if (cur.length && parsed.data.capacity < cur[0].registered_count) {
+      res.status(409).json({ error: `Capacity cannot be below current registrations (${cur[0].registered_count})` });
+      return;
+    }
+  }
 
   const sets: string[] = [];
   const vals: unknown[] = [];
@@ -84,7 +96,7 @@ eventsRouter.put('/:id', requireAdmin, async (req, res) => {
   vals.push(req.params.id);
   const result = await pool.query(`UPDATE events SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, vals);
   if (result.rowCount === 0) { res.status(404).json({ error: 'Event not found' }); return; }
-  const roll = (req.headers['x-roll-number'] as string | undefined)?.trim().toUpperCase();
+  const roll = req.studentRoll;
   let isRegistered = false;
   if (roll) {
     const r = await query('SELECT 1 FROM event_rsvps WHERE event_id=$1 AND roll_number=$2', [req.params.id, roll]);
@@ -99,9 +111,8 @@ eventsRouter.delete('/:id', requireAdmin, async (req, res) => {
   res.status(204).end();
 });
 
-eventsRouter.post('/:id/rsvp', rsvpLimiter, async (req, res) => {
-  const roll = (req.headers['x-roll-number'] as string | undefined)?.trim().toUpperCase();
-  if (!roll) { res.status(401).json({ error: 'Roll number required' }); return; }
+eventsRouter.post('/:id/rsvp', rsvpLimiter, requireStudent, async (req, res) => {
+  const roll = req.studentRoll!;
 
   const client = await pool.connect();
   try {

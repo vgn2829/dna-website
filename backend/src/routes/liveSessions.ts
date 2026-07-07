@@ -1,14 +1,25 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { pool } from '../db/client';
 import { requireAdmin } from '../middleware/adminAuth';
+import { requireStudent, optionalStudent } from '../middleware/studentAuth';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import rateLimit from 'express-rate-limit';
+import jwt from 'jsonwebtoken';
 
 const router = Router();
 
+const joinLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: 'Too many requests — please slow down' },
+});
+
+// Must be chained after requireStudent, which populates req.studentRoll from a
+// verified token. The coordinator identity therefore cannot be spoofed.
 async function requireCoordinator(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const roll = req.headers['x-roll-number'] as string | undefined;
-  if (!roll) { res.status(401).json({ error: 'Roll number required' }); return; }
+  const roll = req.studentRoll;
+  if (!roll) { res.status(401).json({ error: 'Sign in required' }); return; }
   try {
     const result = await pool.query(`
       SELECT 1 FROM audience_group_members
@@ -23,20 +34,24 @@ async function requireCoordinator(req: Request, res: Response, next: NextFunctio
 
 function verifyPublicMeetToken(token: string): boolean {
   try {
-    const payload = JSON.parse(Buffer.from(token, 'base64').toString('utf8')) as {
-      type: string;
-      exp: number;
-    };
-    return payload.type === 'public_meet' && payload.exp > Date.now();
+    const payload = jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ['HS256'] }) as { typ?: string };
+    return payload.typ === 'public_meet';
   } catch {
     return false;
   }
 }
 
+// z.string().url() accepts javascript:/data: URLs; require an explicit https
+// scheme so a meet link can never become a script/phishing sink when rendered.
+const httpsUrl = z.string().url().max(500).refine(
+  u => { try { return new URL(u).protocol === 'https:'; } catch { return false; } },
+  'Meet link must be an https:// URL'
+);
+
 const sessionSchema = z.object({
   title: z.string().min(1).max(200),
   host: z.string().min(1).max(100),
-  meet_link: z.string().url(),
+  meet_link: httpsUrl,
   scheduled_at: z.string(),
   audience_group_id: z.string().nullable().optional(),
   description: z.string().max(500).optional(),
@@ -44,9 +59,9 @@ const sessionSchema = z.object({
 
 // ── Static paths first (must be before /:id routes) ──────────────────────────
 
-router.get('/active', async (req, res) => {
+router.get('/active', optionalStudent, async (req, res) => {
   try {
-    const roll = req.headers['x-roll-number'] as string | undefined;
+    const roll = req.studentRoll;
 
     const result = await pool.query(`
       SELECT
@@ -175,7 +190,7 @@ router.post('/public', async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: 'Invalid request' });
     }
     console.error('Public create session error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -203,7 +218,7 @@ router.delete('/public/:id', async (req, res) => {
   }
 });
 
-router.post('/coordinator', requireCoordinator, async (req, res) => {
+router.post('/coordinator', requireStudent, requireCoordinator, async (req, res) => {
   try {
     const parsed = sessionSchema.parse(req.body);
     const id = uuidv4();
@@ -224,14 +239,14 @@ router.post('/coordinator', requireCoordinator, async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: 'Invalid request' });
     }
     console.error('Coordinator create session error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-router.delete('/coordinator/:id', requireCoordinator, async (req, res) => {
+router.delete('/coordinator/:id', requireStudent, requireCoordinator, async (req, res) => {
   try {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const result = await pool.query(
@@ -248,7 +263,7 @@ router.delete('/coordinator/:id', requireCoordinator, async (req, res) => {
   }
 });
 
-router.put('/coordinator/:id/status', requireCoordinator, async (req, res) => {
+router.put('/coordinator/:id/status', requireStudent, requireCoordinator, async (req, res) => {
   try {
     const { status } = req.body as { status?: string };
 
@@ -338,19 +353,16 @@ router.post('/', requireAdmin, async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: 'Invalid request' });
     }
     console.error('Create session error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-router.post('/:id/join', async (req, res) => {
+router.post('/:id/join', requireStudent, joinLimiter, async (req, res) => {
   try {
-    const roll = req.headers['x-roll-number'] as string;
-    if (!roll) {
-      return res.status(401).json({ error: 'Roll number required' });
-    }
+    const roll = req.studentRoll!;
 
     const sessionCheck = await pool.query(
       `SELECT id, title, status FROM live_sessions WHERE id = $1`,
@@ -446,7 +458,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
     res.json(result.rows[0]);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: 'Invalid request' });
     }
     res.status(500).json({ error: 'Internal server error' });
   }

@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import { api } from '../lib/api';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { api, setStudentToken, clearStudentToken, getStudentToken } from '../lib/api';
 
 export interface StudentSession {
   rollNumber: string;
@@ -20,7 +20,9 @@ interface StudentContextValue {
   isRollModalOpen: boolean;
   openRollModal: () => void;
   closeRollModal: () => void;
-  login: (rollNumber: string, uniqueId: string, registeredAt: string, name: string, email: string) => void;
+  needsReverify: boolean;
+  clearReverifyNotice: () => void;
+  login: (token: string, session: StudentSession, progress?: StudentProgress) => void;
   logout: () => void;
   markVideoWatched: (videoId: string) => void;
   unmarkVideoWatched: (videoId: string) => void;
@@ -54,6 +56,8 @@ export function StudentProvider({ children }: { children: React.ReactNode }) {
   const [studentSession, setStudentSession] = useState<StudentSession | null>(loadSession);
   const [studentProgress, setStudentProgress] = useState<StudentProgress>(loadProgress);
   const [isRollModalOpen, setIsRollModalOpen] = useState(false);
+  const [needsReverify, setNeedsReverify] = useState(false);
+  const clearReverifyNotice = useCallback(() => setNeedsReverify(false), []);
 
   const persist = (session: StudentSession | null, progress: StudentProgress) => {
     if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -64,23 +68,36 @@ export function StudentProvider({ children }: { children: React.ReactNode }) {
   const openRollModal  = useCallback(() => setIsRollModalOpen(true), []);
   const closeRollModal = useCallback(() => setIsRollModalOpen(false), []);
 
-  const login = useCallback((
-    rollNumber: string,
-    uniqueId: string,
-    registeredAt: string,
-    name: string,
-    email: string,
-  ): void => {
-    const session: StudentSession = { rollNumber, uniqueId, registeredAt, name, email };
+  const login = useCallback((token: string, session: StudentSession, progress?: StudentProgress): void => {
+    setStudentToken(token);
     setStudentSession(session);
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    if (progress) {
+      setStudentProgress(progress);
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+    }
   }, []);
 
   const logout = useCallback(() => {
+    clearStudentToken();
     setStudentSession(null);
     setStudentProgress(EMPTY_PROGRESS);
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(PROGRESS_KEY);
+  }, []);
+
+  // Sessions created before token-based auth have a stored profile but no JWT.
+  // Rather than let every student-scoped write silently 401, clear the stale
+  // session on load so the UI shows the sign-in prompt and the user re-verifies
+  // via OTP (which restores their existing profile + progress from the server).
+  useEffect(() => {
+    if (studentSession && !getStudentToken()) {
+      logout();
+      setNeedsReverify(true);
+      setIsRollModalOpen(true);
+    }
+    // Run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const markVideoWatched = useCallback((videoId: string) => {
@@ -106,14 +123,13 @@ export function StudentProvider({ children }: { children: React.ReactNode }) {
     });
   }, [studentSession]);
 
+  // Local state only — completion is recorded server-side by the graded quiz
+  // submit endpoint, so this just reflects the confirmed result in the UI.
   const completeQuiz = useCallback((domainId: string) => {
     setStudentProgress(prev => {
       if (prev.completedQuizzes.includes(domainId)) return prev;
       const next = { ...prev, completedQuizzes: [...prev.completedQuizzes, domainId] };
-      if (studentSession) {
-        api.students.completeQuiz(studentSession.rollNumber, domainId).catch(console.error);
-        persist(studentSession, next);
-      }
+      if (studentSession) persist(studentSession, next);
       return next;
     });
   }, [studentSession]);
@@ -125,7 +141,7 @@ export function StudentProvider({ children }: { children: React.ReactNode }) {
   return (
     <StudentContext.Provider value={{
       studentSession, studentProgress, isRollModalOpen,
-      openRollModal, closeRollModal, login, logout,
+      openRollModal, closeRollModal, needsReverify, clearReverifyNotice, login, logout,
       markVideoWatched, unmarkVideoWatched, completeQuiz, totalXP,
     }}>
       {children}

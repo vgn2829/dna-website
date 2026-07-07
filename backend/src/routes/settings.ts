@@ -1,9 +1,18 @@
 import { Router } from 'express';
+import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import { pool } from '../db/client';
 import { requireAdmin } from '../middleware/adminAuth';
 import { z } from 'zod';
 
 const router = Router();
+
+// Strict limiter to make passcode brute-forcing impractical.
+const passcodeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  message: { error: 'Too many attempts — try again in 15 minutes' },
+});
 
 router.get('/public', async (req, res) => {
   try {
@@ -53,14 +62,14 @@ router.put('/', requireAdmin, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors });
+      return res.status(400).json({ error: 'Invalid request' });
     }
     console.error('Update settings error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-router.post('/verify-passcode', async (req, res) => {
+router.post('/verify-passcode', passcodeLimiter, async (req, res) => {
   try {
     const { passcode } = req.body as { passcode?: string };
     if (!passcode) return res.status(400).json({ error: 'Passcode required' });
@@ -76,14 +85,17 @@ router.post('/verify-passcode', async (req, res) => {
       `SELECT value FROM app_settings WHERE key = 'public_meet_passcode'`
     );
     const correctPasscode = (passcodeResult.rows[0] as { value: string } | undefined)?.value;
-    if (passcode !== correctPasscode) {
+    // Fail closed if no passcode has been configured.
+    if (!correctPasscode || passcode !== correctPasscode) {
       return res.status(401).json({ error: 'Incorrect passcode' });
     }
 
-    const token = Buffer.from(JSON.stringify({
-      type: 'public_meet',
-      exp: Date.now() + 24 * 60 * 60 * 1000,
-    })).toString('base64');
+    // Signed token — cannot be forged client-side (was previously base64(JSON)).
+    const token = jwt.sign(
+      { typ: 'public_meet' },
+      process.env.JWT_SECRET!,
+      { algorithm: 'HS256', expiresIn: '24h' }
+    );
     res.json({ success: true, token });
   } catch (err) {
     console.error('Verify passcode error:', err);

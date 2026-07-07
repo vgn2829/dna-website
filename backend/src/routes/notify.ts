@@ -1,9 +1,23 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { requireAdmin } from '../middleware/adminAuth';
 import { sendEventNotification, sendArtworkNotification, sendCustomAnnouncement } from '../services/mailer';
 import { pool } from '../db/client';
 
 const router = Router();
+
+const MAX_SUBJECT = 300;
+const MAX_HTML = 100_000; // ~100 KB of email markup is plenty
+
+const templateSchema = z.object({
+  subject: z.string().min(1).max(MAX_SUBJECT),
+  body: z.string().min(1).max(MAX_HTML),
+});
+
+const announceSchema = z.object({
+  subject: z.string().min(1).max(MAX_SUBJECT),
+  html: z.string().min(1).max(MAX_HTML),
+});
 
 router.get('/test-email', requireAdmin, async (req, res) => {
   try {
@@ -91,11 +105,12 @@ router.get('/templates/:id', requireAdmin, async (req, res) => {
 
 router.put('/templates/:id', requireAdmin, async (req, res) => {
   try {
-    const { subject, body } = req.body as { subject?: string; body?: string };
-    if (!subject || !body) {
-      res.status(400).json({ error: 'Subject and body are required' });
+    const parsed = templateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Subject and body are required (subject ≤ 300, body ≤ 100 KB)' });
       return;
     }
+    const { subject, body } = parsed.data;
     const result = await pool.query(
       `UPDATE email_templates SET subject = $1, body = $2, updated_at = $3 WHERE id = $4 RETURNING *`,
       [subject, body, new Date().toISOString(), req.params.id]
@@ -112,11 +127,12 @@ router.put('/templates/:id', requireAdmin, async (req, res) => {
 
 router.post('/announce', requireAdmin, async (req, res) => {
   try {
-    const { subject, html } = req.body as Record<string, string>;
-    if (!subject || !html) {
-      res.status(400).json({ error: 'Subject and html are required' });
+    const parsed = announceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Subject and html are required (subject ≤ 300, html ≤ 100 KB)' });
       return;
     }
+    const { subject, html } = parsed.data;
 
     const result = await pool.query(
       'SELECT email FROM student_sessions WHERE email IS NOT NULL'

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, Circle, Trophy, Play, ChevronRight, ArrowRight } from 'lucide-react';
 import { useStudent } from '../context/StudentContext';
 import { useAppData } from '../context/AppDataContext';
+import { api } from '../lib/api';
 
 const DIFF_COLORS: Record<string, string> = {
   Beginner:     '#3ecf5f',
@@ -29,28 +30,52 @@ function ProgressRing({ pct, color, size = 64 }: { pct: number; color: string; s
   );
 }
 
-function QuizCard({ domainId, questions, onComplete }: {
+function QuizCard({ domainId, questions }: {
   domainId: string;
-  questions: { q: string; options: string[]; ans: number }[];
-  onComplete: () => boolean;
+  questions: { q: string; options: string[] }[];
 }) {
-  const { studentProgress } = useStudent();
+  const { studentSession, studentProgress, completeQuiz, openRollModal } = useStudent();
   const [idx, setIdx] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
-  const [correct, setCorrect] = useState<boolean | null>(null);
+  const [answers, setAnswers] = useState<number[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [resultMsg, setResultMsg] = useState('');
   const [done, setDone] = useState(false);
   const alreadyDone = studentProgress.completedQuizzes.includes(domainId);
 
-  const handleSubmit = () => {
+  const reset = () => { setIdx(0); setAnswers([]); setSelected(null); };
+
+  const handleSubmit = async () => {
     if (selected === null) return;
-    const isCorrect = selected === questions[idx].ans;
-    setCorrect(isCorrect);
-    setTimeout(() => {
-      if (isCorrect) {
-        if (idx + 1 < questions.length) { setIdx(i => i + 1); setSelected(null); setCorrect(null); }
-        else { if (onComplete()) setDone(true); }
-      } else { setSelected(null); setCorrect(null); }
-    }, 700);
+    const nextAnswers = [...answers];
+    nextAnswers[idx] = selected;
+    setAnswers(nextAnswers);
+
+    if (idx + 1 < questions.length) {
+      setIdx(i => i + 1);
+      setSelected(nextAnswers[idx + 1] ?? null);
+      return;
+    }
+
+    // Last question — grade server-side (answer keys never reach the client).
+    if (!studentSession) { openRollModal(); return; }
+    setSubmitting(true);
+    setResultMsg('');
+    try {
+      const r = await api.domains.submitQuiz(domainId, studentSession.rollNumber, nextAnswers);
+      if (r.passed) {
+        completeQuiz(domainId);
+        setDone(true);
+      } else {
+        setResultMsg(`${r.correct}/${r.total} correct — give it another try.`);
+        reset();
+      }
+    } catch {
+      setResultMsg('Could not submit — please try again.');
+      reset();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (alreadyDone || done) {
@@ -76,43 +101,42 @@ function QuizCard({ domainId, questions, onComplete }: {
       <p className="type-body" style={{ color: 'var(--color-ink)' }}>{q.q}</p>
       <div className="space-y-2">
         {q.options.map((opt, i) => {
-          let bg = 'var(--color-surface-2)';
-          let color = 'var(--color-ink-muted)';
-          let border = '1px solid transparent';
-          if (selected === i) {
-            if (correct === null) { bg = 'var(--color-surface-2)'; color = 'var(--color-ink)'; border = '1px solid var(--color-hairline)'; }
-            else if (correct && i === q.ans) { bg = 'rgba(62,207,95,0.12)'; color = '#3ecf5f'; }
-            else { bg = 'rgba(229,72,77,0.10)'; color = '#e5484d'; }
-          } else if (correct === false && i === q.ans) {
-            bg = 'rgba(62,207,95,0.08)'; color = '#3ecf5f';
-          }
+          const isSel = selected === i;
           return (
             <button
               key={i}
               onClick={() => setSelected(i)}
-              disabled={correct !== null}
+              disabled={submitting}
               className="w-full text-left px-4 py-3 rounded-xl type-body-sm transition-all"
-              style={{ background: bg, color, border, borderRadius: 'var(--radius-md)' }}
+              style={{
+                background: 'var(--color-surface-2)',
+                color: isSel ? 'var(--color-ink)' : 'var(--color-ink-muted)',
+                border: isSel ? '1px solid var(--color-hairline)' : '1px solid transparent',
+                borderRadius: 'var(--radius-md)',
+              }}
             >
               {opt}
             </button>
           );
         })}
       </div>
+      {resultMsg && (
+        <p className="type-caption" style={{ color: '#e5484d' }}>{resultMsg}</p>
+      )}
       <button
         onClick={handleSubmit}
-        disabled={selected === null}
+        disabled={selected === null || submitting}
         className="btn-primary w-full justify-center"
-        style={{ opacity: selected !== null ? 1 : 0.4 }}
+        style={{ opacity: selected !== null && !submitting ? 1 : 0.4 }}
       >
-        Submit Answer
+        {submitting ? 'Checking…' : idx + 1 < questions.length ? 'Next' : 'Submit Quiz'}
       </button>
     </div>
   );
 }
 
 export function AcademyPage() {
-  const { studentSession, studentProgress, openRollModal, markVideoWatched, unmarkVideoWatched, completeQuiz, totalXP } = useStudent();
+  const { studentSession, studentProgress, openRollModal, markVideoWatched, unmarkVideoWatched, totalXP } = useStudent();
   const { domains, loading, error } = useAppData();
   const domainKeys = Object.keys(domains);
   const [activeDomainId, setActiveDomainId] = useState(domainKeys[0] ?? 'uiux');
@@ -338,7 +362,6 @@ export function AcademyPage() {
                   <QuizCard
                     domainId={activeDomainId}
                     questions={domain.quizzes}
-                    onComplete={() => { if (studentSession) { completeQuiz(activeDomainId); return true; } openRollModal(); return false; }}
                   />
                 )}
               </motion.div>

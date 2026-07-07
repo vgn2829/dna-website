@@ -2,8 +2,17 @@ import { useState, useEffect } from 'react';
 import { Instagram, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { api, type LiveSession, API_BASE } from '../lib/api';
+import { api, type LiveSession, API_BASE, getStudentToken } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
+
+// Coordinator identity is proven by the signed student token, not a roll header.
+function studentAuthHeaders(json = false): Record<string, string> {
+  const h: Record<string, string> = {};
+  if (json) h['Content-Type'] = 'application/json';
+  const tok = getStudentToken();
+  if (tok) h['Authorization'] = `Bearer ${tok}`;
+  return h;
+}
 
 const COLS = [
   {
@@ -71,7 +80,7 @@ export function Footer() {
     try {
       const res = await fetch(`${API_BASE}/live-sessions/coordinator`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Roll-Number': studentSession.rollNumber },
+        headers: studentAuthHeaders(true),
         body: JSON.stringify({
           title: form.title,
           host: form.host,
@@ -97,7 +106,7 @@ export function Footer() {
     try {
       await fetch(`${API_BASE}/live-sessions/coordinator/${id}`, {
         method: 'DELETE',
-        headers: { 'X-Roll-Number': studentSession.rollNumber },
+        headers: studentAuthHeaders(),
       });
       setSessions(prev => prev.filter(s => s.id !== id));
     } catch {}
@@ -110,10 +119,7 @@ export function Footer() {
     try {
       await fetch(`${API_BASE}/live-sessions/coordinator/${id}/status`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Roll-Number': studentSession.rollNumber,
-        },
+        headers: studentAuthHeaders(true),
         body: JSON.stringify({ status }),
       });
       // If ended, remove from list after 2 seconds

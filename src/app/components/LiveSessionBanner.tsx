@@ -3,6 +3,18 @@ import { motion, AnimatePresence } from 'motion/react';
 import { api, LiveSession } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
 
+// Defense in depth: only treat http(s) links as safe to render as an anchor,
+// so a stored javascript:/data: URL can never execute on click.
+function safeHttpUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const proto = new URL(url).protocol;
+    return proto === 'https:' || proto === 'http:' ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function LiveSessionBanner() {
   const { studentSession } = useStudent();
   const [sessions, setSessions] = useState<LiveSession[]>([]);
@@ -177,9 +189,9 @@ export default function LiveSessionBanner() {
 
         {/* Right — join button + dismiss */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          {primary.canAccess && primary.meet_link ? (
+          {primary.canAccess && safeHttpUrl(primary.meet_link) ? (
             <a
-              href={primary.meet_link ?? '#'}
+              href={safeHttpUrl(primary.meet_link) ?? '#'}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => {
