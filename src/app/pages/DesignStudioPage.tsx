@@ -1038,11 +1038,41 @@ function drawGrid(canvas: HTMLCanvasElement|null, system: string, params: Record
   ctx.fillText(`${fmt?.dw||fmtW+"px"} × ${fmt?.dh||fmtH+"px"}`,OX+PW-6,OY+PH-5);
 }
 
+// ── Grid Calculator: recent generations (localStorage) ────────────────────────
+type GridSnapshot = { fmtId: string; system: string; landscape: boolean; params: Record<string, number>; ts: number };
+const GRID_RECENTS_KEY = "dna_grid_recents";
+const GRID_RECENTS_MAX = 10;
+function loadGridRecents(): GridSnapshot[] {
+  try {
+    const raw = localStorage.getItem(GRID_RECENTS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+function gridSnapKey(s: { fmtId: string; system: string; landscape: boolean; params: Record<string, number> }): string {
+  return JSON.stringify([s.fmtId, s.system, s.landscape, s.params]);
+}
+function gridSnapLabel(s: GridSnapshot): string {
+  const sys = GRID_SYSTEMS.find(g => g.id === s.system)?.label ?? s.system;
+  const fmt = FORMATS.find(f => f.id === s.fmtId)?.label ?? s.fmtId;
+  return `${sys} · ${fmt}${s.landscape ? " ↔" : ""}`;
+}
+function gridRelTime(ts: number): string {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 function GridCalculator(){
   const [fmtId,setFmtId]=useState("a4");
   const [system,setSystem]=useState("swiss");
   const [landscape,setLandscape]=useState(false);
   const [params,setParams]=useState<Record<string,number>>({cols:4,rows:5,mt:50,mb:50,ml:40,mr:40,g:12,bl:18,angle:45,customW:800,customH:600});
+  const [recents,setRecents]=useState<GridSnapshot[]>(loadGridRecents);
+  const restoringRef=useRef(false);
+  const readyRef=useRef(false);
   const canvasRef=useRef<HTMLCanvasElement>(null);
 
   const fmt=FORMATS.find(f=>f.id===fmtId)||FORMATS[0];
@@ -1052,6 +1082,9 @@ function GridCalculator(){
   function setP(k: string,v: number){setParams((p:any)=>({...p,[k]:v}));}
 
   useEffect(()=>{
+    // Skip the preset overwrite while restoring a saved snapshot (it would
+    // clobber the restored params for this format).
+    if(restoringRef.current)return;
     const presets: Record<string,any>={
       a4:{cols:4,rows:5,mt:50,mb:50,ml:40,mr:40,g:12,bl:18},
       a3:{cols:4,rows:6,mt:60,mb:60,ml:50,mr:50,g:14,bl:20},
@@ -1066,6 +1099,45 @@ function GridCalculator(){
   },[fmtId]);
 
   useEffect(()=>{drawGrid(canvasRef.current,system,params,fmtW,fmtH);},[system,params,fmtId,landscape]);
+
+  // Ignore param churn during the first moments after mount (initial default +
+  // the format-preset effect) so the untouched default isn't recorded; only
+  // save states the user actually navigates to afterwards.
+  useEffect(()=>{
+    const t=setTimeout(()=>{readyRef.current=true;},450);
+    return ()=>clearTimeout(t);
+  },[]);
+
+  // Auto-save each settled grid to "recents" (debounced, deduped, capped).
+  // Skips the initial mount churn (readyRef) and mid-restore re-saves.
+  useEffect(()=>{
+    if(!readyRef.current||restoringRef.current)return;
+    const handle=setTimeout(()=>{
+      const snap={fmtId,system,landscape,params};
+      const key=gridSnapKey(snap);
+      setRecents(prev=>{
+        const next=[{...snap,ts:Date.now()},...prev.filter(r=>gridSnapKey(r)!==key)].slice(0,GRID_RECENTS_MAX);
+        try{localStorage.setItem(GRID_RECENTS_KEY,JSON.stringify(next));}catch{/* quota */}
+        return next;
+      });
+    },700);
+    return ()=>clearTimeout(handle);
+  },[fmtId,system,landscape,params]);
+
+  const restoreGrid=(snap:GridSnapshot)=>{
+    restoringRef.current=true;
+    setFmtId(snap.fmtId);
+    setSystem(snap.system);
+    setLandscape(snap.landscape);
+    setParams(snap.params);
+    // Clear the guard after this render's effects have flushed.
+    setTimeout(()=>{restoringRef.current=false;},0);
+  };
+
+  const clearRecents=()=>{
+    setRecents([]);
+    try{localStorage.removeItem(GRID_RECENTS_KEY);}catch{/* ignore */}
+  };
 
   const IW=fmtW-params.ml-params.mr, IH=fmtH-params.mt-params.mb;
   const cols=Math.max(params.cols,1),rows=Math.max(params.rows,1);
@@ -1141,6 +1213,23 @@ function GridCalculator(){
       <div style={{background:"var(--color-canvas)",borderRadius:"var(--radius-xl)",overflow:"hidden",border:"1px solid rgba(255,255,255,0.06)",padding:12}}>
         <canvas ref={canvasRef} width={680} height={440} style={{width:"100%",height:"auto",display:"block",borderRadius:10}}/>
       </div>
+
+      {recents.length>0&&(
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <span style={{fontFamily:"var(--font-body)",fontSize:10,fontWeight:600,color:"var(--color-ink-muted)",letterSpacing:"0.08em",textTransform:"uppercase",marginRight:2}}>Recent</span>
+          {recents.map((r,i)=>(
+            <button
+              key={`${r.ts}-${i}`}
+              onClick={()=>restoreGrid(r)}
+              title={`${gridSnapLabel(r)} · cols ${r.params.cols}, rows ${r.params.rows} · ${gridRelTime(r.ts)}`}
+              style={{padding:"5px 12px",borderRadius:"var(--radius-pill)",border:"1px solid var(--color-hairline)",background:"var(--color-surface-1)",color:"var(--color-ink-muted)",fontSize:12,fontFamily:"var(--font-body)",cursor:"pointer",whiteSpace:"nowrap"}}
+            >
+              {gridSnapLabel(r)}
+            </button>
+          ))}
+          <button onClick={clearRecents} style={{...ss.btnSec,padding:"5px 12px",fontSize:12}}>Clear</button>
+        </div>
+      )}
 
       {["swiss","column","baseline"].includes(system)&&(
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
