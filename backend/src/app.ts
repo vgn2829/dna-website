@@ -33,7 +33,7 @@ export function createApp() {
       }
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Roll-Number'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   }));
 
   // Serve uploaded files for local dev storage.
