@@ -153,6 +153,21 @@ export async function initSchema(): Promise<void> {
     )
   `);
 
+  // Pending email-change codes. Separate from login OTPs so the two flows can't
+  // collide. The code is sent to new_email; student_sessions.email is only
+  // updated once this code is verified.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS student_email_change_otps (
+      roll_number TEXT NOT NULL,
+      new_email   TEXT NOT NULL,
+      code_hash   TEXT NOT NULL,
+      expires_at  TIMESTAMPTZ NOT NULL,
+      attempts    INT NOT NULL DEFAULT 0,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (roll_number)
+    )
+  `);
+
   await pool.query(`
 
     CREATE TABLE IF NOT EXISTS student_watched_videos (

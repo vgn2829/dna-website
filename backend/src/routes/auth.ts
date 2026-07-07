@@ -5,7 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { query } from '../db/client';
-import { signStudentToken } from '../middleware/studentAuth';
+import { signStudentToken, requireStudent } from '../middleware/studentAuth';
 import { sendOtpEmail, sendWelcomeEmail } from '../services/mailer';
 
 export const authRouter = Router();
@@ -198,4 +198,104 @@ authRouter.post('/student/verify-otp', otpVerifyLimiter, async (req, res) => {
     session: { rollNumber: roll, uniqueId, registeredAt, name, email },
     progress: { watchedVideos: watched.map(r => r.video_id), completedQuizzes: quizzes.map(r => r.domain_id) },
   });
+});
+
+// ── Student email change (OTP-gated, sent to the NEW address) ─────────────────
+// Identity comes from the verified student JWT (requireStudent), never a
+// client-supplied roll number, so only the session owner can change the email.
+
+const changeEmailRequestLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 6,
+  message: { error: 'Too many requests — try again in 15 minutes' },
+});
+
+const changeEmailVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  message: { error: 'Too many attempts — try again in 15 minutes' },
+});
+
+const changeEmailSchema = z.object({
+  email: z.string().email().max(200)
+    .refine(e => e.toLowerCase().endsWith('@iitk.ac.in'), 'Only @iitk.ac.in email addresses are allowed')
+    .transform(e => e.toLowerCase()),
+});
+
+authRouter.post('/student/change-email/request', changeEmailRequestLimiter, requireStudent, async (req, res) => {
+  const roll = req.studentRoll!;
+  const parsed = changeEmailSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Enter a valid @iitk.ac.in email' }); return; }
+  const newEmail = parsed.data.email;
+
+  const sessionRows = await query<{ email: string | null }>(
+    'SELECT email FROM student_sessions WHERE roll_number=$1', [roll]
+  );
+  if (sessionRows.length === 0) { res.status(404).json({ error: 'Session not found' }); return; }
+  if ((sessionRows[0].email ?? '').toLowerCase() === newEmail) {
+    res.status(400).json({ error: 'That is already your email address' });
+    return;
+  }
+
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const codeHash = await bcrypt.hash(code, 10);
+  const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString();
+
+  await query(
+    `INSERT INTO student_email_change_otps (roll_number, new_email, code_hash, expires_at, attempts)
+     VALUES ($1,$2,$3,$4,0)
+     ON CONFLICT (roll_number)
+     DO UPDATE SET new_email=EXCLUDED.new_email, code_hash=EXCLUDED.code_hash,
+                   expires_at=EXCLUDED.expires_at, attempts=0, created_at=NOW()`,
+    [roll, newEmail, codeHash, expiresAt]
+  );
+
+  try {
+    await sendOtpEmail(newEmail, code);
+  } catch {
+    res.status(502).json({ error: 'Could not send verification email — try again shortly' });
+    return;
+  }
+
+  res.json({ sent: true, email: maskEmail(newEmail) });
+});
+
+const verifyChangeEmailSchema = z.object({ code: z.string().regex(/^[0-9]{6}$/, 'Invalid code') });
+
+authRouter.post('/student/change-email/verify', changeEmailVerifyLimiter, requireStudent, async (req, res) => {
+  const roll = req.studentRoll!;
+  const parsed = verifyChangeEmailSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid code' }); return; }
+  const { code } = parsed.data;
+
+  const rows = await query<{ new_email: string; code_hash: string; expires_at: string; attempts: number }>(
+    'SELECT new_email, code_hash, expires_at, attempts FROM student_email_change_otps WHERE roll_number=$1',
+    [roll]
+  );
+  if (rows.length === 0) { res.status(400).json({ error: 'No pending email change — request one first' }); return; }
+
+  const otp = rows[0];
+  if (new Date(otp.expires_at).getTime() < Date.now()) {
+    await query('DELETE FROM student_email_change_otps WHERE roll_number=$1', [roll]);
+    res.status(400).json({ error: 'Code expired — request a new one' });
+    return;
+  }
+  if (otp.attempts >= OTP_MAX_ATTEMPTS) {
+    await query('DELETE FROM student_email_change_otps WHERE roll_number=$1', [roll]);
+    res.status(429).json({ error: 'Too many incorrect attempts — request a new code' });
+    return;
+  }
+
+  const ok = await bcrypt.compare(code, otp.code_hash);
+  if (!ok) {
+    await query('UPDATE student_email_change_otps SET attempts=attempts+1 WHERE roll_number=$1', [roll]);
+    res.status(400).json({ error: 'Incorrect code' });
+    return;
+  }
+
+  // Verified — apply the change only now, then consume the pending row.
+  await query('UPDATE student_sessions SET email=$1 WHERE roll_number=$2', [otp.new_email, roll]);
+  await query('DELETE FROM student_email_change_otps WHERE roll_number=$1', [roll]);
+
+  res.json({ success: true, email: otp.new_email });
 });

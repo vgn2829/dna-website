@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLocation, useNavigate } from 'react-router';
-import { LogOut, Menu, Moon, Sun, X } from 'lucide-react';
+import { LogOut, Menu, Moon, Sun, X, Mail } from 'lucide-react';
 import { useStudent } from '../context/StudentContext';
 import { useTheme } from '../context/ThemeContext';
+import { ChangeEmailModal } from './ChangeEmailModal';
 
 // PALETTE_STUDIO_FEATURE — remove the Palette entry below to disable
 const NAV_LINKS = [
@@ -22,6 +23,7 @@ export function Navigation() {
   const { studentSession, openRollModal, logout } = useStudent();
   const { theme, toggle } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close menu on route change
@@ -48,6 +50,8 @@ export function Navigation() {
 
   return (
     <>
+      <ChangeEmailModal open={emailModalOpen} onClose={() => setEmailModalOpen(false)} />
+
       {/* ── Floating pill container ── */}
       <div
         style={{
@@ -266,6 +270,25 @@ export function Navigation() {
                       )}
                     </div>
                     <button
+                      onClick={() => setEmailModalOpen(true)}
+                      title="Change email"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--color-ink-muted)',
+                        cursor: 'pointer',
+                        padding: 0,
+                        opacity: 0.7,
+                        transition: 'opacity 0.15s ease',
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.7'; }}
+                    >
+                      <Mail size={12} />
+                    </button>
+                    <button
                       onClick={logout}
                       title="Log out"
                       style={{
@@ -479,6 +502,25 @@ export function Navigation() {
                           </p>
                         )}
                       </div>
+                      <button
+                        onClick={() => { setEmailModalOpen(true); setMenuOpen(false); }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '7px 14px',
+                          borderRadius: 'var(--radius-pill)',
+                          background: 'none',
+                          border: '1px solid var(--nav-border)',
+                          color: 'var(--color-ink-muted)',
+                          fontSize: 13,
+                          fontFamily: 'var(--font-body)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Mail size={12} />
+                        Change email
+                      </button>
                       <button
                         onClick={() => { logout(); setMenuOpen(false); }}
                         style={{
