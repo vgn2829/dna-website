@@ -1,6 +1,21 @@
 import { Resend } from 'resend';
 import { pool } from '../db/client';
 
+// From-address for all outgoing mail (imported by routes/notify.ts too).
+// Set MAIL_FROM to an address on a Resend-VERIFIED domain, e.g.
+// "DnA Club IITK <no-reply@dnaiitk.site>". If unset, we fall back to Resend's
+// shared sandbox address, which only delivers to the Resend account owner
+// (every other recipient returns 403) — fine for local dev, not production.
+const SANDBOX_FROM = 'DnA Club IITK <onboarding@resend.dev>';
+export const MAIL_FROM = process.env.MAIL_FROM ?? SANDBOX_FROM;
+
+if (!process.env.MAIL_FROM) {
+  console.warn(
+    'MAIL_FROM not set — falling back to the Resend sandbox address. Delivery is ' +
+    'limited to the Resend account owner; set MAIL_FROM to a verified-domain address.'
+  );
+}
+
 // Construct the Resend client lazily. Its constructor throws when the key is
 // missing, so building it at import time would crash the whole app on boot in
 // dev (where email is optional and OTP codes are logged to the console instead).
@@ -104,7 +119,7 @@ async function sendInBatches(emails: string[], subject: string, html: string): P
   }
   for (const chunk of chunks) {
     await resendClient().emails.send({
-      from: 'DnA Club IITK <onboarding@resend.dev>',
+      from: MAIL_FROM,
       replyTo: 'designandanimationclub.iitk@gmail.com',
       bcc: chunk,
       to: 'designandanimationclub.iitk@gmail.com',
@@ -136,7 +151,7 @@ export async function sendOtpEmail(email: string, code: string): Promise<void> {
 
   try {
     await resendClient().emails.send({
-      from: 'DnA Club IITK <onboarding@resend.dev>',
+      from: MAIL_FROM,
       replyTo: 'designandanimationclub.iitk@gmail.com',
       to: email,
       subject: 'Your DnA Club verification code',
@@ -160,7 +175,7 @@ export async function sendWelcomeEmail(name: string, email: string): Promise<voi
 
   try {
     await resendClient().emails.send({
-      from: 'DnA Club IITK <onboarding@resend.dev>',
+      from: MAIL_FROM,
       replyTo: 'designandanimationclub.iitk@gmail.com',
       to: email,
       subject: resolve(subject, vars),
