@@ -119,6 +119,30 @@ authRouter.post('/student/request-otp', otpRequestLimiter, async (req, res) => {
   res.json({ sent: true, isNew, email: maskEmail(targetEmail) });
 });
 
+// Send the welcome email at most once per student, without blocking the caller.
+// Sends only when welcome_email_sent_at IS NULL, and records the timestamp only
+// if the email actually went out (so a transient email failure retries next time).
+function maybeSendWelcome(roll: string, name: string, email: string): void {
+  void (async () => {
+    try {
+      const rows = await query<{ welcome_email_sent_at: string | null }>(
+        'SELECT welcome_email_sent_at FROM student_sessions WHERE roll_number=$1', [roll]
+      );
+      if (rows.length === 0 || rows[0].welcome_email_sent_at !== null) return;
+
+      const sent = await sendWelcomeEmail(name, email);
+      if (sent) {
+        await query(
+          'UPDATE student_sessions SET welcome_email_sent_at=NOW() WHERE roll_number=$1 AND welcome_email_sent_at IS NULL',
+          [roll]
+        );
+      }
+    } catch (err) {
+      console.error('Deferred welcome email failed:', err);
+    }
+  })();
+}
+
 const verifyOtpSchema = z.object({
   rollNumber: ROLL_SCHEMA,
   code: z.string().regex(/^[0-9]{6}$/, 'Invalid code'),
@@ -185,8 +209,12 @@ authRouter.post('/student/verify-otp', otpVerifyLimiter, async (req, res) => {
        ON CONFLICT (roll_number) DO UPDATE SET name=EXCLUDED.name, email=EXCLUDED.email`,
       [roll, uniqueId, registeredAt, name, email]
     );
-    sendWelcomeEmail(name, email).catch(err => console.error('Welcome email failed:', err));
   }
+
+  // Send the welcome email once per student — on registration, or on the first
+  // login afterwards for anyone who never received it. Fire-and-forget so a slow
+  // email API can't delay the login response.
+  maybeSendWelcome(roll, name, email);
 
   const watched = await query<{ video_id: string }>('SELECT video_id FROM student_watched_videos WHERE roll_number=$1', [roll]);
   const quizzes = await query<{ domain_id: string }>('SELECT domain_id FROM student_completed_quizzes WHERE roll_number=$1', [roll]);

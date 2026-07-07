@@ -138,6 +138,13 @@ export async function initSchema(): Promise<void> {
     ADD COLUMN IF NOT EXISTS email TEXT DEFAULT NULL
   `);
 
+  // NULL = welcome email not yet sent. Existing rows default to NULL so students
+  // who registered before email delivery worked still get one on next login.
+  await pool.query(`
+    ALTER TABLE student_sessions
+    ADD COLUMN IF NOT EXISTS welcome_email_sent_at TIMESTAMPTZ DEFAULT NULL
+  `);
+
   // One-time email verification codes for student login (OTP).
   // code_hash is a bcrypt hash; the plaintext code is never stored.
   await pool.query(`
