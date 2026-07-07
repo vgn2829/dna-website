@@ -164,8 +164,10 @@ export async function sendOtpEmail(email: string, code: string): Promise<void> {
   }
 }
 
-export async function sendWelcomeEmail(name: string, email: string): Promise<void> {
-  if (!process.env.RESEND_API_KEY) return;
+// Returns true only if the email was actually sent, so callers can record that
+// it happened (e.g. set welcome_email_sent_at) exactly once.
+export async function sendWelcomeEmail(name: string, email: string): Promise<boolean> {
+  if (!process.env.RESEND_API_KEY) return false;
 
   const tpl = await getTemplate('welcome');
   const subject = tpl?.subject ?? 'Welcome to Design and Animation Club, IIT Kanpur';
@@ -182,8 +184,10 @@ export async function sendWelcomeEmail(name: string, email: string): Promise<voi
       html: getBaseTemplate(resolve(body, vars, true)),
     });
     console.log(`Welcome email sent to ${email}`);
+    return true;
   } catch (err) {
     console.error('Failed to send welcome email:', err);
+    return false;
   }
 }
 
