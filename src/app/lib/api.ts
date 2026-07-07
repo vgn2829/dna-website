@@ -179,6 +179,9 @@ export const api = {
   },
   domains: {
     list: () => request<Record<string, unknown>>('GET', '/domains'),
+    submitQuiz: (domainId: string, roll: string, answers: number[]) =>
+      request<{ passed: boolean; correct: number; total: number; results: boolean[] }>(
+        'POST', `/domains/${domainId}/quiz/submit`, { body: { answers }, roll }),
     create: (domain: { title: string; fullName: string; icon: string; tagline: string; description: string; color: string }) =>
       request<unknown>('POST', '/domains', { body: domain, admin: true }),
     update: (id: string, data: object) => request<unknown>('PUT', `/domains/${id}`, { body: data, admin: true }),
@@ -254,7 +257,6 @@ export const api = {
       }>('POST', '/auth/student/verify-otp', { body: { rollNumber, code } }),
     markVideoWatched:   (roll: string, videoId: string) => request<void>('POST', `/students/${roll}/progress/videos/${videoId}`, { roll }),
     unmarkVideoWatched: (roll: string, videoId: string) => request<void>('DELETE', `/students/${roll}/progress/videos/${videoId}`, { roll }),
-    completeQuiz:       (roll: string, domainId: string) => request<void>('POST', `/students/${roll}/progress/quizzes/${domainId}`, { roll }),
   },
   boards: {
     getMyBoards: (roll: string) =>

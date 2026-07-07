@@ -105,14 +105,13 @@ export function StudentProvider({ children }: { children: React.ReactNode }) {
     });
   }, [studentSession]);
 
+  // Local state only — completion is recorded server-side by the graded quiz
+  // submit endpoint, so this just reflects the confirmed result in the UI.
   const completeQuiz = useCallback((domainId: string) => {
     setStudentProgress(prev => {
       if (prev.completedQuizzes.includes(domainId)) return prev;
       const next = { ...prev, completedQuizzes: [...prev.completedQuizzes, domainId] };
-      if (studentSession) {
-        api.students.completeQuiz(studentSession.rollNumber, domainId).catch(console.error);
-        persist(studentSession, next);
-      }
+      if (studentSession) persist(studentSession, next);
       return next;
     });
   }, [studentSession]);

@@ -33,7 +33,7 @@ export interface ClubEvent {
 }
 
 export interface VideoResource { id: string; title: string; ytId: string; difficulty: 'Beginner' | 'Intermediate' | 'Advanced'; duration: string; sequence: number; }
-export interface QuizQuestion  { q: string; options: string[]; ans: number; }
+export interface QuizQuestion  { q: string; options: string[]; }
 
 export interface Domain {
   id: string; title: string; fullName: string; icon: string;

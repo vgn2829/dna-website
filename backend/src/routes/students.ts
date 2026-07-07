@@ -72,16 +72,5 @@ studentsRouter.delete('/:roll/progress/videos/:videoId', progressWriteLimiter, r
   res.status(204).end();
 });
 
-// NOTE: quiz completion is still client-asserted here; item 12 (M-3) replaces
-// this with a server-graded submit-answers endpoint.
-studentsRouter.post('/:roll/progress/quizzes/:domainId', progressWriteLimiter, requireStudent, async (req, res) => {
-  const roll = req.studentRoll!;
-  if (!VALID_ID.test(req.params.domainId)) { res.status(400).json({ error: 'Invalid domain ID' }); return; }
-  const exists = await query('SELECT 1 FROM student_sessions WHERE roll_number=$1', [roll]);
-  if (exists.length === 0) { res.status(404).json({ error: 'Student not found' }); return; }
-  await query(
-    'INSERT INTO student_completed_quizzes(roll_number,domain_id) VALUES($1,$2) ON CONFLICT DO NOTHING',
-    [roll, req.params.domainId]
-  );
-  res.status(204).end();
-});
+// Quiz completion is recorded server-side by POST /domains/:id/quiz/submit
+// (graded), so there is no client-asserted quiz-completion endpoint here.
