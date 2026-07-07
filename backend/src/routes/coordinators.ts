@@ -1,9 +1,16 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { pool } from '../db/client';
 import { requireAdmin } from '../middleware/adminAuth';
 import { requireStudent } from '../middleware/studentAuth';
 
 const router = Router();
+
+const checkLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: 'Too many requests — please slow down' },
+});
 
 // GET /api/coordinators — admin only
 router.get('/', requireAdmin, async (req, res) => {
@@ -114,7 +121,7 @@ router.delete('/:roll', requireAdmin, async (req, res) => {
 
 // GET /api/coordinators/check — returns whether the *authenticated* student is an
 // approved coordinator. Derives the roll from the verified token (no enumeration).
-router.get('/check', requireStudent, async (req, res) => {
+router.get('/check', checkLimiter, requireStudent, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT approved

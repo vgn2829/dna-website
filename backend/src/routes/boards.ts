@@ -5,9 +5,16 @@ import { v4 as uuidv4 } from 'uuid';
 import { requireAdmin } from '../middleware/adminAuth';
 import { requireStudent, optionalStudent } from '../middleware/studentAuth';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import { getStorage } from '../storage';
 
 const router = Router();
+
+const createBoardLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  message: { error: 'Too many boards created — please slow down' },
+});
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -309,7 +316,7 @@ router.get('/:id', optionalStudent, async (req: Request, res: Response) => {
 
 // POST /api/boards
 // Create a new board
-router.post('/', requireStudent, async (req: Request, res: Response) => {
+router.post('/', createBoardLimiter, requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
 
