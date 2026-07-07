@@ -41,10 +41,17 @@ function verifyPublicMeetToken(token: string): boolean {
   }
 }
 
+// z.string().url() accepts javascript:/data: URLs; require an explicit https
+// scheme so a meet link can never become a script/phishing sink when rendered.
+const httpsUrl = z.string().url().max(500).refine(
+  u => { try { return new URL(u).protocol === 'https:'; } catch { return false; } },
+  'Meet link must be an https:// URL'
+);
+
 const sessionSchema = z.object({
   title: z.string().min(1).max(200),
   host: z.string().min(1).max(100),
-  meet_link: z.string().url(),
+  meet_link: httpsUrl,
   scheduled_at: z.string(),
   audience_group_id: z.string().nullable().optional(),
   description: z.string().max(500).optional(),

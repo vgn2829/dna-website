@@ -214,7 +214,16 @@ artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount
   const existing = await query<ArtworkRow>('SELECT * FROM artworks WHERE id=$1', [req.params.id]);
   if (existing.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
 
-  const { title, artist, domain, featured: featuredStr } = req.body as Record<string, string>;
+  const putBodySchema = z.object({
+    title:    z.string().min(1).max(200).optional(),
+    artist:   z.string().max(200).optional(),
+    domain:   z.string().min(1).max(100).optional(),
+    featured: z.enum(['true', 'false']).optional(),
+  });
+  const parsedBody = putBodySchema.safeParse(req.body);
+  if (!parsedBody.success) { res.status(400).json({ error: parsedBody.error.flatten() }); return; }
+  const { title, artist, domain, featured: featuredStr } = parsedBody.data;
+
   const sets: string[] = [];
   const vals: unknown[] = [];
   let i = 1;

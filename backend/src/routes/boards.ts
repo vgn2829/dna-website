@@ -489,10 +489,20 @@ router.post('/:id/items', requireStudent, async (req: Request, res: Response) =>
       return res.status(403).json({ error: 'Access denied' });
     }
 
+    // Only allow http(s) (and inline data:image/ for pasted images) so stored
+    // URLs can't become javascript:/other-scheme sinks when rendered.
+    const safeUrl = (allowDataImage: boolean) => z.string().min(1).max(2_000_000).refine(u => {
+      if (allowDataImage && /^data:image\//i.test(u)) return true;
+      try {
+        const proto = new URL(u).protocol;
+        return proto === 'https:' || proto === 'http:';
+      } catch { return false; }
+    }, 'URL must be http(s) or a data:image');
+
     const schema = z.object({
-      image_url: z.string().min(1),
+      image_url: safeUrl(true),
       note: z.string().max(500).optional(),
-      source_url: z.string().optional(),
+      source_url: safeUrl(false).optional(),
     });
 
     const parsed = schema.parse(req.body);
