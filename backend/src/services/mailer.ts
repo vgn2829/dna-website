@@ -36,8 +36,25 @@ async function getTemplate(id: string): Promise<{ subject: string; body: string 
   }
 }
 
-function resolve(template: string, vars: Record<string, string>): string {
-  return Object.entries(vars).reduce((s, [k, v]) => s.replaceAll(k, v), template);
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Single-pass {{placeholder}} substitution. Because each placeholder is replaced
+// exactly once from the map, a value that itself contains "{{other}}" cannot be
+// re-expanded. When `escape` is set (HTML bodies), values are HTML-escaped so
+// user-supplied fields (name, title, …) can't inject markup.
+function resolve(template: string, vars: Record<string, string>, escape = false): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (match, key: string) => {
+    const val = vars[`{{${key}}}`];
+    if (val === undefined) return match;
+    return escape ? escapeHtml(val) : val;
+  });
 }
 
 function getBaseTemplate(content: string): string {
@@ -139,7 +156,7 @@ export async function sendWelcomeEmail(name: string, email: string): Promise<voi
       replyTo: 'designandanimationclub.iitk@gmail.com',
       to: email,
       subject: resolve(subject, vars),
-      html: getBaseTemplate(resolve(body, vars)),
+      html: getBaseTemplate(resolve(body, vars, true)),
     });
     console.log(`Welcome email sent to ${email}`);
   } catch (err) {
@@ -169,7 +186,7 @@ export async function sendEventNotification(event: {
   };
 
   try {
-    await sendInBatches(emails, resolve(subject, vars), resolve(body, vars));
+    await sendInBatches(emails, resolve(subject, vars), resolve(body, vars, true));
     console.log(`Event notification sent to ${emails.length} students`);
   } catch (err) {
     console.error('Failed to send event notification:', err);
@@ -196,7 +213,7 @@ export async function sendArtworkNotification(artwork: {
   };
 
   try {
-    await sendInBatches(emails, resolve(subject, vars), resolve(body, vars));
+    await sendInBatches(emails, resolve(subject, vars), resolve(body, vars, true));
     console.log(`Artwork notification sent to ${emails.length} students`);
   } catch (err) {
     console.error('Failed to send artwork notification:', err);
