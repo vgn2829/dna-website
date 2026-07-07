@@ -1,12 +1,20 @@
 import { Resend } from 'resend';
 import { pool } from '../db/client';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Construct the Resend client lazily. Its constructor throws when the key is
+// missing, so building it at import time would crash the whole app on boot in
+// dev (where email is optional and OTP codes are logged to the console instead).
+// Callers only reach resendClient() after checking RESEND_API_KEY is set.
+let _resend: Resend | null = null;
+function resendClient(): Resend {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+  return _resend;
+}
 
 if (process.env.RESEND_API_KEY) {
   console.log('Email service ready (Resend)');
 } else {
-  console.warn('RESEND_API_KEY not set — emails will not be sent');
+  console.warn('RESEND_API_KEY not set — emails will not be sent (OTP codes log to console)');
 }
 
 async function getAllStudentEmails(): Promise<string[]> {
@@ -95,7 +103,7 @@ async function sendInBatches(emails: string[], subject: string, html: string): P
     chunks.push(emails.slice(i, i + 50));
   }
   for (const chunk of chunks) {
-    await resend.emails.send({
+    await resendClient().emails.send({
       from: 'DnA Club IITK <onboarding@resend.dev>',
       replyTo: 'designandanimationclub.iitk@gmail.com',
       bcc: chunk,
@@ -127,7 +135,7 @@ export async function sendOtpEmail(email: string, code: string): Promise<void> {
     </p>`;
 
   try {
-    await resend.emails.send({
+    await resendClient().emails.send({
       from: 'DnA Club IITK <onboarding@resend.dev>',
       replyTo: 'designandanimationclub.iitk@gmail.com',
       to: email,
@@ -151,7 +159,7 @@ export async function sendWelcomeEmail(name: string, email: string): Promise<voi
   const vars = { '{{name}}': name };
 
   try {
-    await resend.emails.send({
+    await resendClient().emails.send({
       from: 'DnA Club IITK <onboarding@resend.dev>',
       replyTo: 'designandanimationclub.iitk@gmail.com',
       to: email,
