@@ -2278,6 +2278,22 @@ function TemplateEditor({ templateId }: TemplateEditorProps) {
     } catch { /* cross-origin guard */ }
   };
 
+  const [testEmail, setTestEmail] = useState('vnayak23@iitk.ac.in');
+  const [testing, setTesting] = useState(false);
+  const [testMsg, setTestMsg] = useState('');
+
+  const handleSendTest = async () => {
+    setTesting(true); setTestMsg('');
+    try {
+      await api.notify.sendTemplateTest(templateId, { email: testEmail.trim(), subject, body });
+      setTestMsg(`✓ Test sent to ${testEmail.trim()}`);
+    } catch (e) {
+      setTestMsg(e instanceof Error ? e.message : 'Failed to send test');
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true); setError('');
     try {
@@ -2355,6 +2371,33 @@ function TemplateEditor({ templateId }: TemplateEditorProps) {
         </p>
       </div>
 
+      <div>
+        <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)' }}>
+          Send test
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <input
+            className="input-base"
+            type="email"
+            value={testEmail}
+            onChange={e => { setTestEmail(e.target.value); setTestMsg(''); }}
+            placeholder="you@iitk.ac.in"
+            style={{ flex: '1 1 240px', minWidth: 180, boxSizing: 'border-box' }}
+          />
+          <button className="btn-secondary" onClick={handleSendTest} disabled={testing || !testEmail.trim()}>
+            {testing ? 'Sending…' : 'Send test'}
+          </button>
+          {testMsg && (
+            <span style={{ fontSize: 12, fontFamily: 'var(--font-body)', color: testMsg.startsWith('✓') ? 'var(--color-success)' : 'var(--color-error)' }}>
+              {testMsg}
+            </span>
+          )}
+        </div>
+        <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+          Sends this exact rendered email to that one address only — never the student list.
+        </p>
+      </div>
+
       {error && <p style={{ color: 'var(--color-error)', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>{error}</p>}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -2373,6 +2416,9 @@ function CustomAnnouncement() {
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [testEmail, setTestEmail] = useState('vnayak23@iitk.ac.in');
+  const [testing, setTesting] = useState(false);
+  const [testMsg, setTestMsg] = useState('');
 
   const handleSend = async () => {
     setSending(true); setResult(null);
@@ -2383,6 +2429,18 @@ function CustomAnnouncement() {
     } catch {
       setResult({ success: false, message: 'Failed to send announcement' });
     } finally { setSending(false); }
+  };
+
+  const handleSendTest = async () => {
+    setTesting(true); setTestMsg('');
+    try {
+      await api.notify.sendTemplateTest('custom', { email: testEmail.trim(), subject, body });
+      setTestMsg(`✓ Test sent to ${testEmail.trim()}`);
+    } catch (e) {
+      setTestMsg(e instanceof Error ? e.message : 'Failed to send test');
+    } finally {
+      setTesting(false);
+    }
   };
 
   return (
@@ -2433,6 +2491,33 @@ function CustomAnnouncement() {
           {result.message}
         </p>
       )}
+
+      <div>
+        <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)' }}>
+          Send test to one address first
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <input
+            className="input-base"
+            type="email"
+            value={testEmail}
+            onChange={e => { setTestEmail(e.target.value); setTestMsg(''); }}
+            placeholder="you@iitk.ac.in"
+            style={{ flex: '1 1 240px', minWidth: 180, boxSizing: 'border-box' }}
+          />
+          <button className="btn-secondary" onClick={handleSendTest} disabled={testing || !testEmail.trim() || !subject || !body}>
+            {testing ? 'Sending…' : 'Send test'}
+          </button>
+          {testMsg && (
+            <span style={{ fontSize: 12, fontFamily: 'var(--font-body)', color: testMsg.startsWith('✓') ? 'var(--color-success)' : 'var(--color-error)' }}>
+              {testMsg}
+            </span>
+          )}
+        </div>
+        <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+          Sends only to that one address — never the student list.
+        </p>
+      </div>
 
       {!confirmOpen ? (
         <button className="btn-primary" onClick={() => setConfirmOpen(true)} disabled={!subject || !body}>

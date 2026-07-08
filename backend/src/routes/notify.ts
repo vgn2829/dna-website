@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAdmin } from '../middleware/adminAuth';
-import { sendEventNotification, sendArtworkNotification, sendCustomAnnouncement, MAIL_FROM, renderTemplatePreview, templateVariables } from '../services/mailer';
+import { sendEventNotification, sendArtworkNotification, sendCustomAnnouncement, MAIL_FROM, renderTemplatePreview, templateVariables, sendTemplateTest } from '../services/mailer';
 import { pool } from '../db/client';
 
 const router = Router();
@@ -122,6 +122,33 @@ router.post('/templates/:id/preview', requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('Template preview error:', err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Sends the rendered draft to a SINGLE admin-supplied address — never the
+// broadcast list — so a template can be checked in a real inbox safely.
+const testSendSchema = z.object({
+  email: z.string().email().max(200),
+  subject: z.string().min(1).max(MAX_SUBJECT),
+  body: z.string().min(1).max(MAX_HTML),
+});
+
+router.post('/templates/:id/test', requireAdmin, async (req, res) => {
+  try {
+    const parsed = testSendSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'A valid email, subject and body are required' });
+      return;
+    }
+    if (!process.env.RESEND_API_KEY) {
+      res.status(503).json({ error: 'Email service is not configured (RESEND_API_KEY unset)' });
+      return;
+    }
+    await sendTemplateTest(req.params.id, parsed.data.email, parsed.data.subject, parsed.data.body);
+    res.json({ success: true, sentTo: parsed.data.email });
+  } catch (err) {
+    console.error('Template test send error:', err);
+    res.status(502).json({ error: err instanceof Error ? err.message : 'Failed to send test email' });
   }
 });
 
