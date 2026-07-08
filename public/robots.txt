@@ -1,0 +1,7 @@
+# DnA Club, IIT Kanpur
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /moodboards
+
+Sitemap: https://dna-website-two.vercel.app/sitemap.xml
