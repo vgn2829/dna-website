@@ -235,19 +235,51 @@ export async function initSchema(): Promise<void> {
   if (parseInt((templateCount.rows[0] as { count: string }).count) === 0) {
     const now = new Date().toISOString();
 
-    const welcomeBody = `<h2 style="margin:0 0 12px;font-size:22px;color:#ffffff;">Welcome to DnA Club, {{name}}</h2>
-        <p style="margin:0 0 12px;color:#cccccc;font-size:15px;line-height:1.7;">
-          You are now part of the Design and Animation Club family at IIT Kanpur.
-        </p>
-        <p style="margin:0 0 12px;color:#cccccc;font-size:15px;line-height:1.7;">
-          We are a community of designers, animators, and creative thinkers.
-          Explore our gallery, attend our events, and be part of the creative
-          journey at IITK.
-        </p>
-        <p style="margin:0;color:#cccccc;font-size:15px;line-height:1.7;">
-          Stay tuned for updates on workshops, exhibitions, and events.
-          We are glad to have you with us.
-        </p>`;
+    // Full standalone HTML document — sent as-is by sendWelcomeEmail (it does NOT
+    // apply the getBaseTemplate shell). All styles are inlined so email clients
+    // that strip <style> blocks still render the design.
+    const welcomeBody = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome to DnA Club</title>
+</head>
+<body style="margin:0; padding:0; background-color:#222; font-family:'Helvetica Neue', Helvetica, Arial, sans-serif;">
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#222; margin:0; padding:0;">
+  <tr>
+    <td align="center" style="padding:40px 20px;">
+
+      <div style="background-color:#dced3e; padding:20px 20px 40px 20px; border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,0.6); max-width:450px; width:100%; margin:0 auto; text-align:left;">
+        <div style="background-color:#f4f4f0; padding:45px 35px; box-shadow:2px 2px 10px rgba(0,0,0,0.1); position:relative; background-image:radial-gradient(#aaa 1px, transparent 1px); background-size:20px 20px; background-position:0 0;">
+          <div style="font-family:monospace; font-size:16px; border-bottom:1.5px solid #222; display:inline-block; margin-bottom:35px; color:#222; text-transform:lowercase;">iit_kanpur</div>
+
+          <h1 style="font-size:45px; font-weight:800; color:#111; line-height:1.05; margin:0 0 25px 0; letter-spacing:-1.5px;">Welcome to<br>DnA Club,<br>{{name}}.</h1>
+
+          <p style="font-size:16px; line-height:1.6; color:#333; margin:0 0 18px 0; font-weight:500;">
+            You are now part of the Design and Animation Club family.
+          </p>
+
+          <p style="font-size:16px; line-height:1.6; color:#333; margin:0 0 18px 0; font-weight:500;">
+            We are a community of designers, animators, and creative thinkers. Explore our gallery, attend our events, and be part of the creative journey at IITK.
+          </p>
+
+          <p style="font-size:16px; line-height:1.6; color:#333; margin:0; font-weight:500;">
+            <span style="background-color:#e0f55b; display:inline-block; padding:2px 6px; font-weight:700; color:#111; border-radius:2px;">Stay tuned</span> for updates on workshops, exhibitions, and events. We are glad to have you with us.
+          </p>
+        </div>
+
+        <div style="margin-top:25px; font-size:35px; font-weight:800; color:#111; text-align:center; letter-spacing:-1px;">Get creative.</div>
+        <div style="text-align:center; color:#000; font-size:12px; margin-top:25px; font-weight:500; letter-spacing:0.5px; opacity:0.8;">designed by venugopal</div>
+      </div>
+
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>`;
 
     const artworkBody = `<h2 style="margin:0 0 8px;font-size:22px;color:#ffffff;">New Artwork: {{title}}</h2>
         <p style="margin:0 0 4px;color:#999;font-size:14px;">by {{artist}}</p>
