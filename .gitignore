@@ -7,3 +7,6 @@ backend/dist/
 backend/uploads/
 *.db
 .DS_Store
+
+# Claude Code — per-developer local settings (permission allowlist etc.)
+.claude/settings.local.json
