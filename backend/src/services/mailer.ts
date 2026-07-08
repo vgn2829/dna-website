@@ -181,7 +181,10 @@ export async function sendWelcomeEmail(name: string, email: string): Promise<boo
       replyTo: 'designandanimationclub.iitk@gmail.com',
       to: email,
       subject: resolve(subject, vars),
-      html: getBaseTemplate(resolve(body, vars, true)),
+      // The welcome template is a full standalone HTML document — send it as-is
+      // (only {{name}} substituted + HTML-escaped) WITHOUT the getBaseTemplate
+      // shell that the event/artwork notifications use.
+      html: resolve(body, vars, true),
     });
     console.log(`Welcome email sent to ${email}`);
     return true;
