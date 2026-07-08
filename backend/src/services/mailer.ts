@@ -112,6 +112,40 @@ function getBaseTemplate(content: string): string {
   `;
 }
 
+// ── Single source of truth for the shell decision ────────────────────────────
+// Which template ids ship as a standalone HTML document (NO getBaseTemplate
+// shell). Both the send path and the admin preview consult this, so they can't
+// drift. To make a future template standalone, add its id here — nothing else.
+export const STANDALONE_TEMPLATE_IDS = new Set<string>(['welcome']);
+
+export function renderTemplateHtml(templateId: string, resolvedBody: string): string {
+  return STANDALONE_TEMPLATE_IDS.has(templateId) ? resolvedBody : getBaseTemplate(resolvedBody);
+}
+
+// Sample values for the accurate admin preview — the real placeholders each
+// template substitutes. The keys also define each template's variable list.
+export const TEMPLATE_SAMPLE_VARS: Record<string, Record<string, string>> = {
+  welcome:     { '{{name}}': 'Aarav Sharma' },
+  new_artwork: { '{{title}}': 'Ethereal Solitude', '{{artist}}': 'Vikram Aditya', '{{domain}}': '3D Animation' },
+  new_event:   { '{{title}}': 'Figma UI Sprint', '{{date}}': '12 Jun 2026', '{{venue}}': 'LHC-3', '{{description}}': 'A hands-on masterclass on structural glassmorphism and adaptive layouts.' },
+};
+
+export function templateVariables(templateId: string): string[] {
+  return Object.keys(TEMPLATE_SAMPLE_VARS[templateId] ?? {});
+}
+
+// Produce the EXACT html that would be sent for a template + draft body (same
+// resolve() + wrap/bypass as the real send path), for an accurate admin preview.
+export function renderTemplatePreview(templateId: string, subject: string, body: string): { subject: string; html: string } {
+  const vars = TEMPLATE_SAMPLE_VARS[templateId] ?? {};
+  return {
+    subject: resolve(subject, vars),
+    html: renderTemplateHtml(templateId, resolve(body, vars, true)),
+  };
+}
+
+// Sends pre-rendered html as-is (the caller decides shell vs. standalone via
+// renderTemplateHtml), so batch notifications share the same shell logic.
 async function sendInBatches(emails: string[], subject: string, html: string): Promise<void> {
   const chunks: string[][] = [];
   for (let i = 0; i < emails.length; i += 50) {
@@ -124,7 +158,7 @@ async function sendInBatches(emails: string[], subject: string, html: string): P
       bcc: chunk,
       to: 'designandanimationclub.iitk@gmail.com',
       subject,
-      html: getBaseTemplate(html),
+      html,
     });
   }
 }
@@ -181,10 +215,8 @@ export async function sendWelcomeEmail(name: string, email: string): Promise<boo
       replyTo: 'designandanimationclub.iitk@gmail.com',
       to: email,
       subject: resolve(subject, vars),
-      // The welcome template is a full standalone HTML document — send it as-is
-      // (only {{name}} substituted + HTML-escaped) WITHOUT the getBaseTemplate
-      // shell that the event/artwork notifications use.
-      html: resolve(body, vars, true),
+      // renderTemplateHtml bypasses the shell for standalone templates (welcome).
+      html: renderTemplateHtml('welcome', resolve(body, vars, true)),
     });
     console.log(`Welcome email sent to ${email}`);
     return true;
@@ -216,7 +248,7 @@ export async function sendEventNotification(event: {
   };
 
   try {
-    await sendInBatches(emails, resolve(subject, vars), resolve(body, vars, true));
+    await sendInBatches(emails, resolve(subject, vars), renderTemplateHtml('new_event', resolve(body, vars, true)));
     console.log(`Event notification sent to ${emails.length} students`);
   } catch (err) {
     console.error('Failed to send event notification:', err);
@@ -243,7 +275,7 @@ export async function sendArtworkNotification(artwork: {
   };
 
   try {
-    await sendInBatches(emails, resolve(subject, vars), resolve(body, vars, true));
+    await sendInBatches(emails, resolve(subject, vars), renderTemplateHtml('new_artwork', resolve(body, vars, true)));
     console.log(`Artwork notification sent to ${emails.length} students`);
   } catch (err) {
     console.error('Failed to send artwork notification:', err);
@@ -259,7 +291,8 @@ export async function sendCustomAnnouncement(
   if (emails.length === 0) return;
 
   try {
-    await sendInBatches(emails, subject, html);
+    // Custom announcements are not a stored template; they always use the shell.
+    await sendInBatches(emails, subject, renderTemplateHtml('custom', html));
     console.log(`Custom announcement sent to ${emails.length} students`);
   } catch (err) {
     console.error('Failed to send custom announcement:', err);

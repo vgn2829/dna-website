@@ -2235,16 +2235,18 @@ type AnnouncementSubTab = 'welcome' | 'new_post' | 'new_event' | 'custom';
 interface TemplateEditorProps {
   templateId: string;
   label: string;
-  variables: string[];
 }
 
-function TemplateEditor({ templateId, variables }: TemplateEditorProps) {
+function TemplateEditor({ templateId }: TemplateEditorProps) {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [previewHtml, setPreviewHtml] = useState('');
+  const [variables, setVariables] = useState<string[]>([]);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -2253,6 +2255,28 @@ function TemplateEditor({ templateId, variables }: TemplateEditorProps) {
       .catch(() => setError('Failed to load template'))
       .finally(() => setLoading(false));
   }, [templateId]);
+
+  // Accurate preview: the backend renders the EXACT send output for the current
+  // draft (shell-wrapped or standalone, per the template's real send path), so
+  // the preview can never drift from what's actually emailed.
+  useEffect(() => {
+    if (loading) return;
+    const handle = setTimeout(() => {
+      api.notify.previewTemplate(templateId, { subject, body })
+        .then(r => { setPreviewHtml(r.html); setVariables(r.variables); })
+        .catch(() => {});
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [templateId, subject, body, loading]);
+
+  // Fit the preview iframe to its content (email HTML runs no scripts).
+  const fitIframe = () => {
+    const f = iframeRef.current;
+    try {
+      const doc = f?.contentDocument;
+      if (f && doc) f.style.height = Math.max(240, doc.documentElement.scrollHeight) + 'px';
+    } catch { /* cross-origin guard */ }
+  };
 
   const handleSave = async () => {
     setSaving(true); setError('');
@@ -2314,14 +2338,21 @@ function TemplateEditor({ templateId, variables }: TemplateEditorProps) {
 
       <div>
         <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)' }}>
-          Preview
+          Preview — exact email as sent
         </p>
-        <div style={{ border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: 'var(--color-canvas)' }}>
-          <div style={{ background: 'var(--color-brand)', padding: '16px 24px' }}>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-body)' }}>Design & Animation Club, IIT Kanpur</p>
-          </div>
-          <div style={{ padding: 24 }} dangerouslySetInnerHTML={{ __html: body }} />
+        <div style={{ border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: '#ffffff' }}>
+          <iframe
+            ref={iframeRef}
+            title="Email preview"
+            srcDoc={previewHtml}
+            sandbox="allow-same-origin"
+            onLoad={fitIframe}
+            style={{ width: '100%', height: 400, border: 'none', display: 'block', background: '#ffffff' }}
+          />
         </div>
+        <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+          Rendered by the real send pipeline with sample variable values — matches the actual email exactly (shell-wrapped or standalone per template).
+        </p>
       </div>
 
       {error && <p style={{ color: 'var(--color-error)', fontSize: 13, fontFamily: 'var(--font-body)', margin: 0 }}>{error}</p>}
@@ -2466,9 +2497,9 @@ function AnnouncementsTab() {
       </div>
 
       <div>
-        {subTab === 'welcome'   && <TemplateEditor templateId="welcome"     label="Welcome Email"   variables={['{{name}}']} />}
-        {subTab === 'new_post'  && <TemplateEditor templateId="new_artwork" label="New Artwork Email" variables={['{{title}}', '{{artist}}', '{{domain}}']} />}
-        {subTab === 'new_event' && <TemplateEditor templateId="new_event"   label="New Event Email"  variables={['{{title}}', '{{date}}', '{{venue}}', '{{description}}']} />}
+        {subTab === 'welcome'   && <TemplateEditor templateId="welcome"     label="Welcome Email"   />}
+        {subTab === 'new_post'  && <TemplateEditor templateId="new_artwork" label="New Artwork Email" />}
+        {subTab === 'new_event' && <TemplateEditor templateId="new_event"   label="New Event Email"  />}
         {subTab === 'custom'    && <CustomAnnouncement />}
       </div>
     </div>
