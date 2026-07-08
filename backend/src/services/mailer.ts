@@ -144,6 +144,21 @@ export function renderTemplatePreview(templateId: string, subject: string, body:
   };
 }
 
+// Sends the rendered template to a SINGLE admin-supplied address for testing.
+// Deliberately does NOT call getAllStudentEmails / the broadcast list — it emails
+// exactly `toEmail`, using the same render as the preview. Subject is prefixed
+// [TEST] so it's obvious in the inbox.
+export async function sendTemplateTest(templateId: string, toEmail: string, subject: string, body: string): Promise<void> {
+  const rendered = renderTemplatePreview(templateId, subject, body);
+  await resendClient().emails.send({
+    from: MAIL_FROM,
+    replyTo: 'designandanimationclub.iitk@gmail.com',
+    to: toEmail,
+    subject: `[TEST] ${rendered.subject}`,
+    html: rendered.html,
+  });
+}
+
 // Sends pre-rendered html as-is (the caller decides shell vs. standalone via
 // renderTemplateHtml), so batch notifications share the same shell logic.
 async function sendInBatches(emails: string[], subject: string, html: string): Promise<void> {

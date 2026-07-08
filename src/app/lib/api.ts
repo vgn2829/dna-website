@@ -240,6 +240,9 @@ export const api = {
     previewTemplate: (id: string, data: { subject: string; body: string }) =>
       request<{ subject: string; html: string; variables: string[] }>(
         'POST', `/notify/templates/${id}/preview`, { body: data, admin: true }),
+    sendTemplateTest: (id: string, data: { email: string; subject: string; body: string }) =>
+      request<{ success: boolean; sentTo: string }>(
+        'POST', `/notify/templates/${id}/test`, { body: data, admin: true }),
     sendAnnouncement: (data: { subject: string; html: string }) =>
       request<{ success: boolean; sent: number }>('POST', '/notify/announce', { body: data, admin: true }),
   },
