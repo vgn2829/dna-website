@@ -237,6 +237,9 @@ export const api = {
       request<EmailTemplate>('GET', `/notify/templates/${id}`, { admin: true }),
     updateTemplate: (id: string, data: { subject: string; body: string }) =>
       request<EmailTemplate>('PUT', `/notify/templates/${id}`, { body: data, admin: true }),
+    previewTemplate: (id: string, data: { subject: string; body: string }) =>
+      request<{ subject: string; html: string; variables: string[] }>(
+        'POST', `/notify/templates/${id}/preview`, { body: data, admin: true }),
     sendAnnouncement: (data: { subject: string; html: string }) =>
       request<{ success: boolean; sent: number }>('POST', '/notify/announce', { body: data, admin: true }),
   },

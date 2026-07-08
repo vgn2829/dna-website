@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAdmin } from '../middleware/adminAuth';
-import { sendEventNotification, sendArtworkNotification, sendCustomAnnouncement, MAIL_FROM } from '../services/mailer';
+import { sendEventNotification, sendArtworkNotification, sendCustomAnnouncement, MAIL_FROM, renderTemplatePreview, templateVariables } from '../services/mailer';
 import { pool } from '../db/client';
 
 const router = Router();
@@ -99,6 +99,28 @@ router.get('/templates/:id', requireAdmin, async (req, res) => {
     }
     res.json(result.rows[0]);
   } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Renders the EXACT html a template would send (shell-wrapped or standalone,
+// per the mailer's single source of truth) for the given DRAFT subject/body, so
+// the admin preview always matches the real email. Returns the variable list too.
+router.post('/templates/:id/preview', requireAdmin, async (req, res) => {
+  try {
+    const parsed = templateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Subject and body are required (subject ≤ 300, body ≤ 100 KB)' });
+      return;
+    }
+    const rendered = renderTemplatePreview(req.params.id, parsed.data.subject, parsed.data.body);
+    res.json({
+      subject: rendered.subject,
+      html: rendered.html,
+      variables: templateVariables(req.params.id),
+    });
+  } catch (err) {
+    console.error('Template preview error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
