@@ -116,7 +116,7 @@ function getBaseTemplate(content: string): string {
 // Which template ids ship as a standalone HTML document (NO getBaseTemplate
 // shell). Both the send path and the admin preview consult this, so they can't
 // drift. To make a future template standalone, add its id here — nothing else.
-export const STANDALONE_TEMPLATE_IDS = new Set<string>(['welcome']);
+export const STANDALONE_TEMPLATE_IDS = new Set<string>(['welcome', 'new_artwork', 'new_event']);
 
 export function renderTemplateHtml(templateId: string, resolvedBody: string): string {
   return STANDALONE_TEMPLATE_IDS.has(templateId) ? resolvedBody : getBaseTemplate(resolvedBody);
@@ -163,6 +163,60 @@ async function sendInBatches(emails: string[], subject: string, html: string): P
   }
 }
 
+const OTP_WEBSITE_URL = 'https://dna-website-two.vercel.app';
+
+// Standalone OTP email (bypasses getBaseTemplate — CSS inlined for email
+// clients). Hardcoded rather than an editable template because it's
+// login-critical; the code is injected directly (digits only) and the link
+// points at the site. Exported so the preview harness renders the exact output.
+export function renderOtpHtml(code: string): string {
+  const safeCode = code.replace(/[^0-9]/g, '');
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your verification code — DnA Club</title>
+</head>
+<body style="margin:0; padding:0; background-color:#222; font-family:'Helvetica Neue', Helvetica, Arial, sans-serif;">
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#222; margin:0; padding:0;">
+  <tr>
+    <td align="center" style="padding:40px 20px;">
+
+      <div style="background-color:#dced3e; padding:20px 20px 40px 20px; border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,0.6); max-width:450px; width:100%; margin:0 auto; text-align:left;">
+        <div style="background-color:#f4f4f0; padding:45px 35px; box-shadow:2px 2px 10px rgba(0,0,0,0.1); position:relative; background-image:radial-gradient(#aaa 1px, transparent 1px); background-size:20px 20px; background-position:0 0;">
+          <div style="font-family:monospace; font-size:16px; border-bottom:1.5px solid #222; display:inline-block; margin-bottom:35px; color:#222; text-transform:lowercase;">auth_request</div>
+
+          <h1 style="font-size:45px; font-weight:800; color:#111; line-height:1.05; margin:0 0 25px 0; letter-spacing:-1.5px;">Your verification code</h1>
+
+          <p style="font-size:16px; line-height:1.6; color:#333; margin:0; font-weight:500;">
+            Use this code to sign in to DnA Club. It expires in 10 minutes.
+          </p>
+
+          <div style="background-color:#e5e5e5; padding:20px; text-align:center; border-radius:6px; margin:25px 0; font-size:35px; font-weight:800; letter-spacing:4px; color:#333;">
+            ${safeCode}
+          </div>
+
+          <p style="font-size:13px; color:#888; margin-top:20px;">
+            If you did not request this, you can ignore this email.
+          </p>
+
+          <a href="${OTP_WEBSITE_URL}" style="display:inline-block; background-color:#e64298; color:#ffffff; padding:12px 24px; text-decoration:none; font-weight:bold; border-radius:25px; margin-top:15px;">Visit Website</a>
+        </div>
+
+        <div style="margin-top:25px; font-size:35px; font-weight:800; color:#111; text-align:center; letter-spacing:-1px;">Get creative.</div>
+        <div style="text-align:center; color:#555; font-size:14px; margin-top:15px; font-weight:500; letter-spacing:0.5px;">designed by venugopal</div>
+      </div>
+
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>`;
+}
+
 export async function sendOtpEmail(email: string, code: string): Promise<void> {
   if (!process.env.RESEND_API_KEY) {
     // In dev without email configured, surface the code in logs so the flow is testable.
@@ -170,26 +224,13 @@ export async function sendOtpEmail(email: string, code: string): Promise<void> {
     return;
   }
 
-  const content = `
-    <h2 style="margin:0 0 12px;font-size:22px;color:#ffffff;">Your verification code</h2>
-    <p style="margin:0 0 16px;color:#cccccc;font-size:15px;line-height:1.7;">
-      Use this code to sign in to DnA Club. It expires in 10 minutes.
-    </p>
-    <div style="font-size:32px;font-weight:700;letter-spacing:8px;color:#ffffff;
-      background:#1a1a1a;border-radius:8px;padding:16px 24px;text-align:center;">
-      ${code.replace(/[^0-9]/g, '')}
-    </div>
-    <p style="margin:16px 0 0;color:#777;font-size:13px;line-height:1.6;">
-      If you did not request this, you can ignore this email.
-    </p>`;
-
   try {
     await resendClient().emails.send({
       from: MAIL_FROM,
       replyTo: 'designandanimationclub.iitk@gmail.com',
       to: email,
       subject: 'Your DnA Club verification code',
-      html: getBaseTemplate(content),
+      html: renderOtpHtml(code),
     });
     console.log(`OTP email sent to ${email}`);
   } catch (err) {

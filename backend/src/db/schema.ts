@@ -281,18 +281,85 @@ export async function initSchema(): Promise<void> {
 </body>
 </html>`;
 
-    const artworkBody = `<h2 style="margin:0 0 8px;font-size:22px;color:#ffffff;">New Artwork: {{title}}</h2>
-        <p style="margin:0 0 4px;color:#999;font-size:14px;">by {{artist}}</p>
-        <p style="margin:0 0 16px;color:#999;font-size:14px;">{{domain}}</p>
-        <p style="margin:16px 0;color:#cccccc;font-size:15px;line-height:1.7;">
-          A new artwork has been added to the DnA Club gallery. Visit the
-          website to explore the latest creative work from our members.
-        </p>`;
+    // Full standalone HTML document (bypasses getBaseTemplate — see
+    // STANDALONE_TEMPLATE_IDS). CSS inlined for email-client safety.
+    const artworkBody = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>New Artwork — DnA Club</title>
+</head>
+<body style="margin:0; padding:0; background-color:#222; font-family:'Helvetica Neue', Helvetica, Arial, sans-serif;">
 
-    const eventBody = `<h2 style="margin:0 0 8px;font-size:22px;color:#ffffff;">New Event: {{title}}</h2>
-        <p style="margin:0 0 4px;color:#999;font-size:14px;">Date: {{date}}</p>
-        <p style="margin:0 0 16px;color:#999;font-size:14px;">Venue: {{venue}}</p>
-        <p style="margin:16px 0;color:#cccccc;font-size:15px;line-height:1.7;">{{description}}</p>`;
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#222; margin:0; padding:0;">
+  <tr>
+    <td align="center" style="padding:40px 20px;">
+
+      <div style="background-color:#dced3e; padding:20px 20px 40px 20px; border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,0.6); max-width:450px; width:100%; margin:0 auto; text-align:left;">
+        <div style="background-color:#f4f4f0; padding:45px 35px; box-shadow:2px 2px 10px rgba(0,0,0,0.1); position:relative; background-image:radial-gradient(#aaa 1px, transparent 1px); background-size:20px 20px; background-position:0 0;">
+          <div style="font-family:monospace; font-size:16px; border-bottom:1.5px solid #222; display:inline-block; margin-bottom:35px; color:#222; text-transform:lowercase;">gallery_update</div>
+
+          <h1 style="font-size:45px; font-weight:800; color:#111; line-height:1.05; margin:0 0 25px 0; letter-spacing:-1.5px;">New Artwork:<br>{{title}}</h1>
+
+          <p style="font-size:16px; line-height:1.6; color:#333; margin:0 0 25px 0; font-weight:500;">
+            <strong>by {{artist}}</strong> &nbsp;|&nbsp; <span style="background-color:#e0f55b; display:inline-block; padding:2px 6px; font-weight:700; color:#111; border-radius:2px;">{{domain}}</span>
+          </p>
+
+          <p style="font-size:16px; line-height:1.6; color:#333; margin:0; font-weight:500;">
+            A new artwork has been added to the DnA Club gallery. Visit the website to explore the latest creative work from our members.
+          </p>
+        </div>
+
+        <div style="margin-top:25px; font-size:35px; font-weight:800; color:#111; text-align:center; letter-spacing:-1px;">Get creative.</div>
+        <div style="text-align:center; color:#888; font-size:14px; margin-top:25px; font-weight:500; letter-spacing:0.5px;">designed by venugopal</div>
+      </div>
+
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>`;
+
+    const eventBody = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>New Event — DnA Club</title>
+</head>
+<body style="margin:0; padding:0; background-color:#222; font-family:'Helvetica Neue', Helvetica, Arial, sans-serif;">
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#222; margin:0; padding:0;">
+  <tr>
+    <td align="center" style="padding:40px 20px;">
+
+      <div style="background-color:#dced3e; padding:20px 20px 40px 20px; border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,0.6); max-width:450px; width:100%; margin:0 auto; text-align:left;">
+        <div style="background-color:#f4f4f0; padding:45px 35px; box-shadow:2px 2px 10px rgba(0,0,0,0.1); position:relative; background-image:radial-gradient(#aaa 1px, transparent 1px); background-size:20px 20px; background-position:0 0;">
+          <div style="font-family:monospace; font-size:16px; border-bottom:1.5px solid #222; display:inline-block; margin-bottom:35px; color:#222; text-transform:lowercase;">event_update</div>
+
+          <h1 style="font-size:45px; font-weight:800; color:#111; line-height:1.05; margin:0 0 25px 0; letter-spacing:-1.5px;">New Event:<br>{{title}}</h1>
+
+          <p style="font-size:16px; line-height:1.6; color:#333; margin:0 0 25px 0; font-weight:500;">
+            <strong>Date: {{date}}</strong> &nbsp;|&nbsp; <span style="background-color:#e0f55b; display:inline-block; padding:2px 6px; font-weight:700; color:#111; border-radius:2px;">Venue: {{venue}}</span>
+          </p>
+
+          <p style="font-size:16px; line-height:1.6; color:#333; margin:0; font-weight:500;">
+            {{description}}
+          </p>
+        </div>
+
+        <div style="margin-top:25px; font-size:35px; font-weight:800; color:#111; text-align:center; letter-spacing:-1px;">Get creative.</div>
+        <div style="text-align:center; color:#888; font-size:14px; margin-top:25px; font-weight:500; letter-spacing:0.5px;">designed by venugopal</div>
+      </div>
+
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>`;
 
     await pool.query(
       `INSERT INTO email_templates (id, name, subject, body, updated_at) VALUES ($1,$2,$3,$4,$5)`,
