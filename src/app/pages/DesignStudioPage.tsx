@@ -1277,7 +1277,7 @@ const TOOLS = [
   { id:"image",    icon:"↔",  label:"Image Converter",   comp:ImageConverter       },
   { id:"grid",     icon:"⊞",  label:"Grid Calculator",   comp:GridCalculator       },
   { id:"halftone", icon:"∷",  label:"Halftone",          comp:HalftoneStudio       },
-  { id:"svg",      icon:"⬡",  label:"Image → SVG",       comp:SvgConverter         },
+  { id:"svg",      icon:"⬡",  label:"SVG Tools",         comp:SvgConverter         },
 ];
 
 const SUBTITLES: Record<string,string> = {
