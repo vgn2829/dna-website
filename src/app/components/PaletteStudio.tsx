@@ -841,13 +841,18 @@ export default function PaletteStudio() {
           {/* Seed input — color picker + hex field grouped as one pill */}
           <label style={s.seedGroup} aria-label="Seed color">
             <span style={s.seedLabel}>Seed</span>
-            <input
-              type="color"
-              value={seed}
-              onChange={(e) => setSeed(e.target.value)}
-              style={s.colorInput}
-              aria-label="Pick seed color"
-            />
+            {/* The native colour input renders its chip inset inside its own box,
+                so it reads smaller than its footprint. Painting the swatch on the
+                wrapper and overlaying a transparent input gives a full-bleed chip. */}
+            <span style={{ ...s.swatchWrap, background: seed }}>
+              <input
+                type="color"
+                value={seed}
+                onChange={(e) => setSeed(e.target.value)}
+                style={s.colorInput}
+                aria-label="Pick seed color"
+              />
+            </span>
             <span style={s.seedDivider} aria-hidden="true" />
             <input
               type="text"
@@ -908,70 +913,22 @@ export default function PaletteStudio() {
         <span style={s.harmonyDesc}>{HARMONY_MODES[harmony]?.description}</span>
       </div>
 
-      {/* ── Color Symbolism panel ───────────────────────────────────────────── */}
+      {/* ── Color Symbolism caption ─────────────────────────────────────────── */}
+      {/* Restrained single line; the mood + suggested uses move into a hover
+          tooltip so the metadata stays available without adding visual noise. */}
       {symbolism && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 16,
-          padding: '10px 24px',
-          borderBottom: '1px solid var(--color-hairline)',
-          flexWrap: 'wrap',
-          background: 'var(--color-surface-1)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            <span style={{ fontSize: 18, lineHeight: 1 }}>{symbolism.emoji}</span>
-            <span style={{
-              fontSize: 12,
-              fontWeight: 700,
-              color: 'var(--color-ink)',
-              fontFamily: 'var(--font-body)',
-              letterSpacing: '-0.1px',
-            }}>
-              {symbolism.label}
-            </span>
-          </div>
-          <div style={{ width: 1, height: 20, background: 'var(--color-hairline)', flexShrink: 0 }} />
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {symbolism.keywords.map((kw) => (
-              <span key={kw} style={{
-                fontSize: 11,
-                fontWeight: 500,
-                padding: '3px 9px',
-                borderRadius: 'var(--radius-pill)',
-                background: 'var(--color-surface-2)',
-                color: 'var(--color-ink-muted)',
-                border: '1px solid var(--color-hairline)',
-                fontFamily: 'var(--font-body)',
-                whiteSpace: 'nowrap',
-              }}>
-                {kw}
-              </span>
-            ))}
-          </div>
-          <div style={{ width: 1, height: 20, background: 'var(--color-hairline)', flexShrink: 0 }} />
-          <p style={{
-            fontSize: 11,
-            color: 'var(--color-ink-muted)',
-            fontFamily: 'var(--font-body)',
-            margin: 0,
-            fontStyle: 'italic',
-            lineHeight: 1.5,
-            flex: 1,
-            minWidth: 160,
-          }}>
-            {symbolism.mood}
-          </p>
-          <span style={{
-            fontSize: 10,
-            color: 'var(--color-ink-muted)',
-            fontFamily: 'var(--font-body)',
-            whiteSpace: 'nowrap',
-            opacity: 0.7,
-            flexShrink: 0,
-          }}>
-            ✦ {symbolism.use}
-          </span>
+        <div
+          style={s.symbolismBar}
+          title={`${symbolism.mood}${symbolism.use ? `  ·  Ideal for ${symbolism.use}` : ""}`}
+        >
+          <span
+            style={{ ...s.symbolismSwatch, background: seed }}
+            aria-hidden="true"
+          />
+          <span style={s.symbolismName}>{symbolism.label}</span>
+          <span style={s.symbolismSep} aria-hidden="true">·</span>
+          <span style={s.symbolismKeywords}>{symbolism.keywords.join(", ")}</span>
+          <span style={s.symbolismInfo} aria-hidden="true">&#9432;</span>
         </div>
       )}
 
@@ -1015,22 +972,29 @@ export default function PaletteStudio() {
         {palette && tab === "palette" && (
           <div>
 
-            {/* Score bar */}
+            {/* Score summary — lightweight results block on canvas, no card chrome */}
             {fitness && (
               <div style={s.scoreBar}>
-                <div style={s.scoreBlock}>
-                  <span style={s.scoreLabel}>Quality Score</span>
-                  <span style={{ ...s.scoreNum, color: SCORE_COLOR(fitness.score) }}>
-                    {fitness.score}
-                    <span style={s.scoreOutOf}>/100</span>
-                  </span>
+                <div style={s.scoreHead}>
+                  <div style={s.scoreBlock}>
+                    <span style={s.scoreLabel}>Quality Score</span>
+                    <span style={{ ...s.scoreNum, color: SCORE_COLOR(fitness.score) }}>
+                      {fitness.score}
+                      <span style={s.scoreOutOf}>/100</span>
+                    </span>
+                  </div>
+                  <div style={s.scoreBlock}>
+                    <span style={s.scoreLabel}>ΔE Distance</span>
+                    <span style={{ ...s.deltaVal, color: SCORE_COLOR(fitness.dScore) }}>
+                      {fitness.dScore}%
+                    </span>
+                  </div>
                 </div>
-
-                <div style={s.scoreDivider} />
 
                 <div style={s.pairGrid}>
                   {Object.entries(fitness.pairs).slice(0, 6).map(([name, data]) => {
                     const g = GRADE(data.cr);
+                    const isFail = g.label === "Fail";
                     return (
                       <div key={name} style={s.pairItem}>
                         <span style={s.pairName}>{name}</span>
@@ -1038,18 +1002,13 @@ export default function PaletteStudio() {
                           <span style={{ ...s.gradeChip, color: g.color, background: g.color + "22" }}>
                             {g.label}
                           </span>
-                          <span style={s.pairRatio}>{data.cr}</span>
+                          <span style={{ ...s.pairRatio, ...(isFail ? s.pairRatioFail : {}) }}>
+                            {data.cr}
+                          </span>
                         </span>
                       </div>
                     );
                   })}
-                </div>
-
-                <div style={s.deltaBox}>
-                  <span style={s.deltaLabel}>ΔE</span>
-                  <span style={{ ...s.deltaVal, color: SCORE_COLOR(fitness.dScore) }}>
-                    {fitness.dScore}%
-                  </span>
                 </div>
               </div>
             )}
@@ -1503,9 +1462,8 @@ const styles = {
     justifyContent: "flex-end",   // controls-only row; title comes from the shell
     gap: 12,
     flexWrap: "wrap",
-    padding: "10px 24px",
-    background: "var(--color-canvas)",
-    borderBottom: "1px solid var(--color-hairline)",
+    padding: "12px 24px",
+    background: "var(--color-canvas)",   // controls sit on plain canvas, like sibling tools
   },
   toolbarControls: {
     display: "flex",
@@ -1518,11 +1476,13 @@ const styles = {
   seedGroup: {
     display: "inline-flex",
     alignItems: "center",
-    gap: 8,
-    background: "var(--color-surface-1)",
+    gap: 10,
+    background: "var(--color-surface-2)",
     border: "1px solid var(--color-hairline)",
     borderRadius: "var(--radius-pill)",
-    padding: "5px 12px 5px 8px",
+    minHeight: 40,               // shared row height — primacy comes from the swatch, not height
+    boxSizing: "border-box",
+    padding: "0 16px 0 4px",
     cursor: "default",
   },
   seedLabel: {
@@ -1532,22 +1492,36 @@ const styles = {
     userSelect: "none",
     letterSpacing: ".04em",
     lineHeight: 1,
+    display: "flex",
+    alignItems: "center",
+  },
+  swatchWrap: {
+    position: "relative",
+    display: "block",
+    width: 30,
+    height: 30,
+    borderRadius: "var(--radius-full)",   // circular dot — matches the pill's roundness
+    border: "1px solid var(--color-hairline)",
+    overflow: "hidden",
+    cursor: "pointer",
+    flexShrink: 0,
   },
   colorInput: {
-    width: 22,
-    height: 22,
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    opacity: 0,
     padding: 0,
     border: "none",
     background: "none",
     cursor: "pointer",
-    borderRadius: "var(--radius-xs)",
     outline: "none",
-    flexShrink: 0,
   },
   seedDivider: {
     display: "inline-block",
     width: 1,
-    height: 14,
+    height: 18,
     background: "var(--color-hairline)",
     flexShrink: 0,
   },
@@ -1556,54 +1530,72 @@ const styles = {
     border: "none",
     outline: "none",
     color: "var(--color-ink)",
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: "var(--font-mono)",
-    width: 68,
+    width: 74,
     letterSpacing: ".04em",
     padding: 0,
     lineHeight: 1,
+    display: "block",
   },
 
   // ── Toolbar buttons ─────────────────────────────────────────────────────────
   modeBtn: {
-    background: "var(--color-surface-1)",
-    color: "var(--color-ink-muted)",
-    border: "1px solid var(--color-hairline)",
+    background: "var(--color-surface-2)",
+    color: "var(--color-ink)",
+    border: "none",
     borderRadius: "var(--radius-pill)",
-    padding: "7px 16px",
-    fontSize: 12,
+    minHeight: 40,               // matches the Seed pill — one shared baseline across the row
+    boxSizing: "border-box",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0 18px",
+    fontSize: 13,
     fontWeight: 500,
     fontFamily: "var(--font-body)",
     cursor: "pointer",
     whiteSpace: "nowrap",
     lineHeight: 1,
+    letterSpacing: "-0.13px",
   },
   generateBtn: {
     background: "var(--color-inverse-canvas)",
     color: "var(--color-canvas)",
     border: "none",
     borderRadius: "var(--radius-pill)",
-    padding: "9px 22px",
+    minHeight: 40,               // matches the Seed pill — one shared baseline across the row
+    boxSizing: "border-box",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0 18px",
     fontSize: 13,
-    fontWeight: 600,
-    fontFamily: "var(--font-body)",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    lineHeight: 1,
-    letterSpacing: "-0.1px",
-  },
-  exportBtn: {
-    background: "var(--color-surface-1)",
-    color: "var(--color-ink-muted)",
-    border: "1px solid var(--color-hairline)",
-    borderRadius: "var(--radius-pill)",
-    padding: "7px 16px",
-    fontSize: 12,
     fontWeight: 500,
     fontFamily: "var(--font-body)",
     cursor: "pointer",
     whiteSpace: "nowrap",
     lineHeight: 1,
+    letterSpacing: "-0.13px",
+  },
+  exportBtn: {
+    background: "var(--color-surface-2)",
+    color: "var(--color-ink)",
+    border: "none",
+    borderRadius: "var(--radius-pill)",
+    minHeight: 40,               // matches the Seed pill — one shared baseline across the row
+    boxSizing: "border-box",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0 18px",
+    fontSize: 13,
+    fontWeight: 500,
+    fontFamily: "var(--font-body)",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    lineHeight: 1,
+    letterSpacing: "-0.13px",
   },
 
   // ── Harmony bar ─────────────────────────────────────────────────────────────
@@ -1611,14 +1603,13 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: 12,
-    padding: "10px 24px",
-    borderBottom: "1px solid var(--color-hairline)",
+    padding: "4px 24px 10px",
     flexWrap: "wrap",
   },
   harmonyLabel: {
     fontSize: 11,
-    fontWeight: 600,
-    letterSpacing: ".10em",
+    fontWeight: 400,
+    letterSpacing: ".06em",
     textTransform: "uppercase",
     color: "var(--color-ink-muted)",
     flexShrink: 0,
@@ -1649,13 +1640,57 @@ const styles = {
     transition: "background .12s, color .12s",
   },
   harmonyBtnActive: {
-    background: "var(--color-surface-2)",
-    color: "var(--color-ink)",
+    background: "var(--color-inverse-canvas)",   // vivid active state, matching Grid/Font pills
+    color: "var(--color-canvas)",
   },
   harmonyDesc: {
     fontSize: 11,
     color: "var(--color-ink-muted)",
-    fontStyle: "italic",
+    lineHeight: 1,
+  },
+
+  // ── Color symbolism caption ─────────────────────────────────────────────────
+  symbolismBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+    padding: "8px 24px 10px",
+    cursor: "help",
+  },
+  symbolismSwatch: {
+    width: 12,
+    height: 12,
+    borderRadius: "var(--radius-xs)",
+    border: "1px solid var(--color-hairline)",
+    flexShrink: 0,
+  },
+  symbolismName: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "var(--color-ink)",
+    fontFamily: "var(--font-body)",
+    lineHeight: 1,
+  },
+  symbolismSep: {
+    fontSize: 12,
+    color: "var(--color-ink-muted)",
+    opacity: 0.5,
+    lineHeight: 1,
+  },
+  symbolismKeywords: {
+    fontSize: 11,
+    fontWeight: 400,
+    color: "var(--color-ink-muted)",
+    fontFamily: "var(--font-body)",
+    letterSpacing: ".02em",
+    lineHeight: 1,
+  },
+  symbolismInfo: {
+    fontSize: 12,
+    color: "var(--color-ink-muted)",
+    opacity: 0.55,
+    marginLeft: 2,
     lineHeight: 1,
   },
 
@@ -1726,25 +1761,25 @@ const styles = {
   // ── Score bar ────────────────────────────────────────────────────────────────
   scoreBar: {
     display: "flex",
-    alignItems: "center",
-    gap: 20,
+    flexDirection: "column",
+    gap: 10,
+    marginBottom: 32,
+  },
+  scoreHead: {
+    display: "flex",
+    alignItems: "flex-end",
+    gap: 24,
     flexWrap: "wrap",
-    background: "var(--color-surface-1)",
-    border: "1px solid rgba(255,255,255,0.06)",
-    borderRadius: "var(--radius-xl)",
-    padding: 24,
-    marginBottom: 28,
   },
   scoreBlock: {
     display: "flex",
     flexDirection: "column",
-    gap: 4,
-    minWidth: 80,
+    gap: 5,
   },
   scoreLabel: {
-    fontSize: 10,
-    fontWeight: 600,
-    letterSpacing: ".12em",
+    fontSize: 11,
+    fontWeight: 400,
+    letterSpacing: ".06em",
     textTransform: "uppercase",
     color: "var(--color-ink-muted)",
     lineHeight: 1,
@@ -1763,22 +1798,18 @@ const styles = {
     marginLeft: 2,
     letterSpacing: 0,
   },
-  scoreDivider: {
-    width: 1,
-    alignSelf: "stretch",
-    background: "var(--color-hairline)",
-    flexShrink: 0,
-  },
   pairGrid: {
-    display: "flex",
-    gap: 16,
-    flexWrap: "wrap",
-    flex: 1,
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gap: 8,
   },
   pairItem: {
     display: "flex",
     flexDirection: "column",
-    gap: 5,
+    gap: 6,
+    padding: "8px 10px",
+    borderRadius: "var(--radius-sm)",
+    background: "var(--color-surface-1)",
   },
   pairName: {
     fontSize: 10,
@@ -1806,20 +1837,9 @@ const styles = {
     color: "var(--color-ink-muted)",
     lineHeight: 1,
   },
-  deltaBox: {
-    marginLeft: "auto",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-end",
-    gap: 4,
-  },
-  deltaLabel: {
-    fontSize: 10,
-    fontWeight: 600,
-    letterSpacing: ".12em",
-    textTransform: "uppercase",
-    color: "var(--color-ink-muted)",
-    lineHeight: 1,
+  pairRatioFail: {
+    color: "var(--color-error)",
+    fontWeight: 700,
   },
   deltaVal: {
     fontSize: 24,
@@ -1835,9 +1855,9 @@ const styles = {
   },
   groupLabel: {
     display: "block",
-    fontSize: 10,
-    fontWeight: 600,
-    letterSpacing: ".12em",
+    fontSize: 11,
+    fontWeight: 400,
+    letterSpacing: ".06em",
     textTransform: "uppercase",
     color: "var(--color-ink-muted)",
     marginBottom: 12,
@@ -1928,9 +1948,9 @@ const styles = {
   },
   previewLabel: {
     display: "block",
-    fontSize: 10,
-    fontWeight: 600,
-    letterSpacing: ".12em",
+    fontSize: 11,
+    fontWeight: 400,
+    letterSpacing: ".06em",
     textTransform: "uppercase",
     color: "var(--color-ink-muted)",
     marginBottom: 16,
