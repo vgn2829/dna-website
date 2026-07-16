@@ -1532,7 +1532,8 @@ const styles = {
     color: "var(--color-ink)",
     fontSize: 13,
     fontFamily: "var(--font-mono)",
-    width: 74,
+    width: 74,          // fixed so the pill doesn't resize as the value is typed
+    textAlign: "center", // centre the value in that fixed box, rather than hugging the left
     letterSpacing: ".04em",
     padding: 0,
     lineHeight: 1,
