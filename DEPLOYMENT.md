@@ -99,7 +99,11 @@ curl https://your-api.onrender.com/api/health
 
 1. [vercel.com](https://vercel.com) → **Add New Project** → import the same repo.
 2. Set **Root directory** to `.` (the repo root).
-3. Vercel auto-detects Vite. Build command: `pnpm build` (or `npm run build`). Output: `dist/`.
+3. Vercel auto-detects Vite. Build command: `pnpm build`. Output: `dist/`.
+   The frontend is a pnpm project — `packageManager` in `package.json` pins the
+   pnpm version, and `pnpm-lock.yaml` is the only frontend lockfile. Don't use
+   npm here or you'll get a non-reproducible install. (The backend is separate
+   and does use npm — see §2.)
 
 ### 3.2 Environment variable
 
