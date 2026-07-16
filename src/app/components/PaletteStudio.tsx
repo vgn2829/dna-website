@@ -834,12 +834,9 @@ export default function PaletteStudio() {
     <div style={s.wrap}>
 
       {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
+      {/* Title/eyebrow intentionally omitted — the Design Studio shell already
+          renders the tool title + subtitle, so this is a lighter controls-only row. */}
       <header style={s.toolbar}>
-        <div style={s.toolbarBrand}>
-          <span style={s.eyebrow}>Color Intelligence Engine</span>
-          <span style={s.pageTitle}>Palette Studio</span>
-        </div>
-
         <div style={s.toolbarControls}>
           {/* Seed input — color picker + hex field grouped as one pill */}
           <label style={s.seedGroup} aria-label="Seed color">
@@ -1503,33 +1500,12 @@ const styles = {
     zIndex: 100,
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",   // controls-only row; title comes from the shell
     gap: 12,
     flexWrap: "wrap",
-    padding: "12px 24px",
+    padding: "10px 24px",
     background: "var(--color-canvas)",
     borderBottom: "1px solid var(--color-hairline)",
-  },
-  toolbarBrand: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-  },
-  eyebrow: {
-    fontSize: 10,
-    fontWeight: 600,
-    letterSpacing: ".12em",
-    textTransform: "uppercase",
-    color: "var(--color-ink-muted)",
-    lineHeight: 1,
-  },
-  pageTitle: {
-    fontFamily: "var(--font-display)",
-    fontSize: 20,
-    fontWeight: 600,
-    letterSpacing: "-0.5px",
-    color: "var(--color-ink)",
-    lineHeight: 1.15,
   },
   toolbarControls: {
     display: "flex",
