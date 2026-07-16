@@ -694,11 +694,66 @@ function ImageConverter(){
   const [converted,setConverted]=useState<any>(null);
   const [info,setInfo]=useState<any>(null);
   const [converting,setConverting]=useState(false);
+  const [pdfDoc,setPdfDoc]=useState<any>(null);
+  const [pageCount,setPageCount]=useState(0);
+  const [pageNum,setPageNum]=useState(1);
   const canvasRef=useRef<HTMLCanvasElement>(null);
 
+  function measure(url: string, extra: any){
+    const img=new Image();
+    img.onload=()=>setInfo((i:any)=>({...i,...extra,w:img.naturalWidth,h:img.naturalHeight}));
+    img.src=url;
+  }
+
+  // Renders one PDF page to a raster at 2x for a crisp result.
+  async function renderPdfPage(doc: any, n: number){
+    const page=await doc.getPage(n);
+    const viewport=page.getViewport({scale:2});
+    const c=document.createElement("canvas");
+    c.width=viewport.width;c.height=viewport.height;
+    await page.render({canvasContext:c.getContext("2d")!,viewport,canvas:c}).promise;
+    return c.toDataURL("image/png");
+  }
+
+  async function loadPdf(f: File){
+    setConverting(true);
+    try{
+      // pdf.js is by far the heaviest dependency here, so both it and its
+      // worker are imported on demand — opening a PDF is the only thing that
+      // pays for them.
+      const pdfjs: any=await import("pdfjs-dist");
+      const worker: any=await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+      pdfjs.GlobalWorkerOptions.workerSrc=worker.default;
+      const doc=await pdfjs.getDocument({data:await f.arrayBuffer()}).promise;
+      setPdfDoc(doc);setPageCount(doc.numPages);setPageNum(1);
+      const url=await renderPdfPage(doc,1);
+      setPreview(url);
+      measure(url,{size:(f.size/1024).toFixed(1),name:f.name});
+    }catch{
+      setPreview(null);setInfo(null);setPdfDoc(null);setPageCount(0);
+    }
+    setConverting(false);
+  }
+
+  async function gotoPage(n: number){
+    if(!pdfDoc||n<1||n>pageCount)return;
+    setPageNum(n);setConverted(null);setConverting(true);
+    const url=await renderPdfPage(pdfDoc,n);
+    setPreview(url);
+    measure(url,{});
+    setConverting(false);
+  }
+
+  function reset(){
+    setPreview(null);setConverted(null);setInfo(null);
+    setPdfDoc(null);setPageCount(0);setPageNum(1);
+  }
+
   function loadFile(f: File|null){
-    if(!f||!f.type.startsWith("image/"))return;
-    setConverted(null);
+    if(!f)return;
+    setConverted(null);setPdfDoc(null);setPageCount(0);setPageNum(1);
+    if(f.type==="application/pdf"){loadPdf(f);return;}
+    if(!f.type.startsWith("image/"))return;
     const url=URL.createObjectURL(f);
     setPreview(url);
     const img=new Image();
@@ -748,9 +803,9 @@ function ImageConverter(){
               <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
             </svg>
           </div>
-          <span style={{fontFamily:"var(--font-body)",fontSize:16,fontWeight:500,color:T.ink}}>Drop an image here</span>
-          <span style={{fontFamily:"var(--font-body)",fontSize:13,color:T.inkMuted}}>or click to browse — PNG, JPEG, WebP</span>
-          <input id="img-inp" type="file" accept="image/*" style={{display:"none"}} onChange={(e:any)=>loadFile(e.target.files[0])}/>
+          <span style={{fontFamily:"var(--font-body)",fontSize:16,fontWeight:500,color:T.ink}}>Drop an image or PDF here</span>
+          <span style={{fontFamily:"var(--font-body)",fontSize:13,color:T.inkMuted}}>or click to browse — PNG, JPEG, WebP, PDF</span>
+          <input id="img-inp" type="file" accept="image/*,application/pdf" style={{display:"none"}} onChange={(e:any)=>loadFile(e.target.files[0])}/>
         </div>
       ):(
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
@@ -780,8 +835,19 @@ function ImageConverter(){
           </div>
           {(format==="image/jpeg"||format==="image/webp")&&<div><label style={ss.label}>Quality — {quality}%</label><input type="range" min={10} max={100} value={quality} onChange={(e:any)=>setQuality(+e.target.value)} style={{width:120,accentColor:T.accentBlue}}/></div>}
           <div><label style={ss.label}>Scale — {scale}%</label><input type="range" min={10} max={200} value={scale} onChange={(e:any)=>setScale(+e.target.value)} style={{width:120,accentColor:T.accentBlue}}/></div>
+          {pageCount>1&&(
+            <div>
+              <label style={ss.label}>Page — {pageNum} / {pageCount}</label>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>gotoPage(pageNum-1)} disabled={pageNum<=1}
+                  style={{...ss.btnSec,padding:"6px 14px",opacity:pageNum<=1?0.4:1,cursor:pageNum<=1?"not-allowed":"pointer"}}>‹</button>
+                <button onClick={()=>gotoPage(pageNum+1)} disabled={pageNum>=pageCount}
+                  style={{...ss.btnSec,padding:"6px 14px",opacity:pageNum>=pageCount?0.4:1,cursor:pageNum>=pageCount?"not-allowed":"pointer"}}>›</button>
+              </div>
+            </div>
+          )}
           <div style={{display:"flex",gap:10,marginLeft:"auto"}}>
-            <button onClick={()=>{setPreview(null);setConverted(null);setInfo(null);}} style={ss.btnSec}>↺ Reset</button>
+            <button onClick={reset} style={ss.btnSec}>↺ Reset</button>
             <button onClick={convert} style={ss.btnPri}>{converting?"Converting…":"Convert"}</button>
             {converted&&<a href={converted.url} download={`converted.${converted.ext}`} style={{...ss.btnPri,textDecoration:"none",display:"inline-flex",alignItems:"center"}}>↓ Download</a>}
           </div>
