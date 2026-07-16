@@ -2321,7 +2321,7 @@ function TemplateEditor({ templateId }: TemplateEditorProps) {
             <code
               key={v}
               onClick={() => setBody(prev => prev + v)}
-              style={{ padding: '3px 10px', borderRadius: 'var(--radius-pill)', background: 'rgba(233,30,140,0.12)', color: 'var(--color-brand)', fontSize: 12, fontFamily: 'var(--font-mono, monospace)', border: '1px solid rgba(233,30,140,0.2)', cursor: 'pointer' }}
+              style={{ padding: '3px 10px', borderRadius: 'var(--radius-pill)', background: 'color-mix(in srgb, var(--color-brand) 12%, transparent)', color: 'var(--color-brand)', fontSize: 12, fontFamily: 'var(--font-mono, monospace)', border: '1px solid color-mix(in srgb, var(--color-brand) 20%, transparent)', cursor: 'pointer' }}
             >
               {v}
             </code>
@@ -2445,7 +2445,7 @@ function CustomAnnouncement() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ padding: '12px 16px', borderRadius: 'var(--radius-sm)', background: 'rgba(233,30,140,0.08)', border: '1px solid rgba(233,30,140,0.2)' }}>
+      <div style={{ padding: '12px 16px', borderRadius: 'var(--radius-sm)', background: 'color-mix(in srgb, var(--color-brand) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-brand) 20%, transparent)' }}>
         <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', lineHeight: 1.6 }}>
           This sends a one-time custom email to all registered students. Use it for announcements not tied to a specific artwork or event.
         </p>
@@ -2524,7 +2524,7 @@ function CustomAnnouncement() {
           Send to All Students
         </button>
       ) : (
-        <div style={{ padding: 16, borderRadius: 'var(--radius-md)', border: '1px solid rgba(233,30,140,0.3)', background: 'rgba(233,30,140,0.06)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ padding: 16, borderRadius: 'var(--radius-md)', border: '1px solid color-mix(in srgb, var(--color-brand) 30%, transparent)', background: 'color-mix(in srgb, var(--color-brand) 6%, transparent)', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--color-ink)', fontFamily: 'var(--font-body)', fontWeight: 600 }}>
             Send this announcement to all registered students?
           </p>
@@ -2925,7 +2925,7 @@ function SessionsTab() {
                         <span style={{
                           fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
                           textTransform: 'uppercase', padding: '2px 8px', borderRadius: 'var(--radius-pill)',
-                          background: 'rgba(233,30,140,0.1)', color: 'var(--color-brand)',
+                          background: 'color-mix(in srgb, var(--color-brand) 10%, transparent)', color: 'var(--color-brand)',
                           fontFamily: 'var(--font-body)',
                         }}>
                           {s.audience_name}
@@ -3013,7 +3013,7 @@ function SessionsTab() {
                   padding: '14px 16px',
                   borderRadius: 'var(--radius-md)',
                   border: selectedPast === s.id ? '1px solid var(--color-brand)' : '1px solid var(--color-border)',
-                  background: selectedPast === s.id ? 'rgba(233,30,140,0.06)' : 'var(--color-surface)',
+                  background: selectedPast === s.id ? 'color-mix(in srgb, var(--color-brand) 6%, transparent)' : 'var(--color-surface)',
                   cursor: 'pointer',
                   display: 'flex',
                   flexDirection: 'column',
@@ -3254,7 +3254,7 @@ function MoodboardsAdminTab() {
                   <span style={{
                     fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
                     padding: '2px 8px', borderRadius: 'var(--radius-pill)',
-                    background: board.visibility === 'shared' ? 'rgba(233,30,140,0.1)' : 'rgba(255,255,255,0.06)',
+                    background: board.visibility === 'shared' ? 'color-mix(in srgb, var(--color-brand) 10%, transparent)' : 'rgba(255,255,255,0.06)',
                     color: board.visibility === 'shared' ? 'var(--color-brand)' : 'var(--color-ink-muted)',
                     fontFamily: 'var(--font-body)',
                   }}>

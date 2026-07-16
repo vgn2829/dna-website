@@ -304,7 +304,7 @@ export default function BoardPage() {
               fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
               padding: '2px 8px', borderRadius: 'var(--radius-pill)', flexShrink: 0, fontFamily: 'var(--font-body)',
               background: board.visibility === 'shared'
-                ? 'rgba(233,30,140,0.15)'
+                ? 'color-mix(in srgb, var(--color-brand) 15%, transparent)'
                 : theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
               color: board.visibility === 'shared' ? 'var(--color-brand)' : textMuted,
             }}>

@@ -495,8 +495,8 @@ export function Footer() {
                         key={s.id}
                         style={{
                           padding: '12px 14px',
-                          background: s.status === 'live' ? 'rgba(233,30,140,0.06)' : 'var(--color-canvas)',
-                          border: s.status === 'live' ? '1px solid rgba(233,30,140,0.3)' : '1px solid var(--color-border)',
+                          background: s.status === 'live' ? 'color-mix(in srgb, var(--color-brand) 6%, transparent)' : 'var(--color-canvas)',
+                          border: s.status === 'live' ? '1px solid color-mix(in srgb, var(--color-brand) 30%, transparent)' : '1px solid var(--color-border)',
                           borderRadius: 'var(--radius-md)',
                           display: 'flex',
                           flexDirection: 'column',

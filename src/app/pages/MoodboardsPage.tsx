@@ -70,8 +70,8 @@ function BoardCard({ board, onClick, onMenuOpen, ownerRoll }: {
         overflow: 'hidden',
         background: 'var(--color-surface-2)',
       }}>
-        {[0.04, 0.06, 0.08, 0.10].map((alpha, i) => (
-          <div key={i} style={{ background: `rgba(233,30,140,${alpha})` }} />
+        {[4, 6, 8, 10].map((pct, i) => (
+          <div key={i} style={{ background: `color-mix(in srgb, var(--color-brand) ${pct}%, transparent)` }} />
         ))}
         {onMenuOpen && ownerRoll === board.owner_roll && (
           <button
@@ -111,7 +111,7 @@ function BoardCard({ board, onClick, onMenuOpen, ownerRoll }: {
           <span style={{
             fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
             padding: '2px 8px', borderRadius: 'var(--radius-pill)', flexShrink: 0, fontFamily: 'var(--font-body)',
-            background: board.visibility === 'shared' ? 'rgba(233,30,140,0.1)' : 'rgba(128,128,128,0.1)',
+            background: board.visibility === 'shared' ? 'color-mix(in srgb, var(--color-brand) 10%, transparent)' : 'rgba(128,128,128,0.1)',
             color: board.visibility === 'shared' ? 'var(--color-brand)' : 'var(--color-ink-muted)',
           }}>
             {board.visibility}
@@ -452,7 +452,7 @@ export default function MoodboardsPage() {
                       onClick={() => setForm(prev => ({ ...prev, visibility: v }))}
                       style={{
                         flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer',
-                        background: form.visibility === v ? 'rgba(233,30,140,0.1)' : 'none',
+                        background: form.visibility === v ? 'color-mix(in srgb, var(--color-brand) 10%, transparent)' : 'none',
                         color: form.visibility === v ? 'var(--color-brand)' : 'var(--color-ink-muted)',
                         fontSize: 13, fontWeight: form.visibility === v ? 600 : 400, fontFamily: 'var(--font-body)',
                       }}
