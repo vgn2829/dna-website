@@ -709,11 +709,24 @@ function ImageConverter(){
     if(!preview||!canvasRef.current)return;
     setConverting(true);
     const img=new Image();
-    img.onload=()=>{
+    img.onload=async()=>{
       const cvs=canvasRef.current!;
       const w=Math.round(img.naturalWidth*scale/100),h=Math.round(img.naturalHeight*scale/100);
       cvs.width=w;cvs.height=h;
       cvs.getContext("2d")!.drawImage(img,0,0,w,h);
+      if(format==="application/pdf"){
+        // jsPDF is imported on demand so it never lands in the initial bundle —
+        // only visitors who actually export a PDF pay for it.
+        const {jsPDF}=await import("jspdf");
+        const data=cvs.toDataURL("image/png");
+        const doc=new jsPDF({orientation:w>h?"landscape":"portrait",unit:"px",format:[w,h]});
+        doc.addImage(data,"PNG",0,0,w,h);
+        const blob=doc.output("blob");
+        // A PDF blob can't render in <img>, so keep the raster for the preview pane.
+        setConverted({url:URL.createObjectURL(blob),preview:data,size:(blob.size/1024).toFixed(1),w,h,format,ext:"pdf"});
+        setConverting(false);
+        return;
+      }
       const q=format==="image/png"?1:quality/100;
       cvs.toBlob(blob=>{
         if(!blob)return;
@@ -741,7 +754,7 @@ function ImageConverter(){
         </div>
       ):(
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-          {[{label:"Original",src:preview,meta:info?`${info.w}×${info.h} · ${info.size}KB`:""},{label:"Output",src:converted?.url,meta:converted?`${converted.w}×${converted.h} · ${converted.size}KB`:""}].map((p:any)=>(
+          {[{label:"Original",src:preview,meta:info?`${info.w}×${info.h} · ${info.size}KB`:""},{label:"Output",src:converted?.preview||converted?.url,meta:converted?`${converted.w}×${converted.h} · ${converted.size}KB`:""}].map((p:any)=>(
             <div key={p.label} style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",overflow:"hidden",border:"1px solid rgba(255,255,255,0.06)"}}>
               <div style={{padding:"10px 16px",borderBottom:`1px solid ${T.hairline}`,display:"flex",justifyContent:"space-between"}}>
                 <span style={{fontFamily:"var(--font-body)",fontSize:12,color:T.inkMuted}}>{p.label}</span>
@@ -760,12 +773,12 @@ function ImageConverter(){
           <div>
             <label style={ss.label}>Format</label>
             <div style={{display:"flex",gap:8}}>
-              {[["image/png","PNG"],["image/jpeg","JPEG"],["image/webp","WebP"]].map(([m,l])=>(
+              {[["image/png","PNG"],["image/jpeg","JPEG"],["image/webp","WebP"],["application/pdf","PDF"]].map(([m,l])=>(
                 <button key={m} onClick={()=>setFormat(m)} style={{padding:"6px 14px",borderRadius:"var(--radius-pill)",border:"none",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:12,fontWeight:format===m?500:400,background:format===m?"var(--color-inverse-canvas)":"var(--color-surface-1)",color:format===m?"var(--color-canvas)":"var(--color-ink-muted)"}}>{l}</button>
               ))}
             </div>
           </div>
-          {format!=="image/png"&&<div><label style={ss.label}>Quality — {quality}%</label><input type="range" min={10} max={100} value={quality} onChange={(e:any)=>setQuality(+e.target.value)} style={{width:120,accentColor:T.accentBlue}}/></div>}
+          {(format==="image/jpeg"||format==="image/webp")&&<div><label style={ss.label}>Quality — {quality}%</label><input type="range" min={10} max={100} value={quality} onChange={(e:any)=>setQuality(+e.target.value)} style={{width:120,accentColor:T.accentBlue}}/></div>}
           <div><label style={ss.label}>Scale — {scale}%</label><input type="range" min={10} max={200} value={scale} onChange={(e:any)=>setScale(+e.target.value)} style={{width:120,accentColor:T.accentBlue}}/></div>
           <div style={{display:"flex",gap:10,marginLeft:"auto"}}>
             <button onClick={()=>{setPreview(null);setConverted(null);setInfo(null);}} style={ss.btnSec}>↺ Reset</button>
