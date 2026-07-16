@@ -228,7 +228,7 @@ export function EventsPage() {
                 <div key={s.id} style={{
                   border: s.status === 'live' ? '1px solid var(--color-brand)' : '1px solid var(--color-border)',
                   borderRadius: 'var(--radius-lg)', padding: '16px 20px',
-                  background: s.status === 'live' ? 'rgba(233,30,140,0.06)' : 'var(--color-surface)',
+                  background: s.status === 'live' ? 'color-mix(in srgb, var(--color-brand) 6%, transparent)' : 'var(--color-surface)',
                   display: 'flex', justifyContent: 'space-between',
                   alignItems: 'center', gap: 16,
                 }}>

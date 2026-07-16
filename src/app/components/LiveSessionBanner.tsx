@@ -177,7 +177,7 @@ export default function LiveSessionBanner() {
                 textTransform: 'uppercase',
                 padding: '2px 8px',
                 borderRadius: 'var(--radius-pill)',
-                background: isLive ? 'rgba(255,255,255,0.2)' : 'rgba(233,30,140,0.1)',
+                background: isLive ? 'rgba(255,255,255,0.2)' : 'color-mix(in srgb, var(--color-brand) 10%, transparent)',
                 color: isLive ? '#fff' : 'var(--color-brand)',
                 fontFamily: 'var(--font-body)',
               }}>
