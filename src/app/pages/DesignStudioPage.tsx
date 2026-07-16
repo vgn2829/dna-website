@@ -1363,7 +1363,7 @@ const SUBTITLES: Record<string,string> = {
   palette:  "Generate accessible OKLCH color palettes with WCAG + APCA contrast scoring and color blind simulation.",
   font:     "Infinite Google Font pairings — regenerate to explore, pick a strategy, compare by typographic score.",
   contrast: "WCAG AA/AAA live check. When failing, get harmonious color suggestions from color theory.",
-  image:    "Convert, resize, and compress images client-side — private, instant, no upload needed.",
+  image:    "Convert, resize, and compress images client-side — export to PNG, JPEG, WebP or PDF, and turn PDF pages back into images. Private, instant, no upload needed.",
   grid:     "9 grid systems from Swiss Modular to Radial and Isometric — built for poster and print design.",
   halftone: "Convert images into halftone patterns — lines, dots, or squares. Adjust angle, spacing, contrast, brightness, and colors.",
   svg:      "Trace any image into a scalable SVG line drawing — adjust threshold, fill, invert, and edge dilation, then download.",
