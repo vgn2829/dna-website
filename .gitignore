@@ -10,3 +10,11 @@ backend/uploads/
 
 # Claude Code — per-developer local settings (permission allowlist etc.)
 .claude/settings.local.json
+# Personal, machine-specific project instructions (e.g. knowledge-vault path)
+CLAUDE.local.md
+
+# Generated test bundle — tests/palette-engine.test.js writes a timestamped copy per run
+tests/.palette-bundle-*.cjs
+
+# Codex CLI local config (personal, machine-specific)
+.codex/
