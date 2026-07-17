@@ -13,8 +13,10 @@ backend/uploads/
 # Personal, machine-specific project instructions (e.g. knowledge-vault path)
 CLAUDE.local.md
 
-# Generated test bundle — tests/palette-engine.test.js writes a timestamped copy per run
+# Generated test bundles — palette-engine.test.js writes a timestamped copy per run;
+# .debug-bundle.cjs is a one-off debug build. Neither belongs in the repo.
 tests/.palette-bundle-*.cjs
+tests/.debug-bundle*.cjs
 
 # Codex CLI local config (personal, machine-specific)
 .codex/
