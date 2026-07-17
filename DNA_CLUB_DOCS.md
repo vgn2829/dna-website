@@ -1,661 +1,719 @@
 # DnA Club Website — Comprehensive Documentation
 
-Design & Animation Club, IIT Kanpur  
-Last updated: June 2026
+Design & Animation Club, IIT Kanpur
+Rewritten from a fresh, line-by-line audit of the codebase — July 2026
 
 ---
 
 ## Table of Contents
 
-1. [About the Website](#1-about-the-website)
-2. [Feature Overview](#2-feature-overview)
-3. [User Roles & Access](#3-user-roles--access)
-4. [Page by Page Guide](#4-page-by-page-guide)
-5. [UI Design System](#5-ui-design-system)
-6. [Frontend Architecture](#6-frontend-architecture)
-7. [Backend Architecture](#7-backend-architecture)
-8. [Database Schema](#8-database-schema)
-9. [API Reference](#9-api-reference)
-10. [Email System](#10-email-system)
-11. [Key Components](#11-key-components)
-12. [Environment Variables](#12-environment-variables)
-13. [Deployment](#13-deployment)
-14. [Known Issues & Deferred Work](#14-known-issues--deferred-work)
-15. [Future Features Discussed](#15-future-features-discussed)
+1. [Project Summary](#1-project-summary)
+2. [Tech Stack](#2-tech-stack)
+3. [Folder & File Structure](#3-folder--file-structure)
+4. [Complete Features List](#4-complete-features-list)
+5. [Components Breakdown](#5-components-breakdown)
+6. [Full Code Logic Reference](#6-full-code-logic-reference)
+7. [Styling Approach](#7-styling-approach)
+8. [Animations](#8-animations)
+9. [Data & State Management](#9-data--state-management)
+10. [Routing](#10-routing)
+11. [Known Issues / TODOs](#11-known-issues--todos)
+12. [How to Run Locally](#12-how-to-run-locally)
+13. [Database Schema](#13-database-schema)
+14. [API Reference](#14-api-reference)
 
 ---
 
-## 1. About the Website
+## 1. Project Summary
 
-The DnA Club website is the official digital home of the Design & Animation Club at IIT Kanpur. It serves three audiences simultaneously: prospective members browsing the club's work, registered students engaging with club content, and club coordinators/admins managing everything.
+The DnA Club website is the official digital home of the **Design & Animation Club at IIT Kanpur**. It serves three audiences:
 
-**Live URLs**
+- **Prospective/general visitors** — browse the club's artwork gallery, events, and team, with no login required.
+- **Registered IITK students** — log in with their roll number + `@iitk.ac.in` email to like/comment on artwork, RSVP to events, track learning progress in the "Academy," join live sessions, and create collaborative moodboard canvases.
+- **Club admins/coordinators** — manage all content (gallery, events, team, academy domains/videos/quizzes) through a password-protected admin dashboard, send email notifications/announcements, and (for approved coordinators) schedule live Google Meet sessions.
+
+**Live URLs** (per `DEPLOYMENT.md`):
 
 | Environment | URL |
 |---|---|
 | Frontend | https://dna-website-two.vercel.app |
 | Backend API | https://dna-website.onrender.com |
 
-**Technology summary**
+**One-line architecture:** a React 18 + Vite + TypeScript single-page app talks to a Node/Express + TypeScript REST API, backed by Postgres (Supabase) with Supabase Storage for media, and Resend for transactional email.
 
-The frontend is a React 18 single-page application deployed on Vercel, built with Vite and TypeScript. The backend is a Node.js + Express API deployed on Render. The database is PostgreSQL hosted on Supabase. File storage (artwork images, videos, team photos) uses Supabase Storage. Email is sent via Resend. Collaborative moodboard canvases use the tldraw library.
-
-**Club contacts**
-
-- Club email: designandanimationclub.iitk@gmail.com
-- Website contact via email links: same address
+**Club contact:** designandanimationclub.iitk@gmail.com
 
 ---
 
-## 2. Feature Overview
+## 2. Tech Stack
 
-### 2.1 Features for Students (registered IITK members)
+### Frontend (`/`, root `package.json`)
 
-**Registration**  
-Students register using their IITK roll number and a `@iitk.ac.in` email. The roll number format validated is `/^[0-9]{2}[a-zA-Z0-9]{4,6}$/i`. Upon first registration a welcome email is sent automatically and a unique member ID is assigned in the format `IITK-DnA-{ROLL}-{4-char-suffix}`.
-
-**Gallery**  
-Browse all artworks uploaded by the club. Filter by domain (e.g. Illustration, Motion Graphics). Click any artwork to open a full viewer. Like artworks (toggle). Leave comments. Save artwork images directly to a personal moodboard. Images load as thumbnails (`?width=300&quality=75`) with full resolution on click. PDFs and videos are also supported with cover image previews.
-
-**Academy**  
-Domain-structured learning hub. Select a design domain from the sidebar, watch curated YouTube videos (embedded iframe), mark them as watched, then take a domain quiz to earn XP. XP formula: 10 points per video watched + 20 points per quiz completed. Progress persists across sessions via backend sync. Difficulty levels are color-coded: Beginner (green `#3ecf5f`), Intermediate (blue `#007AFF`), Advanced (red `#e5484d`).
-
-**Events**  
-Browse all upcoming and past club events. RSVP to upcoming events (requires login). A live countdown timer shows time until each event. Events show a capacity bar. Students can un-RSVP. Events filter into All / Upcoming / Past. Live sessions (video call links) appear in a separate "Live Now" section at the top of the page.
-
-**Moodboards**  
-Create and manage personal visual boards. Each board has a name, description, and visibility setting (private or shared). Shared boards are discoverable by all students. Board owners can invite collaborators by roll number. The board canvas (powered by tldraw) supports drawing, sticky notes, images, and text. Images from the gallery can be saved directly to any owned moodboard.
-
-**Design Studio**  
-An in-browser design environment (separate page at `/design-studio`). The exact capabilities depend on the PaletteStudio component.
-
-**Like & Comment**  
-On any artwork in the gallery, logged-in students can tap the heart icon to like (tap again to unlike). Comment with name and text. Admin can delete any comment.
-
-**Live Sessions**  
-When a coordinator or admin creates a live session, it appears in a fixed banner at the top of every page. The banner shows the session title, host, and a "Join" button. Students in the target audience group see the meeting link; others see the session but not the link. Clicking "Join" records the student's attendance in the database.
-
-**XP & Progress Tracking**  
-Visible on the Academy page as a progress ring. Tracks videos watched per domain and quiz completions per domain. All state is stored in localStorage and synced to the backend.
-
-### 2.2 Features for Coordinators
-
-Coordinators are approved IITK members (listed in the `coordinators` audience group). They do not have admin access but have special scheduling privileges.
-
-**Schedule Live Sessions**  
-Coordinators can create live sessions from the **footer scheduler modal**. The modal appears only when `meetEnabled` is true (set by admin), the user is logged in, and they are an approved coordinator (`canSchedule === true`). They fill in: title, host name, meeting link, scheduled time, and optionally an audience group.
-
-**Go Live / End Session**  
-In the footer scheduler modal, coordinators see a list of their own sessions. Each session has "Go Live" (sets status to `live`) and "End Session" (sets status to `ended`) buttons. These make direct API calls to `/api/live-sessions/coordinator/:id/status`.
-
-**Delete Session**  
-Coordinators can remove sessions they created within 24 hours of creation.
-
-### 2.3 Admin Tabs
-
-The admin panel at `/admin` is protected by a password (JWT-based). It has nine tabs:
-
-| Tab | Purpose |
-|---|---|
-| Academy | Manage domains, videos, quiz questions |
-| Gallery | Upload/edit/delete artworks, bulk upload, set featured |
-| Team | Add/edit/delete team members, drag-and-drop reorder |
-| Events | Create/edit/delete events |
-| Comments | View and delete all artwork comments |
-| Sessions | Create/edit/delete/manage live sessions, see join analytics |
-| Moodboards | View all student moodboards, delete any, change visibility |
-| Announcements | Compose and send email announcements to all registered students |
-| Settings | Toggle public meet scheduler, set passcode, manage coordinators, edit email templates |
-
-**Gallery bulk upload**: Admin can paste a list of files named `title_artist.ext` and the system parses title + artist automatically. Dragging in a video also captures the first frame as the cover image. An image cropper allows editing before upload.
-
----
-
-## 3. User Roles & Access
-
-| Role | How Identified | What They Can Do |
+| Category | Library | Version |
 |---|---|---|
-| Guest | No session in localStorage | Browse home, gallery (no likes/comments), events (no RSVP), team, resources, academy (no progress saved) |
-| Student | `iitk_dna_student_session` in localStorage, validated by roll number | Everything above + like, comment, RSVP, moodboards, academy XP, join live sessions |
-| Coordinator | Student who is in `audience_group_members` with `group_id='coordinators'` and `approved=true` | Everything student can do + schedule/manage live sessions via footer |
-| Admin | `dna_admin_token` JWT in sessionStorage | Full admin panel, all CRUD operations, email sending, settings |
-
-**Auth mechanics**
-
-- Student auth: Roll number stored in `localStorage` under `iitk_dna_student_session`. No password. Roll number sent as `X-Roll-Number` header on every API request. There is no server-side session token for students; the backend uses the header for owner-checks.
-- Admin auth: `POST /api/auth/admin/login` with password. Returns a JWT signed with `JWT_SECRET` (8-hour expiry). Stored in `sessionStorage` under `dna_admin_token`. Sent as `Authorization: Bearer {token}` header. The backend middleware `requireAdmin` verifies this token. On 401 response, the frontend clears the token and throws `SESSION_EXPIRED`, which `AppDataContext` catches and redirects to `/admin`.
-- Coordinator auth: The backend `requireCoordinator` middleware queries `audience_group_members` where `group_id='coordinators'` AND `roll_number = X-Roll-Number header` AND `approved=true`. No separate token; coordinator status is checked live per request.
-
-**Session gate**
-
-`Root.tsx` wraps the entire app in a `SessionGate` component. When no student session exists, `JoinPrompt` is shown after a 1500ms delay — a floating card at the bottom of the screen offering to register or browse as guest. "Browse as guest" dismisses it for 24 hours (stored in `localStorage` as `iitk_dna_guest_dismissed` with a timestamp). The JoinPrompt is not shown on `/moodboards/:id` or `/admin`.
-
----
-
-## 4. Page by Page Guide
-
-### 4.1 Home Page
-
-**URL**: `/`  
-**Access**: Everyone  
-**Component**: `src/app/pages/HomePage.tsx`
-
-A composition-only page. Renders these sections top to bottom:
-
-1. **Hero** — Full-screen section with club tagline, PixelTrail mouse-follow interaction, stats card (250+ Members, 50+ Workshops, 500+ Artworks), and two CTAs. If logged in: "Explore Events" button. If not logged in: "Join the Club" (opens RollModal).
-2. **FeaturedMarquee** — Horizontally scrolling strip of artworks marked as featured by admin. Cards are 220px wide (7+ artworks), 260px (3–6), or 300px (1–2). Pauses on hover. Loops seamlessly by duplicating the array when count ≥ 3.
-3. **Mission** — Club mission statement and values.
-4. **Stats** — Animated counters for key club metrics.
-5. **GalleryPreview** — A preview grid of recent artworks, links to `/gallery`.
-6. **EventSpotlight** — Highlights the next upcoming event.
-7. **DesignStudioCard** — CTA card linking to `/design-studio`.
-8. **ResourcesPreview** — Preview of resources, links to `/resources`.
-9. **Team** — Preview of team members, links to `/team`.
-
-### 4.2 Gallery Page
-
-**URL**: `/gallery`  
-**Access**: Everyone (likes/comments require student login)  
-**Component**: `src/app/pages/GalleryPage.tsx`
-
-Masonry column layout using CSS `columns-1 sm:columns-2 lg:columns-3 xl:columns-4`. Domain filter tabs at the top (ALL + one tab per unique domain string found in artwork data). Clicking a tab filters the visible artworks.
-
-**Artwork modal**: Clicking an artwork opens a modal. On desktop it is a centered floating card. On mobile it is a bottom-sheet that springs up with Framer Motion. The modal shows the full media (image, video player, or PDF embed), title, artist, domain, like count, and comments thread.
-
-**LikeBurst**: When a student likes an artwork, 8 heart particles explode outward in a radial burst animation.
-
-**MediaViewer**: Handles image, video (`<video>` element), and PDF (`<iframe>` embed).
-
-**Save to moodboard**: Logged-in students see a "Save" button in the artwork modal that opens a picker listing their own boards. Selecting a board calls `POST /api/boards/:id/items` with the artwork image URL.
-
-**Thumbnail optimization**: Gallery list images use `?width=300&quality=75` query params via the `thumbUrl()` helper, which Supabase storage transforms on the fly.
-
-### 4.3 Academy Page
-
-**URL**: `/academy`  
-**Access**: Everyone (progress tracking requires student login)  
-**Component**: `src/app/pages/AcademyPage.tsx`
-
-12-column grid layout: 3-column sidebar on the left, 9-column main content on the right.
-
-**Sidebar**: Domain tabs (one per design domain, with icon and title). Below the tabs: student stats — XP total, videos watched count, quizzes completed count. A ProgressRing SVG component renders a circular progress indicator.
-
-**Main content**: When a domain is selected:
-- YouTube iframe showing the current video (playlist of all domain videos).
-- Below the iframe: a playlist of all videos in that domain. Each shows difficulty badge, duration, title. Checked state shows if the student has already watched it. Clicking a video navigates the iframe to that video and marks it watched.
-- Quiz section: A multi-question flow. QuizCard component shows one question at a time. After selecting an answer, the card shows green (correct) or red (incorrect) feedback. After completing all questions, the domain quiz is marked complete.
-
-**XP formula**: `watchedVideos.length × 10 + completedQuizzes.length × 20`. Stored in `localStorage` key `iitk_dna_student_progress`.
-
-**Difficulty colors**:
-- Beginner: `#3ecf5f`
-- Intermediate: `#007AFF`
-- Advanced: `#e5484d`
-
-### 4.4 Events Page
-
-**URL**: `/events`  
-**Access**: Everyone (RSVP requires student login)  
-**Component**: `src/app/pages/EventsPage.tsx`
-
-**Live sessions section**: At the top, fetches `/api/live-sessions/active`. Shows any `live` or `upcoming` sessions. Renders them as cards with a join button.
-
-**Filter tabs**: All / Upcoming / Past. Status logic:
-- Past: event date + time is more than 2 hours ago
-- Live: within 1 hour of event start
-- Upcoming: everything else
-
-**Grid / List toggle**: Students can switch between a card grid view and a compact list view.
-
-**Event card**: Shows title, date, time, location, description, capacity bar (`registeredCount / capacity`), and a live countdown timer (days / hours / minutes / seconds) that updates every second.
-
-**RSVP button**: Logged-in students see a RSVP / Cancel RSVP button. Clicking it calls `POST /api/events/:id/rsvp` which toggles attendance. If the event is at capacity, a 409 error is returned and the button shows "Full".
-
-### 4.5 Team Page
-
-**URL**: `/team`  
-**Access**: Everyone  
-**Component**: `src/app/pages/TeamPage.tsx`
-
-Sections (in order): Faculty/Advisors, Coordinators, Secretaries, Design Team, Ex-Core. Ex-Core members are grouped by year and sorted descending (most recent year first).
-
-**MemberCard**: Shows photo (or colored placeholder), name, designation, year. Clicking the card expands it to show the full bio. Social links (Instagram, LinkedIn, email) appear as icon buttons.
-
-Responsive grid: adapts columns based on screen width.
-
-### 4.6 Resources Page
-
-**URL**: `/resources`  
-**Access**: Everyone  
-**Component**: `src/app/pages/ResourcesPage.tsx`
-
-A curated list of design resources. (Content managed statically or via domain data.)
-
-### 4.7 Design Studio Page
-
-**URL**: `/design-studio`  
-**Access**: Everyone  
-**Component**: `src/app/pages/DesignStudioPage.tsx`
-
-An in-browser creative tool powered by the `PaletteStudio` component.
-
-### 4.8 Palette Page (Feature-Flagged)
-
-**URL**: `/palette`  
-**Access**: Not linked in navigation (feature-flagged as `PALETTE_STUDIO_FEATURE` in routes.tsx)  
-**Component**: `src/app/pages/PalettePage.tsx`
-
-Color palette studio. Not publicly accessible through normal navigation. The route exists in the router but is not shown in any nav link.
-
-### 4.9 Moodboards Page
-
-**URL**: `/moodboards`  
-**Access**: Student login required (SessionGate enforces this)  
-**Component**: `src/app/pages/MoodboardsPage.tsx`
-
-Two tabs: **Mine** (boards owned by the student) and **Shared** (all boards with `visibility='shared'`).
-
-Board list is cached in `sessionStorage` with a 5-minute TTL to avoid redundant API calls.
-
-**Create board modal**: Name (required), description (optional), visibility: private / shared.
-
-**BoardCard**: Shows board name, description, owner name, item count, member count, visibility badge. Clicking opens `/moodboards/:id`.
-
-**Share & Invite modal**: Change visibility, set `edit_mode` (members only / anyone), copy a share link, invite a collaborator by entering their roll number. Inviting calls `POST /api/boards/:id/members`.
-
-**Delete confirm**: Owner can delete the board. Non-owners can leave.
-
-### 4.10 Board Page (Full-Screen Canvas)
-
-**URL**: `/moodboards/:id`  
-**Access**: Owner + members for private boards; everyone for shared boards  
-**Component**: `src/app/pages/BoardPage.tsx` (actually `src/app/pages/TldrawCanvas.tsx` is the canvas component)
-
-Full-screen fixed layout — the navigation bar, footer, LiveSessionBanner, and BackToTop are all hidden. The Root component detects `/moodboards/:id` paths and skips rendering those shell components.
-
-**Top bar**: Back arrow, board name, visibility badge (Private / Shared), save status ("Saved" / "Saving…"), member avatar stack, Share/Invite/Delete buttons.
-
-**Canvas**: `TldrawCanvas` component, lazy-loaded via `React.lazy()`. Wraps the tldraw editor with the current board's stored canvas state loaded from `GET /api/boards/:id/canvas`. On change, saves to `PUT /api/boards/:id/canvas`.
-
-**Access logic**:
-- `isOwner`: `board.owner_roll === studentSession.rollNumber`
-- `isMember`: `isOwner` OR the roll number appears in `board.members`
-- `readOnly`: not a member AND `edit_mode === 'members_only'`
-
-**Keepalive**: `BoardPage` sends a ping to `/api/health` every 10 minutes to prevent the Render.com backend from going cold while the student is working.
-
-### 4.11 Admin Page
-
-**URL**: `/admin`  
-**Access**: Admin password required  
-**Component**: `src/app/pages/AdminPage.tsx` (3311 lines)
-
-Login form on first visit. On successful login, the JWT token is stored in `sessionStorage` and the full admin dashboard is shown. Token expires after 8 hours; on expiry the panel redirects back to the login form.
-
-**Tab: Academy**
-- List all domains. Create new domain (title, full name, icon, tagline, description, color).
-- For each domain: add/edit/delete videos (title, YouTube URL or ID, difficulty, duration, sequence order). Add/edit/delete quiz questions (question text, 4 options, correct answer index).
-
-**Tab: Gallery**
-- Grid of all artworks with edit/delete buttons per card.
-- Upload new artwork: drag-and-drop or file picker. Fields: title, artist, domain, file (jpg/jpeg/png/gif/webp/pdf/mp4, max 50MB). Optional cover image.
-- **Bulk upload mode**: toggle to drag multiple files at once. Filenames are parsed as `{title}_{artist}.{ext}`.
-- **Video cover auto-capture**: When uploading a video, the first frame is captured on the frontend as a cover image.
-- **Image cropper**: Before uploading, images can be cropped using the `ImageCropper` component.
-- Star toggle (⭐) sets `featured=true` — featured artworks appear in the homepage marquee.
-- Edit artwork: update title, artist, domain, featured status, or replace the file/cover.
-
-**Tab: Team**
-- Grid of all team members.
-- Add/edit member: name, designation, year, bio, color (hex), photo (jpg/png/webp, max 10MB), display order, social links (Instagram, LinkedIn, email).
-- Drag-and-drop reorder within each group (designation-based grouping).
-- Delete member (photo deleted from storage too).
-
-**Tab: Events**
-- List all events. Create/edit/delete events.
-- Fields: title, date (YYYY-MM-DD), time (text), location, description (up to 2000 chars), capacity.
-
-**Tab: Comments**
-- Table of all comments across all artworks. Shows comment text, sender, artwork title, timestamp. Delete button per comment.
-
-**Tab: Sessions**
-- List all live sessions (upcoming, live, ended).
-- Create session: title, host, meeting link (URL), scheduled time, audience group, description.
-- Set session status to live/upcoming/ended.
-- View join analytics: who joined and when.
-
-**Tab: Moodboards**
-- Table of all boards from all students: name, owner, visibility, item count, member count.
-- Admin can delete any board or change its `visibility` / `edit_mode`.
-
-**Tab: Announcements**
-- Compose email subject and HTML body.
-- Send to all registered students (batched 50 per email via Resend BCC).
-
-**Tab: Settings**
-- Toggle `public_meet_enabled` (shows/hides the coordinator meet scheduler in footer).
-- Set `public_meet_passcode` (passphrase that unlocks the public meet token).
-- **Coordinators panel**: list all coordinators, add by roll number + name, approve/revoke, delete.
-- **Email templates**: edit the `welcome`, `new_event`, and `new_artwork` template subject + body. Templates support `{{name}}`, `{{title}}`, `{{artist}}`, `{{domain}}`, `{{date}}`, `{{venue}}`, `{{description}}` placeholders.
-
----
-
-## 5. UI Design System
-
-All design tokens live in `src/styles/theme.css`. The app uses dark theme by default; light theme is applied by setting `data-theme="light"` on the `<html>` element (controlled by `ThemeProvider`).
-
-### 5.1 Color Variables
-
-| Variable | Dark value | Light value |
+| Framework | React | `18.3.1` (peer dep) |
+| Build tool | Vite | `^6.4.3` |
+| Language | TypeScript | via `@types/react` `^18.3.31` |
+| Routing | `react-router` | `^7.17.0` (data-router / `createBrowserRouter`) |
+| Styling | Tailwind CSS | `4.1.12` (CSS-first, `@tailwindcss/vite` plugin) |
+| Animation | `motion` | `12.23.24` (standalone "Motion" library, imported as `motion/react` — not `framer-motion`) |
+| UI primitives | Radix UI (`@radix-ui/react-*`) | various, underpin the shadcn-style `src/app/components/ui/` kit |
+| Icons | `lucide-react` | `0.487.0` |
+| Component variants | `class-variance-authority`, `clsx`, `tailwind-merge` | — |
+| Whiteboard/canvas | `tldraw` | `2.4.4` (Moodboards feature) |
+| 3D | `@splinetool/react-spline` | `^4.1.0` (unused in the live tree, see §11) |
+| Image cropping | `react-image-crop` | `^11.0.10` |
+| Image compression | `browser-image-compression` | `^2.0.2` |
+| Carousels | `embla-carousel-react`, `react-slick` | present but unused by the live component tree |
+| Confetti | `canvas-confetti` | `1.9.4` (present, no current call site found) |
+| Charts | `recharts` | `2.15.2` (backs `ui/chart.tsx`) |
+| Forms | `react-hook-form` | `7.55.0` |
+| Toasts | `sonner` | `2.0.3` |
+| Dates | `date-fns` | `3.6.0` |
+| Theming lib | `next-themes` | `0.4.6` (installed but **not used** — the site has its own hand-rolled `ThemeContext`) |
+| Misc | `uuid`, `vaul`, `cmdk`, `input-otp`, `react-dnd` (+html5-backend), `react-resizable-panels`, `react-popper`, `@popperjs/core`, `react-responsive-masonry` | supporting the `ui/` kit and admin drag-and-drop |
+| Dev tooling | `vite`, `@vitejs/plugin-react` `4.7.0`, `@tailwindcss/vite`, `tailwindcss`, TypeScript types | — |
+
+### Backend (`backend/`, separate `package.json`)
+
+| Category | Library | Version |
 |---|---|---|
+| Runtime | Node.js | 20 (per Dockerfiles) |
+| Framework | Express | `^4.19.2` |
+| Language | TypeScript (compiled via `tsc`, dev via `tsx watch`) | `^5.4.5` |
+| Database driver | `pg` (node-postgres) | `^8.11.5` |
+| Object storage | `@supabase/supabase-js` | `^2.45.4` |
+| Auth | `jsonwebtoken` (admin JWT), `bcryptjs` (password hashing) | `^9.0.2` / `^2.4.3` |
+| Validation | `zod` | `^3.22.4` |
+| File uploads | `multer` (memory storage) | `^1.4.5-lts.1` |
+| Image processing | `sharp` (thumbnail generation) | `^0.35.2` |
+| Email | `resend` | `^6.14.0` (the **only** email provider actually wired up — `nodemailer` is listed as a dependency but unused in `services/mailer.ts`) |
+| Security middleware | `helmet`, `cors`, `express-rate-limit` | `^7.1.0` / `^2.8.5` / `^7.2.0` |
+| IDs | `uuid` | `^11.1.1` |
+| Env | `dotenv` | `^16.4.5` |
+
+### Infrastructure
+
+- **Database + file storage:** Supabase (Postgres + Storage bucket `dna-media`).
+- **Frontend hosting:** Vercel (SPA, `vercel.json` rewrites everything to `index.html`).
+- **Backend hosting:** Render (Web Service) — with a Docker Compose alternative (`Dockerfile`, `backend/Dockerfile`, `nginx.conf`, `docker-compose.yml`) for self-hosting.
+- **Package manager:** `pnpm` (root `pnpm-workspace.yaml`, `pnpm-lock.yaml`) for the frontend; the backend uses plain `npm` (`package-lock.json`).
+
+---
+
+## 3. Folder & File Structure
+
+```
+dna_website/
+├── index.html                    # SPA shell — Google Fonts links, Font Awesome CDN, inline FOUC-prevention theme script
+├── vite.config.ts                # Vite config: React + Tailwind v4 plugins, "@" → src alias, figma:asset resolver, dev proxy /api → :4000
+├── tsconfig.json                 # Frontend TS config (noEmit, bundler resolution)
+├── postcss.config.mjs            # Empty — Tailwind v4 self-configures via its Vite plugin
+├── vercel.json                   # Vercel SPA rewrite rule
+├── nginx.conf                    # Nginx config for the Docker self-host path
+├── Dockerfile                    # Frontend multi-stage build (Vite build → nginx:alpine)
+├── docker-compose.yml            # Local/self-hosted compose: frontend + backend services
+├── .env.example                  # Root env vars for Docker Compose (JWT_SECRET, ADMIN_PASSWORD, CORS_ORIGINS, PORT)
+├── .mcp.json                     # Configures the Supabase MCP server for Claude Code
+├── skills-lock.json              # Locks two Claude Code skills (supabase, supabase-postgres-best-practices)
+├── pnpm-workspace.yaml           # Single-package pnpm workspace + build-script allowlist
+├── DEPLOYMENT.md                 # Step-by-step Vercel/Render/Supabase deployment guide
+├── AUDIT_REPORT.md               # Dated security/quality audit (2026-06-14) — see §11
+├── ATTRIBUTIONS.md                # Third-party asset credits
+├── README.md                     # Minimal Figma-Make boilerplate readme
+├── default_shadcn_theme.css      # Reference-only stock shadcn theme, NOT imported by the live build
+├── public/
+│   └── logo.png                  # Favicon/logo
+├── tests/
+│   └── palette-engine.test.js    # Standalone Node script testing PaletteStudio's color engine (see §11 — not wired to any "test" script)
+├── src/
+│   ├── main.tsx                  # ReactDOM.createRoot entry point, mounts <App/>
+│   ├── styles/
+│   │   ├── index.css              # Single entry: imports fonts.css → tailwind.css → theme.css → globals.css
+│   │   ├── fonts.css              # Empty (0 bytes) — vestigial; fonts actually load via <link> tags in index.html
+│   │   ├── tailwind.css           # 4-line Tailwind v4 bootstrap (`@import 'tailwindcss' source(none)`, explicit `@source`, `tw-animate-css`)
+│   │   ├── theme.css              # The real design system: CSS custom properties, dark/light tokens, typography scale, button/card primitives
+│   │   └── globals.css            # Resets + tldraw z-index override fixes
+│   ├── imports/pasted_text/       # Legacy Figma-Make scaffolding (design spec markdown, unused canvas-animation.js/displacement-map.tsx referenced by orphaned components)
+│   └── app/
+│       ├── App.tsx                 # Root component — just <RouterProvider router={router}/>
+│       ├── routes.tsx               # createBrowserRouter route table (see §10)
+│       ├── context/
+│       │   ├── ThemeContext.tsx     # Light/dark theme provider (attribute-based, localStorage-persisted)
+│       │   ├── StudentContext.tsx   # Student session + learning-progress state (localStorage-persisted)
+│       │   └── AppDataContext.tsx   # Central data-fetch layer: domains/artworks/events/team + all CRUD mutators
+│       ├── lib/
+│       │   ├── api.ts               # Typed fetch client for every backend endpoint
+│       │   ├── color-engine.ts      # HSL-based color-theory engine — orphaned, unused (superseded by PaletteStudio's own engine)
+│       │   ├── halftone-logic.ts    # Canvas halftone-rendering algorithm used by HalftoneStudio
+│       │   └── utils.ts             # `cn()` class-merge helper (clsx + tailwind-merge)
+│       ├── pages/                   # One file per route (see §10 for the route map)
+│       │   ├── HomePage.tsx
+│       │   ├── AcademyPage.tsx
+│       │   ├── ResourcesPage.tsx
+│       │   ├── GalleryPage.tsx
+│       │   ├── EventsPage.tsx
+│       │   ├── TeamPage.tsx
+│       │   ├── PalettePage.tsx
+│       │   ├── DesignStudioPage.tsx
+│       │   ├── AdminPage.tsx
+│       │   ├── MoodboardsPage.tsx
+│       │   ├── BoardPage.tsx
+│       │   └── TldrawCanvas.tsx     # Not a route — the tldraw wrapper consumed by BoardPage
+│       └── components/
+│           ├── Root.tsx             # react-router layout route: providers + nav/footer/modals shell
+│           ├── Navigation.tsx       # Site-wide top nav pill bar
+│           ├── Footer.tsx           # Site-wide footer + "Schedule a Meet" modal
+│           ├── RollModal.tsx        # Roll-number login/registration modal
+│           ├── WelcomeOverlay.tsx   # First-time-registration onboarding overlay
+│           ├── JoinPrompt.tsx       # Guest-conversion nudge (bottom card, 24h cooldown)
+│           ├── LiveSessionBanner.tsx# Top banner for active/upcoming live sessions
+│           ├── BackToTop.tsx        # Floating scroll-to-top button
+│           ├── Hero.tsx             # Homepage hero + PixelTrail cursor effect
+│           ├── FeaturedMarquee.tsx  # Homepage infinite CSS marquee of featured artworks
+│           ├── Mission.tsx          # Homepage mission statement section
+│           ├── Stats.tsx            # Homepage animated stat counters
+│           ├── GalleryPreview.tsx   # Homepage shuffled artwork grid preview
+│           ├── EventSpotlight.tsx   # Homepage single-event countdown spotlight
+│           ├── DesignStudioCard.tsx # Homepage promo card linking into Design Studio tools
+│           ├── ResourcesPreview.tsx # Homepage learning-domains preview grid
+│           ├── Team.tsx             # Homepage coordinators preview grid
+│           ├── PaletteStudio.tsx    # Full OKLCH color-palette generator engine + UI (2000+ lines)
+│           ├── HalftoneStudio.tsx   # Image → halftone-pattern converter tool
+│           ├── SvgConverter.tsx     # Image → line-art SVG tracer tool
+│           ├── ImageCropper.tsx     # Singleton promise-based crop modal (`openCropModal`/`ImageCropperPortal`)
+│           ├── InteractiveRobotSpline.tsx # Spline 3D wrapper — orphaned, unused
+│           ├── AnimatedBlobs.tsx    # Decorative gradient blobs — orphaned, unused
+│           ├── CustomCursor.tsx     # Custom cursor replacement — orphaned, unused
+│           ├── Events.tsx           # Legacy sample events grid — orphaned, superseded by EventsPage
+│           ├── HeroScroll.tsx       # Scroll-driven 3D tile gallery — orphaned, superseded by FeaturedMarquee
+│           ├── figma/ImageWithFallback.tsx # Figma-Make scaffold image fallback — orphaned, unused
+│           ├── hooks/
+│           │   ├── use-debounced-dimensions.ts # `useDimensions()` — used by ui/pixel-trail.tsx
+│           │   └── use-screen-size.ts          # `useScreenSize()` — used by Hero.tsx
+│           └── ui/                  # shadcn/Radix primitive kit (accordion, dialog, dropdown-menu, sheet, sidebar, tabs, pixel-trail, etc. — ~45 files)
+├── backend/
+│   ├── package.json / package-lock.json
+│   ├── tsconfig.json
+│   ├── Dockerfile                   # Backend multi-stage build (still rebuilds better-sqlite3 — legacy leftover, see §11)
+│   ├── .env.example                 # Backend env var template
+│   ├── data/dna.db*                 # Leftover SQLite files from a pre-Postgres era (unused by current code)
+│   ├── uploads/                     # Local-disk storage fallback (gallery/, team/) when Supabase Storage env vars are absent
+│   ├── scripts/
+│   │   └── backfill-thumbnails.ts   # One-time maintenance script: generates missing artwork thumbnails
+│   └── src/
+│       ├── server.ts                # Entry point: env-var guards, initSchema(), admin-password auto-seed, app.listen()
+│       ├── app.ts                   # Express app factory: helmet/cors/rate-limit, route mounting, error handler
+│       ├── db/
+│       │   ├── client.ts            # `pg.Pool` singleton + `query()` helper
+│       │   ├── schema.ts            # `initSchema()` — idempotent CREATE/ALTER TABLE migrations + seed data
+│       │   └── seed.ts              # Manual one-time dev seed script (`npm run seed`)
+│       ├── middleware/
+│       │   └── adminAuth.ts         # `requireAdmin` JWT-verification middleware
+│       ├── routes/                  # One file per resource — endpoint tables in §14, per-feature logic in §6
+│       │   ├── auth.ts              # POST /api/auth/admin/login
+│       │   ├── artworks.ts          # /api/artworks — gallery CRUD, likes, comments
+│       │   ├── domains.ts           # /api/domains — Academy domains/videos/quizzes CRUD
+│       │   ├── events.ts            # /api/events — event CRUD + RSVP
+│       │   ├── students.ts          # /api/students — registration, sessions, progress tracking
+│       │   ├── team.ts              # /api/team — team member CRUD
+│       │   ├── notify.ts            # /api/notify — email templates + broadcast sends
+│       │   ├── liveSessions.ts      # /api/live-sessions — Google Meet session scheduling
+│       │   ├── boards.ts            # /api/boards — Moodboards CRUD, membership, canvas persistence
+│       │   ├── settings.ts          # /api/settings — app_settings key/value store + passcode gate
+│       │   └── coordinators.ts      # /api/coordinators — coordinator role management
+│       ├── services/
+│       │   └── mailer.ts            # Resend email-sending service, templates, batching
+│       └── storage/
+│           ├── index.ts             # `getStorage()` factory — picks Supabase vs local backend
+│           ├── local.ts             # LocalStorageProvider — writes to backend/uploads/
+│           └── supabase.ts          # SupabaseStorageProvider — writes to Supabase Storage bucket
+```
+
+---
+
+## 4. Complete Features List
+
+### 4.1 Public / all-visitor features
+
+- **Homepage** (`/`) — hero section, infinite featured-artwork marquee, mission statement, animated stat counters, shuffled gallery preview, single-event countdown spotlight, Design Studio promo card, learning-resources preview, coordinators preview.
+- **Gallery** (`/gallery`) — masonry grid of all club artwork (images, videos, PDFs), domain filter pills, full-screen artwork viewer with pinch-zoom/pan for images, native video playback, embedded PDF viewer (Google Docs viewer with fallback link), deep-linkable via `?art=<id>` query param.
+- **Events** (`/events`) — grid/list toggle, all/upcoming/past filters, capacity progress bars, live countdown timers per event, a separate "Live & Upcoming Sessions" banner section pulling from the live-session system.
+- **Team** (`/team`) — full roster grouped into Faculty/Advisors, Coordinators, Secretaries, Design Team, and Ex-Core alumni (grouped by year), expandable bio cards with social links.
+- **Design Studio** (`/design-studio`) — a suite of 7 free-standing design tools (see 4.4).
+- **Resources** (`/resources`) — a static, hardcoded curated list of external learning resources with search/type/domain filters (not backed by the CMS/admin panel).
+- **Site chrome** — floating pill navigation with active-route highlighting and mobile hamburger menu, footer with nav columns and a coordinator-only "Schedule a Meet" modal, dark/light theme toggle, "back to top" button, live-session announcement banner, guest join-prompt nudge.
+
+### 4.2 Student (registered IITK member) features
+
+- **Registration/login** — two-step roll-number + name/email flow (`RollModal`), IITK-email-only validation (`@iitk.ac.in`), roll-number format validation, automatic club member ID generation (`IITK-DnA-{ROLL}-{suffix}`), welcome email on first registration, one-time onboarding overlay (`WelcomeOverlay`) introducing the 5 flagship features.
+- **Academy** (`/academy`) — per-domain video playlists (UI/UX, Photoshop, Illustrator, Animation, extensible via admin), YouTube embed player, watched/unwatched toggle per video, per-domain quiz unlocking a "badge," animated XP/progress rings, XP formula (`10 × videos watched + 20 × quizzes completed`).
+- **Gallery interactions** — like/unlike artwork (optimistic UI with heart-burst animation), comment on artwork, save any artwork image directly into a personal Moodboard.
+- **Events** — RSVP/un-RSVP with live capacity enforcement, live countdown timers.
+- **Live Sessions** — see and join Google Meet sessions targeted at "All Students," restricted team-only sessions show as inaccessible; join-clicks are tracked for admin attendance review.
+- **Moodboards** (`/moodboards`, `/moodboards/:id`) — create private/shared collaborative canvases (tldraw-based whiteboard), invite other students by roll number, real-time-feeling autosave (debounced snapshot persistence), share-link copying, visibility (private/shared) and edit-mode (members-only/anyone) controls, "Shared Boards" public discovery tab.
+- **Coordinator-only:** approved coordinators get a "Schedule a Meet" action in the footer to self-serve create/manage live sessions without full admin access.
+
+### 4.3 Admin features (`/admin`, password-gated dashboard, 9 tabs)
+
+1. **Academy tab** — create/edit/delete learning domains (title, icon, tagline, description, color); add/edit/delete/reorder videos per domain (YouTube URL normalization, difficulty, duration, drag-free numeric sequence editing).
+2. **Gallery tab** — single or bulk artwork upload (drag/drop, auto-parses `title_artist.ext` filenames, auto-captures video first-frame as cover, in-browser image compression + cropping before upload), edit/delete/feature-toggle per artwork.
+3. **Team tab** — add/edit/delete team members (name, designation, year, bio, color, socials, photo with cropper), drag-and-drop reordering within Coordinator/Secretary/Other groups, "Reset to A–Z" per group.
+4. **Events tab** — create/edit/delete events (title, date, time, location, description, capacity); creating an event triggers an email notification to all students.
+5. **Comments tab** — moderate (delete) any comment across all artworks, with artwork context shown.
+6. **Settings tab** — toggle + set passcode for the public meet-scheduling gate, approve/revoke/add/remove coordinators, toggle a site-wide "force uppercase" text-styling setting.
+7. **Announcements tab** — edit the 3 transactional email templates (welcome, new-artwork, new-event) with variable-chip insertion and live preview; compose and broadcast a one-off custom announcement email to all registered students.
+8. **Sessions tab** — create/manage live Google Meet sessions (title, host, link, schedule, target audience group), transition status upcoming→live→ended, review past-session attendance (who joined and when).
+9. **Moodboards tab** — site-wide moderation view of every student's boards, force-toggle visibility/edit-mode, delete any board, open any board directly.
+
+### 4.4 Design Studio tools (`/design-studio`, 7 tabs, also reachable individually)
+
+1. **Palette Studio** — generates full 18-slot UI color palettes (bg/surface/text/border/primary/secondary/accent/success/warning/error/info, light+dark) from one seed color using an internal OKLCH color-science engine; 5 harmony modes, per-slot locking, WCAG + APCA accessibility scoring, color-blindness simulation (protanopia/deuteranopia/tritanopia), a "Mood" tab mapping colors to psychology/symbolism, CSS custom-property export. Also mounted standalone at `/palette`.
+2. **Font Pairing** — 147 curated Google Font display/body pairings across 7 typographic strategies (Contrast, Humanist, Mono Accent, Slab Power, Serif Stack, Display Drama, Grotesque); live preview with adjustable size/custom text, pairing-quality scoring, undo/redo history.
+3. **Contrast Checker** — live WCAG contrast-ratio calculation between two colors, AA/AAA pass/fail matrix, auto-generated harmonious replacement-color suggestions when failing.
+4. **Image Converter** — client-side image format conversion (PNG/JPEG/WebP), quality and scale sliders, before/after preview, download.
+5. **Grid Calculator** — 9 selectable grid systems (Swiss Modular, Column, Baseline, Golden Ratio, Rule of Thirds, Radial, Isometric, Diagonal, Compound) rendered live on an HTML canvas over 9 page-format presets (A4/A3/A5/Letter/Posters/Square/16:9/Custom), adjustable columns/gutters/margins/baseline/angle parameters.
+6. **Halftone** — converts an uploaded image into a halftone pattern (lines/dots/squares), adjustable angle, frequency, contrast, brightness, min/max element width, invert, custom colors; PNG export.
+7. **Image → SVG** — hand-rolled pixel-scanning tracer converting an image into a line-art (or filled) SVG, adjustable threshold/fill/invert/edge-dilation, SVG download.
+
+---
+
+## 5. Components Breakdown
+
+### 5.1 Layout & shell
+
+**`Root.tsx`** — the react-router layout component mounted at `/`.
+- Renders provider stack: `ThemeProvider` → `StudentProvider` → `AppDataProvider`.
+- Renders (unless on a `/moodboards/:id` board page): `LiveSessionBanner`, `Navigation`, `<main>` wrapping `<Outlet/>`, `Footer`, `BackToTop`.
+- Always renders `RollModal` (self-controls visibility via `StudentContext`) and a local `SessionGate` component that shows `JoinPrompt` only when no student session exists.
+- `isBoardPage = pathname.startsWith('/moodboards/') && pathname !== '/moodboards'` — on board pages, renders **only** `<Outlet/>` (full-bleed canvas, no chrome).
+- Smooth-scrolls to top on route change (skipped on board pages).
+
+**`Navigation.tsx`** — floating pill nav bar. Links: Home, Academy, Gallery, Events, Team, Design Studio, Moodboards. Shows student name+roll+logout if logged in, else a "Join" button opening `RollModal`. Desktop active-link highlight uses a shared `layoutId="nav-pill"` motion animation. Mobile hamburger menu with outside-click-to-close. Theme toggle (sun/moon). No Admin link here — Admin is only linked from `Footer`.
+
+**`Footer.tsx`** — brand column + Explore/Club link columns + contact/social row. Contains the **"Schedule a Meet"** modal, shown only if `public_meet_enabled` (from `/api/settings/public`) is true, the visitor is logged in, and `/api/coordinators/check/:roll` confirms they're an approved coordinator. The modal posts to `/api/live-sessions/coordinator` and can toggle a session live/ended or delete it.
+
+**`RollModal.tsx`** — two-step login/registration: (1) enter roll number → `checkExists` → if a complete profile exists, silently logs in via `loginExisting`; else (2) collect name + email (validated `@iitk.ac.in`) → `createSession`. First-time registrants see `WelcomeOverlay` afterward.
+
+**`WelcomeOverlay.tsx`** — full-screen 5-feature onboarding card shown once per roll number (`hasSeenWelcome`/`markWelcomeSeen`, localStorage-gated).
+
+**`JoinPrompt.tsx`** — bottom card nudging guests to register, appears after a 1.5s delay if not dismissed in the last 24h (`shouldShowJoinPrompt`/`markGuestDismissed`).
+
+**`LiveSessionBanner.tsx`** — fixed top banner for the current live/next-upcoming session; polls `/api/live-sessions/active` every 60s and join-count every 30s while live; access-gates the "Join Meet" link based on `canAccess`.
+
+**`BackToTop.tsx`** — appears after 300px scroll, smooth-scrolls to top.
+
+### 5.2 Homepage sections
+
+`Hero`, `FeaturedMarquee`, `Mission`, `Stats`, `GalleryPreview`, `EventSpotlight`, `DesignStudioCard`, `ResourcesPreview`, `Team` — each a self-contained section composed in order by `HomePage.tsx`. Notable internals:
+- **`Hero.tsx`** hosts a cursor-reactive `PixelTrail` background grid (from `ui/pixel-trail.tsx`) and CTA buttons that branch on login state.
+- **`FeaturedMarquee.tsx`** shows only artworks flagged `featured` by an admin; runs a pure-CSS infinite scroll (pauses on hover).
+- **`GalleryPreview.tsx`** shows a viewport-responsive count of non-featured artworks, shuffled (Fisher–Yates) on each mount.
+- **`EventSpotlight.tsx`** and **`Team.tsx`** (homepage version, coordinators-only) are separate from the full `EventsPage`/`TeamPage`.
+- **`DesignStudioCard.tsx`** deep-links into `/design-studio` with `{ state: { tab } }` to preselect a tool tab.
+
+### 5.3 Design Studio tools
+
+**`PaletteStudio.tsx`** (also used standalone at `/palette` via `PalettePage.tsx`) is the largest single file in the codebase (~2000 lines, `// @ts-nocheck`). It implements its own OKLCH color engine (hex↔RGB↔OKLCH, WCAG + APCA contrast, CIEDE2000 delta-E, color-blindness simulation matrices) independent of `lib/color-engine.ts` — see §6.5 for the algorithm.
+
+**`HalftoneStudio.tsx`** + **`lib/halftone-logic.ts`** — canvas-based halftone renderer; UI in the component, pixel math in the lib (see §6.6).
+
+**`SvgConverter.tsx`** — self-contained; no shared lib, does its own pixel-edge-detection scan (see §6.6).
+
+**`ImageCropper.tsx`** — a singleton "portal" pattern: `openCropModal(file, type)` returns a Promise from anywhere in the app; `ImageCropperPortal()` is mounted once (in `AdminPage.tsx`) to actually render the crop UI (`react-image-crop`).
+
+**`DesignStudioPage.tsx`** (default export `DesignStudio`) is the shell hosting all 7 tools: a `TOOLS` registry array (`palette`, `font`, `contrast`, `image`, `grid`, `halftone`, `svg`) drives a sticky tab bar; the active tab is initialized from `location.state?.tab` (set by `DesignStudioCard`'s deep links) and defaults to `'palette'`. Three of the tools — `FontPairing`, `ContrastChecker`, `ImageConverter`, and `GridCalculator` — are defined locally inside this file (not separate component files):
+- `FontPairing` — holds a 147-entry hardcoded `PAIR_DB` of Google Font pairs; dynamically injects a Google Fonts `<link>` for whichever pair is active; tracks `history`/`histIdx` for undo/redo across regenerate/strategy-switch actions; computes a 3-metric pairing score (category, x-height match, weight delta).
+- `ContrastChecker` — hand-rolled hex↔RGB↔HSL↔luminance math; `generateSuggestions()` searches lightness/hue space (in 2-3° / 2-4% steps) for the nearest color meeting a target WCAG ratio via 5 strategies (adjusted lightness up/down, complementary, analogous ±30°/±60°, triadic, plus pure black/white fallbacks).
+- `ImageConverter` — loads a file into an `<img>`, redraws it to an off-screen `<canvas>` at a chosen `scale`, and calls `canvas.toBlob()` with the chosen MIME type (`image/png|jpeg|webp`) and quality.
+- `GridCalculator` — `drawGrid()` is a single large canvas-drawing function with a branch per grid system (`swiss`, `column`, `baseline`, `golden`, `thirds`, `radial`, `isometric`, `diagonal`, `compound`), each with hand-tuned geometry (e.g. the golden-ratio branch recursively subdivides by `φ=1.618` and draws the classic spiral arc; the isometric branch draws 30°-angled line families plus a 3-face cube illustration).
+
+### 5.4 Gallery/Events/Team/Academy page-local components
+
+These are defined **inside** their page files (not separately exported), documented in §6:
+- `GalleryPage.tsx`: `LikeBurst`, `ZoomImage`, `MediaViewer`, `ArtworkModal`, `MediaThumbnail`.
+- `EventsPage.tsx`: `EventCard`, `CountUnit`, `useCountdown` hook.
+- `TeamPage.tsx`: `MemberCard`.
+- `AcademyPage.tsx`: `ProgressRing`, `QuizCard`.
+- `MoodboardsPage.tsx`: `BoardCard`.
+- `AdminPage.tsx`: `AdminLogin`, `Modal`, and one component per tab (`AcademyTab`, `GalleryTab`, `TeamTab`, `EventsTab`, `CommentsTab`, `SettingsTab`, `AnnouncementsTab` with `TemplateEditor`/`CustomAnnouncement`, `SessionsTab`, `MoodboardsAdminTab`).
+
+### 5.5 Moodboards / canvas
+
+**`MoodboardsPage.tsx`** — "My Boards" / "Shared Boards" tabs, board creation, sessionStorage cache-then-revalidate (5-min TTL, `readCache`/`writeCache`/`clearBoardsCache` — the last is also imported by `BoardPage.tsx`), share/invite/delete modals.
+
+**`BoardPage.tsx`** — full-screen board editor shell: loads board metadata + saved canvas snapshot, computes `isOwner`/`isMember`/read-only status, renders `TldrawCanvas` (lazy-loaded), theme-syncs it to the site theme, shows a save-status indicator, member avatar stack, share/invite/delete modals, and a 10-minute keepalive ping to `/api/health` to prevent backend cold-start sleep.
+
+**`TldrawCanvas.tsx`** — thin wrapper around the `tldraw` library: loads an initial snapshot once, debounce-saves (3s) on every store change, force-saves immediately on tab-hide/window-close/offline to avoid losing edits, dedupes identical saves.
+
+### 5.6 Orphaned / dead components (confirmed via repo-wide import search — zero importers)
+
+These exist in the tree but are not reachable from any route or rendered component. Documented here for completeness/cleanup awareness, not as active features:
+
+- `AnimatedBlobs.tsx` — decorative gradient blobs.
+- `CustomCursor.tsx` — custom mouse cursor replacement.
+- `Events.tsx` — legacy sample events grid (superseded by `pages/EventsPage.tsx`), also depends on a stray legacy import path.
+- `HeroScroll.tsx` — scroll-driven 3D tile gallery (superseded by `FeaturedMarquee.tsx` on the homepage).
+- `InteractiveRobotSpline.tsx` — Spline 3D scene wrapper.
+- `figma/ImageWithFallback.tsx` — Figma-Make scaffold boilerplate.
+- `lib/color-engine.ts` — HSL color-theory engine, superseded by `PaletteStudio.tsx`'s own OKLCH engine.
+
+---
+
+## 6. Full Code Logic Reference
+
+### 6.1 Roll-number login & registration (`RollModal.tsx` + `backend/src/routes/students.ts`)
+
+1. User opens `RollModal` (triggered from `Navigation`, `Hero`, `JoinPrompt`, or any gated action across the site calling `openRollModal()` from `StudentContext`).
+2. **Step "roll":** user types a roll number → `handleRollContinue()` calls `GET /api/students/:roll/exists`.
+   - If `exists && hasProfile` → `handleSubmitRoll()` calls `POST /api/students/sessions/login` (looks up `student_sessions` where `email`/`name` are both non-null) → `login(...)` from `StudentContext` → modal closes.
+   - Otherwise → advances to step "profile".
+3. **Step "profile":** user enters name + email. Email must end in `@iitk.ac.in` (client-side check, plus a server-side zod `.refine()`). `handleFullSubmit()` calls `POST /api/students/sessions`.
+   - Backend validates via `sessionSchema` (roll regex `^[0-9]{2}[a-zA-Z0-9]{4,6}$/i`, name 2-100 chars, IITK-only email).
+   - New roll number → generates `uniqueId = IITK-DnA-{ROLL}-{4-char-uuid-suffix}`, inserts with `ON CONFLICT (roll_number) DO UPDATE` (race-safe), fires `sendWelcomeEmail()` fire-and-forget.
+   - Existing roll number → reuses `uniqueId`, updates name/email.
+   - Returns `{session, progress}`.
+4. On success, if `!hasSeenWelcome(roll)`, shows `WelcomeOverlay` before closing; the overlay's "Explore" button navigates to `/gallery`.
+5. `StudentContext.login()` persists `{rollNumber, uniqueId, registeredAt, name, email}` to `localStorage['iitk_dna_student_session']`. All subsequent gated calls (`likeArtwork`, `rsvpEvent`, video/quiz progress, board creation) send this roll number via the `X-Roll-Number` header — there is **no password/OTP verification of the roll number itself**, it is trusted as claimed (see §11).
+
+### 6.2 Academy — video watching & quiz completion (`AcademyPage.tsx` + `StudentContext.tsx` + `backend/src/routes/students.ts` + `domains.ts`)
+
+1. `AppDataContext` fetches `GET /api/domains` on mount → returns a keyed object of domains, each with `videos[]` (sorted by `sequence`) and `quizzes[]` (options pre-parsed, **including the correct answer index** — no server-side answer-hiding).
+2. User selects a domain (`activeDomainId`) and a video (`activeVideoId`); the video plays via a YouTube iframe embed.
+3. Clicking "Watch"/"Watched" calls `handleWatchToggle` → if no session, `openRollModal()`; else `markVideoWatched`/`unmarkVideoWatched` from `StudentContext`, which optimistically updates local state, persists to `localStorage['iitk_dna_student_progress']`, and fires `POST`/`DELETE /api/students/:roll/progress/videos/:videoId`.
+4. Backend's `ownerGuard` ensures the `X-Roll-Number` header matches the `:roll` URL param (403 otherwise) before writing to `student_watched_videos`.
+5. **Quiz flow (`QuizCard`):** sequential MCQs; correct answer on the last question calls `completeQuiz(domainId)` → same optimistic-update + `POST /api/students/:roll/progress/quizzes/:domainId` pattern → `student_completed_quizzes` row inserted (`ON CONFLICT DO NOTHING`). Once completed, the quiz permanently shows a "badge unlocked" state (`studentProgress.completedQuizzes.includes(domainId)`).
+6. **XP** is computed client-side only, in `StudentContext`: `totalXP = watchedVideos.length * 10 + completedQuizzes.length * 20`. Displayed via an animated `ProgressRing` (SVG `strokeDashoffset` driven by `motion.circle`).
+
+### 6.3 Gallery — like, comment, save-to-moodboard (`GalleryPage.tsx` + `AppDataContext.tsx` + `backend/src/routes/artworks.ts`)
+
+1. `AppDataContext` fetches `GET /api/artworks` (optionally sending `X-Roll-Number` to compute `likedByUser` per item) on mount and whenever the logged-in roll number changes.
+2. **Like:** `likeArtwork(id)` optimistically flips `likes`/`likedByUser` in local state, then `POST /api/artworks/:id/like` (requires `X-Roll-Number`, rate-limited 30/min/IP). Backend runs an explicit transaction: if a like row exists, deletes it and decrements (floored at 0); else inserts and increments. On request failure, the optimistic update is rolled back. A `LikeBurst` particle animation plays on first-like only.
+3. **Comment:** `addComment(artworkId, sender, text)` calls `POST /api/artworks/:id/comments` (rate-limited 10/min/IP, zod-validated 1-1000 chars) — gated behind an active student session.
+4. **Save to Moodboard:** clicking the "◈" button (visible only if logged in) opens a board picker that lazy-loads `api.boards.getMyBoards(roll)` once, then `api.boards.addItem(boardId, roll, {image_url, note, source_url})` on selection.
+5. **Deep linking:** `?art=<id>` in the URL (via `useSearchParams`) opens `ArtworkModal` for that artwork on load; invalid/missing ids strip the param. Effect runs once per artworks-load (`didDeepLink` ref guard).
+6. **Media rendering (`MediaViewer`):** images get pinch-zoom-drag (`ZoomImage`, manual scale/pos state + pointer drag math); videos render as native `<video>`; PDFs render via a Google Docs viewer iframe with a manual "Open PDF" fallback link if the iframe errors.
+7. **Admin CRUD** (see §6.4) feeds this same list — `AppDataContext`'s `uploadArtwork`/`updateArtwork`/`deleteArtwork`/`toggleFeatured` all mutate the shared `artworks` array so Gallery and homepage previews update immediately without a refetch.
+
+### 6.4 Admin artwork upload pipeline (`AdminPage.tsx` `GalleryTab` + `backend/src/routes/artworks.ts`)
+
+1. Admin selects one file (or multiple → auto-switches to **bulk mode**, `bulkQueue`).
+2. Client-side validation: extension whitelist (`jpg,jpeg,png,webp,gif,pdf,mp4`), 50MB size cap (`MAX_MB`).
+3. **Image files** are routed through `openCropModal(file, 'artwork')` (free-form crop with 3:4/1:1/4:5/2:3 presets) before compression.
+4. All images pass through `compressImage()` (`browser-image-compression`, max 0.5MB / 1920px, web-worker) — the result is explicitly re-wrapped as a real `File` object (the compression library's returned Blob has a mangled `.name`, which would otherwise cause the backend to reject the upload as `filename="blob"`).
+5. **Video files** auto-capture a cover thumbnail via `captureVideoFirstFrame()` (seeks an off-DOM `<video>` to 0.1s, draws to canvas, exports JPEG @0.9 quality); admins can override via "Change cover" → also routed through the cropper.
+6. `title`/`artist` auto-fill from `parseFilename()` (`title_artist.ext` convention, artist hyphens→spaces).
+7. Submits `multipart/form-data` to `POST /api/artworks` (admin JWT required). Backend:
+   - Validates extension against `ALLOWED_EXT` (magic-byte sniffing is defined but only actually invoked for the optional `cover` field on the **update** path, not the primary upload path — see §11).
+   - Uploads to `gallery/{uuid}.{ext}` via the active `StorageProvider`.
+   - If the media type is `image`, generates a 400px WebP thumbnail via `sharp` → `thumbs/{uuid}.webp` → sets `cover_url`.
+   - If video/pdf and a `cover` file was sent, uploads it to `covers/{uuid}.jpg`.
+   - Inserts the `artworks` row (`id = art-{uuid8}`); on DB failure, best-effort deletes the just-uploaded file.
+8. Response is prepended to `AppDataContext`'s local `artworks` array, and `api.notify.artwork({title, artist, domain})` fires (fire-and-forget) → `POST /api/notify/artwork` → `sendArtworkNotification()` broadcasts an email to every student with a saved email address, in batches of 50 via BCC.
+9. **Bulk mode** repeats steps 3-8 sequentially per queued item via "Publish All," tracking each item's status (`pending→capturing→uploading→done/error`).
+
+### 6.5 Palette Studio color engine (`components/PaletteStudio.tsx`)
+
+Entirely self-contained OKLCH-based color science (no external color library):
+
+1. **Conversion pipeline:** hex → sRGB → linear RGB → OKLCH (`rgbToOKLCH`), and back (`oklchToRgbRaw` → `oklchToHex`), with a binary-search `gamutMap()` that reduces chroma until the color fits back in sRGB gamut.
+2. **`derivePalette(seedHex, darkMode, harmonyKey, lockedColors)`** — the core generator:
+   - Picks a random, non-repeating strategy from a 10-entry `STRATEGY_POOL` (hue offsets + chroma scaling factors, informed by an internal comment referencing an analysis of 1149 real Figma palettes — median hue shift 57°, average chroma 0.092).
+   - Derives secondary/accent hues with a fixed harmony offset (from `HARMONY_MODES`: complementary 180°, analogous 30°, triadic 120°, split-complementary 150°, tetradic 90°) plus ±16° random jitter.
+   - For text/border tokens, runs `findAccessibleLightness()`/`nudgeLightnessForContrast()` — binary-searches the OKLCH lightness channel until the WCAG contrast ratio against the generated background meets a target (default 4.5:1).
+   - Any slot present in `lockedColors` is preserved byte-identical across regenerations (verified by `tests/palette-engine.test.js`).
+3. **Scoring (`scorePalette`)** — aggregates WCAG pass/fail across all text/bg, primary/bg, primaryFg/primary, textMuted/bg pairs into a 0-100 score.
+4. **Color-blindness (`analyzeCB`/`simulateCB`)** — applies fixed 3×3 transform matrices per deficiency type (protanopia/deuteranopia/tritanopia) to every palette color, then recomputes contrast ratios against the simulated backgrounds.
+5. **Mood tab (`deriveVisualPalette`, `getSeedSymbolism`)** — a separate, non-UI-token palette generator plus a hardcoded hue/lightness/chroma → color-psychology lookup (label, emoji, keywords, mood, use-case) for ~11 color families.
+6. **Export** — `exportCSS()` serializes the current 18-slot palette into `:root { --color-x: ...; }` CSS and copies it to the clipboard.
+
+### 6.6 Halftone & SVG converters (client-side canvas algorithms)
+
+**Halftone (`lib/halftone-logic.ts` → `processHalftone()`):**
+1. Downscales the source image to a max working dimension (700px) and caches its `ImageData` to avoid re-decoding on every settings tweak (debounced via `requestAnimationFrame`).
+2. Rotates the canvas context by the chosen `angle` so scanning can happen in axis-aligned rotated space.
+3. `getBrightness(x,y)` samples the rotated coordinate, computes luminance, applies contrast/brightness adjustment.
+4. For `type: 'lines'` — scans horizontal bands `frequency` px apart, draws a variable-height filled rectangle per band sized by sampled brightness (`getWidth()` maps brightness into `[minWidth, maxWidth]`).
+5. For `type: 'dots'`/`'squares'` — scans a `frequency`-spaced grid, draws a circle or square per cell sized by brightness.
+6. Renders live to a `<canvas>`; "Download" exports via `canvas.toDataURL('image/png')`.
+
+**Image → SVG (`SvgConverter.tsx`, self-contained, no shared lib):**
+1. Draws the source image to an offscreen canvas (max 1000px longest edge).
+2. Computes per-pixel grayscale, thresholds into dark/light per the `threshold` slider (and `useInvert`).
+3. Unless `useFill` is on, keeps only **edge pixels** (a dark pixel adjacent to a non-dark 4-neighbor) — producing a line drawing rather than a silhouette.
+4. If `useDilate` is on, thickens kept edge pixels by adding their 3×3 neighborhood to the output set.
+5. Emits one `<rect width="1" height="1"/>` per surviving pixel inside a single `<svg>` string; warns if pixel/rect count exceeds 40,000 (may be slow to open).
+
+### 6.7 Live Sessions & the two "weak token" gates
+
+There are **three** ways a live Google Meet session can be created, each with different auth:
+
+1. **Admin** — `POST /api/live-sessions` behind `requireAdmin` (JWT).
+2. **Approved coordinator** — `POST /api/live-sessions/coordinator` behind `requireCoordinator` (checks `audience_group_members` for `group_id='coordinators' AND approved=true` for the caller's roll number).
+3. **Public-token flow** — `POST /api/live-sessions/public`, gated by `verifyPublicMeetToken()`. This token is minted by `POST /api/settings/verify-passcode` after checking a shared passcode (`app_settings.public_meet_passcode`, default `DNA2025`) — but the token itself is just **base64-encoded JSON** (`{type:'public_meet', exp}`), not cryptographically signed. This means anyone who understands the format could construct a valid-looking token without ever knowing the passcode (flagged in §11).
+   - Public/coordinator-created sessions can only be **deleted** within 24 hours of creation (`created_at >= cutoff`), limiting blast radius.
+
+`GET /api/live-sessions/active` is public and filters each session's visibility: if a session targets a specific non-`all_students` audience group and the requester isn't a member, `meet_link` is nulled out in the response (the session is visible as existing, but not joinable) — surfaced in the UI as "Team only."
+
+### 6.8 Moodboards — canvas persistence (`BoardPage.tsx` + `TldrawCanvas.tsx` + `backend/src/routes/boards.ts`)
+
+1. `BoardPage` loads board metadata (`GET /api/boards/:id`) and, once, the saved canvas JSON (`GET /api/boards/:id/canvas`) — access is gated: private boards require `X-Roll-Number` + membership; shared boards' canvas is fully public.
+2. `TldrawCanvas` loads the snapshot into the tldraw store once (`loadSnapshot`), then `editor.store.listen()` triggers `handleChange()` on every edit, which debounces `handleSave()` by 3000ms.
+3. `handleSave()` serializes the store (`getSnapshot`), skips the network call if the serialized string is identical to the last save (dedupe), and calls the `onSave` prop.
+4. `BoardPage.handleSave(snapshot)` → `PUT /api/boards/:id/canvas` (requires `X-Roll-Number` + `isMember`) → server validates the body is parseable JSON, then stores it verbatim as TEXT.
+5. Safety nets: `visibilitychange`/`beforeunload`/`offline` listeners force an immediate (non-debounced) save to avoid losing edits when a tab is hidden, the window closes, or the network drops.
+6. **Permission model:** `isOwner = board.owner_roll === me`; `isMember = isOwner || board.members.includes(me)`; the canvas is rendered `readOnly` when `!isMember && board.edit_mode === 'members_only'` (i.e. non-members can only edit boards explicitly set to `edit_mode: 'anyone'`).
+7. Inviting requires the invitee to already have a `student_sessions` row (backend 404s with "must register first" otherwise, surfaced as a friendly UI error).
+
+### 6.9 Admin authentication
+
+1. `POST /api/auth/admin/login` (rate-limited 10/15min/IP) — zod-validates a non-empty password, `bcrypt.compare()`s against the single hash stored in `admin_config.admin_password_hash`, and on success signs a JWT (`{role:'admin'}`, HS256, 8h expiry) with `JWT_SECRET`.
+2. The password hash is seeded **once**, on first server boot (`server.ts`), from the `ADMIN_PASSWORD` env var — changing the env var afterward has no effect unless the DB row is manually cleared.
+3. The token is stored client-side in `sessionStorage` (`dna_admin_token`) and attached as `Authorization: Bearer <token>` on every admin-scoped `api.ts` call (`{admin: true}` option).
+4. Every admin-mutating route is protected by `requireAdmin` middleware (`middleware/adminAuth.ts`), which just verifies the JWT signature/expiry — it does not check any additional claim.
+5. On a 401 from an admin call, `api.ts`'s `request()` clears the token and throws `'SESSION_EXPIRED'`; `AppDataContext.onAdminErr()` catches this and redirects the browser to `/admin`, forcing re-login.
+6. **The `/admin` route itself has no server-side gate** — `AdminPage.tsx` is a normal client-rendered route; the real security boundary is that all its mutating API calls require a valid JWT. An unauthenticated visitor can load the page shell (and see the login form) but cannot read or write any protected data.
+
+---
+
+## 7. Styling Approach
+
+**Method:** Tailwind CSS v4 (CSS-first configuration — there is **no** `tailwind.config.js`/`.ts` file). Tailwind is wired in two places:
+
+- `vite.config.ts` includes the `@tailwindcss/vite` plugin (v4's native Vite integration, replacing the old PostCSS-plugin approach).
+- `src/styles/tailwind.css` is a 4-line bootstrap: `@import 'tailwindcss' source(none)` (disables Tailwind's automatic content scanning) + an explicit `@source '../**/*.{js,ts,jsx,tsx}'` glob + `@import 'tw-animate-css'` (animation utilities, the v4-era replacement for `tailwindcss-animate`).
+
+**Design tokens live in `src/styles/theme.css`**, not in a Tailwind config — a custom "Framer Design System" of CSS custom properties:
+
+| Token | Dark (default) | Light (`[data-theme="light"]`) |
+|---|---|---|
+| `--color-ink` | `#ffffff` | `#111110` |
+| `--color-ink-muted` | `#999999` | `#555550` |
 | `--color-canvas` | `#111110` | `#ffffff` |
 | `--color-surface-1` | `#1c1c1a` | `#f5f5f5` |
 | `--color-surface-2` | `#252523` | `#ebebeb` |
-| `--color-ink` | `#ffffff` | `#111110` |
-| `--color-ink-muted` | `#999999` | `#555550` |
-| `--color-brand` | `#E91E8C` | `#E91E8C` (same) |
-| `--color-inverse-canvas` | `#ffffff` | `#111110` |
+| `--color-hairline` | `rgba(255,255,255,.10)` | `rgba(0,0,0,.10)` |
+| `--color-brand` | `#E91E8C` (unchanged both themes) | |
+| `--color-accent-blue` | `#0099ff` | |
+| `--color-success` / `--color-error` | `#22c55e` / `#ef4444` (unchanged) | |
 
-Additional semantic variables (same in both themes unless noted):
-- `--color-hairline`: `rgba(255,255,255,0.08)` dark / `rgba(0,0,0,0.08)` light — used for borders
-- `--color-focus`: focus ring color
-- `--color-shadow`: drop shadow color
+Plus a gradient-spotlight set (`--gradient-violet/magenta/orange/coral`), a radius scale (`--radius-xs:4px` → `--radius-xxl:30px`, `--radius-pill:100px`), a 5px-base spacing scale, and shadow tokens.
 
-### 5.2 Typography Scale
+**Fonts:**
+```css
+--font-display: 'Mona Sans', 'Inter', system-ui, sans-serif;
+--font-body:    'Inter Variable', 'Inter', system-ui, sans-serif;
+--font-mono:    'JetBrains Mono', 'Fira Code', monospace;
+```
+Loaded via `<link>` tags to Google Fonts in `index.html` (Mona Sans, Inter, JetBrains Mono) plus Font Awesome 6.4.0 from cdnjs (used for Academy domain icons). **`src/styles/fonts.css` is empty/vestigial** — not the actual font source, despite being part of the import chain.
 
-All text classes are defined as utility classes in `theme.css`.
+**Tailwind ↔ token bridge:** a `@theme inline { ... }` block in `theme.css` maps `--color-background`, `--color-foreground`, `--color-primary`, etc. (shadcn-style legacy names) onto the custom tokens above, so utility classes like `bg-background`/`rounded-lg` resolve correctly. `default_shadcn_theme.css` at the repo root is a **reference-only** copy of the stock shadcn OKLCH theme — it is not imported anywhere in the live build (the project diverged from it into the current hex/rgba, attribute-based system).
 
-| Class | Font size | Weight | Line height | Letter spacing |
-|---|---|---|---|---|
-| `.type-display-xxl` | clamp(52px, 7.6vw, 110px) | 500 | 0.85 | -5.5px |
-| `.type-display-xl` | clamp(40px, 5.9vw, 85px) | 500 | 0.95 | -4.25px |
-| `.type-display-lg` | clamp(30px, 4.3vw, 62px) | 500 | 1.00 | -3.1px |
-| `.type-display-md` | clamp(22px, 2.2vw, 32px) | 500 | 1.13 | -1.0px |
-| `.type-headline` | clamp(18px, 1.5vw, 22px) | 700 | 1.20 | -0.8px |
-| `.type-body-lg` | 18px | 400 | — | — |
-| `.type-body` | 15px | 400 | 1.30 | -0.15px |
-| `.type-body-sm` | 14px | 500 | — | — |
-| `.type-caption` | 13px | 500 | — | -0.13px |
-| `.type-micro` | 12px | 400 | — | -0.12px |
+**Dark/light mode mechanism:** attribute-based (`document.documentElement.setAttribute('data-theme', theme)`), **not** class-based and **not** using the installed-but-unused `next-themes` package. Implemented by hand in `ThemeContext.tsx` (see §9), with an inline `<script>` in `index.html` running before React hydrates to set `data-theme` and a matching background color immediately (prevents a flash of the wrong theme).
 
-### 5.3 Font Families
+**Utility layer** (also in `theme.css`): a full typographic scale (`.type-display-xxl` → `.type-micro`), button primitives (`.btn-primary`, `.btn-secondary`, `.btn-translucent`, `.btn-icon`), card/spotlight primitives, `.glass`/`.glass-strong`/`.gradient-text` legacy classes, an `.eyebrow` pill, fade-in/fade-up utility animations, a `.page-container` (max-width 1440px, responsive padding, tighter on `≤768px`), and thin custom scrollbar styling.
 
-| Variable | Family | Usage |
+**`src/styles/globals.css`** — resets (`html, body, #root` full-size), a `spin` keyframe, and `!important` z-index overrides specifically to make the `tldraw` library's toolbar/popover/menu UI render above the site's own navigation bar.
+
+**Responsive approach:** plain Tailwind breakpoints (`sm/md/lg/xl/2xl`) plus a custom `useScreenSize()` hook (`hooks/use-screen-size.ts`) for JS-side breakpoint logic (e.g. `Hero.tsx` sizing its `PixelTrail` grid), and manual `window.resize` listeners in a few places (`GalleryPreview`, `TeamPage`) for responsive column counts.
+
+---
+
+## 8. Animations
+
+**Primary library:** `motion` v12 (the standalone successor to Framer Motion), imported everywhere as `from 'motion/react'`.
+
+| Component | Technique |
+|---|---|
+| `Navigation.tsx` | Shared-layout animation (`motion.span layoutId="nav-pill"`) so the active-link highlight visually slides between nav items on route change (spring: stiffness 400, damping 38). Mobile menu icon cross-fades `Menu ⇄ X` via `AnimatePresence mode="wait"`. |
+| `Hero.tsx` + `ui/pixel-trail.tsx` | A grid of `motion.div` "pixels" sized to the container (`useDimensions`); each pixel attaches an imperative `__animatePixel` function directly to its DOM node (an escape hatch letting `Hero`'s own `onMouseMove` — needed because the trail layer is `pointer-events:none` — trigger a specific pixel's flash-then-fade `opacity:[1,0]` animation by ID lookup). |
+| `FeaturedMarquee.tsx` | Pure CSS `@keyframes marquee { 0%{translateX(0)} 100%{translateX(-50%)} }` injected via a `<style>` tag at mount; the artwork list is duplicated once so a `-50%` loop is seamless; paused on hover via `animationPlayState`. |
+| `HeroScroll.tsx` (orphaned) | `useScroll` + `useSpring` (stiffness 100, damping 30) smooths raw scroll progress; `useTransform` maps it to `rotateX: [20,0]`, `scale`, `y` for a 3D card-flattening effect as it scrolls into view. |
+| `Stats.tsx` | `useSpring(0, {duration:1800})` + `useTransform(v => Math.floor(v))` for animated count-up numbers, triggered by a manual `IntersectionObserver` (not `whileInView`). |
+| `Mission.tsx` | Also uses a manual `IntersectionObserver` (threshold 0.25) rather than `whileInView`, driving staggered `motion` fade-ins. |
+| `AcademyPage.tsx` `ProgressRing` | `motion.circle` animates `strokeDashoffset` over 1.4s ease-out for the XP/completion rings. |
+| `GalleryPage.tsx` `LikeBurst` | 8 particles radiate outward via `Math.cos/sin(angle)` position math, fading opacity/scale to 0 over 0.45s, triggered only on first-like. |
+| `GalleryPage.tsx` masonry grid | `motion.div layout` for automatic re-flow animation when the domain filter changes; `AnimatePresence` for modal enter/exit with different transitions for the mobile bottom-sheet vs. desktop centered-card layouts. |
+| `EventsPage.tsx` | `AnimatePresence mode="popLayout"` + `layout` for grid/list re-arrangement; a live pulsing dot (`animate-pulse` Tailwind class) for "live" events; capacity bars animate width. |
+| `TeamPage.tsx` `MemberCard` | Bio panel expand/collapse animates `height`/`opacity`; cards fade up on `whileInView` (`viewport once:true`). |
+| `CustomCursor.tsx` (orphaned) | Two `motion.div` layers (dot + trailing ring) driven by spring physics (`damping/stiffness/mass` tuned differently per layer so the ring visibly lags the dot), `mix-blend-difference` for a color-inverting look. |
+| `RollModal.tsx` | Step transitions slide horizontally inside `AnimatePresence mode="wait"`; error states trigger a horizontal shake keyframe (`x:[-10,10,-8,8,0]`). |
+| `LiveSessionBanner.tsx` | The "live" indicator layers a pulsing dot (`animate={{scale:[1,1.6,1], opacity:[1,0,1]}}`, infinite loop, 1.8s) behind a static dot. |
+| `AdminPage.tsx` | Login-failure shake (same pattern as `RollModal`); tab switches cross-fade via `AnimatePresence mode="wait"`; the "New Domain" form expands via animated `height: 0 → auto`. |
+
+**Non-`motion` animation:** the Halftone/SVG/Grid Calculator/Contrast-checker tools all render via imperative `<canvas>` drawing (no animation library — see §6.6 for the algorithms); tldraw manages its own internal canvas rendering/animation for the Moodboards feature.
+
+---
+
+## 9. Data & State Management
+
+**No global state-management library** (no Redux/Zustand/Jotai) — the app uses plain React Context + component-local `useState`, split into three layered providers (all wired in `Root.tsx`):
+
+1. **`ThemeContext.tsx`** — `{theme, toggle}`. Single `useState<'light'|'dark'>`, default `'dark'`, read/written to `localStorage['dna-theme']` (both operations wrapped in try/catch to survive Firefox Private Browsing's `localStorage` throw), applied via `document.documentElement.setAttribute('data-theme', theme)` in a `useLayoutEffect`.
+
+2. **`StudentContext.tsx`** — `{studentSession, studentProgress, isRollModalOpen, login, logout, openRollModal, closeRollModal, markVideoWatched, unmarkVideoWatched, completeQuiz, totalXP}`. Both `studentSession` and `studentProgress` are initialized from and persisted to `localStorage` (`iitk_dna_student_session` / `iitk_dna_student_progress`). Progress-mutating actions optimistically update local state immediately, persist to `localStorage`, and fire a background API call (errors just logged, not rolled back — client state is the source of truth here, unlike `AppDataContext`'s optimistic-with-rollback pattern).
+
+3. **`AppDataContext.tsx`** — the central server-data cache: `{domains, artworks, events, team, loading, error}` plus ~20 mutator callbacks. On mount (and whenever the logged-in roll number changes), fetches all four resources in parallel (`Promise.all([domains.list(), artworks.list(roll), events.list(roll), team.list()])`). Every mutator follows one of two patterns:
+   - **Optimistic-with-rollback** (`likeArtwork`, `rsvpEvent`, `toggleFeatured`) — updates local state immediately, calls the API, and reverts on failure.
+   - **Await-then-merge** (`uploadArtwork`, `updateEvent`, `addDomain`, etc.) — calls the API first, then merges the confirmed server response into local state.
+   - A shared `onAdminErr()` helper catches the special `'SESSION_EXPIRED'` error thrown by `api.ts` and redirects to `/admin`.
+
+**Data NOT in these contexts** (fetched directly via `api.ts` inside the pages/components that need them, since they're either admin-only, session-scoped, or too infrequently used to justify a global cache): `boards` (Moodboards), `liveSessions`, `settings`, `coordinators`. This is a deliberate scoping choice, not an oversight — these resources are only read by 1-3 specific components each.
+
+**`ResourcesPage.tsx`** is the one page with **fully static, hardcoded data** (a local `Resource[]` array) — it is not connected to the backend/admin panel at all.
+
+**Client-side caches outside React state:**
+- `MoodboardsPage.tsx` uses `sessionStorage` as a 5-minute stale-while-revalidate cache for board lists (`readCache`/`writeCache`/`clearBoardsCache`).
+- `GalleryTab` (admin) and `GalleryPage`/`GalleryPreview` share a cross-tab-synced `localStorage['forceUppercase']` flag (toggled in `SettingsTab`, propagated via a manually-dispatched `storage` event so already-open tabs update without a reload).
+- `api.ts` stores the admin JWT in `sessionStorage['dna_admin_token']` (cleared automatically on any 401 from an admin-scoped call).
+
+**Backend data flow:** Express routes → `pg.Pool` (single shared connection pool, `backend/src/db/client.ts`) → Postgres (Supabase-hosted). File uploads go through a small `StorageProvider` abstraction (`backend/src/storage/index.ts`) that picks Supabase Storage or local disk based on whether `SUPABASE_URL`+`SUPABASE_SERVICE_ROLE_KEY` are both set. No ORM — all queries are hand-written parameterized SQL via `pg`.
+
+---
+
+## 10. Routing
+
+**Library:** `react-router` v7, data-router style (`createBrowserRouter`), defined entirely in `src/app/routes.tsx`:
+
+```
+/                       → Root (layout: providers + nav/footer/modals)
+├── (index)             → HomePage
+├── academy             → AcademyPage
+├── resources           → ResourcesPage
+├── gallery             → GalleryPage
+├── events              → EventsPage
+├── team                → TeamPage
+├── palette             → PalettePage        (standalone Palette Studio; marked PALETTE_STUDIO_FEATURE — removable)
+├── design-studio       → DesignStudioPage (default export `DesignStudio`)
+├── admin               → AdminPage
+├── moodboards          → MoodboardsPage
+└── moodboards/:id      → BoardPage
+```
+
+All routes are children of the single `Root` layout route — there is no route-level code-splitting/lazy-loading of pages (only `TldrawCanvas` inside `BoardPage` is `React.lazy`-loaded).
+
+**Navigation entry points:**
+- `Navigation.tsx`'s `NAV_LINKS`: Home, Academy, Gallery, Events, Team, Design Studio, Moodboards (Palette is not separately linked — it's reachable via `DesignStudioCard`'s tab-state deep link and directly by URL).
+- `Footer.tsx`'s "Club" column additionally links to `/admin` (the only nav-level link to the admin panel) and `/` ("About DnA"), `/events` ("Join Us").
+- `DesignStudioCard.tsx` (homepage) links into `/design-studio` with React Router's `state: { tab }` to preselect one of the 7 tool tabs.
+- `WelcomeOverlay.tsx`'s "Explore" button navigates to `/gallery`.
+- `GalleryPage.tsx` syncs the open artwork modal into the URL via `?art=<id>` (using `useSearchParams`, not a nested route) for shareable deep links.
+
+**Vercel routing:** `vercel.json` rewrites every path to `/index.html`, so client-side routing owns all navigation in production (no server-side route handling beyond static asset serving).
+
+---
+
+## 11. Known Issues / TODOs
+
+No `TODO`/`FIXME`/`HACK`/`XXX` comments exist anywhere in `src/` or `backend/src/` (confirmed by repo-wide search) — the project doesn't use inline TODO markers. The items below come from direct code inspection and the repo's own `AUDIT_REPORT.md` (dated 2026-06-14), cross-checked against the current code:
+
+**Already fixed since the audit** (kept here only so the audit document doesn't mislead a future reader):
+- ✅ `index.html`'s inline FOUC-prevention theme script and `ThemeContext.tsx`'s `localStorage` calls are now wrapped in try/catch (Firefox Private Browsing safe).
+- ✅ Rate limiting now exists on `/api/artworks/:id/like` (30/min), `/api/artworks/:id/comments` (10/min), and `/api/events/:id/rsvp` (20/min).
+- ✅ `backend/src/db/seed.ts` now throws if `ADMIN_PASSWORD` is unset, instead of silently falling back to a weak default.
+
+**Still open:**
+- **No server-side route guard on `/admin`** — the page shell is publicly loadable; the only real protection is that every mutating API call requires a valid admin JWT. This is a reasonable design (SPA routing can't be a real security boundary anyway) but worth knowing.
+- **Roll-number identity is fully self-asserted** — `POST /api/students/sessions/login` and all `X-Roll-Number`-header-authenticated endpoints trust whatever roll number the client sends, with no OTP/email verification step. Anyone who knows (or guesses) another student's roll number could act as them (like/comment/RSVP/board access) since likes/comments/RSVPs aren't otherwise tied to a verified account.
+- **The "public meet" token is not cryptographically signed** (`liveSessions.ts`'s `verifyPublicMeetToken`) — it's base64-encoded JSON (`{type, exp}`), not an HMAC/JWT. A client could construct a valid-looking token without knowing the real passcode. Blast radius is limited by a 24-hour delete window and the fact that it only gates live-session creation, not any data read.
+- **Artwork magic-byte content sniffing is inconsistently applied** — `ALLOWED_EXT.check()` functions exist for every file type but are only invoked for the optional `cover` field on the artwork **update** (`PUT`) path; the main upload (`POST`) path and the main-file replace path only check the file extension string, not real file content.
+- **`POST /api/boards/:id/canvas-files`** trusts the client-reported MIME type for the output file extension with no server-side allowlist/magic-byte check (unlike `artworks.ts`/`team.ts`).
+- **Email HTML injection risk (low severity):** `services/mailer.ts`'s template `resolve()` does naive `String.replaceAll` substitution with no HTML-escaping of user-supplied values (e.g. a student's registered `name`) before injecting into the welcome-email HTML.
+- **`AUDIT_REPORT.md`'s remaining MEDIUM items** not yet addressed: JWT expiry (8h) has no user-visible re-login prompt (fails silently to console); `EventsPage`/`GalleryPage`/`AcademyPage` don't surface `useAppData()`'s `loading`/`error` state, so backend downtime renders an empty page with no feedback; no `z.string().url()` validation on `socialInstagram`/`socialLinkedin` in `team.ts` (just length-capped strings); double-submit is possible on `AcademyTab.handleAddVideo`/`EventsTab.handleAdd` (no disabled-while-submitting guard, unlike `GalleryTab`/`TeamTab` which do this correctly); no Row-Level Security assumed on the Supabase Postgres connection (the app connects directly via `DATABASE_URL`, so the Express layer is the only access-control boundary).
+- **Debug `console.log` statements left in `AdminPage.tsx`'s `TeamTab.handleEditMember`** (photo-upload state) — not gated behind a dev flag.
+- **`GalleryPage.tsx`'s `forceUppercase` setting is purely cosmetic/client-side** — it's a `localStorage` flag with no server-side enforcement, toggled from `SettingsTab`.
+- **Legacy/dead code left in the repo:**
+  - `backend/data/dna.db*` (SQLite files) and `backend/Dockerfile`'s `better-sqlite3` rebuild step are leftovers from a pre-Postgres version of the backend — the live backend uses `pg`/Supabase exclusively; `better-sqlite3` is not even a listed dependency in `backend/package.json`.
+  - `src/styles/fonts.css` is empty — fonts are actually loaded via `<link>` tags in `index.html`; this file should either be deleted or repurposed.
+  - `default_shadcn_theme.css` at the repo root is unused reference material, not part of the live import chain.
+  - 7 orphaned/unreferenced components (see §5.6) — safe candidates for deletion if confirmed unneeded.
+  - `tests/palette-engine.test.js` is a real, working test suite (esbuild-bundles `PaletteStudio.tsx` and runs 6 assertion groups) but is **not wired to any `npm test`/`package.json` script** and there's no CI to run it — currently must be invoked manually via `node tests/palette-engine.test.js`.
+  - Root `.env.example` only documents Docker-Compose/backend variables; it does not mention the frontend's `VITE_API_BASE_URL`, which is required for a non-Docker (Vercel) deployment and is only documented in `DEPLOYMENT.md`.
+  - `RESEND_API_KEY` (required for all email functionality) is used throughout `services/mailer.ts` but is absent from `backend/.env.example`.
+  - `pnpm-workspace.yaml` has a literal unresolved placeholder string `core-js: set this to true or false` in its build-script allowlist instead of an actual boolean.
+
+---
+
+## 12. How to Run Locally
+
+### Prerequisites
+- Node.js 20+
+- `pnpm` (frontend) — `npm install -g pnpm` if not already installed
+- A Postgres database (a free Supabase project is the path of least resistance, since it also provides file storage)
+
+### 1. Backend
+
+```bash
+cd backend
+npm install
+cp .env.example .env
+# Edit .env and set at minimum:
+#   DATABASE_URL=<your Postgres connection string>
+#   JWT_SECRET=<any random string, 32+ chars recommended>
+#   ADMIN_PASSWORD=<the password you'll use to log into /admin>
+# Optional: SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (both together) to enable
+#   Supabase Storage for uploads instead of the local backend/uploads/ folder.
+# Optional: RESEND_API_KEY to enable outgoing email (welcome/notification/announcement).
+npm run dev        # tsx watch — starts the API on http://localhost:4000
+```
+
+On first boot, `initSchema()` creates all tables and seeds default email templates, audience groups, and coordinator roster automatically. To also seed sample domains/videos/artworks/events/team members for local development:
+
+```bash
+npm run seed        # only runs if the `domains` table is empty
+```
+
+### 2. Frontend
+
+```bash
+# from the repo root
+pnpm install
+pnpm dev             # Vite dev server on http://localhost:5173
+```
+
+The Vite dev server proxies `/api/*` requests to `http://localhost:4000` automatically (configured in `vite.config.ts`), so no `VITE_API_BASE_URL` env var is needed for local development — it's only required when the frontend and backend are deployed to different origins (see `DEPLOYMENT.md`).
+
+### 3. Log in as admin
+
+Visit `http://localhost:5173/admin` and enter the `ADMIN_PASSWORD` you set in `backend/.env`.
+
+### 4. (Optional) Docker Compose — self-hosted alternative
+
+```bash
+cp .env.example .env   # root-level, sets JWT_SECRET / ADMIN_PASSWORD / CORS_ORIGINS / PORT
+docker compose up --build
+```
+This builds the frontend into an nginx container (port 80 by default, proxying `/api/` to the backend container) and the backend into a Node container with a persistent `/data` volume — an alternative to the Vercel+Render+Supabase path described in `DEPLOYMENT.md`.
+
+### 5. Running the palette-engine test
+
+```bash
+node tests/palette-engine.test.js
+```
+(Not wired into any `npm test` script — see §11.)
+
+---
+
+## 13. Database Schema
+
+PostgreSQL (Supabase in production). All tables are created on server startup by `backend/src/db/schema.ts` via `CREATE TABLE IF NOT EXISTS`, so the schema is code-defined rather than migration-file-driven. Some columns are added **after** their table's initial `CREATE` via idempotent `ALTER TABLE … ADD COLUMN IF NOT EXISTS` statements (called out per-table below); a dedicated `schema_migrations` table gates one-time **data** migrations so they run at most once.
+
+> Verified against `backend/src/db/schema.ts` on 2026-07-16. Differences from the pre-rewrite documentation are noted inline.
+
+### `schema_migrations`
+| Column | Type | Notes |
 |---|---|---|
-| `--font-display` | `'Mona Sans'` | All headings, display text |
-| `--font-body` | `'Inter Variable'` | All body copy, UI labels |
-| `--font-mono` | `'JetBrains Mono'` | Code blocks, IDs |
+| `key` | TEXT | PRIMARY KEY — name of a one-time migration that has run |
 
-Fonts are loaded as variable fonts via the `@font-face` declarations at the top of `theme.css`.
-
-### 5.4 Border Radius Scale
-
-| Variable | Value |
-|---|---|
-| `--radius-xs` | 4px |
-| `--radius-sm` | 6px |
-| `--radius-md` | 10px |
-| `--radius-lg` | 15px |
-| `--radius-xl` | 20px |
-| `--radius-xxl` | 30px |
-| `--radius-pill` | 100px |
-| `--radius-full` | 9999px |
-
-### 5.5 Component Classes
-
-**Buttons**
-
-```css
-.btn-primary   /* inverse-canvas background, pill radius, 44px min-height, ink-inverse text */
-.btn-secondary /* surface-1 background, same shape */
-.btn-icon      /* 40×40px, full radius (circle), icon-only */
-```
-
-**Input**
-
-```css
-.input-base    /* surface-1 bg, hairline border, md radius, focus = box-shadow using --color-shadow-focus */
-```
-
-**Card**
-
-```css
-.card          /* surface-1 bg, xl radius */
-```
-
-**Page container**
-
-```css
-.page-container  /* max-width: 1440px, padding: 0 30px (16px on mobile) */
-```
-
-### 5.6 Spacing
-
-No custom spacing scale beyond CSS defaults. Spacing values are used inline (e.g. `padding: '96px 0'`, `gap: 16`, `marginBottom: 48`). The main page content top padding is controlled by the fixed Navigation bar height.
-
-### 5.7 Animations
-
-All component animations use Framer Motion (`motion/react`). Common patterns:
-- `whileHover={{ y: -4 }}` on cards for lift effect
-- `initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}` for page entrance
-- Spring physics via `useSpring` for scroll-driven effects
-- Staggered children via `staggerChildren` in `Variants`
-
-The LiveSessionBanner uses a `@keyframes pulse` white dot animation defined inline.  
-The FeaturedMarquee uses `@keyframes marquee` injected via `useEffect` into `document.head`.
-
----
-
-## 6. Frontend Architecture
-
-### 6.1 Stack
-
-| Tool | Version/Detail |
-|---|---|
-| React | 18 |
-| React Router | v7 (data router, `createBrowserRouter`) |
-| Vite | Build tool |
-| TypeScript | Throughout |
-| Tailwind CSS | v4 (utility classes used minimally; primary styling is CSS-in-JS via inline styles + theme.css classes) |
-| Framer Motion | `motion/react` package |
-| tldraw | Canvas library, lazy-loaded |
-
-### 6.2 Directory Structure
-
-```
-src/
-├── app/
-│   ├── components/         # Shared UI components
-│   │   ├── hooks/          # Custom hooks (useScrollY, etc.)
-│   │   ├── ui/             # Primitive UI components
-│   │   └── figma/          # Figma-related components (if any)
-│   ├── context/            # React context providers
-│   │   ├── AppDataContext.tsx
-│   │   ├── StudentContext.tsx
-│   │   └── ThemeContext.tsx (implied by ThemeProvider)
-│   ├── lib/
-│   │   └── api.ts          # Typed API client
-│   ├── pages/              # Route-level page components
-│   └── routes.tsx          # Route definitions
-├── styles/
-│   └── theme.css           # Full design token CSS
-└── main.tsx                # Entry point
-```
-
-### 6.3 Routing
-
-Routes are defined in `src/app/routes.tsx` using React Router v7's data router format:
-
-```typescript
-{ path: '/',                Component: Root,           children: [
-  { index: true,            Component: HomePage },
-  { path: 'academy',        Component: AcademyPage },
-  { path: 'resources',      Component: ResourcesPage },
-  { path: 'gallery',        Component: GalleryPage },
-  { path: 'events',         Component: EventsPage },
-  { path: 'team',           Component: TeamPage },
-  { path: 'palette',        Component: PalettePage },       // feature-flagged
-  { path: 'design-studio',  Component: DesignStudio },
-  { path: 'admin',          Component: AdminPage },
-  { path: 'moodboards',     Component: MoodboardsPage },
-  { path: 'moodboards/:id', Component: BoardPage },
-]}
-```
-
-`Root` is the layout wrapper that provides all context providers and renders the shell (Navigation, LiveSessionBanner, Footer, BackToTop). Board pages at `/moodboards/:id` get a full-screen treatment — the shell is not rendered for them.
-
-### 6.4 State Management
-
-There is no external state management library (no Redux, no Zustand). State is organized into three React contexts:
-
-**ThemeProvider** (`src/app/context/` or in Root)  
-Manages `data-theme` attribute on `<html>`. Persists preference in localStorage.
-
-**StudentProvider** (`src/app/context/StudentContext.tsx`)  
-Manages student session (roll number, name, email, unique ID). Reads/writes to `localStorage`:
-- `iitk_dna_student_session` — session object
-- `iitk_dna_student_progress` — `{ watchedVideos: string[], completedQuizzes: string[] }`
-- `iitk_dna_welcome_shown_{roll}` — boolean flag per roll number
-
-Exposes: `studentSession`, `setStudentSession`, `watchedVideos`, `completedQuizzes`, `markVideoWatched`, `unmarkVideoWatched`, `completeQuiz`, `xp`.
-
-Syncs progress changes to the backend via: `api.students.markVideoWatched`, `api.students.unmarkVideoWatched`, `api.students.completeQuiz`.
-
-**AppDataProvider** (`src/app/context/AppDataContext.tsx`)  
-Loads all shared data on mount (and when roll number changes) via `Promise.all`:
-```typescript
-[api.domains.list(), api.artworks.list(roll), api.events.list(roll), api.team.list()]
-```
-
-Exposes: `artworks`, `events`, `domains`, `team`, `loading`, `uploadArtwork`, `updateArtwork`, `deleteArtwork`, `toggleLike`, `addComment`, `deleteComment`, `rsvpEvent`, `addEvent`, `updateEvent`, `deleteEvent`.
-
-Optimistic updates: `toggleLike` and `rsvpEvent` update local state immediately before the API call resolves.
-
-After `uploadArtwork` resolves: fires `api.notify.artwork()` to send email notifications.  
-After `addEvent` resolves: fires `api.notify.event()` to send email notifications.
-
-On 401 responses with admin context: calls `onAdminErr` which redirects to `/admin`.
-
-### 6.5 API Client
-
-`src/app/lib/api.ts` is a typed API client. All fetch calls are wrappers here.
-
-- Base URL: `import.meta.env.VITE_API_BASE_URL`
-- Admin token: read from `sessionStorage` key `dna_admin_token`
-- Roll number: sent as `X-Roll-Number` header on all calls that need student identity
-- Admin token: sent as `Authorization: Bearer {token}`
-
-Namespaces:
-
-| Namespace | Methods |
-|---|---|
-| `api.auth` | `adminLogin(password)` |
-| `api.domains` | `list()`, `create(data)`, `update(id, data)`, `delete(id)`, `addVideo(domainId, data)`, `updateVideo(domainId, videoId, data)`, `patchVideoSeq(domainId, videoId, seq)`, `deleteVideo(domainId, videoId)` |
-| `api.artworks` | `list(roll?)`, `upload(formData)`, `update(id, formData)`, `setFeatured(id, bool)`, `delete(id)`, `like(id, roll)`, `addComment(id, data)`, `deleteComment(id, commentId)` |
-| `api.events` | `list(roll?)`, `create(data)`, `update(id, data)`, `delete(id)`, `rsvp(id, roll)` |
-| `api.team` | `list()`, `create(formData)`, `update(id, formData)`, `updateOrder(id, order)`, `delete(id)` |
-| `api.students` | `checkExists(roll)`, `register(data)`, `login(roll)`, `getProgress(roll)`, `markVideoWatched(roll, videoId)`, `unmarkVideoWatched(roll, videoId)`, `completeQuiz(roll, domainId)` |
-| `api.boards` | `list(roll)`, `listShared()`, `adminListAll()`, `get(id, roll)`, `create(data, roll)`, `update(id, data, roll)`, `delete(id, roll)`, `adminDelete(id)`, `adminUpdate(id, data)`, `addMember(id, targetRoll, roll)`, `removeMember(id, targetRoll, roll)`, `addItem(id, data, roll)`, `deleteItem(id, itemId, roll)`, `getItems(id, roll)`, `getCanvas(id, roll)`, `saveCanvas(id, data, roll)`, `uploadCanvasFile(id, file, fileId, roll)` |
-| `api.liveSessions` | `getActive(roll?)`, `getPast()`, `getGroups()`, `getAll()`, `create(data)`, `createPublic(data, token)`, `createCoordinator(data, roll)`, `update(id, data)`, `updateStatus(id, status)`, `updateCoordinatorStatus(id, status, roll)`, `delete(id)`, `deletePublic(id, token)`, `deleteCoordinator(id, roll)`, `join(id, roll)`, `getJoinCount(id)`, `getJoins(id)` |
-| `api.coordinators` | `list()`, `add(data)`, `approve(roll, approved)`, `delete(roll)`, `check(roll)` |
-| `api.settings` | `getPublic()`, `getAll()`, `update(data)`, `verifyPasscode(passcode)` |
-| `api.notify` | `event(data)`, `artwork(data)`, `getTemplates()`, `getTemplate(id)`, `updateTemplate(id, data)`, `announce(subject, html)` |
-
----
-
-## 7. Backend Architecture
-
-### 7.1 Stack
-
-| Tool | Detail |
-|---|---|
-| Runtime | Node.js |
-| Framework | Express |
-| Language | TypeScript |
-| Database | PostgreSQL (Supabase-hosted) |
-| Storage | Supabase Storage |
-| Email | Resend |
-| Auth | bcryptjs (password hashing), jsonwebtoken (JWT) |
-| Validation | Zod |
-| File upload | multer (memory storage) |
-| ID generation | uuid v4 |
-| Rate limiting | express-rate-limit |
-
-### 7.2 App Setup (`backend/src/app.ts`)
-
-Express app with the following middleware stack (in order):
-
-1. `helmet()` — Security headers
-2. `cors()` — Allowed origins from `CORS_ORIGINS` environment variable (comma-separated list)
-3. `express.json({ limit: '50mb' })` — JSON body parser with 50MB limit
-4. `express.static('uploads', { setHeaders: res => res.setHeader('Content-Disposition', 'attachment') })` — Serves local uploads with forced download header
-5. Rate limit: 300 requests/minute per IP, skips `/api/health`
-
-All API routes are mounted at `/api/*`:
-
-```
-/api/health           → { ok: true }
-/api/auth             → authRouter
-/api/domains          → domainsRouter
-/api/artworks         → artworksRouter
-/api/events           → eventsRouter
-/api/team             → teamRouter
-/api/students         → studentsRouter
-/api/live-sessions    → liveSessionsRouter
-/api/boards           → boardsRouter
-/api/coordinators     → coordinatorsRouter
-/api/settings         → settingsRouter
-/api/notify           → notifyRouter
-```
-
-### 7.3 Admin Middleware
-
-`backend/src/middleware/adminAuth.ts` exports `requireAdmin`. It reads the `Authorization: Bearer {token}` header, verifies with `jwt.verify(token, process.env.JWT_SECRET)`, and checks that the payload contains `{ role: 'admin' }`. On failure returns `401 { error: 'Unauthorized' }`.
-
-### 7.4 Storage (`backend/src/storage.ts`)
-
-The `getStorage()` function returns a storage adapter backed by Supabase Storage. It exposes three methods:
-
-- `upload(path, buffer, mimeType)` — Uploads a file buffer to Supabase Storage
-- `getPublicUrl(path)` — Returns the public CDN URL for a file
-- `delete(path)` — Deletes a file from storage
-
-Storage paths by type:
-- Artwork files: `gallery/{uuid}.{ext}`
-- Artwork cover images: `covers/{uuid}.jpg`
-- Team member photos: `team/{uuid}.{ext}`
-- Canvas images: `canvas-files/{boardId}/{fileId}.{ext}`
-
-### 7.5 Database Client (`backend/src/db/client.ts`)
-
-Exports `pool` (a `pg.Pool` instance) and a typed `query<T>` helper. The database schema auto-migrates on server startup — all `CREATE TABLE IF NOT EXISTS` statements run in `backend/src/db/schema.ts`.
-
-### 7.6 File Upload Validation
-
-For artworks and team photos, the backend validates:
-1. File extension is in the allowed list
-2. File magic bytes match the extension (prevents extension spoofing):
-   - JPEG: `0xFF 0xD8 0xFF`
-   - PNG: `0x89 0x50 0x4E 0x47`
-   - GIF: `0x47 0x49 0x46 0x38`
-   - WebP: `RIFF....WEBP`
-   - PDF: `0x25 0x50 0x44 0x46`
-   - MP4: bytes 4–7 are `ftyp`
-3. File size ≤ 50MB for artworks, ≤ 10MB for team photos
-
----
-
-## 8. Database Schema
-
-All tables are auto-created on server startup via `CREATE TABLE IF NOT EXISTS`. The database is PostgreSQL on Supabase.
+Guards destructive one-time data migrations (e.g. `clear_pre_email_sessions_v1`, which deletes pre-OTP `student_sessions` rows missing name/email exactly once).
 
 ### `admin_config`
 | Column | Type | Notes |
 |---|---|---|
 | `key` | TEXT | PRIMARY KEY |
-| `value` | TEXT | |
+| `value` | TEXT | NOT NULL |
 
-Seeded with: `admin_password_hash` (bcrypt hash of the admin password).
+Seeded with `admin_password_hash` (bcrypt hash of the admin password).
 
 ### `domains`
 | Column | Type | Notes |
@@ -663,32 +721,32 @@ Seeded with: `admin_password_hash` (bcrypt hash of the admin password).
 | `id` | TEXT | PRIMARY KEY (slug, e.g. `motion-graphics`) |
 | `title` | TEXT | Short label (e.g. `Motion`) |
 | `full_name` | TEXT | Full display name |
-| `icon` | TEXT | FontAwesome class or icon identifier |
-| `tagline` | TEXT | One-line description |
-| `description` | TEXT | Longer description |
-| `color` | TEXT | Hex color (e.g. `#007AFF`) |
-| `display_order` | INT | Sort order in sidebar |
-| `created_at` | TIMESTAMPTZ | Auto |
+| `icon` | TEXT | DEFAULT `fa-layer-group` |
+| `tagline` | TEXT | DEFAULT `''` |
+| `description` | TEXT | DEFAULT `''` |
+| `color` | TEXT | DEFAULT `#007AFF` |
+| `display_order` | INT | DEFAULT 0 |
+| `created_at` | TIMESTAMPTZ | DEFAULT NOW() |
 
 ### `videos`
 | Column | Type | Notes |
 |---|---|---|
 | `id` | TEXT | PRIMARY KEY (`{domain_id}-{uuid8}`) |
-| `domain_id` | TEXT | FK → `domains.id` |
+| `domain_id` | TEXT | FK → `domains.id` ON DELETE CASCADE |
 | `title` | TEXT | |
-| `yt_id` | TEXT | YouTube video ID (11 chars) |
-| `difficulty` | TEXT | CHECK IN ('Beginner', 'Intermediate', 'Advanced') |
-| `duration` | TEXT | Human-readable string (e.g. `12:34`) |
-| `sequence` | INT | Sort order within domain |
-| `created_at` | TIMESTAMPTZ | Auto |
+| `yt_id` | TEXT | YouTube video ID |
+| `difficulty` | TEXT | CHECK IN ('Beginner','Intermediate','Advanced') |
+| `duration` | TEXT | Human-readable (e.g. `12:34`) |
+| `sequence` | INT | DEFAULT 0 — **added via `ALTER TABLE`** and back-filled by per-domain insertion order |
+| `created_at` | TIMESTAMPTZ | DEFAULT NOW() |
 
 ### `quiz_questions`
 | Column | Type | Notes |
 |---|---|---|
 | `id` | BIGSERIAL | PRIMARY KEY |
-| `domain_id` | TEXT | FK → `domains.id` |
+| `domain_id` | TEXT | FK → `domains.id` ON DELETE CASCADE |
 | `question` | TEXT | |
-| `options` | TEXT | JSON array of 4 strings, serialized |
+| `options` | TEXT | JSON array of strings, serialized |
 | `answer_index` | INT | 0-based index into options |
 
 ### `events`
@@ -697,21 +755,21 @@ Seeded with: `admin_password_hash` (bcrypt hash of the admin password).
 | `id` | TEXT | PRIMARY KEY (`evt-{uuid8}`) |
 | `title` | TEXT | |
 | `date` | TEXT | YYYY-MM-DD |
-| `time` | TEXT | Human-readable (e.g. `6:00 PM`) |
+| `time` | TEXT | Human-readable |
 | `location` | TEXT | |
-| `content` | TEXT | Description / details |
-| `capacity` | INT | Max attendees |
-| `registered_count` | INT | DEFAULT 0, maintained by rsvp endpoint |
-| `created_at` | TIMESTAMPTZ | Auto |
+| `content` | TEXT | |
+| `capacity` | INT | |
+| `registered_count` | INT | DEFAULT 0, maintained by the rsvp endpoint |
+| `created_at` | TIMESTAMPTZ | DEFAULT NOW() |
 
 ### `event_rsvps`
 | Column | Type | Notes |
 |---|---|---|
-| `event_id` | TEXT | FK → `events.id` |
+| `event_id` | TEXT | FK → `events.id` ON DELETE CASCADE |
 | `roll_number` | TEXT | |
 | PRIMARY KEY | (`event_id`, `roll_number`) | |
 
-The RSVP endpoint uses `SELECT ... FOR UPDATE` inside a transaction to prevent race conditions on capacity checks.
+The RSVP endpoint uses `SELECT … FOR UPDATE` inside a transaction to avoid capacity races.
 
 ### `artworks`
 | Column | Type | Notes |
@@ -721,57 +779,81 @@ The RSVP endpoint uses `SELECT ... FOR UPDATE` inside a transaction to prevent r
 | `artist` | TEXT | |
 | `domain` | TEXT | Domain label string |
 | `image_url` | TEXT | Legacy field (nullable) |
-| `media_type` | TEXT | CHECK IN ('image', 'pdf', 'video') |
-| `storage_path` | TEXT | Supabase Storage path (e.g. `gallery/uuid.jpg`) |
+| `media_type` | TEXT | DEFAULT `image`, CHECK IN ('image','pdf','video') |
+| `storage_path` | TEXT | Storage path (nullable) |
 | `original_filename` | TEXT | |
 | `mime_type` | TEXT | |
-| `file_size` | BIGINT | Bytes, max 52428800 (50MB) |
-| `likes` | INT | DEFAULT 0, maintained by like endpoint |
-| `featured` | BOOLEAN | DEFAULT false |
-| `cover_url` | TEXT | Full URL for video/PDF cover image |
-| `created_at` | TIMESTAMPTZ | Auto |
+| `file_size` | BIGINT | CHECK ≤ 52428800 (50 MB) or NULL |
+| `likes` | INT | DEFAULT 0, maintained by the like endpoint |
+| `featured` | BOOLEAN | DEFAULT false — **added via `ALTER TABLE`** |
+| `cover_url` | TEXT | DEFAULT NULL — **added via `ALTER TABLE`** (cover for video/PDF) |
+| `created_at` | TIMESTAMPTZ | DEFAULT NOW() |
 
 ### `artwork_likes`
 | Column | Type | Notes |
 |---|---|---|
-| `artwork_id` | TEXT | FK → `artworks.id` |
+| `artwork_id` | TEXT | FK → `artworks.id` ON DELETE CASCADE |
 | `roll_number` | TEXT | |
 | PRIMARY KEY | (`artwork_id`, `roll_number`) | |
 
-Like/unlike is a transaction: inserts/deletes `artwork_likes` row and increments/decrements `artworks.likes`.
+Like/unlike is a transaction: inserts/deletes the row and increments/decrements `artworks.likes`.
 
 ### `artwork_comments`
 | Column | Type | Notes |
 |---|---|---|
 | `id` | TEXT | PRIMARY KEY (`c-{uuid8}`) |
-| `artwork_id` | TEXT | FK → `artworks.id` |
+| `artwork_id` | TEXT | FK → `artworks.id` ON DELETE CASCADE |
 | `sender` | TEXT | Student name |
-| `text` | TEXT | Max 1000 chars |
-| `created_at` | TIMESTAMPTZ | Auto |
-
-Comment dates are returned as relative strings: "Just now", "5 minutes ago", "2 hours ago", "3 days ago".
+| `text` | TEXT | |
+| `created_at` | TIMESTAMPTZ | DEFAULT NOW() |
 
 ### `student_sessions`
 | Column | Type | Notes |
 |---|---|---|
-| `roll_number` | TEXT | PRIMARY KEY, uppercased |
+| `roll_number` | TEXT | PRIMARY KEY |
 | `unique_id` | TEXT | `IITK-DnA-{ROLL}-{XXXX}` |
-| `registered_at` | TEXT | Formatted date string (Indian locale) |
-| `name` | TEXT | |
-| `email` | TEXT | Must end with `@iitk.ac.in` |
+| `registered_at` | TEXT | Formatted date string (en-IN) |
+| `name` | TEXT | DEFAULT NULL — **added via `ALTER TABLE`** |
+| `email` | TEXT | DEFAULT NULL — **added via `ALTER TABLE`** |
+| `welcome_email_sent_at` | TIMESTAMPTZ | DEFAULT NULL — **added via `ALTER TABLE`**; NULL = welcome email not yet sent |
+
+> **Drift from old docs:** `welcome_email_sent_at` is new (welcome-email-once tracking). The base `CREATE` only has `roll_number`/`unique_id`/`registered_at`; `name`/`email`/`welcome_email_sent_at` are `ALTER TABLE` additions.
+
+### `student_otps` *(new — OTP login)*
+| Column | Type | Notes |
+|---|---|---|
+| `roll_number` | TEXT | PRIMARY KEY |
+| `email` | TEXT | Address the code was sent to |
+| `code_hash` | TEXT | bcrypt hash — plaintext code is never stored |
+| `name` | TEXT | Pending name for a new registration |
+| `expires_at` | TIMESTAMPTZ | |
+| `attempts` | INT | DEFAULT 0 |
+| `created_at` | TIMESTAMPTZ | DEFAULT NOW() |
+
+### `student_email_change_otps` *(new — email change)*
+| Column | Type | Notes |
+|---|---|---|
+| `roll_number` | TEXT | PRIMARY KEY |
+| `new_email` | TEXT | Target address; `student_sessions.email` is only updated once verified |
+| `code_hash` | TEXT | bcrypt hash |
+| `expires_at` | TIMESTAMPTZ | |
+| `attempts` | INT | DEFAULT 0 |
+| `created_at` | TIMESTAMPTZ | DEFAULT NOW() |
+
+Kept separate from `student_otps` so login and email-change flows can't collide.
 
 ### `student_watched_videos`
 | Column | Type | Notes |
 |---|---|---|
 | `roll_number` | TEXT | |
-| `video_id` | TEXT | FK → `videos.id` |
+| `video_id` | TEXT | FK → `videos.id` ON DELETE CASCADE |
 | PRIMARY KEY | (`roll_number`, `video_id`) | |
 
 ### `student_completed_quizzes`
 | Column | Type | Notes |
 |---|---|---|
 | `roll_number` | TEXT | |
-| `domain_id` | TEXT | FK → `domains.id` |
+| `domain_id` | TEXT | FK → `domains.id` ON DELETE CASCADE |
 | PRIMARY KEY | (`roll_number`, `domain_id`) | |
 
 ### `team_members`
@@ -779,45 +861,49 @@ Comment dates are returned as relative strings: "Just now", "5 minutes ago", "2 
 |---|---|---|
 | `id` | BIGSERIAL | PRIMARY KEY |
 | `name` | TEXT | |
-| `designation` | TEXT | Used for grouping on team page |
-| `year` | TEXT | Graduation year, nullable |
-| `bio` | TEXT | Max 500 chars, nullable |
-| `color` | TEXT | Hex, used for avatar placeholder |
-| `photo_path` | TEXT | Supabase Storage path, nullable |
-| `display_order` | INT | Sort key within designation group |
-| `social_instagram` | TEXT | URL, nullable |
-| `social_linkedin` | TEXT | URL, nullable |
-| `social_email` | TEXT | Email address, nullable |
-| `created_at` | TIMESTAMPTZ | Auto |
+| `designation` | TEXT | Used for grouping on the team page |
+| `year` | TEXT | Nullable |
+| `bio` | TEXT | Nullable |
+| `color` | TEXT | DEFAULT `#007AFF` |
+| `photo_path` | TEXT | Nullable |
+| `display_order` | INT | DEFAULT 0 |
+| `social_instagram` | TEXT | Nullable |
+| `social_linkedin` | TEXT | Nullable |
+| `social_email` | TEXT | Nullable |
+| `created_at` | TIMESTAMPTZ | DEFAULT NOW() |
 
 ### `email_templates`
 | Column | Type | Notes |
 |---|---|---|
 | `id` | TEXT | PRIMARY KEY (`welcome`, `new_event`, `new_artwork`) |
 | `name` | TEXT | Human-readable name |
-| `subject` | TEXT | Email subject line (supports `{{placeholders}}`) |
-| `body` | TEXT | HTML body (supports `{{placeholders}}`) |
+| `subject` | TEXT | Supports `{{placeholders}}` |
+| `body` | TEXT | HTML, supports `{{placeholders}}` |
 | `updated_at` | TEXT | ISO string |
+
+Seeded with standalone welcome / new-event / new-artwork templates on first boot.
 
 ### `audience_groups`
 | Column | Type | Notes |
 |---|---|---|
-| `id` | TEXT | PRIMARY KEY (e.g. `coordinators`) |
+| `id` | TEXT | PRIMARY KEY (e.g. `all_students`, `all_team`, `coordinators`) |
 | `name` | TEXT | |
-| `description` | TEXT | |
+| `description` | TEXT | Nullable |
 | `created_at` | TEXT | ISO string |
+
+Seeded on first boot with `all_students` + `all_team` (the latter pre-populated with ~45 team member roll numbers).
 
 ### `audience_group_members`
 | Column | Type | Notes |
 |---|---|---|
-| `group_id` | TEXT | FK → `audience_groups.id` |
+| `group_id` | TEXT | FK → `audience_groups.id` ON DELETE CASCADE |
 | `roll_number` | TEXT | |
-| `name` | TEXT | |
+| `name` | TEXT | Nullable |
 | `added_at` | TEXT | ISO string |
-| `approved` | BOOLEAN | DEFAULT false |
+| `approved` | BOOLEAN | DEFAULT false — **added via `ALTER TABLE`** |
 | PRIMARY KEY | (`group_id`, `roll_number`) | |
 
-The coordinator-check middleware queries this table: `group_id='coordinators'` AND `approved=true`.
+The coordinator-check middleware queries this table for `group_id='coordinators' AND approved=true`.
 
 ### `live_sessions`
 | Column | Type | Notes |
@@ -827,20 +913,20 @@ The coordinator-check middleware queries this table: `group_id='coordinators'` A
 | `host` | TEXT | |
 | `meet_link` | TEXT | URL |
 | `scheduled_at` | TEXT | ISO string |
-| `status` | TEXT | DEFAULT 'upcoming' — 'upcoming', 'live', or 'ended' |
-| `audience_group_id` | TEXT | FK → `audience_groups.id`, nullable (null = everyone) |
+| `status` | TEXT | DEFAULT `upcoming` — `upcoming` / `live` / `ended` |
+| `audience_group_id` | TEXT | FK → `audience_groups.id` ON DELETE SET NULL, nullable (null = everyone) |
 | `description` | TEXT | Nullable |
 | `created_at` | TEXT | ISO string |
 
-If `audience_group_id` is null or `'all_students'`, the session is visible to everyone and the meeting link is shown to all logged-in students.
+If `audience_group_id` is null or `all_students`, the session (and its meet link) is visible to every logged-in student.
 
 ### `session_joins`
 | Column | Type | Notes |
 |---|---|---|
 | `id` | TEXT | PRIMARY KEY (UUID) |
-| `session_id` | TEXT | FK → `live_sessions.id` |
+| `session_id` | TEXT | FK → `live_sessions.id` ON DELETE CASCADE |
 | `roll_number` | TEXT | |
-| `name` | TEXT | Student's name at time of join |
+| `name` | TEXT | Nullable |
 | `joined_at` | TEXT | ISO string |
 | UNIQUE | (`session_id`, `roll_number`) | Re-joining updates `joined_at` |
 
@@ -848,22 +934,22 @@ If `audience_group_id` is null or `'all_students'`, the session is visible to ev
 | Column | Type | Notes |
 |---|---|---|
 | `id` | TEXT | PRIMARY KEY (UUID) |
-| `name` | TEXT | Max 100 chars |
-| `description` | TEXT | Max 300 chars, nullable |
-| `owner_roll` | TEXT | Student roll number |
-| `owner_name` | TEXT | |
-| `visibility` | TEXT | DEFAULT 'private' — 'private' or 'shared' |
-| `room_id` | TEXT | UUID, reserved for future real-time use |
-| `edit_mode` | TEXT | DEFAULT 'members_only' — 'members_only' or 'anyone' |
-| `canvas_data` | TEXT | JSON string of tldraw canvas state |
+| `name` | TEXT | |
+| `description` | TEXT | Nullable |
+| `owner_roll` | TEXT | |
+| `owner_name` | TEXT | Nullable |
+| `visibility` | TEXT | DEFAULT `private` — `private` / `shared` |
+| `room_id` | TEXT | UUID — **added via `ALTER TABLE`**, back-filled |
+| `edit_mode` | TEXT | DEFAULT `members_only` — **added via `ALTER TABLE`** (`members_only` / `anyone`) |
+| `canvas_data` | TEXT | DEFAULT NULL — **added via `ALTER TABLE`** (tldraw canvas JSON) |
 | `created_at` | TEXT | ISO string |
 
 ### `board_members`
 | Column | Type | Notes |
 |---|---|---|
-| `board_id` | TEXT | FK → `boards.id` |
+| `board_id` | TEXT | FK → `boards.id` ON DELETE CASCADE |
 | `roll_number` | TEXT | |
-| `name` | TEXT | |
+| `name` | TEXT | Nullable |
 | `added_at` | TEXT | ISO string |
 | PRIMARY KEY | (`board_id`, `roll_number`) | |
 
@@ -871,83 +957,82 @@ If `audience_group_id` is null or `'all_students'`, the session is visible to ev
 | Column | Type | Notes |
 |---|---|---|
 | `id` | TEXT | PRIMARY KEY (UUID) |
-| `board_id` | TEXT | FK → `boards.id` |
-| `image_url` | TEXT | URL of the artwork image saved to this board |
-| `note` | TEXT | Optional note, max 500 chars |
-| `source_url` | TEXT | Optional source link |
+| `board_id` | TEXT | FK → `boards.id` ON DELETE CASCADE |
+| `image_url` | TEXT | |
+| `note` | TEXT | Nullable |
+| `source_url` | TEXT | Nullable |
 | `added_by_roll` | TEXT | |
-| `added_by_name` | TEXT | |
+| `added_by_name` | TEXT | Nullable |
 | `created_at` | TEXT | ISO string |
 
 ### `app_settings`
 | Column | Type | Notes |
 |---|---|---|
 | `key` | TEXT | PRIMARY KEY |
-| `value` | TEXT | |
+| `value` | TEXT | NOT NULL |
 | `updated_at` | TEXT | ISO string |
 
-Seeded with:
-- `public_meet_enabled` = `'false'`
-- `public_meet_passcode` = `'DNA2025'`
+Seeded with `public_meet_enabled = 'false'` and `public_meet_passcode = 'DNA2025'`.
 
 ---
 
-## 9. API Reference
+## 14. API Reference
 
-Base URL for all endpoints: `https://dna-website.onrender.com`
+**Base URL:** the frontend calls `${VITE_API_BASE_URL}/api` (`src/app/lib/api.ts`). `VITE_API_BASE_URL` is empty for local dev (same-origin via the Vite proxy) and set to the Render backend URL in production. All paths below are under `/api`.
 
-All endpoints are prefixed with `/api`.
-
-**Common headers**:
-- `X-Roll-Number: {ROLL}` — Student identity (required for student-protected endpoints)
-- `Authorization: Bearer {token}` — Admin JWT (required for admin-protected endpoints)
-- `Content-Type: application/json` — For JSON bodies
-- `Content-Type: multipart/form-data` — For file upload endpoints
+**Common headers**
+- `X-Roll-Number: {ROLL}` — student identity (required for student-protected endpoints)
+- `Authorization: Bearer {token}` — admin JWT (required for admin-protected endpoints)
+- `Content-Type: application/json` — JSON bodies
+- `Content-Type: multipart/form-data` — file-upload endpoints
 
 **Legend**: 🔓 Public · 🎓 Student (roll number header) · 🛡 Admin (JWT) · 📡 Coordinator
+
+> Verified against `backend/src/routes/*.ts` on 2026-07-16. The auth/registration model changed substantially since the pre-rewrite docs — see the **⚠ drift** notes.
 
 ---
 
 ### Health
-
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | GET | `/api/health` | 🔓 | Returns `{ ok: true }`. Rate-limit exempt. |
 
 ---
 
-### Auth
-
+### Auth (`/api/auth`)
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/api/auth/admin/login` | 🔓 | Body: `{ password }`. Returns `{ token }`. Rate-limited: 10 req / 15 min. |
+| POST | `/admin/login` | 🔓 | Body `{ password }` → `{ token }`. Rate-limited (10 / 15 min). |
+| POST | `/student/request-otp` | 🔓 | Body `{ rollNumber, name?, email? }`. Emails a 6-digit code. New students must supply a valid name + `@iitk.ac.in` email; existing students omit them (the code always goes to the address on file). Returns `{ sent: true, isNew, email: <masked> }`. Rate-limited. |
+| POST | `/student/verify-otp` | 🔓 | Body `{ rollNumber, code }`. On success returns `{ session: { rollNumber, uniqueId, registeredAt, name, email }, progress: { watchedVideos, completedQuizzes } }` and fires the welcome email once. **This is the combined registration + login.** |
+| POST | `/student/change-email/request` | 🎓 | Body `{ rollNumber, newEmail }` (roll taken from the header; owner-guarded). Sends a code to `newEmail`. Returns `{ sent: true, email: <masked> }`. |
+| POST | `/student/change-email/verify` | 🎓 | Body `{ code }`. On success updates `student_sessions.email`. |
+
+> **⚠ drift:** the pre-rewrite docs listed only `POST /admin/login` here. The entire student email-OTP flow (`request-otp`, `verify-otp`, `change-email/*`) is new and lives in `auth.ts`.
 
 ---
 
-### Domains
-
+### Domains (`/api/domains`)
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/api/domains` | 🔓 | All domains with their videos and quiz questions. |
-| POST | `/api/domains` | 🛡 | Create domain. Body: `{ title, fullName, icon?, tagline?, description?, color? }`. |
-| PUT | `/api/domains/:id` | 🛡 | Update domain fields. Body: same as create (all optional). |
-| DELETE | `/api/domains/:id` | 🛡 | Delete domain. 204 on success. |
-| POST | `/api/domains/:id/videos` | 🛡 | Add video. Body: `{ title, ytUrl, difficulty, duration, sequence? }`. |
-| PUT | `/api/domains/:id/videos/:videoId` | 🛡 | Update video. Body: same fields all optional. |
-| PATCH | `/api/domains/:id/videos/:videoId` | 🛡 | Update sequence only. Body: `{ sequence }`. |
-| DELETE | `/api/domains/:id/videos/:videoId` | 🛡 | Delete video. 204 on success. |
+| GET | `/` | 🔓 | All domains with their videos and quiz questions (object keyed by domain id). |
+| POST | `/` | 🛡 | Create domain. Body `{ title, fullName, icon?, tagline?, description?, color? }`. |
+| PUT | `/:id` | 🛡 | Update domain fields (all optional). |
+| DELETE | `/:id` | 🛡 | Delete domain. 204. |
+| POST | `/:id/videos` | 🛡 | Add video. Body `{ title, ytUrl, difficulty, duration, sequence? }`. |
+| PUT | `/:id/videos/:videoId` | 🛡 | Update video (fields optional). |
+| PATCH | `/:id/videos/:videoId` | 🛡 | Update sequence only. Body `{ sequence }`. |
+| DELETE | `/:id/videos/:videoId` | 🛡 | Delete video. 204. |
+| POST | `/:id/quiz/submit` | 🎓 | Submit quiz answers; graded against `quiz_questions`, marks `student_completed_quizzes` on pass. |
 
-The `GET /api/domains` response is an object keyed by domain ID:
+> **⚠ drift:** `POST /:id/quiz/submit` is where quiz completion now lives — it moved here from the old `POST /api/students/:roll/progress/quizzes/:domainId`.
+
+`GET /api/domains` response is keyed by domain id:
 ```json
 {
   "motion-graphics": {
-    "id": "motion-graphics",
-    "title": "Motion",
-    "fullName": "Motion Graphics",
-    "icon": "fa-film",
-    "tagline": "...",
-    "description": "...",
-    "color": "#007AFF",
+    "id": "motion-graphics", "title": "Motion", "fullName": "Motion Graphics",
+    "icon": "fa-film", "tagline": "...", "description": "...", "color": "#007AFF",
     "videos": [{ "id": "...", "title": "...", "ytId": "...", "difficulty": "Beginner", "duration": "12:00", "sequence": 1 }],
     "quizzes": [{ "q": "...", "options": ["A","B","C","D"], "ans": 2 }]
   }
@@ -956,427 +1041,160 @@ The `GET /api/domains` response is an object keyed by domain ID:
 
 ---
 
-### Artworks
+### Students (`/api/students`)
+| Method | Path | Auth | Rate limit |
+|---|---|---|---|
+| GET | `/:roll/exists` | 🔓 | — |
+| GET | `/:roll/progress` | 🔓 | 60 / min |
+| POST | `/:roll/progress/videos/:videoId` | 🎓 (owner) | 30 / min |
+| DELETE | `/:roll/progress/videos/:videoId` | 🎓 (owner) | 30 / min |
 
+**Owner guard:** the video-progress writes require `X-Roll-Number` to equal `:roll` (403 otherwise).
+
+`GET /:roll/exists` → `{ exists, hasProfile }`, where `hasProfile` is true only when the row has both a name and an email.
+
+> **⚠ drift:** the pre-rewrite docs listed `POST /sessions`, `POST /sessions/login`, `GET /:roll/profile`, and `POST /:roll/progress/quizzes/:domainId` under Students. All are gone: registration + login moved to the `/auth` OTP flow, profile data is folded into `/:roll/exists`, and quiz submission moved to `/domains/:id/quiz/submit`.
+
+---
+
+### Artworks (`/api/artworks`)
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/api/artworks` | 🔓 / 🎓 | All artworks ordered by `created_at DESC`. With roll header: includes `likedByUser`. |
-| POST | `/api/artworks` | 🛡 | Multipart: `file` (required), `cover` (optional), `title`, `artist`, `domain`. |
-| PUT | `/api/artworks/:id` | 🛡 | Multipart update: all fields optional, `file` and `cover` optional replacements. |
-| PATCH | `/api/artworks/:id/featured` | 🛡 | Body: `{ featured: boolean }`. Returns `{ id, featured }`. |
-| DELETE | `/api/artworks/:id` | 🛡 | Deletes file from storage and DB. 204 on success. |
-| POST | `/api/artworks/:id/like` | 🎓 | Toggle like. Returns `{ likes, likedByUser }`. Rate-limited: 30 req/min. |
-| POST | `/api/artworks/:id/comments` | 🎓 | Body: `{ sender, text }`. Returns created comment. Rate-limited: 10 req/min. |
-| DELETE | `/api/artworks/:id/comments/:commentId` | 🛡 | Delete comment. Returns `{ success, deletedId }`. |
+| GET | `/` | 🔓 / 🎓 | All artworks, `created_at DESC`. With roll header: includes `likedByUser`. |
+| POST | `/` | 🛡 | Multipart: `file` (required), `cover` (optional), `title`, `artist`, `domain`. |
+| PUT | `/:id` | 🛡 | Multipart update; fields + `file`/`cover` optional. |
+| PATCH | `/:id/featured` | 🛡 | Body `{ featured }` → `{ id, featured }`. |
+| DELETE | `/:id` | 🛡 | Deletes file from storage + DB. 204. |
+| POST | `/:id/like` | 🎓 | Toggle like → `{ likes, likedByUser }`. Rate-limited (30 / min). |
+| POST | `/:id/comments` | 🎓 | Body `{ sender, text }` → created comment. Rate-limited (10 / min). |
+| DELETE | `/:id/comments/:commentId` | 🛡 | Delete comment → `{ success, deletedId }`. |
 
 Artwork response shape:
 ```json
 {
-  "id": "art-abc12345",
-  "title": "...",
-  "artist": "...",
-  "domain": "Illustration",
-  "mediaUrl": "https://...",
-  "mediaType": "image",
-  "originalFilename": "design.jpg",
-  "likes": 12,
-  "likedByUser": false,
-  "featured": true,
-  "coverUrl": null,
+  "id": "art-abc12345", "title": "...", "artist": "...", "domain": "Illustration",
+  "mediaUrl": "https://...", "mediaType": "image", "originalFilename": "design.jpg",
+  "likes": 12, "likedByUser": false, "featured": true, "coverUrl": null,
   "comments": [{ "id": "c-xxxx", "sender": "Name", "text": "...", "date": "5 minutes ago" }]
 }
 ```
 
 ---
 
-### Events
-
+### Events (`/api/events`)
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/api/events` | 🔓 / 🎓 | All events ordered by date ASC. With roll header: includes `isRegistered`. |
-| POST | `/api/events` | 🛡 | Body: `{ title, date (YYYY-MM-DD), time, location, content, capacity }`. |
-| PUT | `/api/events/:id` | 🛡 | Body: same fields, all optional. |
-| DELETE | `/api/events/:id` | 🛡 | 204 on success. |
-| POST | `/api/events/:id/rsvp` | 🎓 | Toggle RSVP. Uses `FOR UPDATE` row lock. Returns `{ registeredCount, isRegistered }`. 409 if at capacity. |
+| GET | `/` | 🔓 / 🎓 | All events, date ASC. With roll header: includes `isRegistered`. |
+| POST | `/` | 🛡 | Body `{ title, date, time, location, content, capacity }`. |
+| PUT | `/:id` | 🛡 | Fields optional. |
+| DELETE | `/:id` | 🛡 | 204. |
+| POST | `/:id/rsvp` | 🎓 | Toggle RSVP (uses `FOR UPDATE` row lock) → `{ registeredCount, isRegistered }`. 409 if full. |
 
 ---
 
-### Team
-
+### Team (`/api/team`)
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/api/team` | 🔓 | All members ordered by `display_order ASC, id ASC`. |
-| POST | `/api/team` | 🛡 | Multipart: `photo` (optional), plus all member fields. |
-| PUT | `/api/team/:id` | 🛡 | Multipart update: all fields required (replaces record). Photo optional. |
-| PATCH | `/api/team/:id/order` | 🛡 | Body: `{ display_order }`. |
-| DELETE | `/api/team/:id` | 🛡 | Deletes photo from storage and DB. 204 on success. |
+| GET | `/` | 🔓 | All members, `display_order ASC, id ASC`. |
+| POST | `/` | 🛡 | Multipart: `photo` (optional) + member fields. |
+| PUT | `/:id` | 🛡 | Multipart update (replaces record). |
+| PATCH | `/:id/order` | 🛡 | Body `{ display_order }`. |
+| DELETE | `/:id` | 🛡 | Deletes photo + DB. 204. |
 
 Member response shape:
 ```json
 {
-  "id": 1,
-  "name": "Jane Doe",
-  "designation": "Coordinator",
-  "year": "2025",
-  "bio": "...",
-  "color": "#007AFF",
-  "photoUrl": "https://...",
-  "displayOrder": 1,
+  "id": 1, "name": "Jane Doe", "designation": "Coordinator", "year": "2025",
+  "bio": "...", "color": "#007AFF", "photoUrl": "https://...", "displayOrder": 1,
   "social": { "instagram": null, "linkedin": "https://...", "email": null }
 }
 ```
 
 ---
 
-### Students
-
-| Method | Path | Auth | Rate limit |
-|---|---|---|---|
-| GET | `/api/students/:roll/exists` | 🔓 | — |
-| POST | `/api/students/sessions` | 🔓 | 10 req / 5 min |
-| POST | `/api/students/sessions/login` | 🔓 | — |
-| GET | `/api/students/:roll/profile` | 🔓 | 60 req / min |
-| GET | `/api/students/:roll/progress` | 🔓 | 60 req / min |
-| POST | `/api/students/:roll/progress/videos/:videoId` | 🎓 (owner) | 30 req / min |
-| DELETE | `/api/students/:roll/progress/videos/:videoId` | 🎓 (owner) | 30 req / min |
-| POST | `/api/students/:roll/progress/quizzes/:domainId` | 🎓 (owner) | 30 req / min |
-
-**Owner guard**: Progress write endpoints check that `X-Roll-Number` header matches the `:roll` param. 403 if they don't match.
-
-`GET /:roll/exists` returns:
-```json
-{ "exists": true, "hasProfile": true }
-```
-
-`POST /sessions` body: `{ rollNumber, name, email }`. Returns:
-```json
-{
-  "session": { "rollNumber": "22ABC123", "uniqueId": "IITK-DnA-22ABC123-XY9Z", "registeredAt": "01 Jun 2025", "name": "Jane", "email": "jane@iitk.ac.in" },
-  "progress": { "watchedVideos": ["vid-id1"], "completedQuizzes": ["motion-graphics"] }
-}
-```
-
-Also fires a welcome email on first-time registration.
-
----
-
-### Notify (Email)
-
+### Notify / Email (`/api/notify`)
 All endpoints require admin JWT.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/notify/test-email` | Sends a test email to the club Gmail. |
-| POST | `/api/notify/event` | Body: `{ title, date?, venue?, description? }`. Queues event notification to all students. |
-| POST | `/api/notify/artwork` | Body: `{ title, artist, domain? }`. Queues artwork notification to all students. |
-| GET | `/api/notify/templates` | Returns all email templates. |
-| GET | `/api/notify/templates/:id` | Returns single template by ID. |
-| PUT | `/api/notify/templates/:id` | Body: `{ subject, body }`. Updates template. |
-| POST | `/api/notify/announce` | Body: `{ subject, html }`. Sends custom email to all registered students. Returns `{ sent: N }`. |
+| GET | `/test-email` | Sends a test email to the club Gmail. |
+| POST | `/event` | Body `{ title, date?, venue?, description? }`. Queues an event notification to all students. |
+| POST | `/artwork` | Body `{ title, artist, domain? }`. Queues an artwork notification to all students. |
+| GET | `/templates` | All email templates. |
+| GET | `/templates/:id` | Single template by id. |
+| POST | `/templates/:id/preview` | Renders the template with sample data and returns the resolved subject + HTML (accurate per-template preview). |
+| POST | `/templates/:id/test` | Sends the template as a one-off test email. |
+| PUT | `/templates/:id` | Body `{ subject, body }`. Updates the template. |
+| POST | `/announce` | Body `{ subject, html }`. Emails all registered students → `{ sent: N }`. |
+
+> **⚠ drift:** `POST /templates/:id/preview` and `POST /templates/:id/test` are new (accurate per-template preview + send-test).
 
 ---
 
-### Live Sessions
-
+### Live Sessions (`/api/live-sessions`)
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/api/live-sessions/active` | 🔓 / 🎓 | Active + upcoming sessions. Audience-checks the `meet_link` per student. |
-| GET | `/api/live-sessions/past` | 🛡 | Ended sessions with join counts. |
-| GET | `/api/live-sessions/groups` | 🛡 | Audience groups with member counts. |
-| GET | `/api/live-sessions` | 🛡 | All sessions ordered by `scheduled_at DESC`. |
-| POST | `/api/live-sessions` | 🛡 | Create session. Body: `{ title, host, meet_link, scheduled_at, audience_group_id?, description? }`. |
-| POST | `/api/live-sessions/public` | 🔓 (token) | Create session using public meet token (base64 JWT, 24h expiry). Body includes `token`. |
-| DELETE | `/api/live-sessions/public/:id` | 🔓 (token) | Delete session within 24h of creation. Body: `{ token }`. |
-| POST | `/api/live-sessions/coordinator` | 📡 | Create session. Same body as admin create. |
-| DELETE | `/api/live-sessions/coordinator/:id` | 📡 | Delete own session within 24h. |
-| PUT | `/api/live-sessions/coordinator/:id/status` | 📡 | Body: `{ status }` — 'live', 'ended', or 'upcoming'. |
-| GET | `/api/live-sessions/:id/joins` | 🛡 | Returns `{ session_id, count, joins: [{roll_number, name, joined_at}] }`. |
-| GET | `/api/live-sessions/:id/joins/count` | 🔓 | Returns `{ count }`. Polled by `LiveSessionBanner` every 30s. |
-| POST | `/api/live-sessions/:id/join` | 🎓 | Track join event. Body: roll in header. Silently succeeds even on error. |
-| PUT | `/api/live-sessions/:id/status` | 🛡 | Body: `{ status }`. |
-| PUT | `/api/live-sessions/:id` | 🛡 | Partial update of session fields. |
-| DELETE | `/api/live-sessions/:id` | 🛡 | Delete any session. |
+| GET | `/active` | 🔓 / 🎓 | Active + upcoming sessions; audience-checks `meet_link` per student. |
+| GET | `/past` | 🛡 | Ended sessions with join counts. |
+| GET | `/groups` | 🛡 | Audience groups with member counts. |
+| GET | `/` | 🛡 | All sessions, `scheduled_at DESC`. |
+| POST | `/` | 🛡 | Create. Body `{ title, host, meet_link, scheduled_at, audience_group_id?, description? }`. |
+| POST | `/public` | 🔓 (token) | Create via public meet token. |
+| DELETE | `/public/:id` | 🔓 (token) | Delete within 24h of creation. |
+| POST | `/coordinator` | 📡 | Create (same body as admin create). |
+| DELETE | `/coordinator/:id` | 📡 | Delete own session within 24h. |
+| PUT | `/coordinator/:id/status` | 📡 | Body `{ status }`. |
+| GET | `/:id/joins` | 🛡 | `{ session_id, count, joins: [...] }`. |
+| GET | `/:id/joins/count` | 🔓 | `{ count }` — polled by `LiveSessionBanner` (~30s). |
+| POST | `/:id/join` | 🎓 | Track a join event (silently succeeds on error). |
+| PUT | `/:id/status` | 🛡 | Body `{ status }`. |
+| PUT | `/:id` | 🛡 | Partial update. |
+| DELETE | `/:id` | 🛡 | Delete any session. |
 
-**Audience access logic** in `GET /active`: If a session has no `audience_group_id` or it is `'all_students'`, `canAccess=true` for everyone. Otherwise, checks `audience_group_members` for the student's roll. If not a member, `meet_link` is returned as `null`.
-
-**Public meet token**: Generated by `POST /api/settings/verify-passcode`. It is a base64-encoded JSON payload `{ type: 'public_meet', exp: timestamp }` valid for 24 hours. Used by the footer scheduler when `public_meet_enabled=true`.
+**Public meet token:** minted by `POST /api/settings/verify-passcode`; base64 JSON `{ type:'public_meet', exp }`, valid 24h. Not cryptographically signed (see §11).
 
 ---
 
-### Boards
-
+### Boards (`/api/boards`)
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/api/boards` | 🎓 | Boards owned by or member of. |
-| GET | `/api/boards/shared` | 🔓 | All boards with `visibility='shared'`. |
-| GET | `/api/boards/admin/all` | 🛡 | All boards from all users. |
-| DELETE | `/api/boards/admin/:id` | 🛡 | Admin delete any board. |
-| PUT | `/api/boards/admin/:id` | 🛡 | Admin update `visibility` or `edit_mode`. |
-| POST | `/api/boards` | 🎓 | Create board. Body: `{ name, description?, visibility? }`. |
-| GET | `/api/boards/:id` | 🔓 / 🎓 | Board + items + members. Private boards require membership. |
-| PUT | `/api/boards/:id` | 🎓 (owner) | Update `name`, `description`, `visibility`, `edit_mode`. |
-| DELETE | `/api/boards/:id` | 🎓 (owner) | Delete board. |
-| GET | `/api/boards/:id/canvas` | 🎓 (member) | Returns `{ canvas_data: string\|null }`. |
-| PUT | `/api/boards/:id/canvas` | 🎓 (member) | Body: `{ canvas_data }` (JSON string). |
-| POST | `/api/boards/:id/members` | 🎓 (owner) | Invite collaborator. Body: `{ roll_number }`. Student must already be registered. |
-| DELETE | `/api/boards/:id/members/:roll` | 🎓 (owner) | Remove collaborator. |
-| POST | `/api/boards/:id/items` | 🎓 (member) | Add item. Body: `{ image_url, note?, source_url? }`. |
-| DELETE | `/api/boards/:id/items/:itemId` | 🎓 (item owner or board owner) | Delete item. |
-| GET | `/api/boards/:id/items` | 🎓 / 🔓 (shared) | Items only (for polling). |
-| POST | `/api/boards/:id/canvas-files` | 🎓 (member) | Upload image for canvas. Multipart: `file`. Returns `{ fileId, url }`. |
+| GET | `/` | 🎓 | Boards owned by or shared with the caller. |
+| GET | `/shared` | 🔓 | All `visibility='shared'` boards. |
+| GET | `/admin/all` | 🛡 | All boards from all users. |
+| DELETE | `/admin/:id` | 🛡 | Admin delete any board. |
+| PUT | `/admin/:id` | 🛡 | Admin update `visibility` / `edit_mode`. |
+| POST | `/` | 🎓 | Create. Body `{ name, description?, visibility? }`. |
+| GET | `/:id` | 🔓 / 🎓 | Board + items + members (private boards require membership). |
+| PUT | `/:id` | 🎓 (owner) | Update `name` / `description` / `visibility` / `edit_mode`. |
+| DELETE | `/:id` | 🎓 (owner) | Delete board. |
+| GET | `/:id/canvas` | 🎓 (member) | `{ canvas_data: string\|null }`. |
+| PUT | `/:id/canvas` | 🎓 (member) | Body `{ canvas_data }`. |
+| POST | `/:id/members` | 🎓 (owner) | Invite. Body `{ roll_number }` (student must be registered). |
+| DELETE | `/:id/members/:roll` | 🎓 (owner) | Remove collaborator. |
+| POST | `/:id/items` | 🎓 (member) | Add item. Body `{ image_url, note?, source_url? }`. |
+| DELETE | `/:id/items/:itemId` | 🎓 (item/board owner) | Delete item. |
+| GET | `/:id/items` | 🎓 / 🔓 (shared) | Items only (polling). |
+| POST | `/:id/canvas-files` | 🎓 (member) | Upload a canvas image. Multipart `file` → `{ fileId, url }`. |
 
 ---
 
-### Coordinators
-
+### Coordinators (`/api/coordinators`)
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/api/coordinators` | 🛡 | All coordinators with approval status and email. |
-| POST | `/api/coordinators` | 🛡 | Add coordinator. Body: `{ roll_number, name }`. `approved=false` by default. |
-| PUT | `/api/coordinators/:roll/approve` | 🛡 | Toggle approval. Body: `{ approved: boolean }`. |
-| DELETE | `/api/coordinators/:roll` | 🛡 | Remove coordinator. |
-| GET | `/api/coordinators/check/:roll` | 🔓 | Returns `{ canSchedule: boolean }`. Used by Footer to show scheduler. |
+| GET | `/` | 🛡 | All coordinators with approval status + email. |
+| POST | `/` | 🛡 | Add. Body `{ roll_number, name }` (`approved=false` by default). |
+| PUT | `/:roll/approve` | 🛡 | Toggle approval. Body `{ approved }`. |
+| DELETE | `/:roll` | 🛡 | Remove coordinator. |
+| GET | `/check` | 🎓 | Whether the caller (roll from header) may schedule → `{ canSchedule }`. Used by the Footer scheduler. |
+
+> **⚠ drift:** this is `GET /check` (roll read from the `X-Roll-Number` header via `requireStudent`), not the old `GET /check/:roll` path parameter.
 
 ---
 
-### Settings
-
+### Settings (`/api/settings`)
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/api/settings/public` | 🔓 | Returns `{ public_meet_enabled: 'true'\|'false' }`. |
-| GET | `/api/settings` | 🛡 | All settings as `{ key: value }`. |
-| PUT | `/api/settings` | 🛡 | Body: `{ key: value, ... }` — upserts any keys. |
-| POST | `/api/settings/verify-passcode` | 🔓 | Body: `{ passcode }`. Returns `{ success, token }` (24h base64 token). |
-
----
-
-## 10. Email System
-
-### Provider
-
-Resend (`https://resend.com`). SDK: `import { Resend } from 'resend'`.
-
-All outgoing emails use:
-- **From**: `DnA Club IITK <onboarding@resend.dev>` (Resend's shared sending domain)
-- **Reply-To**: `designandanimationclub.iitk@gmail.com`
-
-### Email Functions (`backend/src/services/mailer.ts`)
-
-**`sendWelcomeEmail(name, email)`**  
-Triggered on first-time student registration. Fetches the `welcome` template from `email_templates`. Replaces `{{name}}` placeholder. Sends to the student's individual `@iitk.ac.in` email.
-
-**`sendEventNotification(event)`**  
-Triggered when admin creates an event via `POST /api/notify/event`. Fetches all student emails from `student_sessions`. Fetches the `new_event` template. Replaces `{{title}}`, `{{date}}`, `{{venue}}`, `{{description}}`. Sends to all students in batches.
-
-**`sendArtworkNotification(artwork)`**  
-Triggered when admin uploads an artwork via `POST /api/notify/artwork`. Fetches all student emails. Fetches the `new_artwork` template. Replaces `{{title}}`, `{{artist}}`, `{{domain}}`. Sends to all students in batches.
-
-**`sendCustomAnnouncement(subject, html, emails)`**  
-Used by `POST /api/notify/announce`. Sends a custom subject + HTML body to a provided list of emails.
-
-**`sendInBatches(emails, subject, html)`**  
-Internal helper. Splits the email list into chunks of 50. For each chunk, sends one email with the chunk as BCC recipients and the club Gmail as the `to` address. This keeps individual student addresses private and complies with Resend's sending limits.
-
-### HTML Wrapper
-
-All emails use `getBaseTemplate(content)` which wraps content in a styled HTML shell:
-- Dark background (`#0a0a0a`), white text
-- Brand-colored (`#E91E8C`) header bar with "Design & Animation Club, IIT Kanpur"
-- "Visit Website" CTA button linking to `https://dna-website-two.vercel.app`
-- Footer with club name and website link
-
-### Template Placeholders
-
-| Template ID | Available Placeholders |
-|---|---|
-| `welcome` | `{{name}}` |
-| `new_event` | `{{title}}`, `{{date}}`, `{{venue}}`, `{{description}}` |
-| `new_artwork` | `{{title}}`, `{{artist}}`, `{{domain}}` |
-
-Templates are edited by admin in the Settings tab → Email Templates section. Changes take effect immediately (no restart needed).
-
----
-
-## 11. Key Components
-
-### `src/app/components/Root.tsx`
-Provider tree: `ThemeProvider` > `StudentProvider` > `AppDataProvider`. Detects board page paths (`/moodboards/:id`) and renders full-screen (no navbar, no footer, no LiveSessionBanner, no BackToTop, no top padding). All other routes get the full shell. `SessionGate` renders `JoinPrompt` when no student session exists. Smooth scrolls to top on route change (except board pages).
-
-### `src/app/components/Navigation.tsx`
-Top navigation bar with fixed positioning. Contains logo, nav links, theme toggle, and student login status / roll number display. On mobile: hamburger menu with slide-in drawer.
-
-### `src/app/components/Hero.tsx`
-Full-screen landing section. PixelTrail interaction: mouse move events on the section create a trail of colored pixels at the cursor position (pointer-events disabled so it doesn't block clicks). Stats card with gradient-violet spotlight effect showing 250+ Members, 50+ Workshops, 500+ Artworks. Two CTAs based on auth state.
-
-### `src/app/components/FeaturedMarquee.tsx`
-Horizontally scrolling featured artworks strip. Injects `@keyframes marquee` via `useEffect` into `document.head`. Items array is duplicated for seamless loop when count ≥ 3. Pauses on mouseEnter. Card width adapts to artwork count (220/260/300px). Animation duration adapts: 20s for ≤4 items, 30s for ≤8, 40s for more.
-
-### `src/app/components/LiveSessionBanner.tsx`
-Fixed top bar, `z-index: 8000`. Polls `/api/live-sessions/active` every 60 seconds. Shows the primary session (live status takes priority over upcoming). Pulsing white dot for live sessions. Join count polled every 30s from `/api/live-sessions/:id/joins/count`. Dismissible per session ID (stored in state, resets on page refresh). Background: `#E91E8C` (brand) when live, `--color-surface-1` when upcoming.
-
-### `src/app/components/Footer.tsx`
-Standard footer with Explore and Club link columns plus Instagram + email social links. Contains the coordinator **Meet Scheduler modal**. The modal appears only when: `meetEnabled` (from `/api/settings/public`) is `true` AND `studentSession` exists AND `canSchedule` is `true` (from `/api/coordinators/check/:roll`). The modal has a "Schedule a Meet" form and a list of existing sessions with "Go Live", "End Session", "Remove" action buttons.
-
-### `src/app/components/RollModal.tsx`
-Two-step registration/login flow. Step 1 (`'roll'`): enter roll number → `api.students.checkExists()`. If `exists && hasProfile` → direct login. Otherwise → Step 2 (`'profile'`): enter name + `@iitk.ac.in` email → `api.students.register()`. After successful first-time registration: if `hasSeenWelcome(roll)` is false, shows `WelcomeOverlay`. Shake animation on validation errors.
-
-### `src/app/components/JoinPrompt.tsx`
-Bottom-anchored floating card shown to guests after 1500ms delay. Dismissible for 24h via `localStorage` key `iitk_dna_guest_dismissed` (stores timestamp). The outer wrapper has `pointer-events: none`; the card itself has `pointer-events: all` so background content remains interactive. "Register with IITK ID" opens `RollModal`. "Browse as guest" dismisses.
-
-### `src/app/components/WelcomeOverlay.tsx`
-Full-screen modal, `z-index: 9999`. Shown once per new registration. Lists 5 features: Design Studio, Academy, Moodboards, Gallery, Like & Comment. Staggered entrance animation per feature row. Two CTAs: "Explore Gallery" (navigates to `/gallery` then closes) and "Browse on my own" (closes only). After close, marks `iitk_dna_welcome_shown_{roll}=true` in localStorage.
-
-### `src/app/components/ImageCropper.tsx`
-Image crop modal used in admin gallery upload. Allows cropping before upload.
-
-### `src/app/components/AnimatedBlobs.tsx`
-Background blob animations. Used on certain sections for visual depth.
-
-### `src/app/components/BackToTop.tsx`
-Floating button that appears when user scrolls down. Smooth-scrolls to top on click.
-
-### `src/app/components/CustomCursor.tsx`
-Custom cursor overlay (desktop only). Renders a custom pointer following the mouse.
-
-### `src/app/components/HeroScroll.tsx`
-Built but currently not active (was reverted from HomePage). Scroll-driven animation section showing featured artwork grid with tilt effects. Uses `useSpring` with smooth physics and `perspective: 1200px` on the parent. Can be re-enabled by importing in `HomePage.tsx`.
-
-### `src/app/context/AppDataContext.tsx`
-Interfaces exported: `Artwork`, `ArtworkComment`, `ClubEvent`, `VideoResource`, `QuizQuestion`, `Domain`, `TeamMember`. Loads data in parallel on mount. Provides optimistic updates for like/RSVP. Handles `SESSION_EXPIRED` from admin API calls.
-
-### `src/app/context/StudentContext.tsx`
-LocalStorage keys managed: `iitk_dna_student_session`, `iitk_dna_student_progress`, `iitk_dna_welcome_shown_{roll}`. XP computed as `watchedVideos.length * 10 + completedQuizzes.length * 20`. Progress synced to backend on change.
-
-### `src/app/lib/api.ts`
-Typed API client. Base URL from `VITE_API_BASE_URL`. Admin token in `sessionStorage`. Roll in `X-Roll-Number` header. 401 admin responses throw `SESSION_EXPIRED` error after clearing token.
-
----
-
-## 12. Environment Variables
-
-### Frontend (`.env` or Vercel environment)
-
-| Variable | Example | Purpose |
-|---|---|---|
-| `VITE_API_BASE_URL` | `https://dna-website.onrender.com` | Backend API base URL used by `api.ts` |
-
-### Backend (`.env` or Render environment)
-
-| Variable | Example | Purpose |
-|---|---|---|
-| `DATABASE_URL` | `postgresql://...supabase...` | PostgreSQL connection string (Supabase) |
-| `JWT_SECRET` | `a-long-random-string` | Signs and verifies admin JWT tokens |
-| `RESEND_API_KEY` | `re_...` | Resend email service API key |
-| `CORS_ORIGINS` | `https://dna-website-two.vercel.app,http://localhost:5173` | Comma-separated list of allowed CORS origins |
-| `PORT` | `3000` | Express server port (Render sets this automatically) |
-| `NODE_ENV` | `production` | Node environment |
-| `SUPABASE_URL` | `https://xyz.supabase.co` | Supabase project URL (for storage client) |
-| `SUPABASE_SERVICE_KEY` | `eyJ...` | Supabase service role key (bypasses RLS for storage operations) |
-
-If `RESEND_API_KEY` is not set, the mailer service logs a warning and all email functions return early without sending. This allows local development without email setup.
-
-The admin password is not an environment variable — it is stored as a bcrypt hash in the `admin_config` table under the key `admin_password_hash`. To change the password, update this row directly in the database.
-
----
-
-## 13. Deployment
-
-### Frontend — Vercel
-
-**Repository**: same monorepo  
-**Build command**: `npm run build` (Vite)  
-**Output directory**: `dist`  
-**Framework preset**: Vite  
-**Environment variables set in Vercel dashboard**: `VITE_API_BASE_URL`
-
-All routes fall back to `index.html` (SPA routing). Vercel handles this automatically for Vite projects.
-
-### Backend — Render
-
-**Repository**: `backend/` subdirectory of the monorepo  
-**Build command**: `npm run build` (TypeScript compile)  
-**Start command**: `npm start` (runs compiled `dist/index.js`)  
-**Instance type**: Free tier  
-**Environment variables set in Render dashboard**: `DATABASE_URL`, `JWT_SECRET`, `RESEND_API_KEY`, `CORS_ORIGINS`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`
-
-**Cold start mitigation**: Render free tier suspends the service after 15 minutes of inactivity. `BoardPage` sends a keepalive ping to `GET /api/health` every 10 minutes while a student has a board open. This prevents the backend from sleeping during active sessions.
-
-The first request after a cold start may take 30–60 seconds to respond while the Node.js process boots.
-
-### Database & Storage — Supabase
-
-**Database**: PostgreSQL, hosted on Supabase. Schema auto-migrates on every backend startup via `CREATE TABLE IF NOT EXISTS` statements in `backend/src/db/schema.ts`.
-
-**Storage**: Supabase Storage. Files are organized in paths:
-- `gallery/` — Artwork media files
-- `covers/` — Video and PDF cover images
-- `team/` — Team member photos
-- `canvas-files/` — tldraw canvas image assets
-
-Supabase Storage provides public CDN URLs for all uploaded files. The `getStorage().getPublicUrl(path)` helper constructs these URLs.
-
-Thumbnail resizing for gallery images is done via Supabase's image transform API: the frontend appends `?width=300&quality=75` to image URLs, which Supabase processes on the CDN edge.
-
----
-
-## 14. Known Issues & Deferred Work
-
-### 1. Render Free Tier Cold Start Latency
-
-The backend is hosted on Render's free tier, which suspends the process after 15 minutes of inactivity. The `BoardPage` keepalive ping (every 10 minutes) only prevents sleep while a board is open. On first page load of the day — or after any other 15-minute idle period — the backend takes 30–60 seconds to respond. Users see loading spinners or errors during this window. The `LiveSessionBanner` poll and `AppDataProvider` parallel fetch will both fail silently until the backend is warm.
-
-**Mitigation**: Upgrade to a paid Render instance, or add a global keepalive cron (e.g. an external uptime monitoring service pinging `/api/health` every 10 minutes).
-
-### 2. HeroScroll Component Built but Reverted
-
-`src/app/components/HeroScroll.tsx` is a fully built animated homepage section that shows the featured artworks in a scroll-driven tilt animation grid. It was added (commit `7525137`) and subsequently reverted (commit `5dff31c`) back to the original homepage layout. The component still exists in the codebase but is not imported or rendered anywhere. The final `157b70b` commit fixed the spring physics and perspective issues before it was reverted.
-
-**Deferred**: If the HeroScroll section is desired in future, re-import it in `HomePage.tsx` between `<Hero />` and `<FeaturedMarquee />`. The component is complete and should work — it uses `useSpring` for smooth scroll-driven transforms and `perspective: 1200` on the parent container.
-
-### 3. Moodboard Canvas Has No Real-Time Sync
-
-The tldraw canvas saves state to the backend (`PUT /api/boards/:id/canvas`) and loads it on mount (`GET /api/boards/:id/canvas`). There is no WebSocket or real-time sync channel between concurrent editors. The `room_id` column in the `boards` table is reserved for this purpose but is not yet used. If two collaborators edit the same board simultaneously, the last one to save wins and the other's changes are overwritten.
-
-**Deferred**: Implement WebSocket-based real-time collaboration using the `room_id` field as a session key (e.g., with tldraw's built-in sync adapter or a separate Partykit/Socket.io server).
-
-### 4. Palette Studio Is Behind a Feature Flag and Unreachable
-
-The Palette Studio page (`src/app/pages/PalettePage.tsx`, route `/palette`) exists in the router under the comment `// PALETTE_STUDIO_FEATURE` but is not linked in the Navigation or any other component. The `PaletteStudio` component is functional but the feature is not considered ready for general access. There is no admin toggle for it.
-
-**Deferred**: When ready, add a navigation link to `/palette` in `Navigation.tsx` and remove the feature-flag comment in `routes.tsx`.
-
----
-
-## 15. Future Features Discussed
-
-### Real-Time Collaborative Canvas
-
-The moodboard system has the database infrastructure (`room_id` in `boards`, the `board_members` table) for real-time collaboration but currently uses save-on-demand. A future iteration would integrate tldraw's sync engine or a separate WebSocket relay (Partykit, Liveblocks, or a custom Socket.io server) to enable true simultaneous editing with cursor presence.
-
-### HeroScroll Animated Section
-
-The built-but-reverted `HeroScroll.tsx` component would add a scroll-driven section between the hero and the featured marquee on the homepage. It shows the featured artworks as a grid with 3D tilt animation driven by scroll position. The implementation is complete; re-enabling requires one import and one JSX line in `HomePage.tsx`.
-
-### Interactive 3D Robot on Hero
-
-`src/app/components/InteractiveRobotSpline.tsx` exists in the codebase, suggesting a 3D robot model (Spline-based) was explored for the hero section as a more engaging visual element than the current PixelTrail interaction. This was not shipped.
-
-### Figma Component Integration
-
-A `figma/` subdirectory exists inside `src/app/components/`, indicating Figma-related tooling or component export scaffolding was explored. No detail on what this contains was established in the initial codebase review.
-
-### Audience Group Management Beyond Coordinators
-
-The `audience_groups` and `audience_group_members` tables support arbitrary groups (not just coordinators). The current UI only surfaces the `coordinators` group. A future admin feature could let admins create custom audience groups (e.g. by year, by domain interest) and target live sessions to specific groups.
-
-### Per-Domain Leaderboard
-
-The XP system tracks points per student but there is no leaderboard page. A leaderboard showing top students by XP (with privacy options — show name or roll only) was discussed as a future engagement feature.
-
-### Resource Upload by Domain
-
-The Resources page currently shows static or domain-derived content. A future iteration could allow admins to upload curated design resources (PDFs, links, templates) per domain, with the same storage pipeline used for artworks.
-
-### Admin Analytics Dashboard
-
-Currently the admin has session join counts and event registration counts but no unified analytics view. A future analytics tab could show: total registrations over time, most liked artworks, most active domains, event attendance rates, and email open rates.
+| GET | `/public` | 🔓 | `{ public_meet_enabled: 'true'\|'false' }`. |
+| GET | `/` | 🛡 | All settings as `{ key: value }`. |
+| PUT | `/` | 🛡 | Body `{ key: value, … }` — upserts. |
+| POST | `/verify-passcode` | 🔓 | Body `{ passcode }` → `{ success, token }` (24h base64 token). |
