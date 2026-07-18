@@ -1,8 +1,13 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, lazy, Suspense } from "react";
+import { Loader2 } from "lucide-react";
 import { useLocation, useSearchParams } from "react-router";
 import PaletteStudio from "../components/PaletteStudio";
 import { HalftoneStudio } from "../components/HalftoneStudio";
 import { SvgConverter } from "../components/SvgConverter";
+
+// Lazy — its Phase-2 model + ONNX runtime must never enter the main bundle,
+// so the whole tool (and its worker) is code-split behind this dynamic import.
+const BackgroundRemover = lazy(() => import("../components/background-removal/BackgroundRemover"));
 
 const T = {
   get canvas()       { return "var(--color-canvas)"; },
@@ -1357,6 +1362,7 @@ const TOOLS = [
   { id:"grid",     icon:"⊞",  label:"Grid Calculator",   comp:GridCalculator       },
   { id:"halftone", icon:"∷",  label:"Halftone",          comp:HalftoneStudio       },
   { id:"svg",      icon:"⬡",  label:"SVG Tools",         comp:SvgConverter         },
+  { id:"bg",       icon:"◫",  label:"Background Remover", comp:BackgroundRemover    },
 ];
 
 const SUBTITLES: Record<string,string> = {
@@ -1367,6 +1373,7 @@ const SUBTITLES: Record<string,string> = {
   grid:     "9 grid systems from Swiss Modular to Radial and Isometric — built for poster and print design.",
   halftone: "Convert images into halftone patterns — lines, dots, or squares. Adjust angle, spacing, contrast, brightness, and colors.",
   svg:      "Trace any image into a scalable SVG line drawing — adjust threshold, fill, invert, and edge dilation, then download.",
+  bg:       "Remove the background from an image entirely in your browser — private, client-side, nothing uploaded. Export a transparent PNG.",
 };
 
 // ── Shell ─────────────────────────────────────────────────────────────────────
@@ -1414,7 +1421,13 @@ export default function DesignStudio() {
           </h1>
           <p style={{fontSize:16,fontWeight:400,color:"var(--color-ink-muted)",lineHeight:1.5,letterSpacing:"-0.01em",margin:0,fontFamily:"var(--font-body)"}}>{SUBTITLES[active]}</p>
         </div>
-        <Tool/>
+        <Suspense fallback={
+          <div style={{display:"flex",justifyContent:"center",alignItems:"center",minHeight:320,color:"var(--color-ink-muted)"}}>
+            <Loader2 size={26} className="animate-spin" />
+          </div>
+        }>
+          <Tool/>
+        </Suspense>
       </main>
     </div>
   );

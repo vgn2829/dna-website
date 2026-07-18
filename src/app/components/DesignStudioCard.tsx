@@ -13,6 +13,7 @@ export function DesignStudioCard() {
     { icon: '⊞',  label: 'Grid Calculator',  tab: 'grid'     },
     { icon: '∷',  label: 'Halftone',         tab: 'halftone' },
     { icon: '⬡',  label: 'SVG Tools',        tab: 'svg'      },
+    { icon: '◫',  label: 'Background Remover', tab: 'bg'     },
   ];
 
   return (
