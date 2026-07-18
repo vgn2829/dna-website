@@ -170,8 +170,9 @@ export default function BackgroundRemover() {
         }}
       >
         <Info size={15} style={{ flexShrink: 0 }} />
-        Preview scaffold — the cut-out uses a placeholder shape, not real subject
-        detection yet. The on-device AI model arrives in a later phase.
+        Runs a real on-device model (General). First run downloads the model
+        (~18 MB, one-time). Portrait mode, progress, and full limitation notes
+        are being wired next.
       </div>
 
       {!source ? (

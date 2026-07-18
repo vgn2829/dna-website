@@ -5,6 +5,9 @@
 /** Lifecycle of a background-removal run. */
 export type RemovalStatus = 'idle' | 'processing' | 'done' | 'error';
 
+/** Which segmentation model to run. */
+export type ModelId = 'general' | 'portrait';
+
 /** Backdrop composited behind the cut-out subject (display + export). */
 export type Backdrop =
   | { kind: 'transparent' }
@@ -28,10 +31,20 @@ export interface SourceImage {
 export interface SegmentRequest {
   type: 'segment';
   id: number;
+  model: ModelId;
   width: number;
   height: number;
   /** RGBA pixel buffer, transferred to the worker. */
   rgba: ArrayBuffer;
+}
+
+/** Progress ticks so the UI can show download / init / inference phases. */
+export interface SegmentProgress {
+  type: 'progress';
+  id: number;
+  phase: 'download' | 'init' | 'infer';
+  /** 0–100 for downloads with a known length; omitted when indeterminate. */
+  pct?: number;
 }
 
 export interface SegmentResult {
@@ -48,4 +61,4 @@ export interface SegmentError {
 }
 
 export type WorkerRequest = SegmentRequest;
-export type WorkerResponse = SegmentResult | SegmentError;
+export type WorkerResponse = SegmentProgress | SegmentResult | SegmentError;

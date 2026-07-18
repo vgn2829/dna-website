@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RemovalStatus, SegmentRequest, WorkerResponse } from './types';
+import type { ModelId, RemovalStatus, SegmentRequest, WorkerResponse } from './types';
 
 interface Pending {
   resolve: (mask: Uint8ClampedArray) => void;
   reject: (err: Error) => void;
+}
+
+export interface RemovalProgress {
+  phase: 'download' | 'init' | 'infer';
+  pct?: number;
 }
 
 /**
@@ -20,15 +25,21 @@ export function useBackgroundRemoval() {
   const pending = useRef<Map<number, Pending>>(new Map());
   const [status, setStatus] = useState<RemovalStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<RemovalProgress | null>(null);
 
   const ensureWorker = useCallback(() => {
     if (workerRef.current) return workerRef.current;
     const worker = new Worker(new URL('./bg-removal.worker.ts', import.meta.url), { type: 'module' });
     worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
       const msg = e.data;
+      if (msg.type === 'progress') {
+        setProgress({ phase: msg.phase, pct: msg.pct });
+        return;
+      }
       const entry = pending.current.get(msg.id);
       if (!entry) return;
       pending.current.delete(msg.id);
+      setProgress(null);
       if (msg.type === 'result') entry.resolve(new Uint8ClampedArray(msg.mask));
       else entry.reject(new Error(msg.message));
     };
@@ -41,9 +52,10 @@ export function useBackgroundRemoval() {
   }, []);
 
   const removeBackground = useCallback(
-    (image: ImageData): Promise<Uint8ClampedArray> => {
+    (image: ImageData, model: ModelId = 'general'): Promise<Uint8ClampedArray> => {
       setStatus('processing');
       setError(null);
+      setProgress(null);
       const worker = ensureWorker();
       const id = ++idRef.current;
       const rgba = image.data.slice().buffer; // copy so the caller keeps its pixels
@@ -59,7 +71,7 @@ export function useBackgroundRemoval() {
             reject(err);
           },
         });
-        const req: SegmentRequest = { type: 'segment', id, width: image.width, height: image.height, rgba };
+        const req: SegmentRequest = { type: 'segment', id, model, width: image.width, height: image.height, rgba };
         worker.postMessage(req, [rgba]);
       });
     },
@@ -69,6 +81,7 @@ export function useBackgroundRemoval() {
   const reset = useCallback(() => {
     setStatus('idle');
     setError(null);
+    setProgress(null);
   }, []);
 
   useEffect(
@@ -80,5 +93,5 @@ export function useBackgroundRemoval() {
     [],
   );
 
-  return { status, error, removeBackground, reset };
+  return { status, error, progress, removeBackground, reset };
 }
