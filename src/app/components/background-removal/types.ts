@@ -25,10 +25,9 @@ export interface SourceImage {
 }
 
 // ── Worker message protocol ──────────────────────────────────────────────────
-// The worker receives raw RGBA pixels and returns a single-channel alpha mask
-// (0 = background, 255 = foreground). Phase 1 produces the mask with a non-AI
-// placeholder; Phase 2 swaps the mask source for an ONNX segmentation model
-// WITHOUT changing this protocol.
+// The worker receives raw RGBA pixels and runs an ONNX segmentation model,
+// returning a single-channel alpha mask (0 = background, 255 = foreground).
+// The protocol is model-agnostic — `model` selects which network runs.
 
 export interface SegmentRequest {
   type: 'segment';

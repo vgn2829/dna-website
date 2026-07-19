@@ -14,10 +14,8 @@ export interface RemovalProgress {
 /**
  * Orchestrates the segmentation Web Worker: lazily spawns it on first use,
  * tracks per-request promises by id, and exposes status/error to the UI.
- * The worker is terminated on unmount.
- *
- * In Phase 1 the worker returns a placeholder mask; this hook is unchanged by
- * Phase 2, which only swaps what the worker computes.
+ * The worker is terminated on unmount. Progress messages surface the
+ * download / init / inference phases to the UI.
  */
 export function useBackgroundRemoval() {
   const workerRef = useRef<Worker | null>(null);
