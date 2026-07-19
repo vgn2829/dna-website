@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Upload, Download, RotateCcw, Loader2, ImageOff, AlertTriangle, Info, Brush, Eraser } from 'lucide-react';
+import { Upload, Download, RotateCcw, Loader2, ImageOff, AlertTriangle, Info, Brush, Eraser, Undo2, Redo2 } from 'lucide-react';
 import type { SourceImage, ModelId } from './types';
 import { MODELS } from './models';
 import { useImageUpload } from './useImageUpload';
@@ -120,6 +120,10 @@ const BACKDROPS = [
   { id: 'black', label: 'Black', swatch: '#000000' },
 ];
 
+// Undo/redo depth. Each step is a full-mask snapshot (~W×H bytes), so this caps
+// the memory the history can hold — see the memory note in the PR.
+const HISTORY_CAP = 15;
+
 export default function BackgroundRemover() {
   const [source, setSource] = useState<SourceImage | null>(null);
   const [imageData, setImageData] = useState<ImageData | null>(null);
@@ -133,21 +137,84 @@ export default function BackgroundRemover() {
   const [brushSize, setBrushSize] = useState(48);
   const [brushHard, setBrushHard] = useState(false);
 
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
   const displayRef = useRef<HTMLCanvasElement>(null);
   const ringRef = useRef<HTMLDivElement>(null);
   // Mutable buffers read by the imperative brush handlers (no stale closures).
   const maskRef = useRef<Uint8ClampedArray | null>(null);
   const imageDataRef = useRef<ImageData | null>(null);
   const strokeRef = useRef<{ x: number; y: number } | null>(null);
+  const strokeChangedRef = useRef(false);
+  // Undo/redo: full-mask snapshots. index points at the current state.
+  const historyRef = useRef<{ stack: Uint8ClampedArray[]; index: number }>({ stack: [], index: -1 });
 
   const { status, error, progress, removeBackground, reset: resetEngine } = useBackgroundRemoval();
   imageDataRef.current = imageData;
   const refining = brushMode !== 'off';
 
+  const syncHistoryFlags = useCallback(() => {
+    const h = historyRef.current;
+    setCanUndo(h.index > 0);
+    setCanRedo(h.index < h.stack.length - 1);
+  }, []);
+
+  /** Start a fresh history with the given mask as the baseline (index 0). */
+  const resetHistory = useCallback(
+    (mask: Uint8ClampedArray) => {
+      historyRef.current = { stack: [new Uint8ClampedArray(mask)], index: 0 };
+      syncHistoryFlags();
+    },
+    [syncHistoryFlags],
+  );
+
+  /** Push a completed stroke's state, dropping any redo tail and capping depth. */
+  const pushHistory = useCallback(
+    (mask: Uint8ClampedArray) => {
+      const h = historyRef.current;
+      h.stack = h.stack.slice(0, h.index + 1);
+      h.stack.push(new Uint8ClampedArray(mask));
+      h.index = h.stack.length - 1;
+      if (h.stack.length > HISTORY_CAP) {
+        h.stack.shift();
+        h.index -= 1;
+      }
+      syncHistoryFlags();
+    },
+    [syncHistoryFlags],
+  );
+
+  /** Load a snapshot into the live mask and repaint the whole canvas. */
+  const restoreTo = useCallback((i: number) => {
+    const h = historyRef.current;
+    const img = imageDataRef.current;
+    const canvas = displayRef.current;
+    if (!img || !canvas || i < 0 || i >= h.stack.length) return;
+    maskRef.current = new Uint8ClampedArray(h.stack[i]); // fresh copy — snapshots stay immutable
+    h.index = i;
+    canvas.getContext('2d')!.putImageData(applyMask(img, maskRef.current), 0, 0);
+    setCanUndo(i > 0);
+    setCanRedo(i < h.stack.length - 1);
+  }, []);
+
+  const undo = useCallback(() => {
+    const h = historyRef.current;
+    if (h.index > 0) restoreTo(h.index - 1);
+  }, [restoreTo]);
+
+  const redo = useCallback(() => {
+    const h = historyRef.current;
+    if (h.index < h.stack.length - 1) restoreTo(h.index + 1);
+  }, [restoreTo]);
+
   const clearResult = useCallback(() => {
     maskRef.current = null;
     setHasResult(false);
     setBrushMode('off');
+    historyRef.current = { stack: [], index: -1 };
+    setCanUndo(false);
+    setCanRedo(false);
   }, []);
 
   const changeModel = useCallback(
@@ -190,16 +257,38 @@ export default function BackgroundRemover() {
     }
   }, [source, hasResult]);
 
+  // Undo/redo keyboard shortcuts, active only while a result exists.
+  useEffect(() => {
+    if (!hasResult) return;
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      const k = e.key.toLowerCase();
+      if (k === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (k === 'y' || (k === 'z' && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [hasResult, undo, redo]);
+
   const handleRemove = useCallback(async () => {
     if (!imageData) return;
     try {
       const mask = await removeBackground(imageData, model);
       maskRef.current = mask;
+      resetHistory(mask);
       setHasResult(true);
     } catch {
       /* status/error surfaced by the hook */
     }
-  }, [imageData, model, removeBackground]);
+  }, [imageData, model, removeBackground, resetHistory]);
 
   const handleDownload = useCallback(async () => {
     const canvas = displayRef.current;
@@ -255,6 +344,7 @@ export default function BackgroundRemover() {
     const r = brushSize / 2;
     const dirty = stampBrush(mask, img.width, img.height, cx, cy, r, hardness, brushMode);
     recompositeRegion(canvas, img, mask, dirty);
+    strokeChangedRef.current = true;
     return dirty;
   };
 
@@ -268,6 +358,7 @@ export default function BackgroundRemover() {
     }
     const { x, y } = imgCoords(e);
     strokeRef.current = { x, y };
+    strokeChangedRef.current = false;
     stamp(x, y);
     positionRing(e);
   };
@@ -289,6 +380,10 @@ export default function BackgroundRemover() {
 
   const onPointerUp = (e: React.PointerEvent) => {
     strokeRef.current = null;
+    if (strokeChangedRef.current && maskRef.current) {
+      pushHistory(maskRef.current); // snapshot the completed stroke, not per-move
+      strokeChangedRef.current = false;
+    }
     try {
       (e.currentTarget as HTMLCanvasElement).releasePointerCapture(e.pointerId);
     } catch {
@@ -483,6 +578,25 @@ export default function BackgroundRemover() {
                   </button>
                   <button onClick={() => setBrushMode((m) => (m === 'erase' ? 'off' : 'erase'))} style={pill(brushMode === 'erase')}>
                     <Eraser size={14} /> Erase
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                  <button
+                    onClick={undo}
+                    disabled={!canUndo}
+                    title="Undo (⌘/Ctrl+Z)"
+                    style={{ ...ghostBtn, flex: 1, padding: '8px 0', fontSize: 13, opacity: canUndo ? 1 : 0.45, cursor: canUndo ? 'pointer' : 'not-allowed' }}
+                  >
+                    <Undo2 size={14} /> Undo
+                  </button>
+                  <button
+                    onClick={redo}
+                    disabled={!canRedo}
+                    title="Redo (⌘/Ctrl+Shift+Z)"
+                    style={{ ...ghostBtn, flex: 1, padding: '8px 0', fontSize: 13, opacity: canRedo ? 1 : 0.45, cursor: canRedo ? 'pointer' : 'not-allowed' }}
+                  >
+                    <Redo2 size={14} /> Redo
                   </button>
                 </div>
 
