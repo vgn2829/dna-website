@@ -1,8 +1,13 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, lazy, Suspense } from "react";
+import { Loader2 } from "lucide-react";
 import { useLocation, useSearchParams } from "react-router";
 import PaletteStudio from "../components/PaletteStudio";
 import { HalftoneStudio } from "../components/HalftoneStudio";
 import { SvgConverter } from "../components/SvgConverter";
+
+// Lazy — its Phase-2 model + ONNX runtime must never enter the main bundle,
+// so the whole tool (and its worker) is code-split behind this dynamic import.
+const BackgroundRemover = lazy(() => import("../components/background-removal/BackgroundRemover"));
 
 const T = {
   get canvas()       { return "var(--color-canvas)"; },
@@ -694,11 +699,66 @@ function ImageConverter(){
   const [converted,setConverted]=useState<any>(null);
   const [info,setInfo]=useState<any>(null);
   const [converting,setConverting]=useState(false);
+  const [pdfDoc,setPdfDoc]=useState<any>(null);
+  const [pageCount,setPageCount]=useState(0);
+  const [pageNum,setPageNum]=useState(1);
   const canvasRef=useRef<HTMLCanvasElement>(null);
 
+  function measure(url: string, extra: any){
+    const img=new Image();
+    img.onload=()=>setInfo((i:any)=>({...i,...extra,w:img.naturalWidth,h:img.naturalHeight}));
+    img.src=url;
+  }
+
+  // Renders one PDF page to a raster at 2x for a crisp result.
+  async function renderPdfPage(doc: any, n: number){
+    const page=await doc.getPage(n);
+    const viewport=page.getViewport({scale:2});
+    const c=document.createElement("canvas");
+    c.width=viewport.width;c.height=viewport.height;
+    await page.render({canvasContext:c.getContext("2d")!,viewport,canvas:c}).promise;
+    return c.toDataURL("image/png");
+  }
+
+  async function loadPdf(f: File){
+    setConverting(true);
+    try{
+      // pdf.js is by far the heaviest dependency here, so both it and its
+      // worker are imported on demand — opening a PDF is the only thing that
+      // pays for them.
+      const pdfjs: any=await import("pdfjs-dist");
+      const worker: any=await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+      pdfjs.GlobalWorkerOptions.workerSrc=worker.default;
+      const doc=await pdfjs.getDocument({data:await f.arrayBuffer()}).promise;
+      setPdfDoc(doc);setPageCount(doc.numPages);setPageNum(1);
+      const url=await renderPdfPage(doc,1);
+      setPreview(url);
+      measure(url,{size:(f.size/1024).toFixed(1),name:f.name});
+    }catch{
+      setPreview(null);setInfo(null);setPdfDoc(null);setPageCount(0);
+    }
+    setConverting(false);
+  }
+
+  async function gotoPage(n: number){
+    if(!pdfDoc||n<1||n>pageCount)return;
+    setPageNum(n);setConverted(null);setConverting(true);
+    const url=await renderPdfPage(pdfDoc,n);
+    setPreview(url);
+    measure(url,{});
+    setConverting(false);
+  }
+
+  function reset(){
+    setPreview(null);setConverted(null);setInfo(null);
+    setPdfDoc(null);setPageCount(0);setPageNum(1);
+  }
+
   function loadFile(f: File|null){
-    if(!f||!f.type.startsWith("image/"))return;
-    setConverted(null);
+    if(!f)return;
+    setConverted(null);setPdfDoc(null);setPageCount(0);setPageNum(1);
+    if(f.type==="application/pdf"){loadPdf(f);return;}
+    if(!f.type.startsWith("image/"))return;
     const url=URL.createObjectURL(f);
     setPreview(url);
     const img=new Image();
@@ -709,11 +769,24 @@ function ImageConverter(){
     if(!preview||!canvasRef.current)return;
     setConverting(true);
     const img=new Image();
-    img.onload=()=>{
+    img.onload=async()=>{
       const cvs=canvasRef.current!;
       const w=Math.round(img.naturalWidth*scale/100),h=Math.round(img.naturalHeight*scale/100);
       cvs.width=w;cvs.height=h;
       cvs.getContext("2d")!.drawImage(img,0,0,w,h);
+      if(format==="application/pdf"){
+        // jsPDF is imported on demand so it never lands in the initial bundle —
+        // only visitors who actually export a PDF pay for it.
+        const {jsPDF}=await import("jspdf");
+        const data=cvs.toDataURL("image/png");
+        const doc=new jsPDF({orientation:w>h?"landscape":"portrait",unit:"px",format:[w,h]});
+        doc.addImage(data,"PNG",0,0,w,h);
+        const blob=doc.output("blob");
+        // A PDF blob can't render in <img>, so keep the raster for the preview pane.
+        setConverted({url:URL.createObjectURL(blob),preview:data,size:(blob.size/1024).toFixed(1),w,h,format,ext:"pdf"});
+        setConverting(false);
+        return;
+      }
       const q=format==="image/png"?1:quality/100;
       cvs.toBlob(blob=>{
         if(!blob)return;
@@ -735,13 +808,13 @@ function ImageConverter(){
               <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
             </svg>
           </div>
-          <span style={{fontFamily:"var(--font-body)",fontSize:16,fontWeight:500,color:T.ink}}>Drop an image here</span>
-          <span style={{fontFamily:"var(--font-body)",fontSize:13,color:T.inkMuted}}>or click to browse — PNG, JPEG, WebP</span>
-          <input id="img-inp" type="file" accept="image/*" style={{display:"none"}} onChange={(e:any)=>loadFile(e.target.files[0])}/>
+          <span style={{fontFamily:"var(--font-body)",fontSize:16,fontWeight:500,color:T.ink}}>Drop an image or PDF here</span>
+          <span style={{fontFamily:"var(--font-body)",fontSize:13,color:T.inkMuted}}>or click to browse — PNG, JPEG, WebP, PDF</span>
+          <input id="img-inp" type="file" accept="image/*,application/pdf" style={{display:"none"}} onChange={(e:any)=>loadFile(e.target.files[0])}/>
         </div>
       ):(
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-          {[{label:"Original",src:preview,meta:info?`${info.w}×${info.h} · ${info.size}KB`:""},{label:"Output",src:converted?.url,meta:converted?`${converted.w}×${converted.h} · ${converted.size}KB`:""}].map((p:any)=>(
+          {[{label:"Original",src:preview,meta:info?`${info.w}×${info.h} · ${info.size}KB`:""},{label:"Output",src:converted?.preview||converted?.url,meta:converted?`${converted.w}×${converted.h} · ${converted.size}KB`:""}].map((p:any)=>(
             <div key={p.label} style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",overflow:"hidden",border:"1px solid rgba(255,255,255,0.06)"}}>
               <div style={{padding:"10px 16px",borderBottom:`1px solid ${T.hairline}`,display:"flex",justifyContent:"space-between"}}>
                 <span style={{fontFamily:"var(--font-body)",fontSize:12,color:T.inkMuted}}>{p.label}</span>
@@ -760,15 +833,26 @@ function ImageConverter(){
           <div>
             <label style={ss.label}>Format</label>
             <div style={{display:"flex",gap:8}}>
-              {[["image/png","PNG"],["image/jpeg","JPEG"],["image/webp","WebP"]].map(([m,l])=>(
+              {[["image/png","PNG"],["image/jpeg","JPEG"],["image/webp","WebP"],["application/pdf","PDF"]].map(([m,l])=>(
                 <button key={m} onClick={()=>setFormat(m)} style={{padding:"6px 14px",borderRadius:"var(--radius-pill)",border:"none",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:12,fontWeight:format===m?500:400,background:format===m?"var(--color-inverse-canvas)":"var(--color-surface-1)",color:format===m?"var(--color-canvas)":"var(--color-ink-muted)"}}>{l}</button>
               ))}
             </div>
           </div>
-          {format!=="image/png"&&<div><label style={ss.label}>Quality — {quality}%</label><input type="range" min={10} max={100} value={quality} onChange={(e:any)=>setQuality(+e.target.value)} style={{width:120,accentColor:T.accentBlue}}/></div>}
+          {(format==="image/jpeg"||format==="image/webp")&&<div><label style={ss.label}>Quality — {quality}%</label><input type="range" min={10} max={100} value={quality} onChange={(e:any)=>setQuality(+e.target.value)} style={{width:120,accentColor:T.accentBlue}}/></div>}
           <div><label style={ss.label}>Scale — {scale}%</label><input type="range" min={10} max={200} value={scale} onChange={(e:any)=>setScale(+e.target.value)} style={{width:120,accentColor:T.accentBlue}}/></div>
+          {pageCount>1&&(
+            <div>
+              <label style={ss.label}>Page — {pageNum} / {pageCount}</label>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>gotoPage(pageNum-1)} disabled={pageNum<=1}
+                  style={{...ss.btnSec,padding:"6px 14px",opacity:pageNum<=1?0.4:1,cursor:pageNum<=1?"not-allowed":"pointer"}}>‹</button>
+                <button onClick={()=>gotoPage(pageNum+1)} disabled={pageNum>=pageCount}
+                  style={{...ss.btnSec,padding:"6px 14px",opacity:pageNum>=pageCount?0.4:1,cursor:pageNum>=pageCount?"not-allowed":"pointer"}}>›</button>
+              </div>
+            </div>
+          )}
           <div style={{display:"flex",gap:10,marginLeft:"auto"}}>
-            <button onClick={()=>{setPreview(null);setConverted(null);setInfo(null);}} style={ss.btnSec}>↺ Reset</button>
+            <button onClick={reset} style={ss.btnSec}>↺ Reset</button>
             <button onClick={convert} style={ss.btnPri}>{converting?"Converting…":"Convert"}</button>
             {converted&&<a href={converted.url} download={`converted.${converted.ext}`} style={{...ss.btnPri,textDecoration:"none",display:"inline-flex",alignItems:"center"}}>↓ Download</a>}
           </div>
@@ -1277,17 +1361,19 @@ const TOOLS = [
   { id:"image",    icon:"↔",  label:"Image Converter",   comp:ImageConverter       },
   { id:"grid",     icon:"⊞",  label:"Grid Calculator",   comp:GridCalculator       },
   { id:"halftone", icon:"∷",  label:"Halftone",          comp:HalftoneStudio       },
-  { id:"svg",      icon:"⬡",  label:"Image → SVG",       comp:SvgConverter         },
+  { id:"svg",      icon:"⬡",  label:"SVG Tools",         comp:SvgConverter         },
+  { id:"bg",       icon:"◫",  label:"Background Remover", comp:BackgroundRemover    },
 ];
 
 const SUBTITLES: Record<string,string> = {
   palette:  "Generate accessible OKLCH color palettes with WCAG + APCA contrast scoring and color blind simulation.",
   font:     "Infinite Google Font pairings — regenerate to explore, pick a strategy, compare by typographic score.",
   contrast: "WCAG AA/AAA live check. When failing, get harmonious color suggestions from color theory.",
-  image:    "Convert, resize, and compress images client-side — private, instant, no upload needed.",
+  image:    "Convert, resize, and compress images client-side — export to PNG, JPEG, WebP or PDF, and turn PDF pages back into images. Private, instant, no upload needed.",
   grid:     "9 grid systems from Swiss Modular to Radial and Isometric — built for poster and print design.",
   halftone: "Convert images into halftone patterns — lines, dots, or squares. Adjust angle, spacing, contrast, brightness, and colors.",
   svg:      "Trace any image into a scalable SVG line drawing — adjust threshold, fill, invert, and edge dilation, then download.",
+  bg:       "Remove the background from an image entirely in your browser — private, client-side, nothing uploaded. Export a transparent PNG.",
 };
 
 // ── Shell ─────────────────────────────────────────────────────────────────────
@@ -1335,7 +1421,13 @@ export default function DesignStudio() {
           </h1>
           <p style={{fontSize:16,fontWeight:400,color:"var(--color-ink-muted)",lineHeight:1.5,letterSpacing:"-0.01em",margin:0,fontFamily:"var(--font-body)"}}>{SUBTITLES[active]}</p>
         </div>
-        <Tool/>
+        <Suspense fallback={
+          <div style={{display:"flex",justifyContent:"center",alignItems:"center",minHeight:320,color:"var(--color-ink-muted)"}}>
+            <Loader2 size={26} className="animate-spin" />
+          </div>
+        }>
+          <Tool/>
+        </Suspense>
       </main>
     </div>
   );

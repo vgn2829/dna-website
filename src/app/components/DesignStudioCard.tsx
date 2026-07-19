@@ -4,12 +4,16 @@ import { useNavigate } from 'react-router';
 export function DesignStudioCard() {
   const navigate = useNavigate();
 
+  // Keep in sync with the TOOLS registry in pages/DesignStudioPage.tsx.
   const tools = [
     { icon: '',   label: 'Palette Studio',   tab: 'palette'  },
     { icon: 'Aa', label: 'Font Pairing',     tab: 'font'     },
     { icon: '◑',  label: 'Contrast Checker', tab: 'contrast' },
     { icon: '↔',  label: 'Image Converter',  tab: 'image'    },
     { icon: '⊞',  label: 'Grid Calculator',  tab: 'grid'     },
+    { icon: '∷',  label: 'Halftone',         tab: 'halftone' },
+    { icon: '⬡',  label: 'SVG Tools',        tab: 'svg'      },
+    { icon: '◫',  label: 'Background Remover', tab: 'bg'     },
   ];
 
   return (
@@ -42,8 +46,9 @@ export function DesignStudioCard() {
             </h2>
             <p className="type-body" style={{ maxWidth: 560 }}>
               A suite of free design tools — generate accessible color palettes,
-              pair fonts, check contrast ratios, convert images, and calculate
-              grid systems, all in one place.
+              pair fonts, check contrast ratios, convert between images, PDFs
+              and SVGs, calculate grid systems, and build halftone patterns,
+              all in one place.
             </p>
           </div>
 

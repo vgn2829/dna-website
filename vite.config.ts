@@ -36,6 +36,9 @@ export default defineConfig({
 
   optimizeDeps: {
     include: ['tldraw'],
+    // ORT ships its own WASM loader; let it be served as emitted assets rather
+    // than pre-bundled by esbuild.
+    exclude: ['onnxruntime-web'],
     esbuildOptions: {
       define: {
         global: 'globalThis',
