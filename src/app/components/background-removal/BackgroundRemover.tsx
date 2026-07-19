@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Upload, Download, RotateCcw, Loader2, ImageOff, AlertTriangle, Info } from 'lucide-react';
-import type { Backdrop, SourceImage, ModelId } from './types';
+import { Upload, Download, RotateCcw, Loader2, ImageOff, AlertTriangle, Info, Brush, Eraser } from 'lucide-react';
+import type { SourceImage, ModelId } from './types';
 import { MODELS } from './models';
 import { useImageUpload } from './useImageUpload';
 import { useBackgroundRemoval, type RemovalProgress } from './useBackgroundRemoval';
@@ -8,12 +8,11 @@ import {
   loadSourceImage,
   bitmapToImageData,
   applyMask,
-  imageDataToCanvas,
-  paintBackdrop,
   buildExportCanvas,
   canvasToPngBlob,
   downloadBlob,
 } from './compositing';
+import { stampBrush, recompositeRegion, type BrushMode } from './refine';
 
 // ── Local style objects — same inline-CSS-var convention as the other tools ──
 const card = {
@@ -72,8 +71,12 @@ const ghostBtn = {
   fontFamily: 'var(--font-body)',
 } as const;
 
-const modelPill = (active: boolean) => ({
+const pill = (active: boolean) => ({
   flex: 1,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 6,
   padding: '8px 0',
   borderRadius: 'var(--radius-md)',
   cursor: 'pointer',
@@ -84,6 +87,24 @@ const modelPill = (active: boolean) => ({
   fontWeight: active ? 600 : 500,
   fontFamily: 'var(--font-body)',
 });
+const edgeBtn = (active: boolean) => ({
+  padding: '5px 12px',
+  borderRadius: 'var(--radius-pill)',
+  cursor: 'pointer',
+  border: '1px solid var(--color-hairline)',
+  background: active ? 'var(--color-brand)' : 'transparent',
+  color: active ? '#fff' : 'var(--color-ink-muted)',
+  fontSize: 12,
+  fontWeight: 500,
+  fontFamily: 'var(--font-body)',
+});
+
+const CHECKER = 'repeating-conic-gradient(rgba(0,0,0,0.10) 0% 25%, rgba(255,255,255,0.10) 0% 50%) 50% / 16px 16px, var(--color-canvas)';
+function backdropCss(id: string): string {
+  if (id === 'white') return '#ffffff';
+  if (id === 'black') return '#000000';
+  return CHECKER;
+}
 
 /** Human-readable label for the current processing phase. */
 function progressLabel(p: RemovalProgress | null): string {
@@ -93,32 +114,49 @@ function progressLabel(p: RemovalProgress | null): string {
   return 'Analyzing…';
 }
 
-const BACKDROPS: { id: string; label: string; value: Backdrop; swatch: string }[] = [
-  { id: 'transparent', label: 'Transparent', value: { kind: 'transparent' }, swatch: 'checker' },
-  { id: 'white', label: 'White', value: { kind: 'color', color: '#ffffff' }, swatch: '#ffffff' },
-  { id: 'black', label: 'Black', value: { kind: 'color', color: '#000000' }, swatch: '#000000' },
+const BACKDROPS = [
+  { id: 'transparent', label: 'Transparent', swatch: 'checker' },
+  { id: 'white', label: 'White', swatch: '#ffffff' },
+  { id: 'black', label: 'Black', swatch: '#000000' },
 ];
 
 export default function BackgroundRemover() {
   const [source, setSource] = useState<SourceImage | null>(null);
   const [imageData, setImageData] = useState<ImageData | null>(null);
-  const [cutout, setCutout] = useState<HTMLCanvasElement | null>(null);
+  const [hasResult, setHasResult] = useState(false);
   const [backdropId, setBackdropId] = useState('transparent');
   const [reject, setReject] = useState<string | null>(null);
-  const displayRef = useRef<HTMLCanvasElement>(null);
-
   const [model, setModel] = useState<ModelId>('general');
-  const { status, error, progress, removeBackground, reset: resetEngine } = useBackgroundRemoval();
-  const backdrop = BACKDROPS.find((b) => b.id === backdropId)!.value;
 
-  // Switching model invalidates the current cut-out — the user re-runs.
+  // Refine (Phase A)
+  const [brushMode, setBrushMode] = useState<BrushMode | 'off'>('off');
+  const [brushSize, setBrushSize] = useState(48);
+  const [brushHard, setBrushHard] = useState(false);
+
+  const displayRef = useRef<HTMLCanvasElement>(null);
+  const ringRef = useRef<HTMLDivElement>(null);
+  // Mutable buffers read by the imperative brush handlers (no stale closures).
+  const maskRef = useRef<Uint8ClampedArray | null>(null);
+  const imageDataRef = useRef<ImageData | null>(null);
+  const strokeRef = useRef<{ x: number; y: number } | null>(null);
+
+  const { status, error, progress, removeBackground, reset: resetEngine } = useBackgroundRemoval();
+  imageDataRef.current = imageData;
+  const refining = brushMode !== 'off';
+
+  const clearResult = useCallback(() => {
+    maskRef.current = null;
+    setHasResult(false);
+    setBrushMode('off');
+  }, []);
+
   const changeModel = useCallback(
     (m: ModelId) => {
       setModel(m);
-      setCutout(null);
+      clearResult();
       resetEngine();
     },
-    [resetEngine],
+    [clearResult, resetEngine],
   );
 
   const handleFile = useCallback(
@@ -128,15 +166,16 @@ export default function BackgroundRemover() {
       const src = await loadSourceImage(file, name);
       setSource(src);
       setImageData(bitmapToImageData(src));
-      setCutout(null);
+      clearResult();
       resetEngine();
     },
-    [resetEngine],
+    [clearResult, resetEngine],
   );
 
   const upload = useImageUpload({ onImage: handleFile, onReject: setReject, enabled: true });
 
-  // Redraw the display canvas whenever the source, result, or backdrop changes.
+  // Full repaint on source change or when a result appears/disappears. Brush
+  // edits patch the canvas imperatively and don't retrigger this.
   useEffect(() => {
     const canvas = displayRef.current;
     if (!canvas || !source) return;
@@ -144,47 +183,127 @@ export default function BackgroundRemover() {
     canvas.height = source.height;
     const ctx = canvas.getContext('2d')!;
     ctx.clearRect(0, 0, source.width, source.height);
-    if (cutout) {
-      paintBackdrop(ctx, source.width, source.height, backdrop);
-      ctx.drawImage(cutout, 0, 0);
+    if (hasResult && maskRef.current && imageDataRef.current) {
+      ctx.putImageData(applyMask(imageDataRef.current, maskRef.current), 0, 0);
     } else {
       ctx.drawImage(source.bitmap, 0, 0);
     }
-  }, [source, cutout, backdrop]);
+  }, [source, hasResult]);
 
   const handleRemove = useCallback(async () => {
     if (!imageData) return;
     try {
       const mask = await removeBackground(imageData, model);
-      setCutout(imageDataToCanvas(applyMask(imageData, mask)));
+      maskRef.current = mask;
+      setHasResult(true);
     } catch {
       /* status/error surfaced by the hook */
     }
   }, [imageData, model, removeBackground]);
 
   const handleDownload = useCallback(async () => {
-    if (!cutout || !source) return;
-    const blob = await canvasToPngBlob(buildExportCanvas(cutout, backdrop));
+    const canvas = displayRef.current;
+    if (!canvas || !source || !hasResult) return;
+    const backdrop = backdropId === 'transparent'
+      ? ({ kind: 'transparent' } as const)
+      : ({ kind: 'color', color: backdropId === 'white' ? '#ffffff' : '#000000' } as const);
+    const blob = await canvasToPngBlob(buildExportCanvas(canvas, backdrop));
     downloadBlob(blob, `${source.name}-nobg.png`);
-  }, [cutout, source, backdrop]);
+  }, [source, hasResult, backdropId]);
 
   const handleReset = useCallback(() => {
     setSource(null);
     setImageData(null);
-    setCutout(null);
     setReject(null);
+    clearResult();
     resetEngine();
-  }, [resetEngine]);
+  }, [clearResult, resetEngine]);
+
+  // ── Brush interaction ──────────────────────────────────────────────────────
+  const imgCoords = (e: React.PointerEvent) => {
+    const c = displayRef.current!;
+    const rect = c.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (c.width / rect.width),
+      y: (e.clientY - rect.top) * (c.height / rect.height),
+    };
+  };
+
+  const positionRing = (e: React.PointerEvent) => {
+    const ring = ringRef.current;
+    const c = displayRef.current;
+    if (!ring || !c) return;
+    if (!refining) {
+      ring.style.display = 'none';
+      return;
+    }
+    const rect = c.getBoundingClientRect();
+    const diameter = brushSize * (rect.width / c.width);
+    ring.style.display = 'block';
+    ring.style.width = `${diameter}px`;
+    ring.style.height = `${diameter}px`;
+    ring.style.left = `${e.clientX - rect.left}px`;
+    ring.style.top = `${e.clientY - rect.top}px`;
+  };
+
+  const stamp = (cx: number, cy: number) => {
+    const mask = maskRef.current;
+    const img = imageDataRef.current;
+    const canvas = displayRef.current;
+    if (!mask || !img || !canvas || brushMode === 'off') return null;
+    const hardness = brushHard ? 1 : 0.35;
+    const r = brushSize / 2;
+    const dirty = stampBrush(mask, img.width, img.height, cx, cy, r, hardness, brushMode);
+    recompositeRegion(canvas, img, mask, dirty);
+    return dirty;
+  };
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (!refining || !hasResult) return;
+    e.preventDefault();
+    try {
+      (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* synthetic or already-captured pointer */
+    }
+    const { x, y } = imgCoords(e);
+    strokeRef.current = { x, y };
+    stamp(x, y);
+    positionRing(e);
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    positionRing(e);
+    if (!refining || !strokeRef.current) return;
+    const { x, y } = imgCoords(e);
+    const last = strokeRef.current;
+    const dist = Math.hypot(x - last.x, y - last.y);
+    const step = Math.max(1, brushSize * 0.2);
+    const n = Math.max(1, Math.floor(dist / step));
+    for (let i = 1; i <= n; i++) {
+      const t = i / n;
+      stamp(last.x + (x - last.x) * t, last.y + (y - last.y) * t);
+    }
+    strokeRef.current = { x, y };
+  };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    strokeRef.current = null;
+    try {
+      (e.currentTarget as HTMLCanvasElement).releasePointerCapture(e.pointerId);
+    } catch {
+      /* pointer may already be released */
+    }
+  };
+
+  const onPointerLeave = () => {
+    strokeRef.current = null;
+    if (ringRef.current) ringRef.current.style.display = 'none';
+  };
 
   return (
     <div style={{ width: '100%', maxWidth: 1100, margin: '0 auto', padding: '0 16px' }}>
-      <input
-        ref={upload.inputRef}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={upload.onInputChange}
-      />
+      <input ref={upload.inputRef} type="file" accept="image/*" hidden onChange={upload.onInputChange} />
 
       {/* Honest, persistent limitation note. */}
       <div
@@ -205,9 +324,9 @@ export default function BackgroundRemover() {
       >
         <Info size={15} style={{ flexShrink: 0, marginTop: 1 }} />
         <span>
-          Runs on your device — the image never leaves it. Results won't match paid
-          tools on the hardest cases: neither model cuts out <strong>true
-          transparency</strong> (glass, smoke) or very fine hair cleanly.
+          Runs on your device — the image never leaves it. Results won't match paid tools on the
+          hardest cases: neither model cuts out <strong>true transparency</strong> (glass, smoke) or
+          very fine hair cleanly. Use <strong>Refine</strong> to fix what the model misses.
         </span>
       </div>
 
@@ -240,17 +359,7 @@ export default function BackgroundRemover() {
             PNG, JPEG, WebP, GIF or BMP · processed entirely on your device
           </div>
           {reject && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                marginTop: 16,
-                color: 'var(--color-error)',
-                fontSize: 13,
-                fontFamily: 'var(--font-body)',
-              }}
-            >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 16, color: 'var(--color-error)', fontSize: 13, fontFamily: 'var(--font-body)' }}>
               <AlertTriangle size={15} /> {reject}
             </div>
           )}
@@ -259,7 +368,7 @@ export default function BackgroundRemover() {
         <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'minmax(0, 1fr) 300px' }} className="bg-remover-grid">
           {/* Canvas */}
           <div style={card}>
-            <div style={cardHead}>{cutout ? 'Result' : 'Original'}</div>
+            <div style={cardHead}>{hasResult ? 'Result' : 'Original'}</div>
             <div
               style={{
                 padding: 16,
@@ -270,10 +379,38 @@ export default function BackgroundRemover() {
                 background: 'var(--color-canvas)',
               }}
             >
-              <canvas
-                ref={displayRef}
-                style={{ maxWidth: '100%', maxHeight: '68vh', display: 'block', borderRadius: 'var(--radius-md)' }}
-              />
+              <div style={{ position: 'relative', display: 'inline-block', lineHeight: 0 }}>
+                <canvas
+                  ref={displayRef}
+                  onPointerDown={onPointerDown}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUp}
+                  onPointerLeave={onPointerLeave}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '68vh',
+                    display: 'block',
+                    borderRadius: 'var(--radius-md)',
+                    background: hasResult ? backdropCss(backdropId) : 'transparent',
+                    cursor: refining ? 'none' : 'default',
+                    touchAction: refining ? 'none' : 'auto',
+                  }}
+                />
+                <div
+                  ref={ringRef}
+                  style={{
+                    position: 'absolute',
+                    display: 'none',
+                    pointerEvents: 'none',
+                    left: 0,
+                    top: 0,
+                    transform: 'translate(-50%, -50%)',
+                    borderRadius: '50%',
+                    border: '1.5px solid rgba(255,255,255,0.95)',
+                    boxShadow: '0 0 0 1.5px rgba(0,0,0,0.55)',
+                  }}
+                />
+              </div>
             </div>
           </div>
 
@@ -282,20 +419,12 @@ export default function BackgroundRemover() {
             <label style={label}>Model</label>
             <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
               {(['general', 'portrait'] as ModelId[]).map((m) => (
-                <button key={m} onClick={() => changeModel(m)} style={modelPill(model === m)}>
+                <button key={m} onClick={() => changeModel(m)} style={pill(model === m)}>
                   {MODELS[m].label}
                 </button>
               ))}
             </div>
-            <div
-              style={{
-                fontSize: 11.5,
-                lineHeight: 1.5,
-                color: 'var(--color-ink-muted)',
-                marginBottom: 20,
-                fontFamily: 'var(--font-body)',
-              }}
-            >
+            <div style={{ fontSize: 11.5, lineHeight: 1.5, color: 'var(--color-ink-muted)', marginBottom: 20, fontFamily: 'var(--font-body)' }}>
               {MODELS[model].caption}
             </div>
 
@@ -311,10 +440,7 @@ export default function BackgroundRemover() {
                     height: 40,
                     borderRadius: 'var(--radius-md)',
                     cursor: 'pointer',
-                    border:
-                      backdropId === b.id
-                        ? '2px solid var(--color-brand)'
-                        : '1px solid var(--color-hairline)',
+                    border: backdropId === b.id ? '2px solid var(--color-brand)' : '1px solid var(--color-hairline)',
                     background:
                       b.swatch === 'checker'
                         ? 'repeating-conic-gradient(rgba(0,0,0,0.12) 0% 25%, transparent 0% 50%) 50% / 12px 12px'
@@ -325,24 +451,20 @@ export default function BackgroundRemover() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button
-                onClick={handleRemove}
-                disabled={status === 'processing'}
-                style={primaryBtn(status === 'processing')}
-              >
+              <button onClick={handleRemove} disabled={status === 'processing'} style={primaryBtn(status === 'processing')}>
                 {status === 'processing' ? (
                   <>
                     <Loader2 size={16} className="animate-spin" /> {progressLabel(progress)}
                   </>
                 ) : (
                   <>
-                    <ImageOff size={16} /> {cutout ? 'Re-run' : 'Remove Background'}
+                    <ImageOff size={16} /> {hasResult ? 'Re-run' : 'Remove Background'}
                   </>
                 )}
               </button>
 
               <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={handleDownload} disabled={!cutout} style={{ ...ghostBtn, flex: 1, opacity: cutout ? 1 : 0.5, cursor: cutout ? 'pointer' : 'not-allowed' }}>
+                <button onClick={handleDownload} disabled={!hasResult} style={{ ...ghostBtn, flex: 1, opacity: hasResult ? 1 : 0.5, cursor: hasResult ? 'pointer' : 'not-allowed' }}>
                   <Download size={16} /> PNG
                 </button>
                 <button onClick={handleReset} title="Reset" style={ghostBtn}>
@@ -351,31 +473,52 @@ export default function BackgroundRemover() {
               </div>
             </div>
 
+            {/* Refine — only once there's a result to fix. */}
+            {hasResult && (
+              <div style={{ marginTop: 20, borderTop: '1px solid var(--color-hairline)', paddingTop: 18 }}>
+                <label style={label}>Refine mask</label>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <button onClick={() => setBrushMode((m) => (m === 'restore' ? 'off' : 'restore'))} style={pill(brushMode === 'restore')}>
+                    <Brush size={14} /> Restore
+                  </button>
+                  <button onClick={() => setBrushMode((m) => (m === 'erase' ? 'off' : 'erase'))} style={pill(brushMode === 'erase')}>
+                    <Eraser size={14} /> Erase
+                  </button>
+                </div>
+
+                <div style={{ fontSize: 12, color: 'var(--color-ink-muted)', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                  Brush size — {brushSize}px
+                </div>
+                <input
+                  type="range"
+                  min={8}
+                  max={200}
+                  value={brushSize}
+                  onChange={(e) => setBrushSize(+e.target.value)}
+                  style={{ width: '100%', accentColor: 'var(--color-brand)', cursor: 'pointer', marginBottom: 14 }}
+                />
+
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>Edge</span>
+                  <button onClick={() => setBrushHard(false)} style={edgeBtn(!brushHard)}>Soft</button>
+                  <button onClick={() => setBrushHard(true)} style={edgeBtn(brushHard)}>Hard</button>
+                </div>
+
+                <div style={{ fontSize: 11.5, lineHeight: 1.5, color: 'var(--color-ink-muted)', marginTop: 12, fontFamily: 'var(--font-body)' }}>
+                  {refining
+                    ? `Brush over the image to ${brushMode} areas. Restore brings back removed pixels; erase removes kept ones.`
+                    : 'Pick Restore or Erase, then brush over the image to fix the mask.'}
+                </div>
+              </div>
+            )}
+
             {error && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  marginTop: 16,
-                  color: 'var(--color-error)',
-                  fontSize: 12.5,
-                  fontFamily: 'var(--font-body)',
-                }}
-              >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 16, color: 'var(--color-error)', fontSize: 12.5, fontFamily: 'var(--font-body)' }}>
                 <AlertTriangle size={15} /> {error}
               </div>
             )}
 
-            <div
-              style={{
-                marginTop: 18,
-                fontSize: 11.5,
-                lineHeight: 1.5,
-                color: 'var(--color-ink-muted)',
-                fontFamily: 'var(--font-body)',
-              }}
-            >
+            <div style={{ marginTop: 18, fontSize: 11.5, lineHeight: 1.5, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
               {source.width} × {source.height}px · everything runs locally; the image never leaves your device.
               {source.downscaled && ' Large image downscaled for processing.'}
             </div>
