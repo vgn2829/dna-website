@@ -10,15 +10,33 @@ const MAX_BYTES = 25 * 1024 * 1024; // 25 MB guardrail for a browser tool.
 
 export const MAX_IMAGE_MB = MAX_BYTES / (1024 * 1024);
 
+/**
+ * Working-resolution cap. Very large photos are downscaled to this long edge
+ * before anything else, bounding peak memory (a full-res 6000×4000 RGBA buffer
+ * is ~96 MB and can crash a mobile tab). Everything — display, mask, compositing,
+ * export — then operates at the capped size. Inference is unaffected either way
+ * (the model input is a fixed 320²/512²).
+ */
+export const MAX_WORKING_EDGE = 2560;
+
 /** True if the file is an accepted image type within the size limit. */
 export function isAcceptableImage(file: File | Blob): boolean {
   return ACCEPTED.test(file.type) && file.size <= MAX_BYTES;
 }
 
-/** Decode a Blob into a SourceImage (ImageBitmap + dimensions). */
+/** Decode a Blob into a SourceImage, downscaling to the working-resolution cap. */
 export async function loadSourceImage(file: File | Blob, name = 'image'): Promise<SourceImage> {
-  const bitmap = await createImageBitmap(file);
-  return { bitmap, width: bitmap.width, height: bitmap.height, name };
+  const decoded = await createImageBitmap(file);
+  const long = Math.max(decoded.width, decoded.height);
+  if (long <= MAX_WORKING_EDGE) {
+    return { bitmap: decoded, width: decoded.width, height: decoded.height, name, downscaled: false };
+  }
+  const scale = MAX_WORKING_EDGE / long;
+  const w = Math.round(decoded.width * scale);
+  const h = Math.round(decoded.height * scale);
+  const bitmap = await createImageBitmap(decoded, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' });
+  decoded.close();
+  return { bitmap, width: w, height: h, name, downscaled: true };
 }
 
 /** Draw a source bitmap to a canvas and return its RGBA ImageData. */

@@ -20,6 +20,8 @@ export interface SourceImage {
   height: number;
   /** Original file name without extension — used for the download filename. */
   name: string;
+  /** True if the image was downscaled to the working-resolution cap on load. */
+  downscaled: boolean;
 }
 
 // ── Worker message protocol ──────────────────────────────────────────────────

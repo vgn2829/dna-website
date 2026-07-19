@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Upload, Download, RotateCcw, Loader2, ImageOff, AlertTriangle, Info } from 'lucide-react';
-import type { Backdrop, SourceImage } from './types';
+import type { Backdrop, SourceImage, ModelId } from './types';
+import { MODELS } from './models';
 import { useImageUpload } from './useImageUpload';
-import { useBackgroundRemoval } from './useBackgroundRemoval';
+import { useBackgroundRemoval, type RemovalProgress } from './useBackgroundRemoval';
 import {
   loadSourceImage,
   bitmapToImageData,
@@ -71,6 +72,27 @@ const ghostBtn = {
   fontFamily: 'var(--font-body)',
 } as const;
 
+const modelPill = (active: boolean) => ({
+  flex: 1,
+  padding: '8px 0',
+  borderRadius: 'var(--radius-md)',
+  cursor: 'pointer',
+  border: active ? '2px solid var(--color-brand)' : '1px solid var(--color-hairline)',
+  background: active ? 'var(--color-surface-2)' : 'transparent',
+  color: active ? 'var(--color-ink)' : 'var(--color-ink-muted)',
+  fontSize: 13,
+  fontWeight: active ? 600 : 500,
+  fontFamily: 'var(--font-body)',
+});
+
+/** Human-readable label for the current processing phase. */
+function progressLabel(p: RemovalProgress | null): string {
+  if (!p) return 'Processing…';
+  if (p.phase === 'download') return `Downloading model${p.pct != null ? ` ${p.pct}%` : '…'}`;
+  if (p.phase === 'init') return 'Initializing…';
+  return 'Analyzing…';
+}
+
 const BACKDROPS: { id: string; label: string; value: Backdrop; swatch: string }[] = [
   { id: 'transparent', label: 'Transparent', value: { kind: 'transparent' }, swatch: 'checker' },
   { id: 'white', label: 'White', value: { kind: 'color', color: '#ffffff' }, swatch: '#ffffff' },
@@ -85,8 +107,19 @@ export default function BackgroundRemover() {
   const [reject, setReject] = useState<string | null>(null);
   const displayRef = useRef<HTMLCanvasElement>(null);
 
-  const { status, error, removeBackground, reset: resetEngine } = useBackgroundRemoval();
+  const [model, setModel] = useState<ModelId>('general');
+  const { status, error, progress, removeBackground, reset: resetEngine } = useBackgroundRemoval();
   const backdrop = BACKDROPS.find((b) => b.id === backdropId)!.value;
+
+  // Switching model invalidates the current cut-out — the user re-runs.
+  const changeModel = useCallback(
+    (m: ModelId) => {
+      setModel(m);
+      setCutout(null);
+      resetEngine();
+    },
+    [resetEngine],
+  );
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -122,12 +155,12 @@ export default function BackgroundRemover() {
   const handleRemove = useCallback(async () => {
     if (!imageData) return;
     try {
-      const mask = await removeBackground(imageData);
+      const mask = await removeBackground(imageData, model);
       setCutout(imageDataToCanvas(applyMask(imageData, mask)));
     } catch {
       /* status/error surfaced by the hook */
     }
-  }, [imageData, removeBackground]);
+  }, [imageData, model, removeBackground]);
 
   const handleDownload = useCallback(async () => {
     if (!cutout || !source) return;
@@ -153,11 +186,11 @@ export default function BackgroundRemover() {
         onChange={upload.onInputChange}
       />
 
-      {/* Phase-1 scaffold disclosure — honest about what this does right now. */}
+      {/* Honest, persistent limitation note. */}
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           gap: 8,
           padding: '10px 14px',
           marginBottom: 16,
@@ -166,13 +199,16 @@ export default function BackgroundRemover() {
           border: '1px solid var(--color-hairline)',
           color: 'var(--color-ink-muted)',
           fontSize: 12.5,
+          lineHeight: 1.5,
           fontFamily: 'var(--font-body)',
         }}
       >
-        <Info size={15} style={{ flexShrink: 0 }} />
-        Runs a real on-device model (General). First run downloads the model
-        (~18 MB, one-time). Portrait mode, progress, and full limitation notes
-        are being wired next.
+        <Info size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+        <span>
+          Runs on your device — the image never leaves it. Results won't match paid
+          tools on the hardest cases: neither model cuts out <strong>true
+          transparency</strong> (glass, smoke) or very fine hair cleanly.
+        </span>
       </div>
 
       {!source ? (
@@ -243,6 +279,26 @@ export default function BackgroundRemover() {
 
           {/* Controls */}
           <div style={{ ...card, padding: 20, alignSelf: 'start' }}>
+            <label style={label}>Model</label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              {(['general', 'portrait'] as ModelId[]).map((m) => (
+                <button key={m} onClick={() => changeModel(m)} style={modelPill(model === m)}>
+                  {MODELS[m].label}
+                </button>
+              ))}
+            </div>
+            <div
+              style={{
+                fontSize: 11.5,
+                lineHeight: 1.5,
+                color: 'var(--color-ink-muted)',
+                marginBottom: 20,
+                fontFamily: 'var(--font-body)',
+              }}
+            >
+              {MODELS[model].caption}
+            </div>
+
             <label style={label}>Background</label>
             <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
               {BACKDROPS.map((b) => (
@@ -276,7 +332,7 @@ export default function BackgroundRemover() {
               >
                 {status === 'processing' ? (
                   <>
-                    <Loader2 size={16} className="animate-spin" /> Processing…
+                    <Loader2 size={16} className="animate-spin" /> {progressLabel(progress)}
                   </>
                 ) : (
                   <>
@@ -321,6 +377,7 @@ export default function BackgroundRemover() {
               }}
             >
               {source.width} × {source.height}px · everything runs locally; the image never leaves your device.
+              {source.downscaled && ' Large image downscaled for processing.'}
             </div>
           </div>
         </div>
