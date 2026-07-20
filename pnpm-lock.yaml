@@ -203,6 +203,9 @@ importers:
       vaul:
         specifier: 1.1.2
         version: 1.1.2(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      vtracer-wasm:
+        specifier: 0.1.0
+        version: 0.1.0
     devDependencies:
       '@tailwindcss/vite':
         specifier: 4.1.12
@@ -3156,6 +3159,9 @@ packages:
       yaml:
         optional: true
 
+  vtracer-wasm@0.1.0:
+    resolution: {integrity: sha512-q0A/z1NIuzROEJ9Z4NJirsl+PIH47sU5XKqLv/m7Nrf5MVDPcwogT1YfMBwfekncEeep8VLj6y60hpomwJJH6g==}
+
   warning@4.0.3:
     resolution: {integrity: sha512-rpJyN222KWIvHJ/F53XSZv0Zl/accqHR8et1kpaMTD/fLCRxtV8iX8czMzY7sVZupTI3zcUTg8eycS2kNF9l6w==}
 
@@ -5957,6 +5963,8 @@ snapshots:
       jiti: 2.7.0
       lightningcss: 1.30.1
       sass: 1.51.0
+
+  vtracer-wasm@0.1.0: {}
 
   warning@4.0.3:
     dependencies:

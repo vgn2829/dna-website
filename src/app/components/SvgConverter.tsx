@@ -1,5 +1,8 @@
-import { useState, useRef, useCallback } from 'react';
-import { Upload, Download, X, CircleDot, Repeat, Maximize2, Loader2, AlertTriangle } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Upload, Download, X, CircleDot, Repeat, Maximize2, Loader2, AlertTriangle, Info } from 'lucide-react';
+import { useVectorize } from './svg-converter/useVectorize';
+import { PRESETS, type PresetId } from './svg-converter/presets';
+import type { TracerConfig } from './svg-converter/types';
 
 const MAX_DIM = 1000;
 
@@ -29,6 +32,7 @@ export function SvgConverter() {
   const [mode, setMode] = useState<'toSvg' | 'toRaster'>('toSvg');
 
   // ── Image → SVG state ──────────────────────────────────────────────
+  const [traceEngine, setTraceEngine] = useState<'line' | 'vector'>('line');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [svgData, setSvgData] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -39,6 +43,39 @@ export function SvgConverter() {
   const [rectCount, setRectCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Mirrors traceEngine for the async callbacks below (img.onload, the
+  // awaited vectorize() promise): both run uncancelled, so if the user
+  // switches engines while one is in flight, its late result must not
+  // overwrite the other engine's now-displayed output.
+  const traceEngineRef = useRef(traceEngine);
+  useEffect(() => { traceEngineRef.current = traceEngine; }, [traceEngine]);
+
+  // ── Vector Trace (VTracer) state ─────────────────────────────────────
+  const [preset, setPreset] = useState<PresetId>('photo');
+  const [tracerBinary, setTracerBinary] = useState(false);
+  const [tracerPathMode, setTracerPathMode] = useState<TracerConfig['mode']>('spline');
+  const [tracerFilterSpeckle, setTracerFilterSpeckle] = useState(PRESETS.photo.filterSpeckle);
+  const [tracerCornerThreshold, setTracerCornerThreshold] = useState(PRESETS.photo.cornerThreshold);
+  const [tracerColorPrecision, setTracerColorPrecision] = useState(PRESETS.photo.colorPrecision);
+  const [shapeCount, setShapeCount] = useState(0);
+  const { status: vectorizeStatus, error: vectorizeError, vectorize, reset: resetVectorize } = useVectorize();
+
+  const switchEngine = (engine: 'line' | 'vector') => {
+    setTraceEngine(engine);
+    setSvgData(null);
+    setRectCount(0);
+    setShapeCount(0);
+  };
+
+  const applyPreset = (id: PresetId) => {
+    setPreset(id);
+    const p = PRESETS[id];
+    setTracerBinary(p.binary);
+    setTracerPathMode(p.mode);
+    setTracerFilterSpeckle(p.filterSpeckle);
+    setTracerCornerThreshold(p.cornerThreshold);
+    setTracerColorPrecision(p.colorPrecision);
+  };
 
   // ── SVG → raster state ─────────────────────────────────────────────
   const [svgText, setSvgText] = useState<string | null>(null);
@@ -57,6 +94,8 @@ export function SvgConverter() {
       setImageUrl(URL.createObjectURL(file));
       setSvgData(null);
       setRectCount(0);
+      setShapeCount(0);
+      resetVectorize();
     }
   };
 
@@ -111,14 +150,64 @@ export function SvgConverter() {
 
         const rects = pixels.map(([x, y]) => `<rect x="${x}" y="${y}" width="1" height="1"/>`);
         const svg = `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}"><rect width="100%" height="100%" fill="white"/><g fill="black">${rects.join('')}</g></svg>`;
+        setIsProcessing(false);
+        // The user may have switched to Vector Trace while this was in
+        // flight — don't let a late result overwrite its output.
+        if (traceEngineRef.current !== 'line') return;
         setRectCount(rects.length);
         setSvgData(svg);
-        setIsProcessing(false);
       };
       img.onerror = () => setIsProcessing(false);
       img.src = imageUrl;
     }, 10);
   }, [imageUrl, threshold, useFill, useInvert, useDilate]);
+
+  const vectorizeImage = useCallback(() => {
+    if (!imageUrl || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+    const img = new Image();
+    img.onload = async () => {
+      let w = img.width, h = img.height;
+      if (Math.max(w, h) > MAX_DIM) {
+        const scale = MAX_DIM / Math.max(w, h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+      canvas.width = w;
+      canvas.height = h;
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      const imageData = ctx.getImageData(0, 0, w, h);
+
+      const config: TracerConfig = {
+        binary: tracerBinary,
+        mode: tracerPathMode,
+        hierarchical: 'stacked',
+        filterSpeckle: tracerFilterSpeckle,
+        colorPrecision: tracerColorPrecision,
+        layerDifference: PRESETS[preset].layerDifference,
+        cornerThreshold: tracerCornerThreshold,
+        lengthThreshold: PRESETS[preset].lengthThreshold,
+        spliceThreshold: PRESETS[preset].spliceThreshold,
+        maxIterations: PRESETS[preset].maxIterations,
+        pathPrecision: PRESETS[preset].pathPrecision,
+      };
+
+      try {
+        const svg = await vectorize(imageData, config);
+        // The user may have switched to Line Trace while this was in
+        // flight — don't let a late result overwrite its output.
+        if (traceEngineRef.current !== 'vector') return;
+        setSvgData(svg);
+        setShapeCount((svg.match(/<(path|polygon|rect)[\s>]/g) ?? []).length);
+      } catch {
+        /* error surfaced via vectorizeError from the hook */
+      }
+    };
+    img.onerror = () => { /* image failed to (re)load — vectorizeStatus stays idle */ };
+    img.src = imageUrl;
+  }, [imageUrl, tracerBinary, tracerPathMode, tracerFilterSpeckle, tracerCornerThreshold, tracerColorPrecision, preset, vectorize]);
 
   const downloadSvg = () => {
     if (!svgData) return;
@@ -126,13 +215,14 @@ export function SvgConverter() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'line-drawing.svg';
+    a.download = traceEngine === 'vector' ? 'vector-trace.svg' : 'line-drawing.svg';
     a.click();
     URL.revokeObjectURL(url);
   };
 
   const reset = () => {
-    setImageUrl(null); setSvgData(null); setRectCount(0);
+    setImageUrl(null); setSvgData(null); setRectCount(0); setShapeCount(0);
+    resetVectorize();
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -275,7 +365,7 @@ export function SvgConverter() {
               <div style={card}>
                 <div style={cardHead}>SVG Output</div>
                 <div style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 260 }}>
-                  {isProcessing ? (
+                  {(traceEngine === 'line' ? isProcessing : vectorizeStatus === 'processing') ? (
                     <Loader2 size={26} className="animate-spin" style={{ color: 'var(--color-ink-muted)' }} />
                   ) : svgData ? (
                     <div className="svg-output-preview" dangerouslySetInnerHTML={{ __html: svgData }} />
@@ -286,32 +376,113 @@ export function SvgConverter() {
               </div>
             </div>
 
-            {rectCount > 40000 && (
+            {traceEngine === 'line' && rectCount > 40000 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-2)', border: '1px solid var(--color-hairline)', color: 'var(--color-ink-muted)', fontSize: 12, fontFamily: 'var(--font-body)' }}>
                 <AlertTriangle size={15} /> Large output ({rectCount.toLocaleString()} shapes). The SVG may be slow to open. Try a higher threshold or a simpler image.
               </div>
             )}
 
+            {traceEngine === 'vector' && vectorizeError && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-2)', border: '1px solid var(--color-hairline)', color: 'var(--color-ink-muted)', fontSize: 12, fontFamily: 'var(--font-body)' }}>
+                <AlertTriangle size={15} /> Vectorize failed: {vectorizeError}
+              </div>
+            )}
+
+            {traceEngine === 'vector' && (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-2)', border: '1px solid var(--color-hairline)', color: 'var(--color-ink-muted)', fontSize: 12.5, lineHeight: 1.5, fontFamily: 'var(--font-body)' }}>
+                <Info size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>
+                  Runs on your device — the image never leaves it. Vector Trace works best on <strong>logos, line art,
+                  and flat-color images</strong>. Photos with gradients or soft shadows will look posterized or produce
+                  many small shapes — try <strong>Line Trace</strong> for pure line-art photos, or simplify the source
+                  image first.
+                </span>
+              </div>
+            )}
+
             <div style={{ ...card, padding: 20 }}>
-              <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: 18 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', marginBottom: 8, fontFamily: 'var(--font-body)' }}>Threshold: {threshold}</label>
-                  <input type="range" min={0} max={255} value={threshold} onChange={e => setThreshold(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--color-brand)', cursor: 'pointer' }} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', marginBottom: 8, fontFamily: 'var(--font-body)' }}>Effects</label>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => setUseFill(!useFill)} title="Fill" style={effBtn(useFill)}><CircleDot size={18} /></button>
-                    <button onClick={() => setUseInvert(!useInvert)} title="Invert" style={effBtn(useInvert)}><Repeat size={18} /></button>
-                    <button onClick={() => setUseDilate(!useDilate)} title="Thicken" style={effBtn(useDilate)}><Maximize2 size={18} /></button>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+                <button onClick={() => switchEngine('line')} style={pill(traceEngine === 'line')}>Line Trace</button>
+                <button onClick={() => switchEngine('vector')} style={pill(traceEngine === 'vector')}>Vector Trace</button>
+              </div>
+
+              {traceEngine === 'line' ? (
+                <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: 18 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', marginBottom: 8, fontFamily: 'var(--font-body)' }}>Threshold: {threshold}</label>
+                    <input type="range" min={0} max={255} value={threshold} onChange={e => setThreshold(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--color-brand)', cursor: 'pointer' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', marginBottom: 8, fontFamily: 'var(--font-body)' }}>Effects</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => setUseFill(!useFill)} title="Fill" style={effBtn(useFill)}><CircleDot size={18} /></button>
+                      <button onClick={() => setUseInvert(!useInvert)} title="Invert" style={effBtn(useInvert)}><Repeat size={18} /></button>
+                      <button onClick={() => setUseDilate(!useDilate)} title="Thicken" style={effBtn(useDilate)}><Maximize2 size={18} /></button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 18, marginBottom: 18 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', marginBottom: 8, fontFamily: 'var(--font-body)' }}>Preset</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => applyPreset('photo')} style={pill(preset === 'photo')}>Photo</button>
+                      <button onClick={() => applyPreset('lineArt')} style={pill(preset === 'lineArt')}>Line Art</button>
+                      <button onClick={() => applyPreset('pixelArt')} style={pill(preset === 'pixelArt')}>Pixel Art</button>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', marginBottom: 8, fontFamily: 'var(--font-body)' }}>Color mode</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => setTracerBinary(false)} style={pill(!tracerBinary)}>Color</button>
+                        <button onClick={() => setTracerBinary(true)} style={pill(tracerBinary)}>Binary</button>
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', marginBottom: 8, fontFamily: 'var(--font-body)' }}>Path style</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => setTracerPathMode('spline')} style={pill(tracerPathMode === 'spline')}>Spline</button>
+                        <button onClick={() => setTracerPathMode('polygon')} style={pill(tracerPathMode === 'polygon')}>Polygon</button>
+                        <button onClick={() => setTracerPathMode('pixel')} style={pill(tracerPathMode === 'pixel')}>Pixel</button>
+                      </div>
+                    </div>
+                  </div>
+                  <details>
+                    <summary style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>Advanced</summary>
+                    <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginTop: 14 }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', marginBottom: 8, fontFamily: 'var(--font-body)' }}>Speckle filter: {tracerFilterSpeckle}</label>
+                        <input type="range" min={0} max={32} value={tracerFilterSpeckle} onChange={e => setTracerFilterSpeckle(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--color-brand)', cursor: 'pointer' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', marginBottom: 8, fontFamily: 'var(--font-body)' }}>Corner threshold: {tracerCornerThreshold}°</label>
+                        <input type="range" min={0} max={180} value={tracerCornerThreshold} onChange={e => setTracerCornerThreshold(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--color-brand)', cursor: 'pointer' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', marginBottom: 8, fontFamily: 'var(--font-body)' }}>Color precision: {tracerColorPrecision}</label>
+                        <input type="range" min={0} max={7} value={tracerColorPrecision} onChange={e => setTracerColorPrecision(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--color-brand)', cursor: 'pointer' }} />
+                      </div>
+                    </div>
+                  </details>
+                  {svgData && shapeCount > 0 && (
+                    <span style={{ fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono)' }}>{shapeCount.toLocaleString()} shapes</span>
+                  )}
+                </div>
+              )}
+
               <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={processImage} disabled={isProcessing}
-                  style={{ flex: 1, padding: '11px 0', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--color-brand)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: isProcessing ? 'not-allowed' : 'pointer', opacity: isProcessing ? 0.6 : 1, fontFamily: 'var(--font-body)' }}>
-                  {isProcessing ? 'Processing…' : 'Convert to SVG'}
-                </button>
+                {traceEngine === 'line' ? (
+                  <button onClick={processImage} disabled={isProcessing}
+                    style={{ flex: 1, padding: '11px 0', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--color-brand)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: isProcessing ? 'not-allowed' : 'pointer', opacity: isProcessing ? 0.6 : 1, fontFamily: 'var(--font-body)' }}>
+                    {isProcessing ? 'Processing…' : 'Convert to SVG'}
+                  </button>
+                ) : (
+                  <button onClick={vectorizeImage} disabled={vectorizeStatus === 'processing'}
+                    style={{ flex: 1, padding: '11px 0', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--color-brand)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: vectorizeStatus === 'processing' ? 'not-allowed' : 'pointer', opacity: vectorizeStatus === 'processing' ? 0.6 : 1, fontFamily: 'var(--font-body)' }}>
+                    {vectorizeStatus === 'processing' ? 'Vectorizing…' : 'Vectorize'}
+                  </button>
+                )}
                 {svgData && (
                   <button onClick={downloadSvg} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '11px 18px', borderRadius: 'var(--radius-pill)', border: '1px solid var(--color-hairline)', background: 'transparent', color: 'var(--color-ink)', fontSize: 14, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
                     <Download size={16} /> Download
