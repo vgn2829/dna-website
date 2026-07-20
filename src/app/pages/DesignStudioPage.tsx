@@ -3,11 +3,15 @@ import { Loader2 } from "lucide-react";
 import { useLocation, useSearchParams } from "react-router";
 import PaletteStudio from "../components/PaletteStudio";
 import { HalftoneStudio } from "../components/HalftoneStudio";
-import { SvgConverter } from "../components/SvgConverter";
 
 // Lazy — its Phase-2 model + ONNX runtime must never enter the main bundle,
 // so the whole tool (and its worker) is code-split behind this dynamic import.
 const BackgroundRemover = lazy(() => import("../components/background-removal/BackgroundRemover"));
+
+// Lazy — its Vector Trace mode pulls in vtracer-wasm, which must never enter
+// the main bundle, so the tool (and its worker) is code-split behind this
+// dynamic import, same as BackgroundRemover above.
+const SvgConverter = lazy(() => import("../components/SvgConverter").then(m => ({ default: m.SvgConverter })));
 
 const T = {
   get canvas()       { return "var(--color-canvas)"; },
