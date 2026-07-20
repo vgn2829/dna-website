@@ -634,12 +634,14 @@ router.get('/:id/items', optionalStudent, async (req: Request, res: Response) =>
 // Upload a canvas image file to storage; returns the public URL
 // Extensions are derived from a validated content-type allowlist, never from the
 // raw client MIME string, so they can't be used to smuggle path characters.
-const CANVAS_MIME_EXT: Record<string, string> = {
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/webp': 'webp',
-  'image/gif': 'gif',
-  'image/svg+xml': 'svg',
+// SVG is deliberately not allowed: it's XML with no fixed binary signature, so it
+// can't be verified the same way as the raster types below, and unlike an <img>,
+// an SVG can carry <script>/event-handler payloads if ever rendered inline.
+const CANVAS_MIME_EXT: Record<string, { ext: string; check: (b: Buffer) => boolean }> = {
+  'image/png':  { ext: 'png',  check: b => b.length >= 4 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47 },
+  'image/jpeg': { ext: 'jpg',  check: b => b.length >= 3 && b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF },
+  'image/webp': { ext: 'webp', check: b => b.length >= 12 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50 },
+  'image/gif':  { ext: 'gif',  check: b => b.length >= 4 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38 },
 };
 const UUID_RE = /^[0-9a-fA-F-]{36}$/;
 const FILE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -661,10 +663,14 @@ router.post('/:id/canvas-files', requireStudent, upload.single('file'), async (r
       return res.status(400).json({ error: 'No file provided' });
     }
 
-    const ext = CANVAS_MIME_EXT[req.file.mimetype];
-    if (!ext) {
+    const spec = CANVAS_MIME_EXT[req.file.mimetype];
+    if (!spec) {
       return res.status(400).json({ error: 'Unsupported file type' });
     }
+    if (!spec.check(req.file.buffer)) {
+      return res.status(400).json({ error: 'File content does not match its type' });
+    }
+    const ext = spec.ext;
 
     const rawFileId = (req.body.fileId as string | undefined) ?? `canvas_${Date.now()}`;
     if (!FILE_ID_RE.test(rawFileId)) {

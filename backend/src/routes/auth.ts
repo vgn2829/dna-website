@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { randomInt } from 'crypto';
 import { query } from '../db/client';
 import { signStudentToken, requireStudent } from '../middleware/studentAuth';
 import { sendOtpEmail, sendWelcomeEmail } from '../services/mailer';
@@ -95,7 +96,7 @@ authRouter.post('/student/request-otp', otpRequestLimiter, async (req, res) => {
     targetName = parsed.data.name;
   }
 
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = String(randomInt(100000, 1000000));
   const codeHash = await bcrypt.hash(code, 10);
   const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString();
 
@@ -265,7 +266,7 @@ authRouter.post('/student/change-email/request', changeEmailRequestLimiter, requ
     return;
   }
 
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = String(randomInt(100000, 1000000));
   const codeHash = await bcrypt.hash(code, 10);
   const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString();
 
