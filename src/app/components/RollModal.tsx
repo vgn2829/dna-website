@@ -291,7 +291,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                           <input
                             className="input-base"
                             type="email"
-                            placeholder="rollno@iitk.ac.in"
+                            placeholder="e.g. yourname23@iitk.ac.in"
                             value={email}
                             onChange={e => setEmail(e.target.value.toLowerCase())}
                             style={{ width: '100%', boxSizing: 'border-box' }}

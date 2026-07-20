@@ -94,7 +94,7 @@ export function ChangeEmailModal({ open, onClose }: { open: boolean; onClose: ()
               <input
                 className="input-base"
                 type="email"
-                placeholder="rollno@iitk.ac.in"
+                placeholder="e.g. yourname23@iitk.ac.in"
                 value={email}
                 onChange={e => { setEmail(e.target.value.toLowerCase()); setError(''); }}
                 onKeyDown={e => { if (e.key === 'Enter') sendCode(); }}
