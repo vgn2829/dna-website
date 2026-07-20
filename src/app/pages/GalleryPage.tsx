@@ -452,7 +452,7 @@ export function GalleryPage() {
       await api.boards.addItem(boardId, studentSession.rollNumber, {
         image_url: savingArtwork.coverUrl ?? savingArtwork.mediaUrl,
         note: savingArtwork.title,
-        source_url: `https://dna-website-two.vercel.app/gallery`,
+        source_url: `https://www.dnaiitk.site/gallery`,
       });
       setSavingArtwork(null);
     } catch {

@@ -93,7 +93,7 @@ function getBaseTemplate(content: string): string {
       </div>
       <div style="padding:32px;">
         ${content}
-        <a href="https://dna-website-two.vercel.app"
+        <a href="https://www.dnaiitk.site"
           style="display:inline-block;margin-top:24px;padding:12px 24px;
             background:#E91E8C;color:#fff;text-decoration:none;
             border-radius:100px;font-weight:600;font-size:14px;">
@@ -103,9 +103,9 @@ function getBaseTemplate(content: string): string {
       <div style="padding:16px 32px;border-top:1px solid #1a1a1a;
         color:#555;font-size:12px;">
         Design & Animation Club, IIT Kanpur ·
-        <a href="https://dna-website-two.vercel.app"
+        <a href="https://www.dnaiitk.site"
           style="color:#E91E8C;text-decoration:none;">
-          dna-website-two.vercel.app
+          www.dnaiitk.site
         </a>
       </div>
     </div>
@@ -178,7 +178,7 @@ async function sendInBatches(emails: string[], subject: string, html: string): P
   }
 }
 
-const OTP_WEBSITE_URL = 'https://dna-website-two.vercel.app';
+const OTP_WEBSITE_URL = 'https://www.dnaiitk.site';
 
 // Standalone OTP email (bypasses getBaseTemplate — CSS inlined for email
 // clients). Hardcoded rather than an editable template because it's
