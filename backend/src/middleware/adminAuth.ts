@@ -9,7 +9,11 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   }
   const token = auth.slice(7);
   try {
-    jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ['HS256'] });
+    const payload = jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ['HS256'] }) as { role?: string };
+    if (payload.role !== 'admin') {
+      res.status(401).json({ error: 'Admin token required' });
+      return;
+    }
     next();
   } catch {
     res.status(401).json({ error: 'Invalid or expired token' });
