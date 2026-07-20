@@ -4,4 +4,4 @@ Allow: /
 Disallow: /admin
 Disallow: /moodboards
 
-Sitemap: https://dna-website-two.vercel.app/sitemap.xml
+Sitemap: https://www.dnaiitk.site/sitemap.xml
