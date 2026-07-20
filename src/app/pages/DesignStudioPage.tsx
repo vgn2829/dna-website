@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useLocation, useSearchParams } from "react-router";
 import PaletteStudio from "../components/PaletteStudio";
 import { HalftoneStudio } from "../components/HalftoneStudio";
+import { usePageMeta } from "../components/hooks/use-page-meta";
 
 // Lazy — its Phase-2 model + ONNX runtime must never enter the main bundle,
 // so the whole tool (and its worker) is code-split behind this dynamic import.
@@ -1382,6 +1383,12 @@ const SUBTITLES: Record<string,string> = {
 
 // ── Shell ─────────────────────────────────────────────────────────────────────
 export default function DesignStudio() {
+  usePageMeta({
+    title: 'Design Studio | DnA Club, IIT Kanpur',
+    description: 'Free browser-based design tools — background remover, SVG vectorizer, halftone generator, and more, from DnA Club.',
+    path: '/design-studio',
+  });
+
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 

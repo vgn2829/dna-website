@@ -4,6 +4,7 @@ import { MapPin, Clock, Users, Calendar, List, CheckCircle2 } from 'lucide-react
 import { useAppData } from '../context/AppDataContext';
 import { useStudent } from '../context/StudentContext';
 import { api, LiveSession } from '../lib/api';
+import { usePageMeta } from '../components/hooks/use-page-meta';
 
 // ISO dates (YYYY-MM-DD) are parsed as UTC midnight by spec; appending T12:00
 // forces local-time parsing so .getDate() returns the correct calendar day.
@@ -161,6 +162,12 @@ function EventCard({ event, view, delay, onRSVP }: {
 }
 
 export function EventsPage() {
+  usePageMeta({
+    title: 'Events & Workshops | DnA Club, IIT Kanpur',
+    description: 'RSVP to upcoming design and animation workshops, live sessions, and club activities at IIT Kanpur.',
+    path: '/events',
+  });
+
   const { events, rsvpEvent, loading, error } = useAppData();
   const { studentSession, openRollModal } = useStudent();
   const [view, setView] = useState<'grid' | 'list'>('grid');
@@ -203,6 +210,33 @@ export function EventsPage() {
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-canvas)', paddingTop: '5rem', paddingBottom: '5rem' }}>
+      {/* Structured data: one Event block per listed event, for rich results */}
+      {filtered.map(evt => (
+        <script
+          key={evt.id}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Event',
+              name: evt.title,
+              startDate: evt.date,
+              location: {
+                '@type': 'Place',
+                name: evt.location,
+              },
+              description: evt.content,
+              organizer: {
+                '@type': 'Organization',
+                name: 'Design and Animation Club, IIT Kanpur',
+                url: 'https://www.dnaiitk.site',
+              },
+              eventStatus: 'https://schema.org/EventScheduled',
+            }),
+          }}
+        />
+      ))}
+
       <div className="page-container">
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
@@ -216,13 +250,13 @@ export function EventsPage() {
         {/* Live & Upcoming Sessions */}
         {liveSessions.length > 0 && (
           <div style={{ marginBottom: 40 }}>
-            <p style={{
+            <h2 style={{
               fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
               textTransform: 'uppercase', color: 'var(--color-brand)',
               fontFamily: 'var(--font-body)', marginBottom: 16,
             }}>
               Live & Upcoming Sessions
-            </p>
+            </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {liveSessions.map(s => (
                 <div key={s.id} style={{
@@ -312,6 +346,14 @@ export function EventsPage() {
             </button>
           </div>
         </div>
+
+        <h2 style={{
+          fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
+          textTransform: 'uppercase', color: 'var(--color-ink-muted)',
+          fontFamily: 'var(--font-body)', marginBottom: 16,
+        }}>
+          {filter === 'upcoming' ? 'Upcoming Events' : filter === 'past' ? 'Past Events' : 'All Events'}
+        </h2>
 
         <AnimatePresence mode="popLayout">
           <motion.div layout className={view === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-4'}>

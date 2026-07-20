@@ -4,6 +4,7 @@ import { CheckCircle2, Circle, Trophy, Play, ChevronRight, ArrowRight } from 'lu
 import { useStudent } from '../context/StudentContext';
 import { useAppData } from '../context/AppDataContext';
 import { api } from '../lib/api';
+import { usePageMeta } from '../components/hooks/use-page-meta';
 
 const DIFF_COLORS: Record<string, string> = {
   Beginner:     '#3ecf5f',
@@ -136,6 +137,12 @@ function QuizCard({ domainId, questions }: {
 }
 
 export function AcademyPage() {
+  usePageMeta({
+    title: 'Creative Academy | DnA Club, IIT Kanpur',
+    description: 'Free video courses and quizzes in UI/UX, Photoshop, Illustrator, and 3D animation — learn design at your own pace.',
+    path: '/academy',
+  });
+
   const { studentSession, studentProgress, openRollModal, markVideoWatched, unmarkVideoWatched, totalXP } = useStudent();
   const { domains, loading, error } = useAppData();
   const domainKeys = Object.keys(domains);

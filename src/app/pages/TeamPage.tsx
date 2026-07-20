@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Instagram, Linkedin, Mail, Users, ChevronDown, ChevronUp, Sparkles, Loader2 } from 'lucide-react';
 import { useAppData, type TeamMember } from '../context/AppDataContext';
+import { usePageMeta } from '../components/hooks/use-page-meta';
 
 function MemberCard({ member, expanded = false, onToggle, size = 'normal' }: {
   member: TeamMember; large?: boolean; expanded?: boolean; onToggle?: () => void; size?: 'normal' | 'small';
@@ -121,6 +122,12 @@ function MemberCard({ member, expanded = false, onToggle, size = 'normal' }: {
 }
 
 export function TeamPage() {
+  usePageMeta({
+    title: 'Meet Our Team | DnA Club, IIT Kanpur',
+    description: 'A passionate group of designers, animators, and creative thinkers dedicated to building a vibrant design culture at IIT Kanpur.',
+    path: '/team',
+  });
+
   const { team, loading } = useAppData();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const toggle = (id: string) => setExpandedId(prev => prev === id ? null : id);

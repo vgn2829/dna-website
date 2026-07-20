@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BookOpen, Video, Trophy, ArrowRight, Search, ExternalLink, Clock, Star, Filter } from 'lucide-react';
 import { GlassButton } from '../../imports/pasted_text/displacement-map';
+import { usePageMeta } from '../components/hooks/use-page-meta';
 
 interface Resource {
   id: number;
@@ -46,6 +47,12 @@ const levelColors = {
 };
 
 export function ResourcesPage() {
+  usePageMeta({
+    title: 'Learning Resources | DnA Club, IIT Kanpur',
+    description: 'Curated tutorials, courses & guides to help you master design and animation — hand-picked by DnA Club members.',
+    path: '/resources',
+  });
+
   const [selectedDomain, setSelectedDomain] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<string>('All');
@@ -137,6 +144,7 @@ export function ResourcesPage() {
 
         {/* Results count */}
         <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-bold sr-only">Browse Resources</h2>
           <p className="text-white/50 text-sm">
             <span className="text-white font-semibold">{filtered.length}</span> resources found
           </p>
@@ -248,7 +256,7 @@ export function ResourcesPage() {
           viewport={{ once: true }}
           className="mt-16 glass-strong rounded-3xl p-10 text-center"
         >
-          <h3 className="text-2xl font-bold mb-3">Have a resource to share?</h3>
+          <h2 className="text-2xl font-bold mb-3">Have a resource to share?</h2>
           <p className="text-white/60 mb-6 max-w-md mx-auto">
             Found something amazing? Submit it to our curated library and help the community grow.
           </p>

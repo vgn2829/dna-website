@@ -5,6 +5,7 @@ import { Heart, MessageCircle, X, ZoomIn, ZoomOut, Send, FileText, Play, Externa
 import { useAppData, type Artwork } from '../context/AppDataContext';
 import { useStudent } from '../context/StudentContext';
 import { api, type Board } from '../lib/api';
+import { usePageMeta } from '../components/hooks/use-page-meta';
 
 const DOMAIN_COLORS: Record<string, string> = {
   'UI/UX Design': '#007AFF', Photoshop: '#BF5AF2', Illustrator: '#FF9F0A', '3D Animation': '#FF375F',
@@ -377,6 +378,12 @@ function MediaThumbnail({ art }: { art: Artwork }) {
 }
 
 export function GalleryPage() {
+  usePageMeta({
+    title: 'Club Artworks | DnA Club, IIT Kanpur',
+    description: 'Browse the DnA Club gallery — UI/UX, Photoshop, Illustrator, and 3D animation work created by IIT Kanpur students.',
+    path: '/gallery',
+  });
+
   const { artworks, likeArtwork, loading, error } = useAppData();
   const { studentSession } = useStudent();
   const [savingArtwork, setSavingArtwork] = useState<Artwork | null>(null);
