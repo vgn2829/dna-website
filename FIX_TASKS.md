@@ -70,8 +70,8 @@ issue IDs. Each row is fixed on its own branch off `main` and shipped as its own
 | QW2 | Wire palette-engine test into npm test script | test infra | grouped with C1 | `test/otp-rsvp-integration-tests` | done — surfaces 20 pre-existing failures in PaletteStudio's engine (off-limits code); wired as-is per explicit confirmation, not silently fixed or skipped |
 | C7 | ResourcesPage: build the real feature (schema, routes, admin tab, public page) | backend + frontend/Resources | own PR (largest change) | `feat/resources-page` | done — schema+routes+tests+frontend+admin tab all implemented, verified (typecheck, 19/19 tests, build), PR opened; domain-modeling fork (FK to domains vs. free-text) flagged in the plan below, chose FK-to-domains, easy to revisit |
 | DEP1 | React 18→19 + @types/react, @types/react-dom, @vitejs/plugin-react | deps | own PR, only if verified safe | `chore/upgrade-react-19` (if pursued) | **deferred** — tldraw@2.4.4 (Moodboards canvas) is React-18-only; see Dependency majors table for full reasoning. No code changes shipped; install was attempted, verified blocked, then cleanly reverted (confirmed zero diff to package.json/pnpm-lock.yaml). |
-| DEP2 | Express 4→5 | deps/backend | own PR, only if verified safe | `chore/upgrade-express-5` (if pursued) | not started |
-| DEP3 | MUI 7→9 (@mui/material, @mui/icons-material) | deps | own PR, only if verified safe | `chore/upgrade-mui-9` (if pursued) | not started |
+| DEP2 | Express 4→5 | deps/backend | own PR, only if verified safe | `chore/upgrade-express-5` | done — upgraded, verified (typecheck, 15/15 tests, build clean), PR opened |
+| DEP3 | MUI 7→9 (@mui/material, @mui/icons-material) | deps | flagged back — see note | — | **flagged, not upgraded** — `@mui/material`/`@mui/icons-material` have zero imports anywhere in `src/` (grepped) and produce zero bytes in the production bundle (grepped `dist/assets/*.js`). This is a dead dependency, not something actively used that needs upgrading. Upgrading unused code carries no risk but also no benefit — the more useful action is likely removing it entirely, but that's a "should we drop this" call, not a "should we upgrade this" call, and outside what I was asked to do here. Flagging back rather than guessing which you'd want. |
 | DEP4 | Zod 3→4 | deps/backend | own PR, only if verified safe | `chore/upgrade-zod-4` (if pursued) | not started |
 | DEP5 | Outdated Radix UI packages (each ~1 minor/major behind) | deps | own PR, only if verified safe | `chore/upgrade-radix` (if pursued) | not started |
 
@@ -94,8 +94,8 @@ these are independent of everything else and easy to slot in whenever.
 | Library | Current → Latest | Verdict | Reason |
 |---------|-------------------|---------|--------|
 | React + react-dom + @types/* | 18.3.1 → 19.2.8 | **DEFERRED** | `tldraw@2.4.4` (the Moodboards canvas library — `2.4.4` is the version actually pinned here, not latest) peer-depends on `react@^18`/`react-dom@^18` only; no React 19 support until tldraw v5.x, itself a major, unrelated jump. Confirmed via actual install + `pnpm peers check`, not just changelog reading: the bump installs cleanly (all *other* used libraries — Radix, MUI, react-image-crop, react-day-picker, next-themes, embla-carousel, vaul, cmdk, react-responsive-panels, react-slick — declare React 19 support at their currently-pinned versions), but tldraw is the one real blocker. `react-popper` and `react-dnd`/`react-dnd-html5-backend`/`react-responsive-masonry` also lack declared React 19 support but are dead dependencies (grepped `src/` — zero imports), so they don't block anything themselves; flagging as separate dead-dependency cleanup candidates, not part of this deferral's reasoning. `@vitejs/plugin-react` did NOT need a bump — the currently-pinned 4.7.0 has no react/react-dom peer dependency at all and already supports Vite 6/7, so it's excluded from this row's "→ Latest" scope entirely. |
-| Express | 4.22.2 → 5.2.1 | _not yet evaluated_ | — |
-| MUI (@mui/material, @mui/icons-material) | 7.3.5 → 9.2.0 | _not yet evaluated_ | — |
+| Express | 4.22.2 → 5.2.1 | **UPGRADED** | No bare `*` wildcard routes (Express 5's `path-to-regexp@8` breaking change doesn't apply here), no `req.param()`/`app.del()`/other removed legacy APIs in use. All Express-adjacent middleware (cors, helmet, express-rate-limit, multer) have wide-open peer/engine ranges compatible with v5. One real, bounded type-level break: `@types/express@5` widens `req.params[key]` from `string` to `string \| string[]` (correctly reflecting routes with repeating path segments, none of which exist in this app); fixed 16 call sites across `boards.ts`/`notify.ts`/`students.ts` with a small shared `param()` narrowing helper (`backend/src/routeParams.ts`) rather than scattering `as string` casts — mechanical, no logic changes, verified every affected route uses a single non-repeating `:param` segment. Bonus: Express 5 also fixes a real latent bug in this codebase — rejected promises in the ~76 `async` route handlers now correctly reach the error-handling middleware automatically, where Express 4 would have silently hung the request. |
+| MUI (@mui/material, @mui/icons-material) | 7.3.5 → 9.2.0 | **FLAGGED — dead dependency** | Zero imports in `src/`, zero bytes in the built bundle. Not upgraded; recommend a separate decision on whether to remove it instead (out of scope here — that's a product/cleanup call, not a version bump). |
 | Zod | 3.25.76 → 4.4.3 | _not yet evaluated_ | — |
 | Radix UI packages (various) | various, 1 major/minor behind | _not yet evaluated_ | — |
 
@@ -106,6 +106,15 @@ unpredictably. All root-level dependency work must use `pnpm add`/`pnpm install`
 `npm`. (The `backend/` directory is a separate, plain npm project — `npm` is correct
 there.) This cost real time to discover during the React evaluation; recording it here
 so it isn't rediscovered on every subsequent dependency-major evaluation.
+
+**Incidental finding — other dead dependencies noticed during this evaluation** (not
+independently investigated beyond a grep, and not acted on — surfacing since they came
+up twice while checking peer compatibility for DEP1/DEP3, and removing dead weight is
+low-risk cleanup someone will want eventually): `react-popper`, `@popperjs/core`,
+`react-dnd`, `react-dnd-html5-backend`, `react-responsive-masonry`, `react-slick` all
+have zero imports anywhere in `src/`, same pattern as MUI above. Worth a dedicated
+"remove unused dependencies" pass at some point — out of scope for this dependency-
+majors evaluation (that's about versions, not about whether a package should exist).
 
 ## C7 — ResourcesPage: build the real feature (plan)
 
@@ -250,7 +259,7 @@ independently mergeable.
 | — | `fix/small-ui-quick-wins` | B9, CQ11, CQ12 | not started |
 | — | `fix/npm-audit-advisories` | QW1 | not started |
 | — | `chore/upgrade-react-19` (if pursued) | DEP1 | deferred — no PR opened, see Dependency majors table |
-| — | `chore/upgrade-express-5` (if pursued) | DEP2 | not started |
-| — | `chore/upgrade-mui-9` (if pursued) | DEP3 | not started |
+| #28 | `chore/upgrade-express-5` | DEP2 | open |
+| — | `chore/upgrade-mui-9` | DEP3 | not opened — flagged back, no upgrade performed (dead dependency) |
 | — | `chore/upgrade-zod-4` (if pursued) | DEP4 | not started |
 | — | `chore/upgrade-radix` (if pursued) | DEP5 | not started |
