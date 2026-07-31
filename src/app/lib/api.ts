@@ -227,10 +227,18 @@ export const api = {
       request<void>('PATCH', `/team/${id}/order`, { body: { display_order: displayOrder }, admin: true }),
   },
   notify: {
-    event: (event: { title: string; date?: string; venue?: string; description?: string }) =>
-      request<void>('POST', '/notify/event', { body: event, admin: true }),
-    artwork: (artwork: { title: string; artist: string; domain?: string }) =>
-      request<void>('POST', '/notify/artwork', { body: artwork, admin: true }),
+    // Send the student notification for an already-created event/artwork, keyed
+    // by id. The server reads the record, sends, and stamps notified_at (returned
+    // here so the UI badge updates without a refetch).
+    event: (id: string) =>
+      request<{ success: boolean; notifiedAt: string }>('POST', `/notify/event/${id}`, { admin: true }),
+    artwork: (id: string) =>
+      request<{ success: boolean; notifiedAt: string }>('POST', `/notify/artwork/${id}`, { admin: true }),
+    // Preview the exact email + recipient count for the admin confirm dialog.
+    previewEvent: (id: string) =>
+      request<{ subject: string; html: string; recipientCount: number }>('GET', `/notify/event/${id}/preview`, { admin: true }),
+    previewArtwork: (id: string) =>
+      request<{ subject: string; html: string; recipientCount: number }>('GET', `/notify/artwork/${id}/preview`, { admin: true }),
     getTemplates: () =>
       request<EmailTemplate[]>('GET', '/notify/templates', { admin: true }),
     getTemplate: (id: string) =>

@@ -24,12 +24,14 @@ export interface Artwork {
   likedByUser: boolean;
   featured: boolean;
   coverUrl: string | null;
+  notifiedAt: string | null;
   comments: ArtworkComment[];
 }
 
 export interface ClubEvent {
   id: string; title: string; date: string; time: string; location: string;
   content: string; capacity: number; registeredCount: number; isRegistered: boolean;
+  notifiedAt: string | null;
 }
 
 export interface VideoResource { id: string; title: string; ytId: string; difficulty: 'Beginner' | 'Intermediate' | 'Advanced'; duration: string; sequence: number; }
@@ -63,11 +65,13 @@ interface AppDataContextValue {
   deleteArtwork:  (id: string) => void;
   toggleFeatured: (id: string, featured: boolean) => void;
   deleteComment:  (artworkId: string, commentId: string) => Promise<void>;
+  notifyArtwork:  (id: string) => Promise<string>;
   // Events
   rsvpEvent:   (id: string) => void;
-  addEvent:    (event: Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered'>) => void;
-  updateEvent: (id: string, data: Partial<Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered'>>) => Promise<void>;
+  addEvent:    (event: Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered' | 'notifiedAt'>) => void;
+  updateEvent: (id: string, data: Partial<Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered' | 'notifiedAt'>>) => Promise<void>;
   deleteEvent: (id: string) => void;
+  notifyEvent: (id: string) => Promise<string>;
   // Domains / videos
   addDomain:          (domain: { title: string; fullName: string; icon: string; tagline: string; description: string; color: string }) => Promise<void>;
   updateDomain:       (id: string, data: Partial<{ title: string; fullName: string; icon: string; tagline: string; description: string; color: string }>) => Promise<void>;
@@ -136,12 +140,17 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   const uploadArtwork = useCallback(async (formData: FormData) => {
     const newArt = await api.artworks.upload(formData);
+    // Creation no longer auto-notifies students — the admin sends explicitly via
+    // notifyArtwork (with a confirm dialog). New artwork starts as "Not sent".
     setArtworks(prev => [newArt as Artwork, ...prev]);
-    api.notify.artwork({
-      title: (newArt as Artwork).title,
-      artist: (newArt as Artwork).artist,
-      domain: (newArt as Artwork).domain,
-    }).catch(err => console.error('Artwork notification failed:', err));
+  }, []);
+
+  // Sends the student notification for an already-created artwork and updates the
+  // record's notifiedAt from the server response. Returns the new timestamp.
+  const notifyArtwork = useCallback(async (id: string): Promise<string> => {
+    const { notifiedAt } = await api.notify.artwork(id);
+    setArtworks(prev => prev.map(a => a.id !== id ? a : { ...a, notifiedAt }));
+    return notifiedAt;
   }, []);
 
   const updateArtwork = useCallback(async (id: string, formData: FormData) => {
@@ -176,16 +185,20 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       })));
   }, [roll]);
 
-  const addEvent = useCallback((event: Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered'>) => {
+  const addEvent = useCallback((event: Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered' | 'notifiedAt'>) => {
+    // Creation no longer auto-notifies students — the admin sends explicitly via
+    // notifyEvent (with a confirm dialog). New events start as "Not sent".
     api.events.add(event).then(e => {
       setEvents(prev => [e as ClubEvent, ...prev]);
-      api.notify.event({
-        title: (e as ClubEvent).title,
-        date: (e as ClubEvent).date,
-        venue: (e as ClubEvent).location,
-        description: (e as ClubEvent).content,
-      }).catch(err => console.error('Event notification failed:', err));
     }).catch(onAdminErr);
+  }, []);
+
+  // Sends the student notification for an already-created event and updates the
+  // record's notifiedAt from the server response. Returns the new timestamp.
+  const notifyEvent = useCallback(async (id: string): Promise<string> => {
+    const { notifiedAt } = await api.notify.event(id);
+    setEvents(prev => prev.map(e => e.id !== id ? e : { ...e, notifiedAt }));
+    return notifiedAt;
   }, []);
 
   const updateEvent = useCallback(async (id: string, data: Partial<Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered'>>) => {
@@ -297,8 +310,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppDataContext.Provider value={{
       domains, artworks, events, team, loading, error,
-      likeArtwork, addComment, uploadArtwork, updateArtwork, deleteArtwork, toggleFeatured, deleteComment,
-      rsvpEvent, addEvent, updateEvent, deleteEvent,
+      likeArtwork, addComment, uploadArtwork, updateArtwork, deleteArtwork, toggleFeatured, deleteComment, notifyArtwork,
+      rsvpEvent, addEvent, updateEvent, deleteEvent, notifyEvent,
       addDomain, updateDomain, deleteDomain, addVideo, updateVideo, deleteVideo, updateVideoSequence,
       addTeamMember, updateTeamMember, deleteTeamMember, reorderTeamSection,
     }}>
