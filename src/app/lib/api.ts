@@ -34,6 +34,19 @@ export interface SessionJoins {
   joins: SessionJoin[];
 }
 
+export interface EventRegistrant {
+  roll_number: string;
+  name: string | null;
+  email: string | null;
+  rsvped_at: string | null;
+}
+
+export interface EventRegistrants {
+  event_id: string;
+  count: number;
+  registrants: EventRegistrant[];
+}
+
 export interface PastSession {
   id: string;
   title: string;
@@ -217,6 +230,8 @@ export const api = {
     delete: (id: string)  => request<void>('DELETE', `/events/${id}`, { admin: true }),
     rsvp:  (id: string, roll: string) =>
       request<{ registeredCount: number; isRegistered: boolean }>('POST', `/events/${id}/rsvp`, { roll }),
+    registrants: (id: string) =>
+      request<EventRegistrants>('GET', `/events/${id}/registrants`, { admin: true }),
   },
   team: {
     list:   () => request<unknown[]>('GET', '/team'),

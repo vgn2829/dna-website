@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout, Send, TriangleAlert } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
-import { api, setAdminToken, clearAdminToken, type SessionJoins, type CoordinatorMember } from '../lib/api';
+import { api, setAdminToken, clearAdminToken, type SessionJoins, type CoordinatorMember, type EventRegistrants } from '../lib/api';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
 import imageCompression from 'browser-image-compression';
 
@@ -253,6 +253,112 @@ function NotifyDialog({
           </button>
           <button type="button" onClick={onClose} className="btn-secondary" disabled={sending}>Cancel</button>
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+// Escape a field for CSV: quote it and double any interior quotes whenever it
+// contains a comma, quote, or newline that would otherwise break the file.
+function csvField(value: string): string {
+  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
+}
+
+function downloadBlob(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Registrant list + export for a single event. Mirrors SessionsTab's attendee
+// panel (joins list) but as a modal, since EventsTab is single-column.
+function RegistrantsModal({ event, onClose }: { event: ClubEvent; onClose: () => void }) {
+  const [data, setData] = useState<EventRegistrants | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.events.registrants(event.id)
+      .then(r => { if (!cancelled) setData(r); })
+      .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load registrants'); });
+    return () => { cancelled = true; };
+  }, [event.id]);
+
+  const rsvpTime = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+
+  const rows = () => (data?.registrants ?? []).map(r => [r.name ?? 'Unknown', r.roll_number, r.email ?? '', rsvpTime(r.rsvped_at)]);
+
+  const handleDownloadCsv = () => {
+    const header = ['Name', 'Roll Number', 'Email', 'RSVP Time'];
+    const lines = [header, ...rows()].map(row => row.map(csvField).join(','));
+    downloadBlob(`dna-${event.id}-registrants.csv`, lines.join('\n'), 'text/csv');
+  };
+
+  const handleCopyTsv = async () => {
+    const header = ['Name', 'Roll Number', 'Email', 'RSVP Time'];
+    const lines = [header, ...rows()].map(row => row.join('\t'));
+    await navigator.clipboard.writeText(lines.join('\n'));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Modal title={`Registrants — ${event.title}`} onClose={onClose}>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="type-body-sm" style={{ margin: 0 }}>
+            {data ? `${data.count} of ${event.capacity} registered` : 'Loading…'}
+          </p>
+          {data && data.count > 0 && (
+            <div className="flex gap-2">
+              <button type="button" onClick={handleDownloadCsv} className="btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }}>
+                Download CSV
+              </button>
+              <button type="button" onClick={handleCopyTsv} className="btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }}>
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {error ? (
+          <p className="type-body-sm" style={{ color: '#e5484d' }}>{error}</p>
+        ) : !data ? (
+          <div className="flex items-center gap-2 type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>
+            <Loader2 size={14} className="animate-spin" /> Loading registrants…
+          </div>
+        ) : data.registrants.length === 0 ? (
+          <p className="type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>No one has registered yet.</p>
+        ) : (
+          <div style={{ maxHeight: 400, overflowY: 'auto', border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-lg)' }}>
+            {data.registrants.map((r, i) => (
+              <div
+                key={r.roll_number}
+                style={{
+                  padding: '12px 16px',
+                  borderBottom: i < data.registrants.length - 1 ? '1px solid var(--color-hairline)' : 'none',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+                }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                  <span className="type-body-sm" style={{ fontWeight: 600 }}>{r.name ?? 'Unknown'}</span>
+                  <span className="type-micro">{r.roll_number}</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end', flexShrink: 0 }}>
+                  <span className="type-micro" style={{ wordBreak: 'break-all', textAlign: 'right' }}>{r.email ?? '—'}</span>
+                  <span className="type-micro" style={{ whiteSpace: 'nowrap' }}>{rsvpTime(r.rsvped_at)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -1563,6 +1669,7 @@ function TeamTab() {
 function EventsTab() {
   const { events, addEvent, updateEvent, deleteEvent, notifyEvent } = useAppData();
   const [notifyItem, setNotifyItem] = useState<ClubEvent | null>(null);
+  const [registrantsItem, setRegistrantsItem] = useState<ClubEvent | null>(null);
   const [eTitle, setETitle] = useState('');
   const [eDate, setEDate] = useState('');
   const [eTime, setETime] = useState('');
@@ -1641,6 +1748,14 @@ function EventsTab() {
             </div>
             <NotifiedBadge notifiedAt={ev.notifiedAt} />
             <button
+              onClick={() => setRegistrantsItem(ev)}
+              className="btn-icon shrink-0"
+              title="View registrants"
+              style={{ color: 'var(--color-ink-muted)', width: 28, height: 28, background: 'transparent' }}
+            >
+              <Users size={12} />
+            </button>
+            <button
               onClick={() => setNotifyItem(ev)}
               className="btn-icon shrink-0"
               title={ev.notifiedAt ? 'Re-send notification to students' : 'Notify students about this event'}
@@ -1666,6 +1781,10 @@ function EventsTab() {
           fetchPreview={api.notify.previewEvent}
           onSend={notifyEvent}
         />
+      )}
+
+      {registrantsItem && (
+        <RegistrantsModal event={registrantsItem} onClose={() => setRegistrantsItem(null)} />
       )}
 
       {editEvent && (

@@ -159,3 +159,17 @@ eventsRouter.post('/:id/rsvp', rsvpLimiter, requireStudent, async (req, res) => 
     client.release();
   }
 });
+
+eventsRouter.get('/:id/registrants', requireAdmin, async (req, res) => {
+  const result = await query<{
+    roll_number: string; name: string | null; email: string | null; rsvped_at: string | null;
+  }>(`
+    SELECT r.roll_number, ss.name, ss.email, r.created_at AS rsvped_at
+    FROM event_rsvps r
+    LEFT JOIN student_sessions ss ON ss.roll_number = r.roll_number
+    WHERE r.event_id = $1
+    ORDER BY r.created_at ASC NULLS LAST
+  `, [req.params.id]);
+
+  res.json({ event_id: req.params.id, count: result.length, registrants: result });
+});
