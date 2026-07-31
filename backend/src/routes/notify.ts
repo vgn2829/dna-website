@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAdmin } from '../middleware/adminAuth';
-import { sendEventNotification, sendArtworkNotification, sendCustomAnnouncement, MAIL_FROM, renderTemplatePreview, templateVariables, sendTemplateTest } from '../services/mailer';
+import { sendEventNotification, sendArtworkNotification, sendCustomAnnouncement, MAIL_FROM, renderTemplatePreview, templateVariables, sendTemplateTest, buildEventEmail, buildArtworkEmail, getAudienceEmailCount } from '../services/mailer';
 import { pool } from '../db/client';
 
 const router = Router();
@@ -47,30 +47,66 @@ router.get('/test-email', requireAdmin, async (req, res) => {
   }
 });
 
-router.post('/event', requireAdmin, async (req, res) => {
+type EventRow = { id: string; title: string; date: string; location: string; content: string; notified_at: string | null };
+type ArtworkRow = { id: string; title: string; artist: string; domain: string; notified_at: string | null };
+
+// Preview the actual email a given event would send, plus the recipient count,
+// so the admin confirm dialog shows exactly what goes out and to how many.
+router.get('/event/:id/preview', requireAdmin, async (req, res) => {
   try {
-    const { title, date, venue, description } = req.body as Record<string, string>;
-    if (!title) {
-      res.status(400).json({ error: 'Event title is required' });
-      return;
-    }
-    sendEventNotification({ title, date, venue, description });
-    res.json({ success: true, message: 'Notification queued' });
+    const rows = await pool.query<EventRow>('SELECT * FROM events WHERE id=$1', [req.params.id]);
+    if (rows.rows.length === 0) { res.status(404).json({ error: 'Event not found' }); return; }
+    const e = rows.rows[0];
+    const { subject, html } = await buildEventEmail({ title: e.title, date: e.date, venue: e.location, description: e.content });
+    res.json({ subject, html, recipientCount: await getAudienceEmailCount() });
+  } catch (err) {
+    console.error('Notify event preview error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Send the event notification to all registered students and stamp notified_at,
+// which drives the Sent/Not-Sent badge. Re-sending is allowed (admin-confirmed);
+// notified_at is refreshed to the latest send.
+router.post('/event/:id', requireAdmin, async (req, res) => {
+  try {
+    const rows = await pool.query<EventRow>('SELECT * FROM events WHERE id=$1', [req.params.id]);
+    if (rows.rows.length === 0) { res.status(404).json({ error: 'Event not found' }); return; }
+    const e = rows.rows[0];
+    await sendEventNotification({ title: e.title, date: e.date, venue: e.location, description: e.content });
+    const upd = await pool.query<{ notified_at: string }>(
+      'UPDATE events SET notified_at=NOW() WHERE id=$1 RETURNING notified_at', [req.params.id]
+    );
+    res.json({ success: true, notifiedAt: upd.rows[0].notified_at });
   } catch (err) {
     console.error('Notify event error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-router.post('/artwork', requireAdmin, async (req, res) => {
+router.get('/artwork/:id/preview', requireAdmin, async (req, res) => {
   try {
-    const { title, artist, domain } = req.body as Record<string, string>;
-    if (!title || !artist) {
-      res.status(400).json({ error: 'Title and artist are required' });
-      return;
-    }
-    sendArtworkNotification({ title, artist, domain });
-    res.json({ success: true, message: 'Notification queued' });
+    const rows = await pool.query<ArtworkRow>('SELECT * FROM artworks WHERE id=$1', [req.params.id]);
+    if (rows.rows.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
+    const a = rows.rows[0];
+    const { subject, html } = await buildArtworkEmail({ title: a.title, artist: a.artist, domain: a.domain });
+    res.json({ subject, html, recipientCount: await getAudienceEmailCount() });
+  } catch (err) {
+    console.error('Notify artwork preview error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/artwork/:id', requireAdmin, async (req, res) => {
+  try {
+    const rows = await pool.query<ArtworkRow>('SELECT * FROM artworks WHERE id=$1', [req.params.id]);
+    if (rows.rows.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
+    const a = rows.rows[0];
+    await sendArtworkNotification({ title: a.title, artist: a.artist, domain: a.domain });
+    const upd = await pool.query<{ notified_at: string }>(
+      'UPDATE artworks SET notified_at=NOW() WHERE id=$1 RETURNING notified_at', [req.params.id]
+    );
+    res.json({ success: true, notifiedAt: upd.rows[0].notified_at });
   } catch (err) {
     console.error('Notify artwork error:', err);
     res.status(500).json({ error: 'Internal server error' });

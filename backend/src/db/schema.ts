@@ -113,6 +113,14 @@ export async function initSchema(): Promise<void> {
     ADD COLUMN IF NOT EXISTS cover_url TEXT DEFAULT NULL
   `);
 
+  // NULL = student notification not yet sent for this event/artwork. New records
+  // default to NULL (creation no longer auto-sends); an admin sends explicitly
+  // via the notify route, which stamps this. See the backfill migration below.
+  await pool.query(`
+    ALTER TABLE events   ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ DEFAULT NULL;
+    ALTER TABLE artworks ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ DEFAULT NULL;
+  `);
+
   // Add sequence column + back-fill by insertion order per domain.
   // The WHERE sequence = 0 guard makes the UPDATE idempotent too.
   await pool.query(`
@@ -219,6 +227,25 @@ export async function initSchema(): Promise<void> {
       [clearMigration]
     );
     console.log('Migration applied: cleared pre-email student_sessions');
+  }
+
+  // One-time backfill: events/artworks created under the old auto-send behavior
+  // already went out to students, so mark them as notified (using their creation
+  // time) rather than leaving them misleadingly "Not sent". Guarded so it runs
+  // once — it must NOT touch records created after this deploy, which legitimately
+  // start life un-notified.
+  const backfillNotified = 'backfill_notified_at_v1';
+  const alreadyBackfilled = await pool.query(
+    'SELECT 1 FROM schema_migrations WHERE key = $1', [backfillNotified]
+  );
+  if (alreadyBackfilled.rows.length === 0) {
+    await pool.query(`UPDATE events   SET notified_at = created_at WHERE notified_at IS NULL`);
+    await pool.query(`UPDATE artworks SET notified_at = created_at WHERE notified_at IS NULL`);
+    await pool.query(
+      'INSERT INTO schema_migrations (key) VALUES ($1) ON CONFLICT DO NOTHING',
+      [backfillNotified]
+    );
+    console.log('Migration applied: backfilled notified_at for pre-existing events/artworks');
   }
 
   await pool.query(`
