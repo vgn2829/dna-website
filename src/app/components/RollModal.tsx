@@ -186,8 +186,8 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                   {needsReverify && (
                     <div style={{
                       marginBottom: 16, padding: '10px 14px',
-                      background: 'rgba(233,30,140,0.08)',
-                      border: '1px solid rgba(233,30,140,0.25)',
+                      background: 'color-mix(in srgb, var(--color-brand) 8%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--color-brand) 25%, transparent)',
                       borderRadius: 'var(--radius-sm)',
                       fontSize: 12.5, lineHeight: 1.5,
                       color: 'var(--color-ink)', fontFamily: 'var(--font-body)',

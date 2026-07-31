@@ -1,12 +1,21 @@
 /* ─── Framer Design System ──────────────────────────────────────────────────── */
 
 :root {
-  /* ── Brand & Accent ── */
+  /* ── Brand & Accent ──
+     --color-brand was #E91E8C (pink) until the 2026-07-16 rebrand to blue.
+     It now shares a value with --color-accent-blue. That overlap is
+     intentional but NOT a merge: they stay separate tokens with separate
+     meanings — brand = identity (Join, primary CTAs, active tabs),
+     accent-blue = functional signals (focus rings via --shadow-focus,
+     locked swatches in PaletteStudio). Either can be re-pointed without
+     disturbing the other. Don't collapse them into one token.
+     Brand tints elsewhere are derived via color-mix() from --color-brand,
+     so this single value drives them; avoid hardcoding brand hex/rgba. */
   --color-ink:             #ffffff;
   --color-ink-muted:       #999999;
   --color-accent-blue:     #0099ff;
   --color-success:         #22c55e;
-  --color-brand:           #E91E8C;
+  --color-brand:           #0099ff;
   --color-error:           #ef4444;
 
   /* ── Surface / Canvas ── */
@@ -104,7 +113,9 @@
   --nav-bg:     rgba(255, 255, 255, 0.72);
   --nav-border: rgba(0, 0, 0, 0.08);
   --nav-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.04);
-  --color-brand:           #E91E8C;
+  /* Brand is theme-invariant — keep in sync with the :root value above
+     (was #E91E8C pink until the 2026-07-16 rebrand). */
+  --color-brand:           #0099ff;
   --color-error:           #ef4444;
   --color-success:         #22c55e;
   --shadow-level-1: 0 1px 3px rgba(0,0,0,0.10);
