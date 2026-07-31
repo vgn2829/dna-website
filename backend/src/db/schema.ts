@@ -751,4 +751,31 @@ export async function initSchema(): Promise<void> {
     VALUES ('event_reminder', 'Event Reminder', 'Reminder: {{title}} starts soon — DnA Club IITK', $1, $2)
     ON CONFLICT (id) DO NOTHING
   `, [reminderBody, new Date().toISOString()]);
+
+  // Learning resources: student-submitted (approved=false until an admin
+  // reviews it) or admin-authored (inserted with approved=true directly, same
+  // "immediately live" convention as domains/team_members). domain_id FKs to
+  // the real domains table rather than a free-text column, deliberately
+  // avoiding the referential-integrity gap the audit flagged for
+  // artworks.domain — see FIX_TASKS.md's "C7 — ResourcesPage" section for the
+  // full tradeoff this was weighed against.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS resources (
+      id                TEXT        PRIMARY KEY,
+      title             TEXT        NOT NULL,
+      url               TEXT        NOT NULL,
+      author            TEXT        NOT NULL DEFAULT '',
+      domain_id         TEXT        REFERENCES domains(id) ON DELETE SET NULL,
+      type              TEXT        NOT NULL CHECK (type IN ('video','article','course')),
+      level             TEXT        NOT NULL CHECK (level IN ('Beginner','Intermediate','Advanced')),
+      duration_label    TEXT        NOT NULL DEFAULT '',
+      tags              TEXT        NOT NULL DEFAULT '[]',
+      display_order     INT         NOT NULL DEFAULT 0,
+      submitted_by_roll TEXT        REFERENCES student_sessions(roll_number) ON DELETE SET NULL,
+      approved          BOOLEAN     NOT NULL DEFAULT false,
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_resources_domain ON resources(domain_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_resources_approved ON resources(approved) WHERE approved = false`);
 }

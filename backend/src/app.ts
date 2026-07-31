@@ -15,6 +15,7 @@ import boardsRouter from './routes/boards';
 import settingsRouter from './routes/settings';
 import coordinatorsRouter from './routes/coordinators';
 import internalRouter from './routes/internal';
+import { resourcesRouter } from './routes/resources';
 
 export function createApp() {
   const app = express();
@@ -84,6 +85,7 @@ export function createApp() {
   app.use('/api/settings',      settingsRouter);
   app.use('/api/coordinators',  coordinatorsRouter);
   app.use('/api/internal',      internalRouter);
+  app.use('/api/resources',     resourcesRouter);
 
   app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 
