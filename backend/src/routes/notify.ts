@@ -74,6 +74,13 @@ router.post('/event/:id', requireAdmin, async (req, res) => {
     if (rows.rows.length === 0) { res.status(404).json({ error: 'Event not found' }); return; }
     const e = rows.rows[0];
     const { sentNow, queued } = await sendEventNotification({ title: e.title, date: e.date, venue: e.location, description: e.content });
+    if (sentNow === 0 && queued === 0) {
+      // Nothing sent and nothing queued — most likely no student has an email
+      // on file (or RESEND_API_KEY is unset). Don't stamp notified_at, since
+      // that would mark the event "Sent" when the admin action had no effect.
+      res.json({ success: true, notifiedAt: e.notified_at, sentNow, queued });
+      return;
+    }
     // notified_at marks the notify action as taken even if some recipients were
     // queued for later (quota-gated) — the badge means "admin sent this", the
     // queued count tells them delivery is still catching up.
@@ -106,6 +113,10 @@ router.post('/artwork/:id', requireAdmin, async (req, res) => {
     if (rows.rows.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
     const a = rows.rows[0];
     const { sentNow, queued } = await sendArtworkNotification({ title: a.title, artist: a.artist, domain: a.domain });
+    if (sentNow === 0 && queued === 0) {
+      res.json({ success: true, notifiedAt: a.notified_at, sentNow, queued });
+      return;
+    }
     const upd = await pool.query<{ notified_at: string }>(
       'UPDATE artworks SET notified_at=NOW() WHERE id=$1 RETURNING notified_at', [req.params.id]
     );

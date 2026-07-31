@@ -50,10 +50,13 @@ async function getAllStudentEmails(): Promise<string[]> {
 // Resend free tier: 100 emails/day, 3,000/month, and every To/CC/BCC recipient
 // counts separately. OTP and welcome mail must never be blocked by this gate —
 // they call resendClient() directly and always increment usage after sending.
-// Broadcast sends (event/artwork notify, announcements, reminders) go through
-// reserveBroadcastBudget() first, which reserves headroom for OTP/welcome by
-// scaling with the current roster size, so a big notify send on a busy login
-// day can't starve logins.
+// Broadcast sends (event/artwork notify, announcements, reminders) call
+// broadcastBudgetRemaining() first, which reads (not reserves) how much
+// headroom is left for OTP/welcome, scaling with the current roster size, so
+// a big notify send on a busy login day can't starve logins. This is a read,
+// not a lock — two broadcasts started concurrently could both see the same
+// budget and together exceed it slightly; acceptable here since sends are
+// admin-triggered one at a time in practice, not high-concurrency.
 const DAILY_QUOTA = 100;
 const MONTHLY_QUOTA = 3000;
 const MONTHLY_SAFETY_BUFFER = 100; // stop broadcasts before hard-hitting 3000
@@ -90,7 +93,10 @@ async function recordSent(count: number): Promise<void> {
 // Reserve = half the roster, capped at 60, floored at a small constant so it's
 // never zero for a tiny roster. Scales automatically as students are added.
 async function otpReserve(): Promise<number> {
-  const studentCount = (await getAllStudentEmails()).length;
+  const rows = await pool.query<{ count: string }>(
+    'SELECT COUNT(*) AS count FROM student_sessions WHERE email IS NOT NULL'
+  );
+  const studentCount = parseInt(rows.rows[0]?.count ?? '0', 10);
   return Math.max(5, Math.min(60, Math.ceil(studentCount * 0.5)));
 }
 
@@ -223,14 +229,22 @@ export async function sendTemplateTest(templateId: string, toEmail: string, subj
 // Sends pre-rendered html as-is (the caller decides shell vs. standalone via
 // renderTemplateHtml), so batch notifications share the same shell logic.
 // Chunks into groups of 50 BCC recipients per Resend API call (delivery-side
-// limit), and records each recipient sent against the daily quota counter —
-// callers that go through the quota gate rely on this to keep usage accurate.
-async function sendInBatches(emails: string[], subject: string, html: string): Promise<void> {
-  const chunks: string[][] = [];
+// limit). Each call also carries a fixed `to:` address that Resend counts as
+// its own recipient — so each chunk costs (chunk.length + 1) against the
+// quota, not chunk.length. Callers pass how many recipients they're willing
+// to spend budget on; sendInBatches only sends as many emails as fit within
+// that after accounting for the +1-per-chunk overhead, and returns the count
+// actually sent so callers know how many to treat as "done" vs. still queued.
+async function sendInBatches(
+  emails: string[], subject: string, html: string, maxBudget: number
+): Promise<{ sent: number; budgetUsed: number }> {
+  let sent = 0;
+  let budgetUsed = 0;
+  let budget = maxBudget;
   for (let i = 0; i < emails.length; i += 50) {
-    chunks.push(emails.slice(i, i + 50));
-  }
-  for (const chunk of chunks) {
+    if (budget <= 1) break; // need room for the chunk's +1 `to:` overhead too
+    const chunk = emails.slice(i, i + Math.min(50, budget - 1));
+    if (chunk.length === 0) break;
     await resendClient().emails.send({
       from: MAIL_FROM,
       replyTo: 'designandanimationclub.iitk@gmail.com',
@@ -239,8 +253,13 @@ async function sendInBatches(emails: string[], subject: string, html: string): P
       subject,
       html,
     });
-    await recordSent(chunk.length);
+    const cost = chunk.length + 1;
+    await recordSent(cost);
+    budget -= cost;
+    budgetUsed += cost;
+    sent += chunk.length;
   }
+  return { sent, budgetUsed };
 }
 
 // Broadcast entry point: sends up to `broadcastBudgetRemaining()` recipients
@@ -253,19 +272,21 @@ async function sendBroadcast(
   if (emails.length === 0) return { sentNow: 0, queued: 0 };
 
   const budget = await broadcastBudgetRemaining();
-  const toSendNow = emails.slice(0, budget);
-  const toQueue = emails.slice(budget);
+  // sendInBatches decides how many of `emails` actually fit once the +1-per-
+  // chunk `to:` overhead is accounted for — don't pre-slice by raw budget,
+  // that undercounts real Resend usage by one recipient per 50-chunk.
+  const { sent: sentNow } = budget > 0
+    ? await sendInBatches(emails, subject, html, budget)
+    : { sent: 0 };
+  const toQueue = emails.slice(sentNow);
 
-  if (toSendNow.length > 0) {
-    await sendInBatches(toSendNow, subject, html);
-  }
   if (toQueue.length > 0) {
     await pool.query(`
       INSERT INTO mail_queue (id, kind, subject, html, remaining, total_count)
       VALUES ($1, $2, $3, $4, $5, $6)
     `, [`mq-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, kind, subject, html, toQueue, toQueue.length]);
   }
-  return { sentNow: toSendNow.length, queued: toQueue.length };
+  return { sentNow, queued: toQueue.length };
 }
 
 // Drains queued broadcast mail, respecting today's remaining budget. Called
@@ -281,12 +302,11 @@ export async function drainMailQueue(): Promise<void> {
 
   for (const row of rows.rows) {
     if (budget <= 0) break;
-    const toSend = row.remaining.slice(0, budget);
-    const stillRemaining = row.remaining.slice(budget);
 
-    await sendInBatches(toSend, row.subject, row.html);
-    budget -= toSend.length;
+    const { sent: sentCount, budgetUsed } = await sendInBatches(row.remaining, row.subject, row.html, budget);
+    budget -= budgetUsed;
 
+    const stillRemaining = row.remaining.slice(sentCount);
     if (stillRemaining.length === 0) {
       await pool.query('UPDATE mail_queue SET remaining = $1, completed_at = NOW() WHERE id = $2', [stillRemaining, row.id]);
     } else {
@@ -570,7 +590,7 @@ export async function sendEventReminders(due: DueReminder[]): Promise<{ sent: Du
       budget -= 1;
       sent.push(r);
     } catch (err) {
-      console.error(`Failed to send event reminder to ${r.email}:`, err);
+      console.error(`Failed to send event reminder for event ${r.eventId} to roll ${r.rollNumber}:`, err);
       // Don't decrement budget or mark sent — leaves reminder_sent_at NULL so
       // this recipient is retried on the next tick rather than silently lost.
     }

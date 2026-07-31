@@ -274,11 +274,20 @@ function NotifyDialog({
   );
 }
 
+// A leading =, +, -, @ (or tab/CR) makes Excel/Sheets interpret a pasted or
+// imported cell as a formula — prefix with a single quote to neutralize that
+// (spreadsheet formula-injection). Shared by both the CSV and TSV exports.
+function neutralizeFormula(value: string): string {
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+}
+
 // Escape a field for CSV: quote it and double any interior quotes whenever it
-// contains a comma, quote, or newline that would otherwise break the file.
+// contains a comma, quote, newline, or carriage return that would otherwise
+// break the file.
 function csvField(value: string): string {
-  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
+  const safe = neutralizeFormula(value);
+  if (/["\n\r,]/.test(safe)) return `"${safe.replace(/"/g, '""')}"`;
+  return safe;
 }
 
 function downloadBlob(filename: string, content: string, type: string) {
@@ -287,8 +296,12 @@ function downloadBlob(filename: string, content: string, type: string) {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  // Revoking in the same task can cancel the download in some browsers;
+  // defer to the next tick so the click has already been dispatched.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 // Registrant list + export for a single event. Mirrors SessionsTab's attendee
@@ -319,8 +332,13 @@ function RegistrantsModal({ event, onClose }: { event: ClubEvent; onClose: () =>
 
   const handleCopyTsv = async () => {
     const header = ['Name', 'Roll Number', 'Email', 'RSVP Time'];
-    const lines = [header, ...rows()].map(row => row.join('\t'));
-    await navigator.clipboard.writeText(lines.join('\n'));
+    const lines = [header, ...rows()].map(row => row.map(neutralizeFormula).join('\t'));
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+    } catch {
+      setError('Could not copy to clipboard — your browser may be blocking clipboard access.');
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

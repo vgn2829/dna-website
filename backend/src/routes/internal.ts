@@ -62,8 +62,8 @@ router.post('/tick', requireTickSecret, async (_req, res) => {
       WHERE r.reminder_sent_at IS NULL
         AND ss.email IS NOT NULL
         AND e.starts_at IS NOT NULL
-        AND e.starts_at BETWEEN NOW() AND NOW() + INTERVAL '${REMINDER_WINDOW_MINUTES} minutes'
-    `);
+        AND e.starts_at BETWEEN NOW() AND NOW() + ($1 || ' minutes')::interval
+    `, [String(REMINDER_WINDOW_MINUTES)]);
 
     const dueReminders: DueReminder[] = due.rows.map(r => ({
       eventId: r.event_id, rollNumber: r.roll_number, email: r.email, name: r.name,
