@@ -131,6 +131,55 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
+// Shared admin row-action button. Icon-only buttons with no visible label are
+// hard for anyone but the original builder to parse at a glance — especially
+// the difference between a safe, reversible action (view, edit) and a
+// consequential one (send email to the whole roster, permanently delete).
+// This component makes that difference visible instead of relying on a
+// same-weight icon + a hover-only tooltip:
+//   - variant="default" — icon + tooltip only, compact, for safe/reversible actions.
+//   - variant="warn"/"danger" — icon in a colored pill, WITH a text label on
+//     screens wide enough to show it (hidden below `labelBreakpoint` via CSS,
+//     tooltip still carries the meaning on narrow screens/touch).
+function AdminActionButton({
+  icon, label, title, onClick, variant = 'default', disabled,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  title?: string;
+  onClick: () => void;
+  variant?: 'default' | 'warn' | 'danger';
+  disabled?: boolean;
+}) {
+  const palette = {
+    default: { color: 'var(--color-ink-muted)', bg: 'transparent', border: 'transparent' },
+    warn:    { color: 'var(--color-accent-blue)', bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.3)' },
+    danger:  { color: '#e5484d', bg: 'rgba(229,72,77,0.1)', border: 'rgba(229,72,77,0.3)' },
+  }[variant];
+  const labeled = variant !== 'default';
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title ?? label}
+      className="admin-action-btn shrink-0"
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        height: 28, padding: labeled ? '0 10px 0 8px' : 0, width: labeled ? undefined : 28,
+        color: palette.color, background: palette.bg,
+        border: `1px solid ${labeled ? palette.border : 'transparent'}`,
+        borderRadius: 'var(--radius-pill)', cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.5 : 1, fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {icon}
+      {labeled && <span className="admin-action-label">{label}</span>}
+    </button>
+  );
+}
+
 // Small pill showing whether students have been notified about a record yet.
 function NotifiedBadge({ notifiedAt }: { notifiedAt: string | null }) {
   const sent = notifiedAt !== null;
@@ -620,12 +669,17 @@ function AcademyTab() {
                     {seqErrors[v.id] && <p className="type-micro" style={{ color: '#e5484d' }}>{seqErrors[v.id]}</p>}
                   </div>
                   <a href={`https://youtube.com/watch?v=${v.ytId}`} target="_blank" rel="noreferrer" className="type-micro shrink-0" style={{ color: 'var(--color-accent-blue)' }}>↗</a>
-                  <button onClick={() => openEditVideo(activeDomain, v)} className="btn-icon shrink-0" style={{ color: 'var(--color-accent-blue)', width: 28, height: 28, background: 'transparent' }}>
-                    <Pencil size={12} />
-                  </button>
-                  <button onClick={() => deleteVideo(activeDomain, v.id)} className="btn-icon shrink-0" style={{ color: '#e5484d', width: 28, height: 28, background: 'transparent' }}>
-                    <Trash2 size={12} />
-                  </button>
+                  <AdminActionButton
+                    icon={<Pencil size={12} />}
+                    label="Edit"
+                    onClick={() => openEditVideo(activeDomain, v)}
+                  />
+                  <AdminActionButton
+                    icon={<Trash2 size={12} />}
+                    label="Delete"
+                    variant="danger"
+                    onClick={() => deleteVideo(activeDomain, v.id)}
+                  />
                 </div>
               );
             })}
@@ -1224,20 +1278,24 @@ function GalleryTab() {
               <Star size={14} fill={a.featured ? '#FFD700' : 'none'} />
             </button>
             <NotifiedBadge notifiedAt={a.notifiedAt} />
-            <button
-              onClick={() => setNotifyItem(a)}
-              className="btn-icon shrink-0"
+            <AdminActionButton
+              icon={<Send size={12} />}
+              label={a.notifiedAt ? 'Re-send' : 'Notify'}
               title={a.notifiedAt ? 'Re-send notification to students' : 'Notify students about this artwork'}
-              style={{ color: a.notifiedAt ? 'var(--color-ink-muted)' : 'var(--color-accent-blue)', width: 28, height: 28, background: 'transparent' }}
-            >
-              <Send size={12} />
-            </button>
-            <button onClick={() => openEditArtwork(a)} className="btn-icon shrink-0" style={{ color: 'var(--color-accent-blue)', width: 28, height: 28, background: 'transparent' }}>
-              <Pencil size={12} />
-            </button>
-            <button onClick={() => deleteArtwork(a.id)} className="btn-icon shrink-0" style={{ color: '#e5484d', width: 28, height: 28, background: 'transparent' }}>
-              <Trash2 size={12} />
-            </button>
+              variant="warn"
+              onClick={() => setNotifyItem(a)}
+            />
+            <AdminActionButton
+              icon={<Pencil size={12} />}
+              label="Edit"
+              onClick={() => openEditArtwork(a)}
+            />
+            <AdminActionButton
+              icon={<Trash2 size={12} />}
+              label="Delete"
+              variant="danger"
+              onClick={() => deleteArtwork(a.id)}
+            />
           </div>
         ))}
       </div>
@@ -1595,12 +1653,17 @@ function TeamTab() {
                       <p className="type-body-sm truncate">{m.name}</p>
                       <p className="type-micro">{m.designation}{m.year ? ` · ${m.year}` : ''}</p>
                     </div>
-                    <button onClick={() => openEditMember(m)} className="btn-icon shrink-0" style={{ color: 'var(--color-accent-blue)', width: 28, height: 28, background: 'transparent' }}>
-                      <Pencil size={12} />
-                    </button>
-                    <button onClick={() => deleteTeamMember(m.id)} className="btn-icon shrink-0" style={{ color: '#e5484d', width: 28, height: 28, background: 'transparent' }}>
-                      <Trash2 size={12} />
-                    </button>
+                    <AdminActionButton
+                      icon={<Pencil size={12} />}
+                      label="Edit"
+                      onClick={() => openEditMember(m)}
+                    />
+                    <AdminActionButton
+                      icon={<Trash2 size={12} />}
+                      label="Delete"
+                      variant="danger"
+                      onClick={() => deleteTeamMember(m.id)}
+                    />
                   </div>
                 ))}
               </div>
@@ -1801,28 +1864,30 @@ function EventsTab() {
               <p className="type-micro">{ev.date} · {ev.registeredCount}/{ev.capacity}</p>
             </div>
             <NotifiedBadge notifiedAt={ev.notifiedAt} />
-            <button
+            <AdminActionButton
+              icon={<Users size={12} />}
+              label="Registrants"
+              title="View who registered"
               onClick={() => setRegistrantsItem(ev)}
-              className="btn-icon shrink-0"
-              title="View registrants"
-              style={{ color: 'var(--color-ink-muted)', width: 28, height: 28, background: 'transparent' }}
-            >
-              <Users size={12} />
-            </button>
-            <button
-              onClick={() => setNotifyItem(ev)}
-              className="btn-icon shrink-0"
+            />
+            <AdminActionButton
+              icon={<Send size={12} />}
+              label={ev.notifiedAt ? 'Re-send' : 'Notify'}
               title={ev.notifiedAt ? 'Re-send notification to students' : 'Notify students about this event'}
-              style={{ color: ev.notifiedAt ? 'var(--color-ink-muted)' : 'var(--color-accent-blue)', width: 28, height: 28, background: 'transparent' }}
-            >
-              <Send size={12} />
-            </button>
-            <button onClick={() => openEditEvent(ev)} className="btn-icon shrink-0" style={{ color: 'var(--color-accent-blue)', width: 28, height: 28, background: 'transparent' }}>
-              <Pencil size={12} />
-            </button>
-            <button onClick={() => deleteEvent(ev.id)} className="btn-icon shrink-0" style={{ color: '#e5484d', width: 28, height: 28, background: 'transparent' }}>
-              <Trash2 size={12} />
-            </button>
+              variant="warn"
+              onClick={() => setNotifyItem(ev)}
+            />
+            <AdminActionButton
+              icon={<Pencil size={12} />}
+              label="Edit"
+              onClick={() => openEditEvent(ev)}
+            />
+            <AdminActionButton
+              icon={<Trash2 size={12} />}
+              label="Delete"
+              variant="danger"
+              onClick={() => deleteEvent(ev.id)}
+            />
           </div>
         ))}
       </div>

@@ -377,6 +377,15 @@
   }
   .btn-icon:hover { background: var(--color-surface-2); }
 
+  .admin-action-btn:hover { filter: brightness(1.15); }
+  .admin-action-label { display: inline; }
+  @media (max-width: 640px) {
+    /* Icon + color chip still carries the meaning; text collapses to save
+       row space on narrow/touch screens, where the title attribute is less
+       useful anyway (no hover) but the color/border distinction still reads. */
+    .admin-action-label { display: none; }
+  }
+
   /* ── Gradient Spotlight Cards ── */
   .spotlight {
     border-radius: var(--radius-xxl);
