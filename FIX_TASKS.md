@@ -69,7 +69,7 @@ issue IDs. Each row is fixed on its own branch off `main` and shipped as its own
 | QW1 | npm audit fix (root + backend) | deps | own tiny PR | `fix/npm-audit-advisories` | not started |
 | QW2 | Wire palette-engine test into npm test script | test infra | grouped with C1 | `test/otp-rsvp-integration-tests` | done — surfaces 20 pre-existing failures in PaletteStudio's engine (off-limits code); wired as-is per explicit confirmation, not silently fixed or skipped |
 | C7 | ResourcesPage: build the real feature (schema, routes, admin tab, public page) | backend + frontend/Resources | own PR (largest change) | `feat/resources-page` | done — schema+routes+tests+frontend+admin tab all implemented, verified (typecheck, 19/19 tests, build), PR opened; domain-modeling fork (FK to domains vs. free-text) flagged in the plan below, chose FK-to-domains, easy to revisit |
-| DEP1 | React 18→19 + @types/react, @types/react-dom, @vitejs/plugin-react | deps | own PR, only if verified safe | `chore/upgrade-react-19` (if pursued) | not started |
+| DEP1 | React 18→19 + @types/react, @types/react-dom, @vitejs/plugin-react | deps | own PR, only if verified safe | `chore/upgrade-react-19` (if pursued) | **deferred** — tldraw@2.4.4 (Moodboards canvas) is React-18-only; see Dependency majors table for full reasoning. No code changes shipped; install was attempted, verified blocked, then cleanly reverted (confirmed zero diff to package.json/pnpm-lock.yaml). |
 | DEP2 | Express 4→5 | deps/backend | own PR, only if verified safe | `chore/upgrade-express-5` (if pursued) | not started |
 | DEP3 | MUI 7→9 (@mui/material, @mui/icons-material) | deps | own PR, only if verified safe | `chore/upgrade-mui-9` (if pursued) | not started |
 | DEP4 | Zod 3→4 | deps/backend | own PR, only if verified safe | `chore/upgrade-zod-4` (if pursued) | not started |
@@ -93,11 +93,19 @@ these are independent of everything else and easy to slot in whenever.
 
 | Library | Current → Latest | Verdict | Reason |
 |---------|-------------------|---------|--------|
-| React + react-dom + @types/* + @vitejs/plugin-react | 18.3.1 → 19.2.8 | _not yet evaluated_ | — |
+| React + react-dom + @types/* | 18.3.1 → 19.2.8 | **DEFERRED** | `tldraw@2.4.4` (the Moodboards canvas library — `2.4.4` is the version actually pinned here, not latest) peer-depends on `react@^18`/`react-dom@^18` only; no React 19 support until tldraw v5.x, itself a major, unrelated jump. Confirmed via actual install + `pnpm peers check`, not just changelog reading: the bump installs cleanly (all *other* used libraries — Radix, MUI, react-image-crop, react-day-picker, next-themes, embla-carousel, vaul, cmdk, react-responsive-panels, react-slick — declare React 19 support at their currently-pinned versions), but tldraw is the one real blocker. `react-popper` and `react-dnd`/`react-dnd-html5-backend`/`react-responsive-masonry` also lack declared React 19 support but are dead dependencies (grepped `src/` — zero imports), so they don't block anything themselves; flagging as separate dead-dependency cleanup candidates, not part of this deferral's reasoning. `@vitejs/plugin-react` did NOT need a bump — the currently-pinned 4.7.0 has no react/react-dom peer dependency at all and already supports Vite 6/7, so it's excluded from this row's "→ Latest" scope entirely. |
 | Express | 4.22.2 → 5.2.1 | _not yet evaluated_ | — |
 | MUI (@mui/material, @mui/icons-material) | 7.3.5 → 9.2.0 | _not yet evaluated_ | — |
 | Zod | 3.25.76 → 4.4.3 | _not yet evaluated_ | — |
 | Radix UI packages (various) | various, 1 major/minor behind | _not yet evaluated_ | — |
+
+**Note on tooling**: the root project is a **pnpm** workspace (`packageManager: pnpm@11.6.0`,
+`pnpm-workspace.yaml` present) — `npm install` at the root doesn't understand pnpm's
+`workspace:` protocol used somewhere in the dependency graph and fails or hangs
+unpredictably. All root-level dependency work must use `pnpm add`/`pnpm install`, not
+`npm`. (The `backend/` directory is a separate, plain npm project — `npm` is correct
+there.) This cost real time to discover during the React evaluation; recording it here
+so it isn't rediscovered on every subsequent dependency-major evaluation.
 
 ## C7 — ResourcesPage: build the real feature (plan)
 
@@ -241,7 +249,7 @@ independently mergeable.
 | — | `refactor/admin-entity-form` | CQ1 | not started |
 | — | `fix/small-ui-quick-wins` | B9, CQ11, CQ12 | not started |
 | — | `fix/npm-audit-advisories` | QW1 | not started |
-| — | `chore/upgrade-react-19` (if pursued) | DEP1 | not started |
+| — | `chore/upgrade-react-19` (if pursued) | DEP1 | deferred — no PR opened, see Dependency majors table |
 | — | `chore/upgrade-express-5` (if pursued) | DEP2 | not started |
 | — | `chore/upgrade-mui-9` (if pursued) | DEP3 | not started |
 | — | `chore/upgrade-zod-4` (if pursued) | DEP4 | not started |
