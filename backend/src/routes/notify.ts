@@ -73,11 +73,21 @@ router.post('/event/:id', requireAdmin, async (req, res) => {
     const rows = await pool.query<EventRow>('SELECT * FROM events WHERE id=$1', [req.params.id]);
     if (rows.rows.length === 0) { res.status(404).json({ error: 'Event not found' }); return; }
     const e = rows.rows[0];
-    await sendEventNotification({ title: e.title, date: e.date, venue: e.location, description: e.content });
+    const { sentNow, queued } = await sendEventNotification({ title: e.title, date: e.date, venue: e.location, description: e.content });
+    if (sentNow === 0 && queued === 0) {
+      // Nothing sent and nothing queued — most likely no student has an email
+      // on file (or RESEND_API_KEY is unset). Don't stamp notified_at, since
+      // that would mark the event "Sent" when the admin action had no effect.
+      res.json({ success: true, notifiedAt: e.notified_at, sentNow, queued });
+      return;
+    }
+    // notified_at marks the notify action as taken even if some recipients were
+    // queued for later (quota-gated) — the badge means "admin sent this", the
+    // queued count tells them delivery is still catching up.
     const upd = await pool.query<{ notified_at: string }>(
       'UPDATE events SET notified_at=NOW() WHERE id=$1 RETURNING notified_at', [req.params.id]
     );
-    res.json({ success: true, notifiedAt: upd.rows[0].notified_at });
+    res.json({ success: true, notifiedAt: upd.rows[0].notified_at, sentNow, queued });
   } catch (err) {
     console.error('Notify event error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -102,11 +112,15 @@ router.post('/artwork/:id', requireAdmin, async (req, res) => {
     const rows = await pool.query<ArtworkRow>('SELECT * FROM artworks WHERE id=$1', [req.params.id]);
     if (rows.rows.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
     const a = rows.rows[0];
-    await sendArtworkNotification({ title: a.title, artist: a.artist, domain: a.domain });
+    const { sentNow, queued } = await sendArtworkNotification({ title: a.title, artist: a.artist, domain: a.domain });
+    if (sentNow === 0 && queued === 0) {
+      res.json({ success: true, notifiedAt: a.notified_at, sentNow, queued });
+      return;
+    }
     const upd = await pool.query<{ notified_at: string }>(
       'UPDATE artworks SET notified_at=NOW() WHERE id=$1 RETURNING notified_at', [req.params.id]
     );
-    res.json({ success: true, notifiedAt: upd.rows[0].notified_at });
+    res.json({ success: true, notifiedAt: upd.rows[0].notified_at, sentNow, queued });
   } catch (err) {
     console.error('Notify artwork error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -227,16 +241,19 @@ router.post('/announce', requireAdmin, async (req, res) => {
       .filter(Boolean);
 
     if (emails.length === 0) {
-      res.json({ success: true, message: 'No registered students to notify', sent: 0 });
+      res.json({ success: true, message: 'No registered students to notify', sent: 0, queued: 0 });
       return;
     }
 
-    await sendCustomAnnouncement(subject, html, emails);
+    const { sentNow, queued } = await sendCustomAnnouncement(subject, html, emails);
 
     res.json({
       success: true,
-      message: `Announcement sent to ${emails.length} students`,
-      sent: emails.length,
+      message: queued > 0
+        ? `Sent to ${sentNow} students now; ${queued} more queued (today's send limit reached, they'll go out automatically)`
+        : `Announcement sent to ${sentNow} students`,
+      sent: sentNow,
+      queued,
     });
   } catch (err) {
     console.error('Announce error:', err);

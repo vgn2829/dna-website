@@ -13,7 +13,7 @@ const rsvpLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, message: { error: 
 type EventRow = {
   id: string; title: string; date: string; time: string;
   location: string; content: string; capacity: number; registered_count: number;
-  notified_at: string | null;
+  notified_at: string | null; starts_at: string | null;
 };
 
 function formatEvent(row: EventRow, isRegistered = false) {
@@ -22,6 +22,9 @@ function formatEvent(row: EventRow, isRegistered = false) {
     location: row.location, content: row.content,
     capacity: row.capacity, registeredCount: row.registered_count, isRegistered,
     notifiedAt: row.notified_at ?? null,
+    // Machine-readable start instant, used by the reminder job; null until an
+    // admin sets it (the free-text `time` field above remains the display label).
+    startsAt: row.starts_at ?? null,
   };
 }
 
@@ -44,17 +47,22 @@ const createSchema = z.object({
   location: z.string().min(1).max(200),
   content: z.string().min(1).max(2000),
   capacity: z.number().int().min(1).max(10000),
+  // Optional machine-readable start instant (ISO 8601). Not required at
+  // create time — existing/older flows that only fill in the free-text
+  // `time` label keep working; the reminder job simply skips events with no
+  // startsAt rather than forcing this field everywhere.
+  startsAt: z.string().datetime().optional(),
 });
 
 eventsRouter.post('/', requireAdmin, async (req, res) => {
   const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
-  const { title, date, time, location, content, capacity } = parsed.data;
+  const { title, date, time, location, content, capacity, startsAt } = parsed.data;
   const id = `evt-${uuidv4().slice(0, 8)}`;
   await query(
-    'INSERT INTO events (id,title,date,time,location,content,capacity) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-    [id, title, date, time, location, content, capacity]
+    'INSERT INTO events (id,title,date,time,location,content,capacity,starts_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+    [id, title, date, time, location, content, capacity, startsAt ?? null]
   );
   const rows = await query<EventRow>('SELECT * FROM events WHERE id=$1', [id]);
   res.status(201).json(formatEvent(rows[0]));
@@ -67,6 +75,7 @@ const updateSchema = z.object({
   location: z.string().min(1).max(200).optional(),
   content:  z.string().min(1).max(2000).optional(),
   capacity: z.coerce.number().int().min(1).max(10000).optional(),
+  startsAt: z.string().datetime().nullable().optional(),
 });
 
 eventsRouter.put('/:id', requireAdmin, optionalStudent, async (req, res) => {
@@ -94,6 +103,7 @@ eventsRouter.put('/:id', requireAdmin, optionalStudent, async (req, res) => {
   if (d.location !== undefined) { sets.push(`location = $${i++}`); vals.push(d.location); }
   if (d.content  !== undefined) { sets.push(`content = $${i++}`);  vals.push(d.content); }
   if (d.capacity !== undefined) { sets.push(`capacity = $${i++}`); vals.push(d.capacity); }
+  if (d.startsAt !== undefined) { sets.push(`starts_at = $${i++}`); vals.push(d.startsAt); }
   if (sets.length === 0) { res.status(400).json({ error: 'Nothing to update' }); return; }
   vals.push(req.params.id);
   const result = await pool.query(`UPDATE events SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, vals);
@@ -158,4 +168,18 @@ eventsRouter.post('/:id/rsvp', rsvpLimiter, requireStudent, async (req, res) => 
   } finally {
     client.release();
   }
+});
+
+eventsRouter.get('/:id/registrants', requireAdmin, async (req, res) => {
+  const result = await query<{
+    roll_number: string; name: string | null; email: string | null; rsvped_at: string | null;
+  }>(`
+    SELECT r.roll_number, ss.name, ss.email, r.created_at AS rsvped_at
+    FROM event_rsvps r
+    LEFT JOIN student_sessions ss ON ss.roll_number = r.roll_number
+    WHERE r.event_id = $1
+    ORDER BY r.created_at ASC NULLS LAST
+  `, [req.params.id]);
+
+  res.json({ event_id: req.params.id, count: result.length, registrants: result });
 });

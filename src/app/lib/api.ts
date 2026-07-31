@@ -34,6 +34,19 @@ export interface SessionJoins {
   joins: SessionJoin[];
 }
 
+export interface EventRegistrant {
+  roll_number: string;
+  name: string | null;
+  email: string | null;
+  rsvped_at: string | null;
+}
+
+export interface EventRegistrants {
+  event_id: string;
+  count: number;
+  registrants: EventRegistrant[];
+}
+
 export interface PastSession {
   id: string;
   title: string;
@@ -211,12 +224,14 @@ export const api = {
   },
   events: {
     list: (roll?: string) => request<unknown[]>('GET', '/events', { roll }),
-    add:  (event: { title: string; date: string; time: string; location: string; content: string; capacity: number }) =>
+    add:  (event: { title: string; date: string; time: string; location: string; content: string; capacity: number; startsAt?: string | null }) =>
       request<unknown>('POST', '/events', { body: event, admin: true }),
     update: (id: string, data: object) => request<unknown>('PUT', `/events/${id}`, { body: data, admin: true }),
     delete: (id: string)  => request<void>('DELETE', `/events/${id}`, { admin: true }),
     rsvp:  (id: string, roll: string) =>
       request<{ registeredCount: number; isRegistered: boolean }>('POST', `/events/${id}/rsvp`, { roll }),
+    registrants: (id: string) =>
+      request<EventRegistrants>('GET', `/events/${id}/registrants`, { admin: true }),
   },
   team: {
     list:   () => request<unknown[]>('GET', '/team'),
@@ -229,11 +244,14 @@ export const api = {
   notify: {
     // Send the student notification for an already-created event/artwork, keyed
     // by id. The server reads the record, sends, and stamps notified_at (returned
-    // here so the UI badge updates without a refetch).
+    // here so the UI badge updates without a refetch). Because Resend's free
+    // tier caps daily/monthly volume, a send may not fully complete immediately:
+    // sentNow is what went out now, queued is what's waiting for a later tick
+    // (see mailer.ts sendBroadcast / drainMailQueue).
     event: (id: string) =>
-      request<{ success: boolean; notifiedAt: string }>('POST', `/notify/event/${id}`, { admin: true }),
+      request<{ success: boolean; notifiedAt: string; sentNow: number; queued: number }>('POST', `/notify/event/${id}`, { admin: true }),
     artwork: (id: string) =>
-      request<{ success: boolean; notifiedAt: string }>('POST', `/notify/artwork/${id}`, { admin: true }),
+      request<{ success: boolean; notifiedAt: string; sentNow: number; queued: number }>('POST', `/notify/artwork/${id}`, { admin: true }),
     // Preview the exact email + recipient count for the admin confirm dialog.
     previewEvent: (id: string) =>
       request<{ subject: string; html: string; recipientCount: number }>('GET', `/notify/event/${id}/preview`, { admin: true }),
@@ -252,7 +270,7 @@ export const api = {
       request<{ success: boolean; sentTo: string }>(
         'POST', `/notify/templates/${id}/test`, { body: data, admin: true }),
     sendAnnouncement: (data: { subject: string; html: string }) =>
-      request<{ success: boolean; sent: number }>('POST', '/notify/announce', { body: data, admin: true }),
+      request<{ success: boolean; message: string; sent: number; queued: number }>('POST', '/notify/announce', { body: data, admin: true }),
   },
   students: {
     checkExists: (roll: string) =>

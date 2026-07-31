@@ -121,6 +121,15 @@ export async function initSchema(): Promise<void> {
     ALTER TABLE artworks ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ DEFAULT NULL;
   `);
 
+  // NULL = RSVP predates this column; the exact time is unrecoverable, so the
+  // admin UI shows "—" rather than a fabricated timestamp. Existing rows stay
+  // NULL (added with no default, so no rewrite backfills a fake "now"); the
+  // default is set afterward so new RSVPs record accurately going forward.
+  await pool.query(`
+    ALTER TABLE event_rsvps ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
+    ALTER TABLE event_rsvps ALTER COLUMN created_at SET DEFAULT NOW();
+  `);
+
   // Add sequence column + back-fill by insertion order per domain.
   // The WHERE sequence = 0 guard makes the UPDATE idempotent too.
   await pool.query(`
@@ -295,6 +304,8 @@ export async function initSchema(): Promise<void> {
           <p style="font-size:16px; line-height:1.6; color:#333; margin:0; font-weight:500;">
             <span style="background-color:#e0f55b; display:inline-block; padding:2px 6px; font-weight:700; color:#111; border-radius:2px;">Stay tuned</span> for updates on workshops, exhibitions, and events. We are glad to have you with us.
           </p>
+
+          <a href="https://www.dnaiitk.site" style="display:inline-block; background-color:#e64298; color:#ffffff; padding:12px 24px; text-decoration:none; font-weight:bold; border-radius:25px; margin-top:15px;">Visit Website</a>
         </div>
 
         <div style="margin-top:25px; font-size:35px; font-weight:800; color:#111; text-align:center; letter-spacing:-1px;">Get creative.</div>
@@ -336,6 +347,8 @@ export async function initSchema(): Promise<void> {
           <p style="font-size:16px; line-height:1.6; color:#333; margin:0; font-weight:500;">
             A new artwork has been added to the DnA Club gallery. Visit the website to explore the latest creative work from our members.
           </p>
+
+          <a href="https://www.dnaiitk.site" style="display:inline-block; background-color:#e64298; color:#ffffff; padding:12px 24px; text-decoration:none; font-weight:bold; border-radius:25px; margin-top:15px;">Visit Website</a>
         </div>
 
         <div style="margin-top:25px; font-size:35px; font-weight:800; color:#111; text-align:center; letter-spacing:-1px;">Get creative.</div>
@@ -375,6 +388,8 @@ export async function initSchema(): Promise<void> {
           <p style="font-size:16px; line-height:1.6; color:#333; margin:0; font-weight:500;">
             {{description}}
           </p>
+
+          <a href="https://www.dnaiitk.site" style="display:inline-block; background-color:#e64298; color:#ffffff; padding:12px 24px; text-decoration:none; font-weight:bold; border-radius:25px; margin-top:15px;">Visit Website</a>
         </div>
 
         <div style="margin-top:25px; font-size:35px; font-weight:800; color:#111; text-align:center; letter-spacing:-1px;">Get creative.</div>
@@ -668,4 +683,72 @@ export async function initSchema(): Promise<void> {
   }
 
   console.log('6 coordinators seeded');
+
+  // Resend free tier caps at 100 emails/day and 3,000/month, and every
+  // To/CC/BCC recipient counts separately toward that quota — so a single
+  // broadcast to the whole roster can consume most of a day's budget. This
+  // table tracks how much has been sent on each UTC day so broadcast sends can
+  // be gated to protect headroom for OTP/welcome mail (which must never be
+  // blocked). One row per day; `sent_count` increments as mail actually goes out.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS mail_usage (
+      day        DATE PRIMARY KEY,
+      sent_count INT  NOT NULL DEFAULT 0
+    )
+  `);
+
+  // Broadcast sends (event/artwork notify, announcements, event reminders)
+  // that can't fully fit in today's quota-gated budget are queued here instead
+  // of failing. `remaining` shrinks as recipients are drained on each tick;
+  // the row is done once it's empty. `kind` is informational (for admin
+  // visibility / debugging), not used for dispatch logic.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS mail_queue (
+      id           TEXT PRIMARY KEY,
+      kind         TEXT NOT NULL,
+      subject      TEXT NOT NULL,
+      html         TEXT NOT NULL,
+      remaining    TEXT[] NOT NULL,
+      total_count  INT  NOT NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      completed_at TIMESTAMPTZ
+    )
+  `);
+
+  // Machine-readable event start instant, alongside the existing free-text
+  // `time` display label (kept as-is for the UI). NULL for events created
+  // before this column existed, or where the admin hasn't set it yet — the
+  // reminder job simply skips events with no starts_at rather than guessing.
+  await pool.query(`
+    ALTER TABLE events ADD COLUMN IF NOT EXISTS starts_at TIMESTAMPTZ DEFAULT NULL;
+  `);
+
+  // Per-RSVP dedup marker for the ~1-hour-before reminder job. NULL = not yet
+  // reminded. Per-RSVP (not per-event) so a student who RSVPs after the first
+  // reminder batch still gets their own reminder.
+  await pool.query(`
+    ALTER TABLE event_rsvps ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ DEFAULT NULL;
+  `);
+
+  // event_reminder is a 4th admin-editable template (same TemplateEditor
+  // pattern as welcome/new_artwork/new_event), seeded idempotently so it
+  // appears even on a DB where email_templates was already populated before
+  // this feature existed.
+  const reminderBody = `
+    <h1 style="font-size:32px; font-weight:800; color:#111; line-height:1.1; margin:0 0 20px 0; letter-spacing:-1px;">Starting soon:<br>{{title}}</h1>
+    <p style="font-size:16px; line-height:1.6; color:#333; margin:0 0 18px 0; font-weight:500;">
+      Hi {{name}}, this is a reminder that <strong>{{title}}</strong> starts in about an hour.
+    </p>
+    <p style="font-size:16px; line-height:1.6; color:#333; margin:0 0 18px 0; font-weight:500;">
+      <strong>Date:</strong> {{date}} &nbsp;|&nbsp; <strong>Time:</strong> {{time}}
+    </p>
+    <p style="font-size:16px; line-height:1.6; color:#333; margin:0; font-weight:500;">
+      <span style="background-color:#e0f55b; display:inline-block; padding:2px 6px; font-weight:700; color:#111; border-radius:2px;">Venue: {{venue}}</span>
+    </p>
+  `;
+  await pool.query(`
+    INSERT INTO email_templates (id, name, subject, body, updated_at)
+    VALUES ('event_reminder', 'Event Reminder', 'Reminder: {{title}} starts soon — DnA Club IITK', $1, $2)
+    ON CONFLICT (id) DO NOTHING
+  `, [reminderBody, new Date().toISOString()]);
 }

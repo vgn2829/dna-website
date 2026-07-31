@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout, Send, TriangleAlert } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
-import { api, setAdminToken, clearAdminToken, type SessionJoins, type CoordinatorMember } from '../lib/api';
+import { api, setAdminToken, clearAdminToken, type SessionJoins, type CoordinatorMember, type EventRegistrants } from '../lib/api';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
 import imageCompression from 'browser-image-compression';
 
@@ -164,12 +164,13 @@ function NotifyDialog({
   item: { id: string; title: string; notifiedAt: string | null };
   onClose: () => void;
   fetchPreview: (id: string) => Promise<NotifyPreview>;
-  onSend: (id: string) => Promise<string>;
+  onSend: (id: string) => Promise<{ notifiedAt: string; sentNow: number; queued: number }>;
 }) {
   const [preview, setPreview] = useState<NotifyPreview | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState<string | null>(null);
+  const [result, setResult] = useState<{ sentNow: number; queued: number } | null>(null);
   const alreadySent = item.notifiedAt !== null;
   const count = preview?.recipientCount;
 
@@ -185,10 +186,14 @@ function NotifyDialog({
     setSending(true);
     setSendErr(null);
     try {
-      await onSend(item.id);
-      onClose();
+      const { sentNow, queued } = await onSend(item.id);
+      setResult({ sentNow, queued });
+      // Only auto-close on a clean full send; a partial send needs the admin to
+      // actually read the queued-count message before dismissing it.
+      if (queued === 0) onClose();
     } catch (e) {
       setSendErr(e instanceof Error ? e.message : 'Failed to send notification');
+    } finally {
       setSending(false);
     }
   };
@@ -200,7 +205,16 @@ function NotifyDialog({
   return (
     <Modal title={`Notify students — ${item.title}`} onClose={onClose}>
       <div className="space-y-3">
-        {alreadySent && (
+        {result && result.queued > 0 && (
+          <div className="flex items-start gap-2 p-3" style={{ borderRadius: 'var(--radius-lg)', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.35)' }}>
+            <TriangleAlert size={15} style={{ color: '#3b82f6', flexShrink: 0, marginTop: 1 }} />
+            <p className="type-micro" style={{ color: 'var(--color-ink)', margin: 0 }}>
+              Sent to <strong>{result.sentNow}</strong> student{result.sentNow === 1 ? '' : 's'} now. <strong>{result.queued}</strong> more {result.queued === 1 ? 'is' : 'are'} queued — today's free-tier send limit was reached, so the rest will go out automatically over the next day or two.
+            </p>
+          </div>
+        )}
+
+        {alreadySent && !result && (
           <div className="flex items-start gap-2 p-3" style={{ borderRadius: 'var(--radius-lg)', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.35)' }}>
             <TriangleAlert size={15} style={{ color: '#d97706', flexShrink: 0, marginTop: 1 }} />
             <p className="type-micro" style={{ color: 'var(--color-ink)', margin: 0 }}>
@@ -241,18 +255,144 @@ function NotifyDialog({
         {sendErr && <p className="type-micro" style={{ color: '#e5484d' }}>{sendErr}</p>}
 
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={!canSend}
-            className="btn-primary flex items-center gap-2"
-            style={{ opacity: canSend ? 1 : 0.5, cursor: canSend ? 'pointer' : 'not-allowed' }}
-          >
-            {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-            {noStudents ? 'No recipients' : count !== undefined ? `${sendLabel} to ${count} student${count === 1 ? '' : 's'}` : sendLabel}
-          </button>
-          <button type="button" onClick={onClose} className="btn-secondary" disabled={sending}>Cancel</button>
+          {!result && (
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={!canSend}
+              className="btn-primary flex items-center gap-2"
+              style={{ opacity: canSend ? 1 : 0.5, cursor: canSend ? 'pointer' : 'not-allowed' }}
+            >
+              {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+              {noStudents ? 'No recipients' : count !== undefined ? `${sendLabel} to ${count} student${count === 1 ? '' : 's'}` : sendLabel}
+            </button>
+          )}
+          <button type="button" onClick={onClose} className="btn-secondary" disabled={sending}>{result ? 'Close' : 'Cancel'}</button>
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+// A leading =, +, -, @ (or tab/CR) makes Excel/Sheets interpret a pasted or
+// imported cell as a formula — prefix with a single quote to neutralize that
+// (spreadsheet formula-injection). Shared by both the CSV and TSV exports.
+function neutralizeFormula(value: string): string {
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+}
+
+// Escape a field for CSV: quote it and double any interior quotes whenever it
+// contains a comma, quote, newline, or carriage return that would otherwise
+// break the file.
+function csvField(value: string): string {
+  const safe = neutralizeFormula(value);
+  if (/["\n\r,]/.test(safe)) return `"${safe.replace(/"/g, '""')}"`;
+  return safe;
+}
+
+function downloadBlob(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revoking in the same task can cancel the download in some browsers;
+  // defer to the next tick so the click has already been dispatched.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+// Registrant list + export for a single event. Mirrors SessionsTab's attendee
+// panel (joins list) but as a modal, since EventsTab is single-column.
+function RegistrantsModal({ event, onClose }: { event: ClubEvent; onClose: () => void }) {
+  const [data, setData] = useState<EventRegistrants | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.events.registrants(event.id)
+      .then(r => { if (!cancelled) setData(r); })
+      .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load registrants'); });
+    return () => { cancelled = true; };
+  }, [event.id]);
+
+  const rsvpTime = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+
+  const rows = () => (data?.registrants ?? []).map(r => [r.name ?? 'Unknown', r.roll_number, r.email ?? '', rsvpTime(r.rsvped_at)]);
+
+  const handleDownloadCsv = () => {
+    const header = ['Name', 'Roll Number', 'Email', 'RSVP Time'];
+    const lines = [header, ...rows()].map(row => row.map(csvField).join(','));
+    downloadBlob(`dna-${event.id}-registrants.csv`, lines.join('\n'), 'text/csv');
+  };
+
+  const handleCopyTsv = async () => {
+    const header = ['Name', 'Roll Number', 'Email', 'RSVP Time'];
+    const lines = [header, ...rows()].map(row => row.map(neutralizeFormula).join('\t'));
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+    } catch {
+      setError('Could not copy to clipboard — your browser may be blocking clipboard access.');
+      return;
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Modal title={`Registrants — ${event.title}`} onClose={onClose}>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="type-body-sm" style={{ margin: 0 }}>
+            {data ? `${data.count} of ${event.capacity} registered` : 'Loading…'}
+          </p>
+          {data && data.count > 0 && (
+            <div className="flex gap-2">
+              <button type="button" onClick={handleDownloadCsv} className="btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }}>
+                Download CSV
+              </button>
+              <button type="button" onClick={handleCopyTsv} className="btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }}>
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {error ? (
+          <p className="type-body-sm" style={{ color: '#e5484d' }}>{error}</p>
+        ) : !data ? (
+          <div className="flex items-center gap-2 type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>
+            <Loader2 size={14} className="animate-spin" /> Loading registrants…
+          </div>
+        ) : data.registrants.length === 0 ? (
+          <p className="type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>No one has registered yet.</p>
+        ) : (
+          <div style={{ maxHeight: 400, overflowY: 'auto', border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-lg)' }}>
+            {data.registrants.map((r, i) => (
+              <div
+                key={r.roll_number}
+                style={{
+                  padding: '12px 16px',
+                  borderBottom: i < data.registrants.length - 1 ? '1px solid var(--color-hairline)' : 'none',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+                }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                  <span className="type-body-sm" style={{ fontWeight: 600 }}>{r.name ?? 'Unknown'}</span>
+                  <span className="type-micro">{r.roll_number}</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end', flexShrink: 0 }}>
+                  <span className="type-micro" style={{ wordBreak: 'break-all', textAlign: 'right' }}>{r.email ?? '—'}</span>
+                  <span className="type-micro" style={{ whiteSpace: 'nowrap' }}>{rsvpTime(r.rsvped_at)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -1563,12 +1703,14 @@ function TeamTab() {
 function EventsTab() {
   const { events, addEvent, updateEvent, deleteEvent, notifyEvent } = useAppData();
   const [notifyItem, setNotifyItem] = useState<ClubEvent | null>(null);
+  const [registrantsItem, setRegistrantsItem] = useState<ClubEvent | null>(null);
   const [eTitle, setETitle] = useState('');
   const [eDate, setEDate] = useState('');
   const [eTime, setETime] = useState('');
   const [eLocation, setELocation] = useState('');
   const [eContent, setEContent] = useState('');
   const [eCapacity, setECapacity] = useState('100');
+  const [eStartsAt, setEStartsAt] = useState(''); // datetime-local value, e.g. "2026-12-31T18:00"
   const [addingEvent, setAddingEvent] = useState(false);
   const [eSuccess, setESuccess] = useState('');
 
@@ -1580,15 +1722,28 @@ function EventsTab() {
   const [eeLocation, setEeLocation] = useState('');
   const [eeContent, setEeContent] = useState('');
   const [eeCapacity, setEeCapacity] = useState('100');
+  const [eeStartsAt, setEeStartsAt] = useState('');
   const [eeLoading, setEeLoading] = useState(false);
   const [eeError, setEeError] = useState('');
+
+  // datetime-local inputs give/take local time with no timezone info; the
+  // backend stores TIMESTAMPTZ, so round-trip through the Date object's ISO
+  // string (UTC) rather than passing the raw local-time string through.
+  const localToIso = (local: string): string | undefined =>
+    local ? new Date(local).toISOString() : undefined;
+  const isoToLocal = (iso: string | null): string => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
 
   const handleAdd = (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (addingEvent) return;
     setAddingEvent(true);
-    addEvent({ title: eTitle, date: eDate, time: eTime, location: eLocation, content: eContent, capacity: Number(eCapacity) || 100 });
-    setETitle(''); setEDate(''); setETime(''); setELocation(''); setEContent('');
+    addEvent({ title: eTitle, date: eDate, time: eTime, location: eLocation, content: eContent, capacity: Number(eCapacity) || 100, startsAt: localToIso(eStartsAt) ?? null });
+    setETitle(''); setEDate(''); setETime(''); setELocation(''); setEContent(''); setEStartsAt('');
     setESuccess('Event created · use Notify Students to email members');
     setTimeout(() => { setAddingEvent(false); setESuccess(''); }, 4000);
   };
@@ -1597,6 +1752,7 @@ function EventsTab() {
     setEditEvent(ev);
     setEeTitle(ev.title); setEeDate(ev.date); setEeTime(ev.time);
     setEeLocation(ev.location); setEeContent(ev.content); setEeCapacity(String(ev.capacity));
+    setEeStartsAt(isoToLocal(ev.startsAt));
     setEeError('');
   };
 
@@ -1605,7 +1761,7 @@ function EventsTab() {
     if (!editEvent) return;
     setEeLoading(true); setEeError('');
     try {
-      await updateEvent(editEvent.id, { title: eeTitle, date: eeDate, time: eeTime, location: eeLocation, content: eeContent, capacity: Number(eeCapacity) || editEvent.capacity });
+      await updateEvent(editEvent.id, { title: eeTitle, date: eeDate, time: eeTime, location: eeLocation, content: eeContent, capacity: Number(eeCapacity) || editEvent.capacity, startsAt: localToIso(eeStartsAt) ?? null });
       setEditEvent(null);
     } catch (err) { setEeError(String(err)); } finally { setEeLoading(false); }
   };
@@ -1623,6 +1779,11 @@ function EventsTab() {
           <div><label className="type-micro block mb-1">Location *</label><input required value={eLocation} onChange={e => setELocation(e.target.value)} className="input-base" maxLength={200} /></div>
           <div><label className="type-micro block mb-1">Description *</label><textarea required value={eContent} onChange={e => setEContent(e.target.value)} rows={3} className="input-base resize-none" maxLength={2000} /></div>
           <div><label className="type-micro block mb-1">Capacity</label><input type="number" value={eCapacity} onChange={e => setECapacity(e.target.value)} className="input-base" /></div>
+          <div>
+            <label className="type-micro block mb-1">Exact start time (optional)</label>
+            <input type="datetime-local" value={eStartsAt} onChange={e => setEStartsAt(e.target.value)} className="input-base" />
+            <p className="type-micro" style={{ marginTop: 4, color: 'var(--color-ink-muted)' }}>Powers the ~1-hour-before reminder email. The Time field above stays the display label.</p>
+          </div>
           <button type="submit" disabled={addingEvent} className="btn-primary w-full justify-center" style={{ opacity: addingEvent ? 0.5 : 1 }}>
             {addingEvent ? <><Loader2 size={13} className="animate-spin mr-2" />Scheduling…</> : 'Schedule Event'}
           </button>
@@ -1640,6 +1801,14 @@ function EventsTab() {
               <p className="type-micro">{ev.date} · {ev.registeredCount}/{ev.capacity}</p>
             </div>
             <NotifiedBadge notifiedAt={ev.notifiedAt} />
+            <button
+              onClick={() => setRegistrantsItem(ev)}
+              className="btn-icon shrink-0"
+              title="View registrants"
+              style={{ color: 'var(--color-ink-muted)', width: 28, height: 28, background: 'transparent' }}
+            >
+              <Users size={12} />
+            </button>
             <button
               onClick={() => setNotifyItem(ev)}
               className="btn-icon shrink-0"
@@ -1668,6 +1837,10 @@ function EventsTab() {
         />
       )}
 
+      {registrantsItem && (
+        <RegistrantsModal event={registrantsItem} onClose={() => setRegistrantsItem(null)} />
+      )}
+
       {editEvent && (
         <div className="lg:col-span-5">
           <Modal title={`Edit Event — ${editEvent.title}`} onClose={() => setEditEvent(null)}>
@@ -1680,6 +1853,11 @@ function EventsTab() {
               <div><label className="type-micro block mb-1">Location *</label><input required value={eeLocation} onChange={e => setEeLocation(e.target.value)} className="input-base" maxLength={200} /></div>
               <div><label className="type-micro block mb-1">Description *</label><textarea required value={eeContent} onChange={e => setEeContent(e.target.value)} rows={3} className="input-base resize-none" maxLength={2000} /></div>
               <div><label className="type-micro block mb-1">Capacity</label><input type="number" value={eeCapacity} onChange={e => setEeCapacity(e.target.value)} className="input-base" /></div>
+              <div>
+                <label className="type-micro block mb-1">Exact start time (optional)</label>
+                <input type="datetime-local" value={eeStartsAt} onChange={e => setEeStartsAt(e.target.value)} className="input-base" />
+                <p className="type-micro" style={{ marginTop: 4, color: 'var(--color-ink-muted)' }}>Powers the ~1-hour-before reminder email. The Time field above stays the display label.</p>
+              </div>
               {eeError && <p className="type-micro" style={{ color: '#e5484d' }}>{eeError}</p>}
               <div className="flex gap-2">
                 <button type="submit" disabled={eeLoading} className="btn-primary flex items-center gap-2" style={{ opacity: eeLoading ? 0.6 : 1 }}>
@@ -2591,7 +2769,7 @@ function CustomAnnouncement() {
     setSending(true); setResult(null);
     try {
       const res = await api.notify.sendAnnouncement({ subject, html: body });
-      setResult({ success: true, message: `Sent to ${res.sent} registered students` });
+      setResult({ success: true, message: res.message });
       setConfirmOpen(false);
     } catch {
       setResult({ success: false, message: 'Failed to send announcement' });
