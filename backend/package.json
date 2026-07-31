@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "seed": "tsx src/db/seed.ts",
     "backfill:thumbs": "tsx scripts/backfill-thumbnails.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
@@ -37,7 +38,10 @@
     "@types/node": "^20.12.7",
     "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.11.5",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.2.2",
     "tsx": "^4.7.3",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^4.1.10"
   }
 }
