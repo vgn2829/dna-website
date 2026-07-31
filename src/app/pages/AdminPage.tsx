@@ -164,12 +164,13 @@ function NotifyDialog({
   item: { id: string; title: string; notifiedAt: string | null };
   onClose: () => void;
   fetchPreview: (id: string) => Promise<NotifyPreview>;
-  onSend: (id: string) => Promise<string>;
+  onSend: (id: string) => Promise<{ notifiedAt: string; sentNow: number; queued: number }>;
 }) {
   const [preview, setPreview] = useState<NotifyPreview | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState<string | null>(null);
+  const [result, setResult] = useState<{ sentNow: number; queued: number } | null>(null);
   const alreadySent = item.notifiedAt !== null;
   const count = preview?.recipientCount;
 
@@ -185,10 +186,14 @@ function NotifyDialog({
     setSending(true);
     setSendErr(null);
     try {
-      await onSend(item.id);
-      onClose();
+      const { sentNow, queued } = await onSend(item.id);
+      setResult({ sentNow, queued });
+      // Only auto-close on a clean full send; a partial send needs the admin to
+      // actually read the queued-count message before dismissing it.
+      if (queued === 0) onClose();
     } catch (e) {
       setSendErr(e instanceof Error ? e.message : 'Failed to send notification');
+    } finally {
       setSending(false);
     }
   };
@@ -200,7 +205,16 @@ function NotifyDialog({
   return (
     <Modal title={`Notify students — ${item.title}`} onClose={onClose}>
       <div className="space-y-3">
-        {alreadySent && (
+        {result && result.queued > 0 && (
+          <div className="flex items-start gap-2 p-3" style={{ borderRadius: 'var(--radius-lg)', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.35)' }}>
+            <TriangleAlert size={15} style={{ color: '#3b82f6', flexShrink: 0, marginTop: 1 }} />
+            <p className="type-micro" style={{ color: 'var(--color-ink)', margin: 0 }}>
+              Sent to <strong>{result.sentNow}</strong> student{result.sentNow === 1 ? '' : 's'} now. <strong>{result.queued}</strong> more {result.queued === 1 ? 'is' : 'are'} queued — today's free-tier send limit was reached, so the rest will go out automatically over the next day or two.
+            </p>
+          </div>
+        )}
+
+        {alreadySent && !result && (
           <div className="flex items-start gap-2 p-3" style={{ borderRadius: 'var(--radius-lg)', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.35)' }}>
             <TriangleAlert size={15} style={{ color: '#d97706', flexShrink: 0, marginTop: 1 }} />
             <p className="type-micro" style={{ color: 'var(--color-ink)', margin: 0 }}>
@@ -241,17 +255,19 @@ function NotifyDialog({
         {sendErr && <p className="type-micro" style={{ color: '#e5484d' }}>{sendErr}</p>}
 
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={!canSend}
-            className="btn-primary flex items-center gap-2"
-            style={{ opacity: canSend ? 1 : 0.5, cursor: canSend ? 'pointer' : 'not-allowed' }}
-          >
-            {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-            {noStudents ? 'No recipients' : count !== undefined ? `${sendLabel} to ${count} student${count === 1 ? '' : 's'}` : sendLabel}
-          </button>
-          <button type="button" onClick={onClose} className="btn-secondary" disabled={sending}>Cancel</button>
+          {!result && (
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={!canSend}
+              className="btn-primary flex items-center gap-2"
+              style={{ opacity: canSend ? 1 : 0.5, cursor: canSend ? 'pointer' : 'not-allowed' }}
+            >
+              {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+              {noStudents ? 'No recipients' : count !== undefined ? `${sendLabel} to ${count} student${count === 1 ? '' : 's'}` : sendLabel}
+            </button>
+          )}
+          <button type="button" onClick={onClose} className="btn-secondary" disabled={sending}>{result ? 'Close' : 'Cancel'}</button>
         </div>
       </div>
     </Modal>
@@ -2710,7 +2726,7 @@ function CustomAnnouncement() {
     setSending(true); setResult(null);
     try {
       const res = await api.notify.sendAnnouncement({ subject, html: body });
-      setResult({ success: true, message: `Sent to ${res.sent} registered students` });
+      setResult({ success: true, message: res.message });
       setConfirmOpen(false);
     } catch {
       setResult({ success: false, message: 'Failed to send announcement' });

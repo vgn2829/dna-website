@@ -244,11 +244,14 @@ export const api = {
   notify: {
     // Send the student notification for an already-created event/artwork, keyed
     // by id. The server reads the record, sends, and stamps notified_at (returned
-    // here so the UI badge updates without a refetch).
+    // here so the UI badge updates without a refetch). Because Resend's free
+    // tier caps daily/monthly volume, a send may not fully complete immediately:
+    // sentNow is what went out now, queued is what's waiting for a later tick
+    // (see mailer.ts sendBroadcast / drainMailQueue).
     event: (id: string) =>
-      request<{ success: boolean; notifiedAt: string }>('POST', `/notify/event/${id}`, { admin: true }),
+      request<{ success: boolean; notifiedAt: string; sentNow: number; queued: number }>('POST', `/notify/event/${id}`, { admin: true }),
     artwork: (id: string) =>
-      request<{ success: boolean; notifiedAt: string }>('POST', `/notify/artwork/${id}`, { admin: true }),
+      request<{ success: boolean; notifiedAt: string; sentNow: number; queued: number }>('POST', `/notify/artwork/${id}`, { admin: true }),
     // Preview the exact email + recipient count for the admin confirm dialog.
     previewEvent: (id: string) =>
       request<{ subject: string; html: string; recipientCount: number }>('GET', `/notify/event/${id}/preview`, { admin: true }),
@@ -267,7 +270,7 @@ export const api = {
       request<{ success: boolean; sentTo: string }>(
         'POST', `/notify/templates/${id}/test`, { body: data, admin: true }),
     sendAnnouncement: (data: { subject: string; html: string }) =>
-      request<{ success: boolean; sent: number }>('POST', '/notify/announce', { body: data, admin: true }),
+      request<{ success: boolean; message: string; sent: number; queued: number }>('POST', '/notify/announce', { body: data, admin: true }),
   },
   students: {
     checkExists: (roll: string) =>

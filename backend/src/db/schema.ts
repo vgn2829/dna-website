@@ -683,4 +683,35 @@ export async function initSchema(): Promise<void> {
   }
 
   console.log('6 coordinators seeded');
+
+  // Resend free tier caps at 100 emails/day and 3,000/month, and every
+  // To/CC/BCC recipient counts separately toward that quota — so a single
+  // broadcast to the whole roster can consume most of a day's budget. This
+  // table tracks how much has been sent on each UTC day so broadcast sends can
+  // be gated to protect headroom for OTP/welcome mail (which must never be
+  // blocked). One row per day; `sent_count` increments as mail actually goes out.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS mail_usage (
+      day        DATE PRIMARY KEY,
+      sent_count INT  NOT NULL DEFAULT 0
+    )
+  `);
+
+  // Broadcast sends (event/artwork notify, announcements, event reminders)
+  // that can't fully fit in today's quota-gated budget are queued here instead
+  // of failing. `remaining` shrinks as recipients are drained on each tick;
+  // the row is done once it's empty. `kind` is informational (for admin
+  // visibility / debugging), not used for dispatch logic.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS mail_queue (
+      id           TEXT PRIMARY KEY,
+      kind         TEXT NOT NULL,
+      subject      TEXT NOT NULL,
+      html         TEXT NOT NULL,
+      remaining    TEXT[] NOT NULL,
+      total_count  INT  NOT NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      completed_at TIMESTAMPTZ
+    )
+  `);
 }

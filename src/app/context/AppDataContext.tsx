@@ -34,6 +34,15 @@ export interface ClubEvent {
   notifiedAt: string | null;
 }
 
+// Outcome of a "Notify Students" send. Because Resend's free tier caps daily/
+// monthly volume, a send may not fully complete immediately: sentNow is what
+// went out now, queued is what's waiting for a later tick to drain.
+export interface NotifyResult {
+  notifiedAt: string;
+  sentNow: number;
+  queued: number;
+}
+
 export interface VideoResource { id: string; title: string; ytId: string; difficulty: 'Beginner' | 'Intermediate' | 'Advanced'; duration: string; sequence: number; }
 export interface QuizQuestion  { q: string; options: string[]; }
 
@@ -65,13 +74,13 @@ interface AppDataContextValue {
   deleteArtwork:  (id: string) => void;
   toggleFeatured: (id: string, featured: boolean) => void;
   deleteComment:  (artworkId: string, commentId: string) => Promise<void>;
-  notifyArtwork:  (id: string) => Promise<string>;
+  notifyArtwork:  (id: string) => Promise<NotifyResult>;
   // Events
   rsvpEvent:   (id: string) => void;
   addEvent:    (event: Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered' | 'notifiedAt'>) => void;
   updateEvent: (id: string, data: Partial<Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered' | 'notifiedAt'>>) => Promise<void>;
   deleteEvent: (id: string) => void;
-  notifyEvent: (id: string) => Promise<string>;
+  notifyEvent: (id: string) => Promise<NotifyResult>;
   // Domains / videos
   addDomain:          (domain: { title: string; fullName: string; icon: string; tagline: string; description: string; color: string }) => Promise<void>;
   updateDomain:       (id: string, data: Partial<{ title: string; fullName: string; icon: string; tagline: string; description: string; color: string }>) => Promise<void>;
@@ -146,11 +155,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Sends the student notification for an already-created artwork and updates the
-  // record's notifiedAt from the server response. Returns the new timestamp.
-  const notifyArtwork = useCallback(async (id: string): Promise<string> => {
-    const { notifiedAt } = await api.notify.artwork(id);
+  // record's notifiedAt from the server response. Returns the new timestamp plus
+  // how many recipients got mail now vs. were queued (quota-gated free tier).
+  const notifyArtwork = useCallback(async (id: string): Promise<{ notifiedAt: string; sentNow: number; queued: number }> => {
+    const { notifiedAt, sentNow, queued } = await api.notify.artwork(id);
     setArtworks(prev => prev.map(a => a.id !== id ? a : { ...a, notifiedAt }));
-    return notifiedAt;
+    return { notifiedAt, sentNow, queued };
   }, []);
 
   const updateArtwork = useCallback(async (id: string, formData: FormData) => {
@@ -194,11 +204,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Sends the student notification for an already-created event and updates the
-  // record's notifiedAt from the server response. Returns the new timestamp.
-  const notifyEvent = useCallback(async (id: string): Promise<string> => {
-    const { notifiedAt } = await api.notify.event(id);
+  // record's notifiedAt from the server response. Returns the new timestamp plus
+  // how many recipients got mail now vs. were queued (quota-gated free tier).
+  const notifyEvent = useCallback(async (id: string): Promise<NotifyResult> => {
+    const { notifiedAt, sentNow, queued } = await api.notify.event(id);
     setEvents(prev => prev.map(e => e.id !== id ? e : { ...e, notifiedAt }));
-    return notifiedAt;
+    return { notifiedAt, sentNow, queued };
   }, []);
 
   const updateEvent = useCallback(async (id: string, data: Partial<Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered'>>) => {

@@ -46,6 +46,65 @@ async function getAllStudentEmails(): Promise<string[]> {
   }
 }
 
+// ── Quota gate ──────────────────────────────────────────────────────────────
+// Resend free tier: 100 emails/day, 3,000/month, and every To/CC/BCC recipient
+// counts separately. OTP and welcome mail must never be blocked by this gate —
+// they call resendClient() directly and always increment usage after sending.
+// Broadcast sends (event/artwork notify, announcements, reminders) go through
+// reserveBroadcastBudget() first, which reserves headroom for OTP/welcome by
+// scaling with the current roster size, so a big notify send on a busy login
+// day can't starve logins.
+const DAILY_QUOTA = 100;
+const MONTHLY_QUOTA = 3000;
+const MONTHLY_SAFETY_BUFFER = 100; // stop broadcasts before hard-hitting 3000
+
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+async function getDailySent(day: string): Promise<number> {
+  const rows = await pool.query<{ sent_count: number }>(
+    'SELECT sent_count FROM mail_usage WHERE day = $1', [day]
+  );
+  return rows.rows[0]?.sent_count ?? 0;
+}
+
+async function getMonthSent(): Promise<number> {
+  const monthStart = `${todayUtc().slice(0, 7)}-01`;
+  const rows = await pool.query<{ total: string }>(
+    'SELECT COALESCE(SUM(sent_count),0) AS total FROM mail_usage WHERE day >= $1', [monthStart]
+  );
+  return parseInt(rows.rows[0]?.total ?? '0', 10);
+}
+
+// Increments today's usage counter. Called after every actual send (OTP,
+// welcome, and broadcast batches alike) so the gate always sees real usage.
+async function recordSent(count: number): Promise<void> {
+  if (count <= 0) return;
+  await pool.query(`
+    INSERT INTO mail_usage (day, sent_count) VALUES ($1, $2)
+    ON CONFLICT (day) DO UPDATE SET sent_count = mail_usage.sent_count + $2
+  `, [todayUtc(), count]);
+}
+
+// Reserve = half the roster, capped at 60, floored at a small constant so it's
+// never zero for a tiny roster. Scales automatically as students are added.
+async function otpReserve(): Promise<number> {
+  const studentCount = (await getAllStudentEmails()).length;
+  return Math.max(5, Math.min(60, Math.ceil(studentCount * 0.5)));
+}
+
+// How many more broadcast recipients can be sent today without endangering
+// the OTP reserve or the monthly cap. Never negative.
+export async function broadcastBudgetRemaining(): Promise<number> {
+  const [sentToday, sentMonth, reserve] = await Promise.all([
+    getDailySent(todayUtc()), getMonthSent(), otpReserve(),
+  ]);
+  const dailyRoom = Math.max(0, (DAILY_QUOTA - reserve) - sentToday);
+  const monthlyRoom = Math.max(0, (MONTHLY_QUOTA - MONTHLY_SAFETY_BUFFER) - sentMonth);
+  return Math.min(dailyRoom, monthlyRoom);
+}
+
 async function getTemplate(id: string): Promise<{ subject: string; body: string } | null> {
   try {
     const result = await pool.query(
@@ -157,10 +216,14 @@ export async function sendTemplateTest(templateId: string, toEmail: string, subj
     subject: `[TEST] ${rendered.subject}`,
     html: rendered.html,
   });
+  await recordSent(1);
 }
 
 // Sends pre-rendered html as-is (the caller decides shell vs. standalone via
 // renderTemplateHtml), so batch notifications share the same shell logic.
+// Chunks into groups of 50 BCC recipients per Resend API call (delivery-side
+// limit), and records each recipient sent against the daily quota counter —
+// callers that go through the quota gate rely on this to keep usage accurate.
 async function sendInBatches(emails: string[], subject: string, html: string): Promise<void> {
   const chunks: string[][] = [];
   for (let i = 0; i < emails.length; i += 50) {
@@ -175,6 +238,59 @@ async function sendInBatches(emails: string[], subject: string, html: string): P
       subject,
       html,
     });
+    await recordSent(chunk.length);
+  }
+}
+
+// Broadcast entry point: sends up to `broadcastBudgetRemaining()` recipients
+// now and queues the rest in mail_queue for later ticks to drain. Returns how
+// many were sent immediately and how many were queued, so callers (routes)
+// can tell the admin the real outcome instead of implying an instant full send.
+async function sendBroadcast(
+  kind: string, emails: string[], subject: string, html: string
+): Promise<{ sentNow: number; queued: number }> {
+  if (emails.length === 0) return { sentNow: 0, queued: 0 };
+
+  const budget = await broadcastBudgetRemaining();
+  const toSendNow = emails.slice(0, budget);
+  const toQueue = emails.slice(budget);
+
+  if (toSendNow.length > 0) {
+    await sendInBatches(toSendNow, subject, html);
+  }
+  if (toQueue.length > 0) {
+    await pool.query(`
+      INSERT INTO mail_queue (id, kind, subject, html, remaining, total_count)
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `, [`mq-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, kind, subject, html, toQueue, toQueue.length]);
+  }
+  return { sentNow: toSendNow.length, queued: toQueue.length };
+}
+
+// Drains queued broadcast mail, respecting today's remaining budget. Called
+// from the scheduler tick. Processes oldest-first so nothing starves; a
+// partially-drained row keeps its remaining recipients for the next call.
+export async function drainMailQueue(): Promise<void> {
+  let budget = await broadcastBudgetRemaining();
+  if (budget <= 0) return;
+
+  const rows = await pool.query<{ id: string; subject: string; html: string; remaining: string[] }>(
+    'SELECT id, subject, html, remaining FROM mail_queue WHERE completed_at IS NULL ORDER BY created_at ASC'
+  );
+
+  for (const row of rows.rows) {
+    if (budget <= 0) break;
+    const toSend = row.remaining.slice(0, budget);
+    const stillRemaining = row.remaining.slice(budget);
+
+    await sendInBatches(toSend, row.subject, row.html);
+    budget -= toSend.length;
+
+    if (stillRemaining.length === 0) {
+      await pool.query('UPDATE mail_queue SET remaining = $1, completed_at = NOW() WHERE id = $2', [stillRemaining, row.id]);
+    } else {
+      await pool.query('UPDATE mail_queue SET remaining = $1 WHERE id = $2', [stillRemaining, row.id]);
+    }
   }
 }
 
@@ -247,6 +363,7 @@ export async function sendOtpEmail(email: string, code: string): Promise<void> {
       subject: 'Your DnA Club verification code',
       html: renderOtpHtml(code),
     });
+    await recordSent(1);
     console.log(`OTP email sent to ${email}`);
   } catch (err) {
     console.error('Failed to send OTP email:', err);
@@ -274,6 +391,7 @@ export async function sendWelcomeEmail(name: string, email: string): Promise<boo
       // renderTemplateHtml bypasses the shell for standalone templates (welcome).
       html: renderTemplateHtml('welcome', resolve(body, vars, true)),
     });
+    await recordSent(1);
     console.log(`Welcome email sent to ${email}`);
     return true;
   } catch (err) {
@@ -335,23 +453,29 @@ export async function buildArtworkEmail(artwork: {
   };
 }
 
+// Result of a broadcast attempt: how many recipients got mail immediately vs.
+// were queued for later ticks because today's quota-gated budget ran out.
+export type BroadcastResult = { sentNow: number; queued: number };
+
 export async function sendEventNotification(event: {
   title: string;
   date?: string;
   venue?: string;
   description?: string;
-}): Promise<void> {
-  if (!process.env.RESEND_API_KEY) return;
+}): Promise<BroadcastResult> {
+  if (!process.env.RESEND_API_KEY) return { sentNow: 0, queued: 0 };
   const emails = await getAllStudentEmails();
-  if (emails.length === 0) return;
+  if (emails.length === 0) return { sentNow: 0, queued: 0 };
 
   const { subject, html } = await buildEventEmail(event);
 
   try {
-    await sendInBatches(emails, subject, html);
-    console.log(`Event notification sent to ${emails.length} students`);
+    const result = await sendBroadcast('event', emails, subject, html);
+    console.log(`Event notification: ${result.sentNow} sent now, ${result.queued} queued`);
+    return result;
   } catch (err) {
     console.error('Failed to send event notification:', err);
+    return { sentNow: 0, queued: 0 };
   }
 }
 
@@ -359,18 +483,20 @@ export async function sendArtworkNotification(artwork: {
   title: string;
   artist: string;
   domain?: string;
-}): Promise<void> {
-  if (!process.env.RESEND_API_KEY) return;
+}): Promise<BroadcastResult> {
+  if (!process.env.RESEND_API_KEY) return { sentNow: 0, queued: 0 };
   const emails = await getAllStudentEmails();
-  if (emails.length === 0) return;
+  if (emails.length === 0) return { sentNow: 0, queued: 0 };
 
   const { subject, html } = await buildArtworkEmail(artwork);
 
   try {
-    await sendInBatches(emails, subject, html);
-    console.log(`Artwork notification sent to ${emails.length} students`);
+    const result = await sendBroadcast('artwork', emails, subject, html);
+    console.log(`Artwork notification: ${result.sentNow} sent now, ${result.queued} queued`);
+    return result;
   } catch (err) {
     console.error('Failed to send artwork notification:', err);
+    return { sentNow: 0, queued: 0 };
   }
 }
 
@@ -378,14 +504,15 @@ export async function sendCustomAnnouncement(
   subject: string,
   html: string,
   emails: string[]
-): Promise<void> {
-  if (!process.env.RESEND_API_KEY) return;
-  if (emails.length === 0) return;
+): Promise<BroadcastResult> {
+  if (!process.env.RESEND_API_KEY) return { sentNow: 0, queued: 0 };
+  if (emails.length === 0) return { sentNow: 0, queued: 0 };
 
   try {
     // Custom announcements are not a stored template; they always use the shell.
-    await sendInBatches(emails, subject, renderTemplateHtml('custom', html));
-    console.log(`Custom announcement sent to ${emails.length} students`);
+    const result = await sendBroadcast('announcement', emails, subject, renderTemplateHtml('custom', html));
+    console.log(`Announcement: ${result.sentNow} sent now, ${result.queued} queued`);
+    return result;
   } catch (err) {
     console.error('Failed to send custom announcement:', err);
     throw err;
