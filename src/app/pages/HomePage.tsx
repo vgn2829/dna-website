@@ -16,7 +16,7 @@ export function HomePage() {
   });
 
   return (
-    <div style={{ background: 'var(--color-canvas)', overflow: 'hidden' }}>
+    <div style={{ background: 'var(--color-canvas)' }}>
       <HeroFlipCards />
       <Mission />
       <Stats />

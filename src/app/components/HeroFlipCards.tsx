@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { motion } from 'motion/react';
+import { motion, useTransform, useSpring, useMotionValue } from 'motion/react';
 import { useNavigate } from 'react-router';
 import { useAppData } from '../context/AppDataContext';
 import type { Artwork } from '../context/AppDataContext';
@@ -9,12 +9,19 @@ import { Hero } from './Hero';
 // sparse rather than intentional — fall back to a static grid instead.
 const MIN_FOR_ANIMATED_HERO = 6;
 
-const IMG_WIDTH = 60;
-const IMG_HEIGHT = 85;
+const IMG_WIDTH = 85;
+const IMG_HEIGHT = 120;
+
+// Virtual scroll range driving the circle→arc morph + arc shuffle, exactly
+// like the reference component — wheel/touch input is captured (preventDefault)
+// and accumulated into this range instead of the page actually scrolling.
+const MAX_SCROLL = 3000;
 
 type AnimationPhase = 'scatter' | 'line' | 'circle';
 
 interface CardTarget { x: number; y: number; rotation: number; scale: number; opacity: number }
+
+const lerp = (start: number, end: number, t: number) => start * (1 - t) + end * t;
 
 // Mirrors FeaturedMarquee/HeroScroll: an <img> is only safe to point at
 // mediaUrl for image-type artworks. video/pdf artworks need a generated
@@ -57,11 +64,16 @@ function FlipCard({ artwork, target, onClick }: { artwork: Artwork; target: Card
       >
         {/* Front Face */}
         <div
-          className="absolute inset-0 h-full w-full overflow-hidden rounded-xl"
+          className="absolute inset-0 h-full w-full overflow-hidden"
           style={{
             backfaceVisibility: 'hidden',
             boxShadow: 'var(--shadow-level-1)',
             background: 'var(--color-surface-2)',
+            // Explicit px value, not the `rounded-xl` Tailwind class: this
+            // project's @theme remaps rounded-xl to --radius-pill (100px)
+            // for larger UI, which overlaps into faceted corners on a card
+            // this small (60x85px).
+            borderRadius: 12,
           }}
         >
           <img
@@ -79,22 +91,23 @@ function FlipCard({ artwork, target, onClick }: { artwork: Artwork; target: Card
 
         {/* Back Face */}
         <div
-          className="absolute inset-0 h-full w-full overflow-hidden rounded-xl flex flex-col items-center justify-center p-1 text-center"
+          className="absolute inset-0 h-full w-full overflow-hidden flex flex-col items-center justify-center p-2 text-center"
           style={{
             backfaceVisibility: 'hidden',
             transform: 'rotateY(180deg)',
             background: 'var(--color-surface-1)',
             border: '1px solid var(--color-hairline)',
             boxShadow: 'var(--shadow-level-1)',
+            borderRadius: 12,
           }}
         >
           <p
             className="line-clamp-2"
-            style={{ fontSize: 8, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.2 }}
+            style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.25 }}
           >
             {artwork.title}
           </p>
-          <p style={{ fontSize: 7, color: 'var(--color-ink-muted)', marginTop: 2 }}>
+          <p style={{ fontSize: 9, color: 'var(--color-ink-muted)', marginTop: 3 }}>
             {artwork.artist}
           </p>
         </div>
@@ -104,9 +117,14 @@ function FlipCard({ artwork, target, onClick }: { artwork: Artwork; target: Card
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Animated hero — scatter → line → circle, then idle. Time-based only;
-// no scroll/wheel hijacking (this replaced a virtual-scroll version by
-// design — see PR description).
+// Animated hero — ported 1:1 from the reference's scroll mechanics: wheel
+// and touch input is captured (preventDefault) over this section and
+// accumulated into a virtual 0–MAX_SCROLL counter, which drives the
+// circle→bottom-arc morph, arc shuffle, and content fades. The page does
+// not actually scroll while this section owns input; scrolling back
+// (negative delta) reverses the morph at the same speed, matching the
+// reference. Once the counter maxes out, wheel/touch is released so the
+// page scrolls normally into Mission.
 // ─────────────────────────────────────────────────────────────────────────
 function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
   const navigate = useNavigate();
@@ -146,24 +164,133 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
     }));
   }, [artworks]);
 
-  const contentVisible = phase === 'circle';
+  // --- Virtual scroll: wheel/touch deltas accumulate here instead of the
+  // page actually scrolling. Released (page scrolls normally) once maxed out.
+  const virtualScroll = useMotionValue(0);
+  const scrollRef = useRef(0);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const atMax = () => scrollRef.current >= MAX_SCROLL;
+    const atMin = () => scrollRef.current <= 0;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Let the browser scroll normally once we've maxed out the virtual
+      // range and the user keeps scrolling down (or is at 0 and scrolling
+      // up, back into the page above) — only capture input while actively
+      // morphing between circle and arc.
+      if ((atMax() && e.deltaY > 0) || (atMin() && e.deltaY < 0)) return;
+
+      e.preventDefault();
+      const newScroll = Math.min(Math.max(scrollRef.current + e.deltaY, 0), MAX_SCROLL);
+      scrollRef.current = newScroll;
+      virtualScroll.set(newScroll);
+    };
+
+    let touchStartY = 0;
+    const handleTouchStart = (e: TouchEvent) => { touchStartY = e.touches[0].clientY; };
+    const handleTouchMove = (e: TouchEvent) => {
+      const touchY = e.touches[0].clientY;
+      const deltaY = touchStartY - touchY;
+      touchStartY = touchY;
+
+      if ((atMax() && deltaY > 0) || (atMin() && deltaY < 0)) return;
+
+      e.preventDefault();
+      const newScroll = Math.min(Math.max(scrollRef.current + deltaY, 0), MAX_SCROLL);
+      scrollRef.current = newScroll;
+      virtualScroll.set(newScroll);
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    container.addEventListener('touchstart', handleTouchStart, { passive: false });
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, [virtualScroll]);
+
+  // 1. Morph: 0 (circle) → 1 (bottom arc), scroll 0–600.
+  const morphProgress = useTransform(virtualScroll, [0, 600], [0, 1]);
+  const smoothMorph = useSpring(morphProgress, { stiffness: 40, damping: 20 });
+
+  // 2. Arc shuffle: continues after the morph, scroll 600–3000.
+  const scrollRotate = useTransform(virtualScroll, [600, MAX_SCROLL], [0, 360]);
+  const smoothScrollRotate = useSpring(scrollRotate, { stiffness: 40, damping: 20 });
+
+  // --- Mouse parallax (arc cards drift slightly with cursor x-position) ---
+  const mouseX = useMotionValue(0);
+  const smoothMouseX = useSpring(mouseX, { stiffness: 30, damping: 20 });
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = container.getBoundingClientRect();
+      const relativeX = e.clientX - rect.left;
+      const normalizedX = (relativeX / rect.width) * 2 - 1;
+      mouseX.set(normalizedX * 100);
+    };
+    container.addEventListener('mousemove', handleMouseMove);
+    return () => container.removeEventListener('mousemove', handleMouseMove);
+  }, [mouseX]);
+
+  const [morphValue, setMorphValue] = useState(0);
+  const [rotateValue, setRotateValue] = useState(0);
+  const [parallaxValue, setParallaxValue] = useState(0);
+  useEffect(() => {
+    const unsubMorph = smoothMorph.on('change', setMorphValue);
+    const unsubRotate = smoothScrollRotate.on('change', setRotateValue);
+    const unsubParallax = smoothMouseX.on('change', setParallaxValue);
+    return () => { unsubMorph(); unsubRotate(); unsubParallax(); };
+  }, [smoothMorph, smoothScrollRotate, smoothMouseX]);
+
+  const introContentVisible = phase === 'circle' && morphValue < 0.5;
+  const arcContentVisible = morphValue > 0.8;
 
   return (
-    <div ref={containerRef} className="relative w-full h-full overflow-hidden" style={{ background: 'var(--color-canvas)' }}>
-      <div className="flex h-full w-full flex-col items-center justify-center" style={{ perspective: 1000 }}>
-        {/* Arc/circle-active content — fades in once the circle settles */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={contentVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-          transition={{ duration: 0.8, delay: contentVisible ? 0.3 : 0 }}
-          className="absolute top-[14%] z-10 flex flex-col items-center justify-center text-center pointer-events-none px-4"
-        >
-          <span className="eyebrow" style={{ marginBottom: 20 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-success)', display: 'inline-block', flexShrink: 0 }} />
-            IIT Kanpur · Design &amp; Animation Club
-          </span>
-          <h2 className="type-display-lg" style={{ marginBottom: 16, maxWidth: 700 }}>
+    <div
+      ref={containerRef}
+      className="relative w-full overflow-hidden"
+      style={{ height: '100svh', background: 'var(--color-canvas)' }}
+    >
+      <div
+        className="flex h-full w-full flex-col items-center justify-center"
+        style={{ perspective: 1000 }}
+      >
+        {/* Intro content — visible only while the circle is freshly formed,
+            before the scroll-driven arc morph begins. */}
+        <div className="absolute z-0 flex flex-col items-center justify-center text-center pointer-events-none top-1/2 -translate-y-1/2 px-4">
+          <motion.h1
+            animate={introContentVisible ? { opacity: 1 - morphValue * 2, filter: 'blur(0px)' } : { opacity: 0, filter: 'blur(10px)' }}
+            transition={{ duration: 1 }}
+            className="type-display-xl"
+            style={{ maxWidth: 700 }}
+          >
             Design and Animation Club.
+          </motion.h1>
+          <motion.p
+            animate={introContentVisible ? { opacity: 0.5 - morphValue } : { opacity: 0 }}
+            transition={{ duration: 1, delay: 0.2 }}
+            className="type-caption"
+            style={{ marginTop: 16, letterSpacing: '0.2em', textTransform: 'uppercase' }}
+          >
+            Scroll to explore
+          </motion.p>
+        </div>
+
+        {/* Arc-active content — fades in once the arc has formed. */}
+        <motion.div
+          animate={arcContentVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+          transition={{ duration: 0.6 }}
+          className="absolute top-[10%] z-10 flex flex-col items-center justify-center text-center pointer-events-none px-4"
+        >
+          <h2 className="type-display-lg" style={{ marginBottom: 16, maxWidth: 700 }}>
+            Explore Our Vision
           </h2>
           <p className="type-body-lg" style={{ maxWidth: 520 }}>
             IIT Kanpur's creative community for UI/UX, motion design,
@@ -181,20 +308,55 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
             if (phase === 'scatter') {
               target = scatterPositions[i];
             } else if (phase === 'line') {
-              const lineSpacing = 70;
+              const lineSpacing = 100;
               const lineTotalWidth = total * lineSpacing;
               target = { x: i * lineSpacing - lineTotalWidth / 2, y: 0, rotation: 0, scale: 1, opacity: 1 };
             } else {
               const isMobile = containerSize.width < 768;
               const minDimension = Math.min(containerSize.width, containerSize.height);
-              const circleRadius = Math.min(minDimension * 0.35, 350);
+
+              // A. Circle position (scroll progress 0)
+              // Radius scaled up proportionally with IMG_WIDTH/IMG_HEIGHT
+              // (85/120 vs the original 60/85) to preserve the same
+              // arc-length-to-card-width spacing ratio around the circle.
+              const circleRadius = Math.min(minDimension * 0.49, 490);
               const circleAngle = (i / total) * 360;
               const circleRad = (circleAngle * Math.PI) / 180;
-              target = {
+              const circlePos = {
                 x: Math.cos(circleRad) * circleRadius,
                 y: Math.sin(circleRad) * circleRadius,
                 rotation: circleAngle + 90,
-                scale: isMobile ? 1 : 1,
+              };
+
+              // B. Bottom-arc position (scroll progress 1) — convex "rainbow"
+              // arc with the apex near the top of the viewport.
+              const baseRadius = Math.min(containerSize.width, containerSize.height * 1.5);
+              const arcRadius = baseRadius * (isMobile ? 1.4 : 1.1);
+              const arcApexY = containerSize.height * (isMobile ? 0.35 : 0.25);
+              const arcCenterY = arcApexY + arcRadius;
+              const spreadAngle = isMobile ? 100 : 130;
+              const startAngle = -90 - spreadAngle / 2;
+              const step = spreadAngle / (total - 1 || 1);
+
+              const scrollProgress = Math.min(Math.max(rotateValue / 360, 0), 1);
+              const maxRotation = spreadAngle * 0.8;
+              const boundedRotation = -scrollProgress * maxRotation;
+
+              const currentArcAngle = startAngle + i * step + boundedRotation;
+              const arcRad = (currentArcAngle * Math.PI) / 180;
+              const arcPos = {
+                x: Math.cos(arcRad) * arcRadius + parallaxValue,
+                y: Math.sin(arcRad) * arcRadius + arcCenterY,
+                rotation: currentArcAngle + 90,
+                scale: isMobile ? 1.4 : 1.8,
+              };
+
+              // C. Interpolate circle → arc by scroll-driven morph progress.
+              target = {
+                x: lerp(circlePos.x, arcPos.x, morphValue),
+                y: lerp(circlePos.y, arcPos.y, morphValue),
+                rotation: lerp(circlePos.rotation, arcPos.rotation, morphValue),
+                scale: lerp(1, arcPos.scale, morphValue),
                 opacity: 1,
               };
             }
@@ -321,9 +483,5 @@ export function HeroFlipCards() {
     return <StaticFeaturedGrid artworks={featured} />;
   }
 
-  return (
-    <section style={{ minHeight: '100svh', position: 'relative' }}>
-      <AnimatedFlipHero artworks={featured} />
-    </section>
-  );
+  return <AnimatedFlipHero artworks={featured} />;
 }
