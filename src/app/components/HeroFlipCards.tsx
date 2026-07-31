@@ -473,6 +473,36 @@ function StaticFeaturedGrid({ artworks }: { artworks: Artwork[] }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Loading state — shown only while the initial artworks fetch is in
+// flight. Same section sizing/background as the real hero paths (no
+// layout shift on swap), but deliberately shows nothing beyond the
+// eyebrow — no competing hero design, so there's no visible "wrong
+// design flashes then swaps" moment once data resolves.
+// ─────────────────────────────────────────────────────────────────────────
+function HeroLoading() {
+  return (
+    <section
+      id="home"
+      style={{
+        background: 'var(--color-canvas)',
+        minHeight: '100svh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '112px 24px 96px',
+        textAlign: 'center',
+      }}
+    >
+      <span className="eyebrow">
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-success)', display: 'inline-block', flexShrink: 0 }} />
+        IIT Kanpur · Design &amp; Animation Club
+      </span>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Entry point — picks animated hero / static grid / plain original Hero
 // depending on how many featured artworks currently exist.
 // ─────────────────────────────────────────────────────────────────────────
@@ -485,10 +515,16 @@ export function HeroFlipCards() {
     [artworks],
   );
 
-  // While the initial fetch is in flight, artworks is still [] — render the
-  // plain Hero (needs no data) rather than flashing it and then swapping to
-  // the animated/grid version once featured artworks arrive.
-  if (loading || featured.length === 0) {
+  // While the initial fetch is in flight, show a minimal loading state —
+  // not the plain Hero, which used to double as a loading placeholder and
+  // then visibly swapped to a different hero design once data resolved.
+  if (loading) {
+    return <HeroLoading />;
+  }
+
+  // Genuinely zero featured artworks (not a loading state) — fall back to
+  // the plain original Hero, unchanged.
+  if (featured.length === 0) {
     return <Hero />;
   }
 
