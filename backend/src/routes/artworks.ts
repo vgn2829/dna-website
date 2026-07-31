@@ -86,10 +86,12 @@ function formatArtwork(row: ArtworkRow, likedByUser: boolean, comments: CommentR
 
 artworksRouter.get('/', optionalStudent, async (req, res) => {
   const roll = req.studentRoll;
-  const rows = await query<ArtworkRow>('SELECT * FROM artworks ORDER BY created_at DESC');
-  const allComments = await query<CommentRow & { artwork_id: string }>(
-    'SELECT id, artwork_id, sender, text, created_at FROM artwork_comments ORDER BY created_at ASC'
-  );
+  const [rows, allComments] = await Promise.all([
+    query<ArtworkRow>('SELECT * FROM artworks ORDER BY created_at DESC'),
+    query<CommentRow & { artwork_id: string }>(
+      'SELECT id, artwork_id, sender, text, created_at FROM artwork_comments ORDER BY created_at ASC'
+    ),
+  ]);
 
   let likedSet = new Set<string>();
   if (roll) {
