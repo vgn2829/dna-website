@@ -642,7 +642,7 @@ function GalleryTab() {
       setFile(null); setATitle(''); setAArtist(''); setADomain(''); setACustomDomain('');
       setCoverFile(null); if (coverPreview) URL.revokeObjectURL(coverPreview); setCoverPreview(null);
       if (fileRef.current) fileRef.current.value = '';
-      setUploadSuccess('Artwork published · Students will be notified by email');
+      setUploadSuccess('Artwork published · use Notify Students to email members');
       setTimeout(() => setUploadSuccess(''), 4000);
     } catch (err) { setUploadError(err instanceof Error ? err.message : String(err)); } finally { setUploading(false); }
   };
@@ -1589,7 +1589,7 @@ function EventsTab() {
     setAddingEvent(true);
     addEvent({ title: eTitle, date: eDate, time: eTime, location: eLocation, content: eContent, capacity: Number(eCapacity) || 100 });
     setETitle(''); setEDate(''); setETime(''); setELocation(''); setEContent('');
-    setESuccess('Event created · Students will be notified by email');
+    setESuccess('Event created · use Notify Students to email members');
     setTimeout(() => { setAddingEvent(false); setESuccess(''); }, 4000);
   };
 
