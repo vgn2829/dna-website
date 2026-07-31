@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
 import { api } from '../lib/api';
 import { useStudent, hasSeenWelcome, markWelcomeSeen } from '../context/StudentContext';
-import WelcomeOverlay from './WelcomeOverlay';
+import WelcomeCarousel from './WelcomeCarousel';
 
 export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => void }) {
   const { isRollModalOpen, closeRollModal, login, needsReverify, clearReverifyNotice } = useStudent();
@@ -382,7 +382,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
         )}
       </AnimatePresence>
       {showWelcome && (
-        <WelcomeOverlay name={newUserName} onDone={handleWelcomeDone} />
+        <WelcomeCarousel name={newUserName} onDone={handleWelcomeDone} />
       )}
     </>
   );
