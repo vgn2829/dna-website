@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAdmin } from '../middleware/adminAuth';
 import { sendEventNotification, sendArtworkNotification, sendCustomAnnouncement, MAIL_FROM, renderTemplatePreview, templateVariables, sendTemplateTest, buildEventEmail, buildArtworkEmail, getAudienceEmailCount, getEventAudienceEmailCount, type EventNotifyAudience } from '../services/mailer';
 import { pool } from '../db/client';
+import { param } from '../routeParams';
 
 const router = Router();
 
@@ -176,11 +177,11 @@ router.post('/templates/:id/preview', requireAdmin, async (req, res) => {
       res.status(400).json({ error: 'Subject and body are required (subject ≤ 300, body ≤ 100 KB)' });
       return;
     }
-    const rendered = renderTemplatePreview(req.params.id, parsed.data.subject, parsed.data.body);
+    const rendered = renderTemplatePreview(param(req.params.id), parsed.data.subject, parsed.data.body);
     res.json({
       subject: rendered.subject,
       html: rendered.html,
-      variables: templateVariables(req.params.id),
+      variables: templateVariables(param(req.params.id)),
     });
   } catch (err) {
     console.error('Template preview error:', err);
@@ -207,7 +208,7 @@ router.post('/templates/:id/test', requireAdmin, async (req, res) => {
       res.status(503).json({ error: 'Email service is not configured (RESEND_API_KEY unset)' });
       return;
     }
-    await sendTemplateTest(req.params.id, parsed.data.email, parsed.data.subject, parsed.data.body);
+    await sendTemplateTest(param(req.params.id), parsed.data.email, parsed.data.subject, parsed.data.body);
     res.json({ success: true, sentTo: parsed.data.email });
   } catch (err) {
     console.error('Template test send error:', err);

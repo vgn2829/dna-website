@@ -7,6 +7,7 @@ import { requireStudent, optionalStudent } from '../middleware/studentAuth';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import { getStorage } from '../storage';
+import { param } from '../routeParams';
 
 const router = Router();
 
@@ -215,7 +216,7 @@ router.put('/:id/canvas', requireStudent, async (req: Request, res: Response) =>
   try {
     const roll = req.studentRoll!;
 
-    const access = await canEdit(req.params.id, roll);
+    const access = await canEdit(param(req.params.id), roll);
     if (!access) {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -265,7 +266,7 @@ router.get('/:id/canvas', optionalStudent, async (req: Request, res: Response) =
       if (!roll) {
         return res.status(403).json({ error: 'Access denied' });
       }
-      const access = await isMember(req.params.id, roll);
+      const access = await isMember(param(req.params.id), roll);
       if (!access) {
         return res.status(403).json({ error: 'Access denied' });
       }
@@ -381,7 +382,7 @@ router.put('/:id', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
 
-    const owner = await isOwner(req.params.id, roll);
+    const owner = await isOwner(param(req.params.id), roll);
     if (!owner) {
       return res.status(403).json({ error: 'Only owner can update board' });
     }
@@ -425,7 +426,7 @@ router.delete('/:id', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
 
-    const owner = await isOwner(req.params.id, roll);
+    const owner = await isOwner(param(req.params.id), roll);
     if (!owner) {
       return res.status(403).json({ error: 'Only owner can delete board' });
     }
@@ -443,7 +444,7 @@ router.post('/:id/members', requireStudent, async (req: Request, res: Response) 
   try {
     const roll = req.studentRoll!;
 
-    const owner = await isOwner(req.params.id, roll);
+    const owner = await isOwner(param(req.params.id), roll);
     if (!owner) {
       return res.status(403).json({ error: 'Only owner can add members' });
     }
@@ -485,7 +486,7 @@ router.delete('/:id/members/:roll', requireStudent, async (req: Request, res: Re
   try {
     const roll = req.studentRoll!;
 
-    const owner = await isOwner(req.params.id, roll);
+    const owner = await isOwner(param(req.params.id), roll);
     if (!owner) {
       return res.status(403).json({ error: 'Only owner can remove members' });
     }
@@ -507,7 +508,7 @@ router.post('/:id/items', requireStudent, async (req: Request, res: Response) =>
   try {
     const roll = req.studentRoll!;
 
-    const access = await canEdit(req.params.id, roll);
+    const access = await canEdit(param(req.params.id), roll);
     if (!access) {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -581,7 +582,7 @@ router.delete('/:id/items/:itemId', requireStudent, async (req: Request, res: Re
     }
 
     const item = itemResult.rows[0] as { added_by_roll: string };
-    const owner = await isOwner(req.params.id, roll);
+    const owner = await isOwner(param(req.params.id), roll);
 
     if (item.added_by_roll !== roll && !owner) {
       return res.status(403).json({ error: 'Cannot delete this item' });
@@ -648,11 +649,11 @@ router.post('/:id/canvas-files', requireStudent, upload.single('file'), async (r
   try {
     const roll = req.studentRoll!;
 
-    if (!UUID_RE.test(req.params.id)) {
+    if (!UUID_RE.test(param(req.params.id))) {
       return res.status(400).json({ error: 'Invalid board id' });
     }
 
-    const access = await canEdit(req.params.id, roll);
+    const access = await canEdit(param(req.params.id), roll);
     if (!access) {
       return res.status(403).json({ error: 'Access denied' });
     }
