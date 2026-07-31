@@ -248,13 +248,15 @@ export const api = {
     // tier caps daily/monthly volume, a send may not fully complete immediately:
     // sentNow is what went out now, queued is what's waiting for a later tick
     // (see mailer.ts sendBroadcast / drainMailQueue).
-    event: (id: string) =>
-      request<{ success: boolean; notifiedAt: string; sentNow: number; queued: number }>('POST', `/notify/event/${id}`, { admin: true }),
+    // audience: 'all' (default, every student) or 'registered' (only students
+    // who RSVP'd to this event). Artwork has no RSVP concept, so it's always 'all'.
+    event: (id: string, audience: 'all' | 'registered' = 'all') =>
+      request<{ success: boolean; notifiedAt: string; sentNow: number; queued: number }>('POST', `/notify/event/${id}?audience=${audience}`, { admin: true }),
     artwork: (id: string) =>
       request<{ success: boolean; notifiedAt: string; sentNow: number; queued: number }>('POST', `/notify/artwork/${id}`, { admin: true }),
     // Preview the exact email + recipient count for the admin confirm dialog.
-    previewEvent: (id: string) =>
-      request<{ subject: string; html: string; recipientCount: number }>('GET', `/notify/event/${id}/preview`, { admin: true }),
+    previewEvent: (id: string, audience: 'all' | 'registered' = 'all') =>
+      request<{ subject: string; html: string; recipientCount: number }>('GET', `/notify/event/${id}/preview?audience=${audience}`, { admin: true }),
     previewArtwork: (id: string) =>
       request<{ subject: string; html: string; recipientCount: number }>('GET', `/notify/artwork/${id}/preview`, { admin: true }),
     getTemplates: () =>

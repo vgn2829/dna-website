@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAdmin } from '../middleware/adminAuth';
-import { sendEventNotification, sendArtworkNotification, sendCustomAnnouncement, MAIL_FROM, renderTemplatePreview, templateVariables, sendTemplateTest, buildEventEmail, buildArtworkEmail, getAudienceEmailCount } from '../services/mailer';
+import { sendEventNotification, sendArtworkNotification, sendCustomAnnouncement, MAIL_FROM, renderTemplatePreview, templateVariables, sendTemplateTest, buildEventEmail, buildArtworkEmail, getAudienceEmailCount, getEventAudienceEmailCount, type EventNotifyAudience } from '../services/mailer';
 import { pool } from '../db/client';
 
 const router = Router();
@@ -50,6 +50,13 @@ router.get('/test-email', requireAdmin, async (req, res) => {
 type EventRow = { id: string; title: string; date: string; location: string; content: string; notified_at: string | null };
 type ArtworkRow = { id: string; title: string; artist: string; domain: string; notified_at: string | null };
 
+// Accepts ?audience=all|registered, defaulting to 'all' for anything else
+// (missing, malformed, or an old client that doesn't send it yet) so this
+// stays backwards-compatible with the existing "notify everyone" behavior.
+function parseEventAudience(value: unknown): EventNotifyAudience {
+  return value === 'registered' ? 'registered' : 'all';
+}
+
 // Preview the actual email a given event would send, plus the recipient count,
 // so the admin confirm dialog shows exactly what goes out and to how many.
 router.get('/event/:id/preview', requireAdmin, async (req, res) => {
@@ -57,23 +64,29 @@ router.get('/event/:id/preview', requireAdmin, async (req, res) => {
     const rows = await pool.query<EventRow>('SELECT * FROM events WHERE id=$1', [req.params.id]);
     if (rows.rows.length === 0) { res.status(404).json({ error: 'Event not found' }); return; }
     const e = rows.rows[0];
+    const audience = parseEventAudience(req.query.audience);
     const { subject, html } = await buildEventEmail({ title: e.title, date: e.date, venue: e.location, description: e.content });
-    res.json({ subject, html, recipientCount: await getAudienceEmailCount() });
+    res.json({ subject, html, recipientCount: await getEventAudienceEmailCount(e.id, audience) });
   } catch (err) {
     console.error('Notify event preview error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Send the event notification to all registered students and stamp notified_at,
-// which drives the Sent/Not-Sent badge. Re-sending is allowed (admin-confirmed);
-// notified_at is refreshed to the latest send.
+// Send the event notification to the chosen audience (all students, or only
+// those who RSVP'd) and stamp notified_at, which drives the Sent/Not-Sent
+// badge. Re-sending is allowed (admin-confirmed); notified_at is refreshed
+// to the latest send regardless of which audience was chosen.
 router.post('/event/:id', requireAdmin, async (req, res) => {
   try {
     const rows = await pool.query<EventRow>('SELECT * FROM events WHERE id=$1', [req.params.id]);
     if (rows.rows.length === 0) { res.status(404).json({ error: 'Event not found' }); return; }
     const e = rows.rows[0];
-    const { sentNow, queued } = await sendEventNotification({ title: e.title, date: e.date, venue: e.location, description: e.content });
+    const audience = parseEventAudience(req.query.audience);
+    const { sentNow, queued } = await sendEventNotification(
+      { id: e.id, title: e.title, date: e.date, venue: e.location, description: e.content },
+      audience
+    );
     if (sentNow === 0 && queued === 0) {
       // Nothing sent and nothing queued — most likely no student has an email
       // on file (or RESEND_API_KEY is unset). Don't stamp notified_at, since

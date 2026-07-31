@@ -212,9 +212,12 @@ function NotifyDialog({
   kind: 'event' | 'artwork';
   item: { id: string; title: string; notifiedAt: string | null };
   onClose: () => void;
-  fetchPreview: (id: string) => Promise<NotifyPreview>;
-  onSend: (id: string) => Promise<{ notifiedAt: string; sentNow: number; queued: number }>;
+  fetchPreview: (id: string, audience: 'all' | 'registered') => Promise<NotifyPreview>;
+  onSend: (id: string, audience: 'all' | 'registered') => Promise<{ notifiedAt: string; sentNow: number; queued: number }>;
 }) {
+  // Registered-only only makes sense for events (artwork has no RSVP concept);
+  // the picker itself is hidden for kind === 'artwork', so this stays 'all' there.
+  const [audience, setAudience] = useState<'all' | 'registered'>('all');
   const [preview, setPreview] = useState<NotifyPreview | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -225,17 +228,18 @@ function NotifyDialog({
 
   useEffect(() => {
     let cancelled = false;
-    fetchPreview(item.id)
+    setPreview(null);
+    fetchPreview(item.id, audience)
       .then(p => { if (!cancelled) setPreview(p); })
       .catch(e => { if (!cancelled) setLoadErr(e instanceof Error ? e.message : 'Failed to load preview'); });
     return () => { cancelled = true; };
-  }, [item.id, fetchPreview]);
+  }, [item.id, audience, fetchPreview]);
 
   const handleSend = async () => {
     setSending(true);
     setSendErr(null);
     try {
-      const { sentNow, queued } = await onSend(item.id);
+      const { sentNow, queued } = await onSend(item.id, audience);
       setResult({ sentNow, queued });
       // Only auto-close on a clean full send; a partial send needs the admin to
       // actually read the queued-count message before dismissing it.
@@ -267,8 +271,32 @@ function NotifyDialog({
           <div className="flex items-start gap-2 p-3" style={{ borderRadius: 'var(--radius-lg)', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.35)' }}>
             <TriangleAlert size={15} style={{ color: '#d97706', flexShrink: 0, marginTop: 1 }} />
             <p className="type-micro" style={{ color: 'var(--color-ink)', margin: 0 }}>
-              Already sent on <strong>{new Date(item.notifiedAt!).toLocaleString('en-IN')}</strong>. Sending again will email every registered student a second time.
+              Already sent on <strong>{new Date(item.notifiedAt!).toLocaleString('en-IN')}</strong>. Sending again will email {audience === 'registered' ? 'everyone registered for this event' : 'every student on file'} a second time.
             </p>
+          </div>
+        )}
+
+        {kind === 'event' && !result && (
+          <div>
+            <p className="type-micro" style={{ marginBottom: 6, color: 'var(--color-ink-muted)' }}>Send to</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setAudience('all')}
+                className={audience === 'all' ? 'btn-primary' : 'btn-secondary'}
+                style={{ fontSize: 12, padding: '6px 14px' }}
+              >
+                All students
+              </button>
+              <button
+                type="button"
+                onClick={() => setAudience('registered')}
+                className={audience === 'registered' ? 'btn-primary' : 'btn-secondary'}
+                style={{ fontSize: 12, padding: '6px 14px' }}
+              >
+                Registered for this event only
+              </button>
+            </div>
           </div>
         )}
 
@@ -282,8 +310,12 @@ function NotifyDialog({
           <>
             <p className="type-body-sm" style={{ margin: 0 }}>
               {noStudents
-                ? 'No registered students have an email on file — there is no one to notify yet.'
-                : <>This will email all <strong>{count}</strong> registered student{count === 1 ? '' : 's'}.</>}
+                ? audience === 'registered'
+                  ? 'No one has registered for this event yet — there is no one to notify.'
+                  : 'No students have an email on file — there is no one to notify yet.'
+                : audience === 'registered'
+                  ? <>This will email the <strong>{count}</strong> student{count === 1 ? '' : 's'} registered for this event.</>
+                  : <>This will email all <strong>{count}</strong> student{count === 1 ? '' : 's'} on file — not just those registered for this event.</>}
             </p>
             <div>
               <p className="type-micro" style={{ marginBottom: 4, color: 'var(--color-ink-muted)' }}>Subject</p>

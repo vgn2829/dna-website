@@ -84,7 +84,7 @@ interface AppDataContextValue {
   addEvent:    (event: Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered' | 'notifiedAt'>) => void;
   updateEvent: (id: string, data: Partial<Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered' | 'notifiedAt'>>) => Promise<void>;
   deleteEvent: (id: string) => void;
-  notifyEvent: (id: string) => Promise<NotifyResult>;
+  notifyEvent: (id: string, audience?: 'all' | 'registered') => Promise<NotifyResult>;
   // Domains / videos
   addDomain:          (domain: { title: string; fullName: string; icon: string; tagline: string; description: string; color: string }) => Promise<void>;
   updateDomain:       (id: string, data: Partial<{ title: string; fullName: string; icon: string; tagline: string; description: string; color: string }>) => Promise<void>;
@@ -210,8 +210,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   // Sends the student notification for an already-created event and updates the
   // record's notifiedAt from the server response. Returns the new timestamp plus
   // how many recipients got mail now vs. were queued (quota-gated free tier).
-  const notifyEvent = useCallback(async (id: string): Promise<NotifyResult> => {
-    const { notifiedAt, sentNow, queued } = await api.notify.event(id);
+  const notifyEvent = useCallback(async (id: string, audience: 'all' | 'registered' = 'all'): Promise<NotifyResult> => {
+    const { notifiedAt, sentNow, queued } = await api.notify.event(id, audience);
     setEvents(prev => prev.map(e => e.id !== id ? e : { ...e, notifiedAt }));
     return { notifiedAt, sentNow, queued };
   }, []);

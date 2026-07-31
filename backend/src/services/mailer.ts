@@ -46,6 +46,24 @@ async function getAllStudentEmails(): Promise<string[]> {
   }
 }
 
+// Only students who RSVP'd to this specific event — used when the admin
+// chooses "Registered only" instead of the default "All students" audience.
+async function getRegisteredStudentEmails(eventId: string): Promise<string[]> {
+  try {
+    const result = await pool.query(`
+      SELECT ss.email FROM event_rsvps r
+      JOIN student_sessions ss ON ss.roll_number = r.roll_number
+      WHERE r.event_id = $1 AND ss.email IS NOT NULL
+    `, [eventId]);
+    return result.rows
+      .map((r: { email: string }) => r.email)
+      .filter(Boolean);
+  } catch (err) {
+    console.error('Failed to fetch registered student emails:', err);
+    return [];
+  }
+}
+
 // ── Quota gate ──────────────────────────────────────────────────────────────
 // Resend free tier: 100 emails/day, 3,000/month, and every To/CC/BCC recipient
 // counts separately. OTP and welcome mail must never be blocked by this gate —
@@ -427,6 +445,15 @@ export async function getAudienceEmailCount(): Promise<number> {
   return (await getAllStudentEmails()).length;
 }
 
+export type EventNotifyAudience = 'all' | 'registered';
+
+// Same as getAudienceEmailCount, but for an event's "Registered only" choice
+// — counts just the RSVP'd students rather than every student on file.
+export async function getEventAudienceEmailCount(eventId: string, audience: EventNotifyAudience): Promise<number> {
+  const emails = audience === 'registered' ? await getRegisteredStudentEmails(eventId) : await getAllStudentEmails();
+  return emails.length;
+}
+
 // Build the EXACT subject + html a student would receive for an event, using the
 // live template (with hardcoded fallbacks). Shared by the send path and the admin
 // preview so the confirm-dialog preview can't drift from what actually goes out.
@@ -478,21 +505,21 @@ export async function buildArtworkEmail(artwork: {
 // were queued for later ticks because today's quota-gated budget ran out.
 export type BroadcastResult = { sentNow: number; queued: number };
 
-export async function sendEventNotification(event: {
-  title: string;
-  date?: string;
-  venue?: string;
-  description?: string;
-}): Promise<BroadcastResult> {
+export async function sendEventNotification(
+  event: { id: string; title: string; date?: string; venue?: string; description?: string },
+  audience: EventNotifyAudience = 'all'
+): Promise<BroadcastResult> {
   if (!process.env.RESEND_API_KEY) return { sentNow: 0, queued: 0 };
-  const emails = await getAllStudentEmails();
+  const emails = audience === 'registered'
+    ? await getRegisteredStudentEmails(event.id)
+    : await getAllStudentEmails();
   if (emails.length === 0) return { sentNow: 0, queued: 0 };
 
   const { subject, html } = await buildEventEmail(event);
 
   try {
     const result = await sendBroadcast('event', emails, subject, html);
-    console.log(`Event notification: ${result.sentNow} sent now, ${result.queued} queued`);
+    console.log(`Event notification (${audience}): ${result.sentNow} sent now, ${result.queued} queued`);
     return result;
   } catch (err) {
     console.error('Failed to send event notification:', err);
