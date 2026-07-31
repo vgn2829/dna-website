@@ -68,7 +68,7 @@ issue IDs. Each row is fixed on its own branch off `main` and shipped as its own
 | UX6 | BoardPage top action bar not responsive on mobile | frontend/Moodboards | grouped with C5+C6+B10+B11 | `fix/moodboards-canvas-integrity` | not started |
 | QW1 | npm audit fix (root + backend) | deps | own tiny PR | `fix/npm-audit-advisories` | not started |
 | QW2 | Wire palette-engine test into npm test script | test infra | grouped with C1 | `test/otp-rsvp-integration-tests` | done — surfaces 20 pre-existing failures in PaletteStudio's engine (off-limits code); wired as-is per explicit confirmation, not silently fixed or skipped |
-| C7 | ResourcesPage: build the real feature (schema, routes, admin tab, public page) | backend + frontend/Resources | own PR (largest change) | `feat/resources-page` | in progress — plan drafted below, awaiting sanity-check |
+| C7 | ResourcesPage: build the real feature (schema, routes, admin tab, public page) | backend + frontend/Resources | own PR (largest change) | `feat/resources-page` | done — schema+routes+tests+frontend+admin tab all implemented, verified (typecheck, 19/19 tests, build), PR opened; domain-modeling fork (FK to domains vs. free-text) flagged in the plan below, chose FK-to-domains, easy to revisit |
 | DEP1 | React 18→19 + @types/react, @types/react-dom, @vitejs/plugin-react | deps | own PR, only if verified safe | `chore/upgrade-react-19` (if pursued) | not started |
 | DEP2 | Express 4→5 | deps/backend | own PR, only if verified safe | `chore/upgrade-express-5` (if pursued) | not started |
 | DEP3 | MUI 7→9 (@mui/material, @mui/icons-material) | deps | own PR, only if verified safe | `chore/upgrade-mui-9` (if pursued) | not started |
@@ -232,7 +232,7 @@ independently mergeable.
 |----|--------|----------|--------|
 | #25 | `docs/audit-report-2026-07-31` | AUDIT_REPORT.md + AUDIT_TASKS.md | open |
 | #26 | `test/otp-rsvp-integration-tests` | C1, QW2 | open |
-| — | `feat/resources-page` | C7 | in progress |
+| #27 | `feat/resources-page` | C7 | open |
 | — | `fix/admin-session-and-error-handling` | C2, C3, C4, CQ3, CQ4, CQ5, UX2, UX4, UX5 | not started |
 | — | `fix/moodboards-canvas-integrity` | C5, C6, B10, B11, CQ6, UX6 | not started |
 | — | `fix/design-studio-worker-lifecycle` | B1, B2, B3, CQ9, UX3 | not started |
