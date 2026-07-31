@@ -5,7 +5,10 @@ import jwt from 'jsonwebtoken';
 // NOT in a client-supplied X-Roll-Number header. The roll number is a claim in
 // the token and is therefore trustworthy once the signature verifies.
 
-const STUDENT_TOKEN_TTL = '30d';
+// Longer session = fewer OTP re-sends against the Resend free-tier quota
+// (see mailer.ts's quota gate). 90 days trades a bit more stale-session
+// exposure on a lost/shared device for a meaningful cut in login frequency.
+const STUDENT_TOKEN_TTL = '90d';
 
 export interface StudentClaims {
   typ: 'student';
