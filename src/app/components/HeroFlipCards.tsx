@@ -330,7 +330,11 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
               // B. Bottom-arc position (scroll progress 1) — convex "rainbow"
               // arc with the apex near the top of the viewport.
               const baseRadius = Math.min(containerSize.width, containerSize.height * 1.5);
-              const arcRadius = baseRadius * (isMobile ? 1.4 : 1.1);
+              // The 1.4x factor here matches the same proportional scaling
+              // applied to the circle radius when card size grew (60x85 ->
+              // 85x120) — without it, cards crowd in the arc (spacing ratio
+              // dropped to ~1.5x card width vs the circle's ~2.6x).
+              const arcRadius = baseRadius * (isMobile ? 1.4 : 1.1) * 1.4;
               const arcApexY = containerSize.height * (isMobile ? 0.35 : 0.25);
               const arcCenterY = arcApexY + arcRadius;
               const spreadAngle = isMobile ? 100 : 130;
