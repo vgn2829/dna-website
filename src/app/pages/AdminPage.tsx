@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout } from 'lucide-react';
+import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout, Send, TriangleAlert } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
 import { api, setAdminToken, clearAdminToken, type SessionJoins, type CoordinatorMember } from '../lib/api';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
@@ -128,6 +128,133 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
         <div style={{ padding: '1.5rem' }}>{children}</div>
       </div>
     </div>
+  );
+}
+
+// Small pill showing whether students have been notified about a record yet.
+function NotifiedBadge({ notifiedAt }: { notifiedAt: string | null }) {
+  const sent = notifiedAt !== null;
+  return (
+    <span
+      className="type-micro"
+      title={sent ? `Notified ${new Date(notifiedAt).toLocaleString('en-IN')}` : 'Students have not been notified yet'}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        padding: '2px 7px', borderRadius: 'var(--radius-pill)', whiteSpace: 'nowrap',
+        background: sent ? 'rgba(46,160,67,0.12)' : 'var(--color-surface-2)',
+        color: sent ? '#2ea043' : 'var(--color-ink-muted)',
+        border: `1px solid ${sent ? 'rgba(46,160,67,0.35)' : 'var(--color-hairline)'}`,
+      }}
+    >
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: sent ? '#2ea043' : 'var(--color-ink-muted)' }} />
+      {sent ? 'Sent' : 'Not sent'}
+    </span>
+  );
+}
+
+type NotifyPreview = { subject: string; html: string; recipientCount: number };
+
+// Confirm-before-send dialog for the manual "Notify Students" action. Loads the
+// exact email + recipient count (so the admin sees what goes out and to how many),
+// warns when re-sending an already-notified record, then triggers the send.
+function NotifyDialog({
+  kind, item, onClose, fetchPreview, onSend,
+}: {
+  kind: 'event' | 'artwork';
+  item: { id: string; title: string; notifiedAt: string | null };
+  onClose: () => void;
+  fetchPreview: (id: string) => Promise<NotifyPreview>;
+  onSend: (id: string) => Promise<string>;
+}) {
+  const [preview, setPreview] = useState<NotifyPreview | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [sendErr, setSendErr] = useState<string | null>(null);
+  const alreadySent = item.notifiedAt !== null;
+  const count = preview?.recipientCount;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchPreview(item.id)
+      .then(p => { if (!cancelled) setPreview(p); })
+      .catch(e => { if (!cancelled) setLoadErr(e instanceof Error ? e.message : 'Failed to load preview'); });
+    return () => { cancelled = true; };
+  }, [item.id, fetchPreview]);
+
+  const handleSend = async () => {
+    setSending(true);
+    setSendErr(null);
+    try {
+      await onSend(item.id);
+      onClose();
+    } catch (e) {
+      setSendErr(e instanceof Error ? e.message : 'Failed to send notification');
+      setSending(false);
+    }
+  };
+
+  const noStudents = count === 0;
+  const sendLabel = alreadySent ? 'Re-send' : 'Send';
+  const canSend = preview !== null && !noStudents && !sending;
+
+  return (
+    <Modal title={`Notify students — ${item.title}`} onClose={onClose}>
+      <div className="space-y-3">
+        {alreadySent && (
+          <div className="flex items-start gap-2 p-3" style={{ borderRadius: 'var(--radius-lg)', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.35)' }}>
+            <TriangleAlert size={15} style={{ color: '#d97706', flexShrink: 0, marginTop: 1 }} />
+            <p className="type-micro" style={{ color: 'var(--color-ink)', margin: 0 }}>
+              Already sent on <strong>{new Date(item.notifiedAt!).toLocaleString('en-IN')}</strong>. Sending again will email every registered student a second time.
+            </p>
+          </div>
+        )}
+
+        {loadErr ? (
+          <p className="type-body-sm" style={{ color: '#e5484d' }}>{loadErr}</p>
+        ) : !preview ? (
+          <div className="flex items-center gap-2 type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>
+            <Loader2 size={14} className="animate-spin" /> Loading preview…
+          </div>
+        ) : (
+          <>
+            <p className="type-body-sm" style={{ margin: 0 }}>
+              {noStudents
+                ? 'No registered students have an email on file — there is no one to notify yet.'
+                : <>This will email all <strong>{count}</strong> registered student{count === 1 ? '' : 's'}.</>}
+            </p>
+            <div>
+              <p className="type-micro" style={{ marginBottom: 4, color: 'var(--color-ink-muted)' }}>Subject</p>
+              <p className="type-body-sm" style={{ margin: 0 }}>{preview.subject}</p>
+            </div>
+            <div>
+              <p className="type-micro" style={{ marginBottom: 4, color: 'var(--color-ink-muted)' }}>Preview</p>
+              <iframe
+                title="Email preview"
+                srcDoc={preview.html}
+                sandbox=""
+                style={{ width: '100%', height: 280, border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-lg)', background: '#fff' }}
+              />
+            </div>
+          </>
+        )}
+
+        {sendErr && <p className="type-micro" style={{ color: '#e5484d' }}>{sendErr}</p>}
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={!canSend}
+            className="btn-primary flex items-center gap-2"
+            style={{ opacity: canSend ? 1 : 0.5, cursor: canSend ? 'pointer' : 'not-allowed' }}
+          >
+            {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+            {noStudents ? 'No recipients' : count !== undefined ? `${sendLabel} to ${count} student${count === 1 ? '' : 's'}` : sendLabel}
+          </button>
+          <button type="button" onClick={onClose} className="btn-secondary" disabled={sending}>Cancel</button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -435,7 +562,8 @@ interface BulkItem {
 
 // ── Gallery tab ───────────────────────────────────────────────────────────────
 function GalleryTab() {
-  const { artworks, uploadArtwork, updateArtwork, deleteArtwork, toggleFeatured, domains } = useAppData();
+  const { artworks, uploadArtwork, updateArtwork, deleteArtwork, toggleFeatured, notifyArtwork, domains } = useAppData();
+  const [notifyItem, setNotifyItem] = useState<Artwork | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [aTitle, setATitle] = useState('');
@@ -514,7 +642,7 @@ function GalleryTab() {
       setFile(null); setATitle(''); setAArtist(''); setADomain(''); setACustomDomain('');
       setCoverFile(null); if (coverPreview) URL.revokeObjectURL(coverPreview); setCoverPreview(null);
       if (fileRef.current) fileRef.current.value = '';
-      setUploadSuccess('Artwork published · Students will be notified by email');
+      setUploadSuccess('Artwork published · use Notify Students to email members');
       setTimeout(() => setUploadSuccess(''), 4000);
     } catch (err) { setUploadError(err instanceof Error ? err.message : String(err)); } finally { setUploading(false); }
   };
@@ -955,6 +1083,15 @@ function GalleryTab() {
             >
               <Star size={14} fill={a.featured ? '#FFD700' : 'none'} />
             </button>
+            <NotifiedBadge notifiedAt={a.notifiedAt} />
+            <button
+              onClick={() => setNotifyItem(a)}
+              className="btn-icon shrink-0"
+              title={a.notifiedAt ? 'Re-send notification to students' : 'Notify students about this artwork'}
+              style={{ color: a.notifiedAt ? 'var(--color-ink-muted)' : 'var(--color-accent-blue)', width: 28, height: 28, background: 'transparent' }}
+            >
+              <Send size={12} />
+            </button>
             <button onClick={() => openEditArtwork(a)} className="btn-icon shrink-0" style={{ color: 'var(--color-accent-blue)', width: 28, height: 28, background: 'transparent' }}>
               <Pencil size={12} />
             </button>
@@ -964,6 +1101,16 @@ function GalleryTab() {
           </div>
         ))}
       </div>
+
+      {notifyItem && (
+        <NotifyDialog
+          kind="artwork"
+          item={notifyItem}
+          onClose={() => setNotifyItem(null)}
+          fetchPreview={api.notify.previewArtwork}
+          onSend={notifyArtwork}
+        />
+      )}
 
       {editArtwork && (
         <div className="lg:col-span-5">
@@ -1414,7 +1561,8 @@ function TeamTab() {
 
 // ── Events tab ─────────────────────────────────────────────────────────────────
 function EventsTab() {
-  const { events, addEvent, updateEvent, deleteEvent } = useAppData();
+  const { events, addEvent, updateEvent, deleteEvent, notifyEvent } = useAppData();
+  const [notifyItem, setNotifyItem] = useState<ClubEvent | null>(null);
   const [eTitle, setETitle] = useState('');
   const [eDate, setEDate] = useState('');
   const [eTime, setETime] = useState('');
@@ -1441,7 +1589,7 @@ function EventsTab() {
     setAddingEvent(true);
     addEvent({ title: eTitle, date: eDate, time: eTime, location: eLocation, content: eContent, capacity: Number(eCapacity) || 100 });
     setETitle(''); setEDate(''); setETime(''); setELocation(''); setEContent('');
-    setESuccess('Event created · Students will be notified by email');
+    setESuccess('Event created · use Notify Students to email members');
     setTimeout(() => { setAddingEvent(false); setESuccess(''); }, 4000);
   };
 
@@ -1491,6 +1639,15 @@ function EventsTab() {
               <p className="type-body-sm truncate">{ev.title}</p>
               <p className="type-micro">{ev.date} · {ev.registeredCount}/{ev.capacity}</p>
             </div>
+            <NotifiedBadge notifiedAt={ev.notifiedAt} />
+            <button
+              onClick={() => setNotifyItem(ev)}
+              className="btn-icon shrink-0"
+              title={ev.notifiedAt ? 'Re-send notification to students' : 'Notify students about this event'}
+              style={{ color: ev.notifiedAt ? 'var(--color-ink-muted)' : 'var(--color-accent-blue)', width: 28, height: 28, background: 'transparent' }}
+            >
+              <Send size={12} />
+            </button>
             <button onClick={() => openEditEvent(ev)} className="btn-icon shrink-0" style={{ color: 'var(--color-accent-blue)', width: 28, height: 28, background: 'transparent' }}>
               <Pencil size={12} />
             </button>
@@ -1500,6 +1657,16 @@ function EventsTab() {
           </div>
         ))}
       </div>
+
+      {notifyItem && (
+        <NotifyDialog
+          kind="event"
+          item={notifyItem}
+          onClose={() => setNotifyItem(null)}
+          fetchPreview={api.notify.previewEvent}
+          onSend={notifyEvent}
+        />
+      )}
 
       {editEvent && (
         <div className="lg:col-span-5">

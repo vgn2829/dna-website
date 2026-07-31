@@ -41,6 +41,7 @@ type ArtworkRow = {
   image_url: string | null; media_type: string; storage_path: string | null;
   original_filename: string | null; mime_type: string | null; file_size: number | null;
   likes: number; featured: boolean; cover_url: string | null;
+  notified_at: string | null;
 };
 type CommentRow = { id: string; sender: string; text: string; created_at: string };
 
@@ -78,6 +79,7 @@ function formatArtwork(row: ArtworkRow, likedByUser: boolean, comments: CommentR
     likedByUser,
     featured: row.featured ?? false,
     coverUrl: row.cover_url ?? null,
+    notifiedAt: row.notified_at ?? null,
     comments: comments.map(c => ({ id: c.id, sender: c.sender, text: c.text, date: relativeTime(c.created_at) })),
   };
 }

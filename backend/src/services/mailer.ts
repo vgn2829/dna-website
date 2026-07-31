@@ -282,16 +282,21 @@ export async function sendWelcomeEmail(name: string, email: string): Promise<boo
   }
 }
 
-export async function sendEventNotification(event: {
+// Number of students who would receive a broadcast — surfaced to the admin
+// confirm dialog so "Notify Students" states the real recipient count up front.
+export async function getAudienceEmailCount(): Promise<number> {
+  return (await getAllStudentEmails()).length;
+}
+
+// Build the EXACT subject + html a student would receive for an event, using the
+// live template (with hardcoded fallbacks). Shared by the send path and the admin
+// preview so the confirm-dialog preview can't drift from what actually goes out.
+export async function buildEventEmail(event: {
   title: string;
   date?: string;
   venue?: string;
   description?: string;
-}): Promise<void> {
-  if (!process.env.RESEND_API_KEY) return;
-  const emails = await getAllStudentEmails();
-  if (emails.length === 0) return;
-
+}): Promise<{ subject: string; html: string }> {
   const tpl = await getTemplate('new_event');
   const subject = tpl?.subject ?? 'New Event: {{title}} — DnA Club IITK';
   const body = tpl?.body ?? '<h2>{{title}}</h2><p>{{date}}</p><p>{{description}}</p>';
@@ -303,8 +308,47 @@ export async function sendEventNotification(event: {
     '{{description}}': event.description ?? '',
   };
 
+  return {
+    subject: resolve(subject, vars),
+    html: renderTemplateHtml('new_event', resolve(body, vars, true)),
+  };
+}
+
+export async function buildArtworkEmail(artwork: {
+  title: string;
+  artist: string;
+  domain?: string;
+}): Promise<{ subject: string; html: string }> {
+  const tpl = await getTemplate('new_artwork');
+  const subject = tpl?.subject ?? 'New Artwork: {{title}} — DnA Club IITK';
+  const body = tpl?.body ?? '<h2>{{title}}</h2><p>by {{artist}}</p>';
+
+  const vars: Record<string, string> = {
+    '{{title}}':  artwork.title ?? '',
+    '{{artist}}': artwork.artist ?? '',
+    '{{domain}}': artwork.domain ?? '',
+  };
+
+  return {
+    subject: resolve(subject, vars),
+    html: renderTemplateHtml('new_artwork', resolve(body, vars, true)),
+  };
+}
+
+export async function sendEventNotification(event: {
+  title: string;
+  date?: string;
+  venue?: string;
+  description?: string;
+}): Promise<void> {
+  if (!process.env.RESEND_API_KEY) return;
+  const emails = await getAllStudentEmails();
+  if (emails.length === 0) return;
+
+  const { subject, html } = await buildEventEmail(event);
+
   try {
-    await sendInBatches(emails, resolve(subject, vars), renderTemplateHtml('new_event', resolve(body, vars, true)));
+    await sendInBatches(emails, subject, html);
     console.log(`Event notification sent to ${emails.length} students`);
   } catch (err) {
     console.error('Failed to send event notification:', err);
@@ -320,18 +364,10 @@ export async function sendArtworkNotification(artwork: {
   const emails = await getAllStudentEmails();
   if (emails.length === 0) return;
 
-  const tpl = await getTemplate('new_artwork');
-  const subject = tpl?.subject ?? 'New Artwork: {{title}} — DnA Club IITK';
-  const body = tpl?.body ?? '<h2>{{title}}</h2><p>by {{artist}}</p>';
-
-  const vars: Record<string, string> = {
-    '{{title}}':  artwork.title ?? '',
-    '{{artist}}': artwork.artist ?? '',
-    '{{domain}}': artwork.domain ?? '',
-  };
+  const { subject, html } = await buildArtworkEmail(artwork);
 
   try {
-    await sendInBatches(emails, resolve(subject, vars), renderTemplateHtml('new_artwork', resolve(body, vars, true)));
+    await sendInBatches(emails, subject, html);
     console.log(`Artwork notification sent to ${emails.length} students`);
   } catch (err) {
     console.error('Failed to send artwork notification:', err);

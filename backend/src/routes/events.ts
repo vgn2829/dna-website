@@ -13,6 +13,7 @@ const rsvpLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, message: { error: 
 type EventRow = {
   id: string; title: string; date: string; time: string;
   location: string; content: string; capacity: number; registered_count: number;
+  notified_at: string | null;
 };
 
 function formatEvent(row: EventRow, isRegistered = false) {
@@ -20,6 +21,7 @@ function formatEvent(row: EventRow, isRegistered = false) {
     id: row.id, title: row.title, date: row.date, time: row.time,
     location: row.location, content: row.content,
     capacity: row.capacity, registeredCount: row.registered_count, isRegistered,
+    notifiedAt: row.notified_at ?? null,
   };
 }
 
