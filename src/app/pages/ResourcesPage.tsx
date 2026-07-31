@@ -1,3 +1,9 @@
+// RESOURCES_PAGE_FEATURE — built for audit item C7 (was previously a hardcoded
+// mock page with no backend and dead CTAs) but NOT currently needed by the
+// club. Fully working (real submit-then-approve flow, admin moderation tab,
+// backend routes + tests) and left in place rather than deleted, in case a
+// future need — e.g. a blog / articles feature — wants this exact shape.
+// Do not build on top of this or route users to it until that's decided.
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BookOpen, Video, Trophy, ArrowRight, Search, ExternalLink, Clock, Filter, X } from 'lucide-react';

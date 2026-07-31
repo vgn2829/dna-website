@@ -759,6 +759,8 @@ export async function initSchema(): Promise<void> {
   // avoiding the referential-integrity gap the audit flagged for
   // artworks.domain — see FIX_TASKS.md's "C7 — ResourcesPage" section for the
   // full tradeoff this was weighed against.
+  // RESOURCES_PAGE_FEATURE — not currently used by the club; kept working in
+  // case a future need (e.g. a blog/articles feature) wants this exact shape.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS resources (
       id                TEXT        PRIMARY KEY,

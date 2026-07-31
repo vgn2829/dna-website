@@ -9,6 +9,9 @@ import { TeamPage } from './pages/TeamPage';
 import { AcademyPage } from './pages/AcademyPage';
 import { AdminPage } from './pages/AdminPage';
 import { PalettePage } from './pages/PalettePage'; // PALETTE_STUDIO_FEATURE
+// RESOURCES_PAGE_FEATURE — not currently used (no nav link); kept working in
+// case a future need (e.g. a blog/articles feature) wants this shape. See
+// ResourcesPage.tsx and backend/src/routes/resources.ts for more context.
 import DesignStudio from './pages/DesignStudioPage';
 import MoodboardsPage from './pages/MoodboardsPage';
 import BoardPage from './pages/BoardPage';

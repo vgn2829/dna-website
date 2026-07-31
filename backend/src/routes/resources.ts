@@ -1,3 +1,8 @@
+// RESOURCES_PAGE_FEATURE — built for audit item C7 but NOT currently needed by
+// the club (frontend ResourcesPage.tsx isn't linked from anywhere active).
+// Left in place, fully working, in case a future need — e.g. a blog /
+// articles feature — wants this submit-then-approve shape. Not routed to from
+// nav; do not extend unless that's decided first.
 import { Router } from 'express';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';

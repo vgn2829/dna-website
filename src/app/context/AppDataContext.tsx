@@ -63,6 +63,8 @@ export interface TeamMember {
   social: { instagram: string | null; linkedin: string | null; email: string | null };
 }
 
+// RESOURCES_PAGE_FEATURE — not currently used by the club; kept working in
+// case a future need (e.g. a blog/articles feature) wants this shape.
 export interface Resource {
   id: string; title: string; url: string; author: string;
   domainId: string | null; domainTitle: string | null;

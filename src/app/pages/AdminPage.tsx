@@ -3571,6 +3571,9 @@ function SessionsTab() {
 }
 
 // ── Resources tab ─────────────────────────────────────────────────────────────
+// RESOURCES_PAGE_FEATURE — not currently used by the club (the public
+// ResourcesPage isn't linked from nav). Left fully working here in case a
+// future need — e.g. a blog/articles feature — wants this moderation shape.
 function ResourcesTab() {
   const { domains, resources, addResourceAdmin, updateResource, deleteResource } = useAppData();
   const domainKeys = Object.keys(domains);
