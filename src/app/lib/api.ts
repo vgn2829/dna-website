@@ -224,7 +224,7 @@ export const api = {
   },
   events: {
     list: (roll?: string) => request<unknown[]>('GET', '/events', { roll }),
-    add:  (event: { title: string; date: string; time: string; location: string; content: string; capacity: number }) =>
+    add:  (event: { title: string; date: string; time: string; location: string; content: string; capacity: number; startsAt?: string | null }) =>
       request<unknown>('POST', '/events', { body: event, admin: true }),
     update: (id: string, data: object) => request<unknown>('PUT', `/events/${id}`, { body: data, admin: true }),
     delete: (id: string)  => request<void>('DELETE', `/events/${id}`, { admin: true }),

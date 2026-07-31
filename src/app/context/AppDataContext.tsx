@@ -32,6 +32,10 @@ export interface ClubEvent {
   id: string; title: string; date: string; time: string; location: string;
   content: string; capacity: number; registeredCount: number; isRegistered: boolean;
   notifiedAt: string | null;
+  // Machine-readable start instant (ISO 8601) used by the reminder job. The
+  // free-text `time` field above remains the display label; startsAt is null
+  // until an admin sets it via the datetime input.
+  startsAt: string | null;
 }
 
 // Outcome of a "Notify Students" send. Because Resend's free tier caps daily/

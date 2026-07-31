@@ -187,6 +187,7 @@ export const TEMPLATE_SAMPLE_VARS: Record<string, Record<string, string>> = {
   welcome:     { '{{name}}': 'Aarav Sharma' },
   new_artwork: { '{{title}}': 'Ethereal Solitude', '{{artist}}': 'Vikram Aditya', '{{domain}}': '3D Animation' },
   new_event:   { '{{title}}': 'Figma UI Sprint', '{{date}}': '12 Jun 2026', '{{venue}}': 'LHC-3', '{{description}}': 'A hands-on masterclass on structural glassmorphism and adaptive layouts.' },
+  event_reminder: { '{{name}}': 'Aarav Sharma', '{{title}}': 'Figma UI Sprint', '{{date}}': '12 Jun 2026', '{{time}}': '6:00 PM – 8:30 PM', '{{venue}}': 'LHC-3' },
 };
 
 export function templateVariables(templateId: string): string[] {
@@ -517,4 +518,64 @@ export async function sendCustomAnnouncement(
     console.error('Failed to send custom announcement:', err);
     throw err;
   }
+}
+
+// A single RSVP due for its ~1-hour-before reminder (see routes/internal.ts,
+// which queries event_rsvps JOIN events/student_sessions for the due window).
+export interface DueReminder {
+  eventId: string;
+  rollNumber: string;
+  email: string;
+  name: string | null;
+  title: string;
+  date: string;
+  time: string;
+  venue: string;
+}
+
+// Sends one personalized reminder per RSVP (not a BCC broadcast — each email
+// has a different {{name}}), respecting the same quota gate as broadcasts.
+// Recipients beyond today's remaining budget are simply skipped and left with
+// reminder_sent_at still NULL, so the next tick retries them automatically —
+// no separate queue table needed here since the due-window query IS the queue.
+// Returns how many were actually sent so the caller knows which to stamp.
+export async function sendEventReminders(due: DueReminder[]): Promise<{ sent: DueReminder[] }> {
+  if (!process.env.RESEND_API_KEY || due.length === 0) return { sent: [] };
+
+  const tpl = await getTemplate('event_reminder');
+  const subjectTpl = tpl?.subject ?? 'Reminder: {{title}} starts soon — DnA Club IITK';
+  const bodyTpl = tpl?.body ?? '<p>Hi {{name}}, {{title}} starts soon.</p>';
+
+  let budget = await broadcastBudgetRemaining();
+  const sent: DueReminder[] = [];
+
+  for (const r of due) {
+    if (budget <= 0) break;
+    const vars: Record<string, string> = {
+      '{{name}}': r.name ?? 'there',
+      '{{title}}': r.title,
+      '{{date}}': r.date,
+      '{{time}}': r.time,
+      '{{venue}}': r.venue,
+    };
+    try {
+      await resendClient().emails.send({
+        from: MAIL_FROM,
+        replyTo: 'designandanimationclub.iitk@gmail.com',
+        to: r.email,
+        subject: resolve(subjectTpl, vars),
+        html: renderTemplateHtml('event_reminder', resolve(bodyTpl, vars, true)),
+      });
+      await recordSent(1);
+      budget -= 1;
+      sent.push(r);
+    } catch (err) {
+      console.error(`Failed to send event reminder to ${r.email}:`, err);
+      // Don't decrement budget or mark sent — leaves reminder_sent_at NULL so
+      // this recipient is retried on the next tick rather than silently lost.
+    }
+  }
+
+  console.log(`Event reminders: ${sent.length} sent, ${due.length - sent.length} deferred to next tick`);
+  return { sent };
 }

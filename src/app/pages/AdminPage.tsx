@@ -1692,6 +1692,7 @@ function EventsTab() {
   const [eLocation, setELocation] = useState('');
   const [eContent, setEContent] = useState('');
   const [eCapacity, setECapacity] = useState('100');
+  const [eStartsAt, setEStartsAt] = useState(''); // datetime-local value, e.g. "2026-12-31T18:00"
   const [addingEvent, setAddingEvent] = useState(false);
   const [eSuccess, setESuccess] = useState('');
 
@@ -1703,15 +1704,28 @@ function EventsTab() {
   const [eeLocation, setEeLocation] = useState('');
   const [eeContent, setEeContent] = useState('');
   const [eeCapacity, setEeCapacity] = useState('100');
+  const [eeStartsAt, setEeStartsAt] = useState('');
   const [eeLoading, setEeLoading] = useState(false);
   const [eeError, setEeError] = useState('');
+
+  // datetime-local inputs give/take local time with no timezone info; the
+  // backend stores TIMESTAMPTZ, so round-trip through the Date object's ISO
+  // string (UTC) rather than passing the raw local-time string through.
+  const localToIso = (local: string): string | undefined =>
+    local ? new Date(local).toISOString() : undefined;
+  const isoToLocal = (iso: string | null): string => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
 
   const handleAdd = (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (addingEvent) return;
     setAddingEvent(true);
-    addEvent({ title: eTitle, date: eDate, time: eTime, location: eLocation, content: eContent, capacity: Number(eCapacity) || 100 });
-    setETitle(''); setEDate(''); setETime(''); setELocation(''); setEContent('');
+    addEvent({ title: eTitle, date: eDate, time: eTime, location: eLocation, content: eContent, capacity: Number(eCapacity) || 100, startsAt: localToIso(eStartsAt) ?? null });
+    setETitle(''); setEDate(''); setETime(''); setELocation(''); setEContent(''); setEStartsAt('');
     setESuccess('Event created · use Notify Students to email members');
     setTimeout(() => { setAddingEvent(false); setESuccess(''); }, 4000);
   };
@@ -1720,6 +1734,7 @@ function EventsTab() {
     setEditEvent(ev);
     setEeTitle(ev.title); setEeDate(ev.date); setEeTime(ev.time);
     setEeLocation(ev.location); setEeContent(ev.content); setEeCapacity(String(ev.capacity));
+    setEeStartsAt(isoToLocal(ev.startsAt));
     setEeError('');
   };
 
@@ -1728,7 +1743,7 @@ function EventsTab() {
     if (!editEvent) return;
     setEeLoading(true); setEeError('');
     try {
-      await updateEvent(editEvent.id, { title: eeTitle, date: eeDate, time: eeTime, location: eeLocation, content: eeContent, capacity: Number(eeCapacity) || editEvent.capacity });
+      await updateEvent(editEvent.id, { title: eeTitle, date: eeDate, time: eeTime, location: eeLocation, content: eeContent, capacity: Number(eeCapacity) || editEvent.capacity, startsAt: localToIso(eeStartsAt) ?? null });
       setEditEvent(null);
     } catch (err) { setEeError(String(err)); } finally { setEeLoading(false); }
   };
@@ -1746,6 +1761,11 @@ function EventsTab() {
           <div><label className="type-micro block mb-1">Location *</label><input required value={eLocation} onChange={e => setELocation(e.target.value)} className="input-base" maxLength={200} /></div>
           <div><label className="type-micro block mb-1">Description *</label><textarea required value={eContent} onChange={e => setEContent(e.target.value)} rows={3} className="input-base resize-none" maxLength={2000} /></div>
           <div><label className="type-micro block mb-1">Capacity</label><input type="number" value={eCapacity} onChange={e => setECapacity(e.target.value)} className="input-base" /></div>
+          <div>
+            <label className="type-micro block mb-1">Exact start time (optional)</label>
+            <input type="datetime-local" value={eStartsAt} onChange={e => setEStartsAt(e.target.value)} className="input-base" />
+            <p className="type-micro" style={{ marginTop: 4, color: 'var(--color-ink-muted)' }}>Powers the ~1-hour-before reminder email. The Time field above stays the display label.</p>
+          </div>
           <button type="submit" disabled={addingEvent} className="btn-primary w-full justify-center" style={{ opacity: addingEvent ? 0.5 : 1 }}>
             {addingEvent ? <><Loader2 size={13} className="animate-spin mr-2" />Scheduling…</> : 'Schedule Event'}
           </button>
@@ -1815,6 +1835,11 @@ function EventsTab() {
               <div><label className="type-micro block mb-1">Location *</label><input required value={eeLocation} onChange={e => setEeLocation(e.target.value)} className="input-base" maxLength={200} /></div>
               <div><label className="type-micro block mb-1">Description *</label><textarea required value={eeContent} onChange={e => setEeContent(e.target.value)} rows={3} className="input-base resize-none" maxLength={2000} /></div>
               <div><label className="type-micro block mb-1">Capacity</label><input type="number" value={eeCapacity} onChange={e => setEeCapacity(e.target.value)} className="input-base" /></div>
+              <div>
+                <label className="type-micro block mb-1">Exact start time (optional)</label>
+                <input type="datetime-local" value={eeStartsAt} onChange={e => setEeStartsAt(e.target.value)} className="input-base" />
+                <p className="type-micro" style={{ marginTop: 4, color: 'var(--color-ink-muted)' }}>Powers the ~1-hour-before reminder email. The Time field above stays the display label.</p>
+              </div>
               {eeError && <p className="type-micro" style={{ color: '#e5484d' }}>{eeError}</p>}
               <div className="flex gap-2">
                 <button type="submit" disabled={eeLoading} className="btn-primary flex items-center gap-2" style={{ opacity: eeLoading ? 0.6 : 1 }}>
