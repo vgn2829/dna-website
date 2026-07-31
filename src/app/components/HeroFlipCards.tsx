@@ -279,7 +279,12 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
             animate={introContentVisible ? { opacity: 1 - morphValue * 2, filter: 'blur(0px)' } : { opacity: 0, filter: 'blur(10px)' }}
             transition={{ duration: 1 }}
             className="type-display-xl"
-            style={{ maxWidth: 700 }}
+            // Overrides the shared .type-display-xl font-size (clamp floor
+            // 40px) with a lower floor (28px) specific to this heading —
+            // on narrow viewports the circle formation shrinks faster than
+            // a 40px floor allows the text to, causing cards to overlap
+            // the heading horizontally (see circleRadius below).
+            style={{ maxWidth: 700, fontSize: 'clamp(28px, 6vw, 85px)' }}
           >
             Design and Animation Club.
           </motion.h1>
@@ -326,10 +331,23 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
               const minDimension = Math.min(containerSize.width, containerSize.height);
 
               // A. Circle position (scroll progress 0)
-              // Radius scaled up proportionally with IMG_WIDTH/IMG_HEIGHT
-              // (85/120 vs the original 60/85) to preserve the same
-              // arc-length-to-card-width spacing ratio around the circle.
-              const circleRadius = Math.min(minDimension * 0.49, 490);
+              // Base multiplier (0.49) scaled up proportionally with
+              // IMG_WIDTH/IMG_HEIGHT (85/120 vs the original 60/85) to
+              // preserve the same arc-length-to-card-width spacing ratio
+              // around the circle. On top of that, the multiplier itself
+              // scales continuously from 0.49 (large viewports) up to 0.68
+              // (narrow viewports, minDimension <= 400) — a flat 0.49
+              // multiplier leaves the circle too small to clear the
+              // "Design and Animation Club." heading horizontally once
+              // minDimension drops below ~800px (the heading's clamp()
+              // font-size floor shrinks slower than the circle does), so
+              // narrower viewports get a proportionally larger circle
+              // radius to compensate. A single isMobile-gated multiplier
+              // can't serve both ends smoothly — this avoids a hard cliff
+              // right at the 768px isMobile threshold.
+              const clearanceT = Math.max(0, Math.min(1, (minDimension - 400) / (900 - 400)));
+              const circleRadiusMultiplier = 0.68 - clearanceT * (0.68 - 0.49);
+              const circleRadius = Math.min(minDimension * circleRadiusMultiplier, 490);
               const circleAngle = (i / total) * 360;
               const circleRad = (circleAngle * Math.PI) / 180;
               const circlePos = {
