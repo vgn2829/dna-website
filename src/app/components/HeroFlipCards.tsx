@@ -188,11 +188,22 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
       virtualScroll.set(newScroll);
     };
 
+    // Wheel/trackpad deltaY is frequently amplified by OS-level scroll
+    // acceleration and momentum (extra synthetic events fire during
+    // deceleration, well past the physical gesture), while touchmove's
+    // deltaY is raw, un-amplified finger travel — it only fires while the
+    // finger is actually moving, with no inertia layer feeding into it.
+    // Without compensation, a full touch swipe covers a much smaller
+    // fraction of MAX_SCROLL than an equivalent wheel scroll, making touch
+    // feel heavy. This multiplier brings touch swipe distance back in line
+    // with wheel input's effective (accelerated) scroll distance.
+    const TOUCH_DELTA_MULTIPLIER = 3;
+
     let touchStartY = 0;
     const handleTouchStart = (e: TouchEvent) => { touchStartY = e.touches[0].clientY; };
     const handleTouchMove = (e: TouchEvent) => {
       const touchY = e.touches[0].clientY;
-      const deltaY = touchStartY - touchY;
+      const deltaY = (touchStartY - touchY) * TOUCH_DELTA_MULTIPLIER;
       touchStartY = touchY;
 
       if ((atMax() && deltaY > 0) || (atMin() && deltaY < 0)) return;
