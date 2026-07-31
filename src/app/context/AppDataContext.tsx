@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { api } from '../lib/api';
+import { api, type ResourceInput } from '../lib/api';
 import { useStudent } from './StudentContext';
 
 function onAdminErr(err: unknown): void {
@@ -63,11 +63,23 @@ export interface TeamMember {
   social: { instagram: string | null; linkedin: string | null; email: string | null };
 }
 
+// RESOURCES_PAGE_FEATURE — not currently used by the club; kept working in
+// case a future need (e.g. a blog/articles feature) wants this shape.
+export interface Resource {
+  id: string; title: string; url: string; author: string;
+  domainId: string | null; domainTitle: string | null;
+  type: 'video' | 'article' | 'course';
+  level: 'Beginner' | 'Intermediate' | 'Advanced';
+  durationLabel: string; tags: string[]; displayOrder: number;
+  submittedByRoll: string | null; approved: boolean; createdAt: string;
+}
+
 interface AppDataContextValue {
-  domains:  Record<string, Domain>;
-  artworks: Artwork[];
-  events:   ClubEvent[];
-  team:     TeamMember[];
+  domains:   Record<string, Domain>;
+  artworks:  Artwork[];
+  events:    ClubEvent[];
+  team:      TeamMember[];
+  resources: Resource[];
   loading:  boolean;
   error:    string | null;
   // Artwork
@@ -98,6 +110,12 @@ interface AppDataContextValue {
   updateTeamMember:    (id: number, formData: FormData) => Promise<void>;
   deleteTeamMember:    (id: number) => void;
   reorderTeamSection:  (ordered: TeamMember[]) => Promise<void>;
+  // Resources
+  submitResource:      (data: ResourceInput) => Promise<Resource>;
+  addResourceAdmin:    (data: ResourceInput) => Promise<void>;
+  updateResource:      (id: string, data: Partial<ResourceInput> & { approved?: boolean }) => Promise<void>;
+  deleteResource:      (id: string) => void;
+  updateResourceOrder: (id: string, displayOrder: number) => Promise<void>;
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
@@ -106,10 +124,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const { studentSession } = useStudent();
   const roll = studentSession?.rollNumber;
 
-  const [domains,  setDomains]  = useState<Record<string, Domain>>({});
-  const [artworks, setArtworks] = useState<Artwork[]>([]);
-  const [events,   setEvents]   = useState<ClubEvent[]>([]);
-  const [team,     setTeam]     = useState<TeamMember[]>([]);
+  const [domains,   setDomains]   = useState<Record<string, Domain>>({});
+  const [artworks,  setArtworks]  = useState<Artwork[]>([]);
+  const [events,    setEvents]    = useState<ClubEvent[]>([]);
+  const [team,      setTeam]      = useState<TeamMember[]>([]);
+  const [resources, setResources] = useState<Resource[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState<string | null>(null);
 
@@ -121,12 +140,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       api.artworks.list(roll),
       api.events.list(roll),
       api.team.list(),
-    ]).then(([d, a, e, t]) => {
+      api.resources.list(),
+    ]).then(([d, a, e, t, r]) => {
       if (cancelled) return;
       setDomains(d as Record<string, Domain>);
       setArtworks(a as Artwork[]);
       setEvents(e as ClubEvent[]);
       setTeam(t as TeamMember[]);
+      setResources(r as Resource[]);
       setError(null);
       setLoading(false);
     }).catch(err => {
@@ -322,13 +343,57 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     ));
   }, []);
 
+  // Resources — all promise-returning (not fire-and-forget) so callers can
+  // await the real outcome before showing a success message, rather than the
+  // optimistic-then-console.error pattern used by some of the older
+  // callbacks above (flagged in the audit as C4 — not repeating it here).
+  const submitResource = useCallback(async (data: ResourceInput): Promise<Resource> => {
+    if (!roll) throw new Error('Sign in required');
+    const created = await api.resources.submit(roll, data) as Resource;
+    // Submissions start unapproved and aren't visible on the public list
+    // until an admin approves them, so they're intentionally NOT added to
+    // local `resources` state here — the student's own pending submission
+    // isn't reflected anywhere in the UI yet (no "my submissions" view).
+    return created;
+  }, [roll]);
+
+  const addResourceAdmin = useCallback(async (data: ResourceInput) => {
+    const created = await api.resources.addAdmin(data) as Resource;
+    setResources(prev => [...prev, created].sort((a, b) => a.displayOrder - b.displayOrder));
+  }, []);
+
+  const updateResource = useCallback(async (id: string, data: Partial<ResourceInput> & { approved?: boolean }) => {
+    const updated = await api.resources.update(id, data) as Resource;
+    setResources(prev => {
+      const exists = prev.some(r => r.id === id);
+      if (!updated.approved) {
+        // Edited-to-unapproved (or was never approved and still isn't): drop
+        // it from the public-facing list this context represents.
+        return prev.filter(r => r.id !== id);
+      }
+      return exists
+        ? prev.map(r => r.id === id ? updated : r)
+        : [...prev, updated].sort((a, b) => a.displayOrder - b.displayOrder);
+    });
+  }, []);
+
+  const deleteResource = useCallback((id: string) => {
+    api.resources.delete(id).then(() => setResources(prev => prev.filter(r => r.id !== id))).catch(onAdminErr);
+  }, []);
+
+  const updateResourceOrder = useCallback(async (id: string, displayOrder: number) => {
+    await api.resources.patchOrder(id, displayOrder);
+    setResources(prev => prev.map(r => r.id === id ? { ...r, displayOrder } : r).sort((a, b) => a.displayOrder - b.displayOrder));
+  }, []);
+
   return (
     <AppDataContext.Provider value={{
-      domains, artworks, events, team, loading, error,
+      domains, artworks, events, team, resources, loading, error,
       likeArtwork, addComment, uploadArtwork, updateArtwork, deleteArtwork, toggleFeatured, deleteComment, notifyArtwork,
       rsvpEvent, addEvent, updateEvent, deleteEvent, notifyEvent,
       addDomain, updateDomain, deleteDomain, addVideo, updateVideo, deleteVideo, updateVideoSequence,
       addTeamMember, updateTeamMember, deleteTeamMember, reorderTeamSection,
+      submitResource, addResourceAdmin, updateResource, deleteResource, updateResourceOrder,
     }}>
       {children}
     </AppDataContext.Provider>

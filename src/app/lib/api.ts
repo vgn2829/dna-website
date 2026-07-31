@@ -116,6 +116,17 @@ export interface EmailTemplate {
   updated_at: string;
 }
 
+export interface ResourceInput {
+  title: string;
+  url: string;
+  author?: string;
+  domainId?: string | null;
+  type: 'video' | 'article' | 'course';
+  level: 'Beginner' | 'Intermediate' | 'Advanced';
+  durationLabel?: string;
+  tags?: string[];
+}
+
 const ADMIN_TOKEN_KEY = 'dna_admin_token';
 const STUDENT_TOKEN_KEY = 'dna_student_token';
 
@@ -240,6 +251,22 @@ export const api = {
     delete:     (id: number) => request<void>('DELETE', `/team/${id}`, { admin: true }),
     patchOrder: (id: number, displayOrder: number) =>
       request<void>('PATCH', `/team/${id}/order`, { body: { display_order: displayOrder }, admin: true }),
+  },
+  resources: {
+    list: () => request<unknown[]>('GET', '/resources'),
+    // Student submission — starts unapproved, invisible on the public list
+    // until an admin approves it via update({ approved: true }).
+    submit: (roll: string, data: ResourceInput) =>
+      request<unknown>('POST', '/resources', { body: data, roll }),
+    // Admin-authored — ships immediately live (approved server-side).
+    addAdmin: (data: ResourceInput) =>
+      request<unknown>('POST', '/resources/admin', { body: data, admin: true }),
+    getPending: () => request<unknown[]>('GET', '/resources/pending', { admin: true }),
+    update: (id: string, data: Partial<ResourceInput> & { approved?: boolean }) =>
+      request<unknown>('PUT', `/resources/${id}`, { body: data, admin: true }),
+    delete: (id: string) => request<void>('DELETE', `/resources/${id}`, { admin: true }),
+    patchOrder: (id: string, displayOrder: number) =>
+      request<void>('PATCH', `/resources/${id}/order`, { body: { displayOrder }, admin: true }),
   },
   notify: {
     // Send the student notification for an already-created event/artwork, keyed

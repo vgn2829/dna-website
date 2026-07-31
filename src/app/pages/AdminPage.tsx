@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout, Send, TriangleAlert } from 'lucide-react';
-import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
+import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout, Send, TriangleAlert, BookOpen } from 'lucide-react';
+import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource, type Resource } from '../context/AppDataContext';
 import { api, setAdminToken, clearAdminToken, type SessionJoins, type CoordinatorMember, type EventRegistrants } from '../lib/api';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
 import imageCompression from 'browser-image-compression';
@@ -479,7 +479,7 @@ function RegistrantsModal({ event, onClose }: { event: ClubEvent; onClose: () =>
   );
 }
 
-type Tab = 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings' | 'announcements' | 'sessions' | 'moodboards';
+type Tab = 'academy' | 'gallery' | 'team' | 'events' | 'resources' | 'comments' | 'settings' | 'announcements' | 'sessions' | 'moodboards';
 
 // ── Academy tab ──────────────────────────────────────────────────────────────
 function AcademyTab() {
@@ -3570,6 +3570,277 @@ function SessionsTab() {
   );
 }
 
+// ── Resources tab ─────────────────────────────────────────────────────────────
+// RESOURCES_PAGE_FEATURE — not currently used by the club (the public
+// ResourcesPage isn't linked from nav). Left fully working here in case a
+// future need — e.g. a blog/articles feature — wants this moderation shape.
+function ResourcesTab() {
+  const { domains, resources, addResourceAdmin, updateResource, deleteResource } = useAppData();
+  const domainKeys = Object.keys(domains);
+
+  const [pending, setPending] = useState<Resource[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(true);
+  const [pendingError, setPendingError] = useState('');
+
+  const loadPending = () => {
+    setPendingLoading(true);
+    api.resources.getPending()
+      .then(rows => { setPending(rows as Resource[]); setPendingError(''); })
+      .catch(err => setPendingError(err instanceof Error ? err.message : 'Failed to load pending submissions'))
+      .finally(() => setPendingLoading(false));
+  };
+
+  useEffect(() => { loadPending(); }, []);
+
+  const [approving, setApproving] = useState<string | null>(null);
+  const handleApprove = async (id: string) => {
+    setApproving(id);
+    try {
+      await updateResource(id, { approved: true });
+      setPending(prev => prev.filter(r => r.id !== id));
+    } catch (err) {
+      setPendingError(err instanceof Error ? err.message : 'Failed to approve');
+    } finally {
+      setApproving(null);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        api.resources.delete(id).then(resolve).catch(reject);
+      });
+      setPending(prev => prev.filter(r => r.id !== id));
+    } catch (err) {
+      setPendingError(err instanceof Error ? err.message : 'Failed to reject');
+    }
+  };
+
+  // New resource form (admin-authored, immediately live)
+  const [rTitle, setRTitle] = useState('');
+  const [rUrl, setRUrl] = useState('');
+  const [rAuthor, setRAuthor] = useState('');
+  const [rDomain, setRDomain] = useState('');
+  const [rType, setRType] = useState<'video' | 'article' | 'course'>('video');
+  const [rLevel, setRLevel] = useState<'Beginner' | 'Intermediate' | 'Advanced'>('Beginner');
+  const [rDuration, setRDuration] = useState('');
+  const [rLoading, setRLoading] = useState(false);
+  const [rError, setRError] = useState('');
+  const [rSuccess, setRSuccess] = useState('');
+
+  const handleAdd = async (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    setRLoading(true); setRError(''); setRSuccess('');
+    try {
+      await addResourceAdmin({
+        title: rTitle, url: rUrl, author: rAuthor, domainId: rDomain || null,
+        type: rType, level: rLevel, durationLabel: rDuration,
+      });
+      setRTitle(''); setRUrl(''); setRAuthor(''); setRDomain(''); setRDuration('');
+      setRSuccess('Resource added.');
+    } catch (err) {
+      setRError(err instanceof Error ? err.message : 'Failed to add resource');
+    } finally {
+      setRLoading(false);
+    }
+  };
+
+  // Edit modal
+  const [editResource, setEditResource] = useState<Resource | null>(null);
+  const [erTitle, setErTitle] = useState('');
+  const [erUrl, setErUrl] = useState('');
+  const [erAuthor, setErAuthor] = useState('');
+  const [erDomain, setErDomain] = useState('');
+  const [erType, setErType] = useState<'video' | 'article' | 'course'>('video');
+  const [erLevel, setErLevel] = useState<'Beginner' | 'Intermediate' | 'Advanced'>('Beginner');
+  const [erDuration, setErDuration] = useState('');
+  const [erLoading, setErLoading] = useState(false);
+  const [erError, setErError] = useState('');
+
+  const openEditResource = (r: Resource) => {
+    setEditResource(r);
+    setErTitle(r.title); setErUrl(r.url); setErAuthor(r.author);
+    setErDomain(r.domainId ?? ''); setErType(r.type); setErLevel(r.level);
+    setErDuration(r.durationLabel); setErError('');
+  };
+
+  const handleEditResource = async (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    if (!editResource) return;
+    setErLoading(true); setErError('');
+    try {
+      await updateResource(editResource.id, {
+        title: erTitle, url: erUrl, author: erAuthor, domainId: erDomain || null,
+        type: erType, level: erLevel, durationLabel: erDuration,
+      });
+      setEditResource(null);
+    } catch (err) {
+      setErError(err instanceof Error ? err.message : 'Failed to update resource');
+    } finally {
+      setErLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Pending submissions */}
+      <div className="card p-5">
+        <p className="type-headline mb-4">Pending Submissions</p>
+        {pendingLoading ? (
+          <p className="type-micro">Loading…</p>
+        ) : pendingError ? (
+          <p className="type-micro" style={{ color: '#e5484d' }}>{pendingError}</p>
+        ) : pending.length === 0 ? (
+          <p className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>No pending submissions.</p>
+        ) : (
+          <div className="space-y-2">
+            {pending.map(r => (
+              <div key={r.id} className="card p-3 flex items-center gap-3" style={{ borderRadius: 'var(--radius-lg)' }}>
+                <div className="flex-1 min-w-0">
+                  <p className="type-body-sm truncate">{r.title}</p>
+                  <p className="type-micro">
+                    {r.author ? `${r.author} · ` : ''}Submitted by {r.submittedByRoll ?? 'unknown'}
+                  </p>
+                </div>
+                <AdminActionButton
+                  icon={<Eye size={12} />}
+                  label="View"
+                  onClick={() => window.open(r.url, '_blank', 'noopener,noreferrer')}
+                />
+                <AdminActionButton
+                  icon={<Plus size={12} />}
+                  label="Approve"
+                  variant="warn"
+                  disabled={approving === r.id}
+                  onClick={() => handleApprove(r.id)}
+                />
+                <AdminActionButton
+                  icon={<Trash2 size={12} />}
+                  label="Reject"
+                  variant="danger"
+                  onClick={() => handleReject(r.id)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="grid lg:grid-cols-5 gap-6">
+        <div className="lg:col-span-2 card p-5 space-y-3">
+          <p className="type-headline flex items-center gap-2"><Plus size={14} /> Add Resource</p>
+          <form onSubmit={handleAdd} className="space-y-3">
+            <div><label className="type-micro block mb-1">Title *</label><input required value={rTitle} onChange={e => setRTitle(e.target.value)} className="input-base" maxLength={200} /></div>
+            <div><label className="type-micro block mb-1">Link (https) *</label><input required type="url" value={rUrl} onChange={e => setRUrl(e.target.value)} placeholder="https://…" className="input-base" maxLength={500} /></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><label className="type-micro block mb-1">Author</label><input value={rAuthor} onChange={e => setRAuthor(e.target.value)} className="input-base" maxLength={100} /></div>
+              <div>
+                <label className="type-micro block mb-1">Domain</label>
+                <select value={rDomain} onChange={e => setRDomain(e.target.value)} className="input-base">
+                  <option value="">Uncategorized</option>
+                  {domainKeys.map(id => <option key={id} value={id}>{domains[id].title}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="type-micro block mb-1">Type</label>
+                <select value={rType} onChange={e => setRType(e.target.value as typeof rType)} className="input-base">
+                  <option value="video">Video</option>
+                  <option value="article">Article</option>
+                  <option value="course">Course</option>
+                </select>
+              </div>
+              <div>
+                <label className="type-micro block mb-1">Level</label>
+                <select value={rLevel} onChange={e => setRLevel(e.target.value as typeof rLevel)} className="input-base">
+                  <option value="Beginner">Beginner</option>
+                  <option value="Intermediate">Intermediate</option>
+                  <option value="Advanced">Advanced</option>
+                </select>
+              </div>
+            </div>
+            <div><label className="type-micro block mb-1">Duration</label><input value={rDuration} onChange={e => setRDuration(e.target.value)} placeholder="e.g. 1h 10m" className="input-base" maxLength={50} /></div>
+            {rError && <p className="type-micro" style={{ color: '#e5484d' }}>{rError}</p>}
+            {rSuccess && <p className="type-micro" style={{ color: '#2ea043' }}>{rSuccess}</p>}
+            <button type="submit" disabled={rLoading} className="btn-primary w-full justify-center" style={{ opacity: rLoading ? 0.5 : 1 }}>
+              {rLoading ? <Loader2 size={13} className="animate-spin mr-2" /> : <Plus size={13} className="mr-2" />} Add Resource
+            </button>
+          </form>
+        </div>
+
+        <div className="lg:col-span-3">
+          <p className="type-micro mb-2" style={{ color: 'var(--color-ink-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Live Resources ({resources.length})
+          </p>
+          <div className="space-y-2">
+            {resources.length === 0 && (
+              <p className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>No resources yet.</p>
+            )}
+            {resources.map(r => (
+              <div key={r.id} className="card p-3 flex items-center gap-3" style={{ borderRadius: 'var(--radius-lg)' }}>
+                <div className="flex-1 min-w-0">
+                  <p className="type-body-sm truncate">{r.title}</p>
+                  <p className="type-micro">
+                    {r.domainTitle ?? 'Uncategorized'} · {r.type} · {r.level}
+                  </p>
+                </div>
+                <AdminActionButton icon={<Pencil size={12} />} label="Edit" onClick={() => openEditResource(r)} />
+                <AdminActionButton icon={<Trash2 size={12} />} label="Delete" variant="danger" onClick={() => deleteResource(r.id)} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {editResource && (
+        <Modal title={`Edit Resource — ${editResource.title}`} onClose={() => setEditResource(null)}>
+          <form onSubmit={handleEditResource} className="space-y-3">
+            <div><label className="type-micro block mb-1">Title *</label><input required value={erTitle} onChange={e => setErTitle(e.target.value)} className="input-base" maxLength={200} /></div>
+            <div><label className="type-micro block mb-1">Link (https) *</label><input required type="url" value={erUrl} onChange={e => setErUrl(e.target.value)} className="input-base" maxLength={500} /></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><label className="type-micro block mb-1">Author</label><input value={erAuthor} onChange={e => setErAuthor(e.target.value)} className="input-base" maxLength={100} /></div>
+              <div>
+                <label className="type-micro block mb-1">Domain</label>
+                <select value={erDomain} onChange={e => setErDomain(e.target.value)} className="input-base">
+                  <option value="">Uncategorized</option>
+                  {domainKeys.map(id => <option key={id} value={id}>{domains[id].title}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="type-micro block mb-1">Type</label>
+                <select value={erType} onChange={e => setErType(e.target.value as typeof erType)} className="input-base">
+                  <option value="video">Video</option>
+                  <option value="article">Article</option>
+                  <option value="course">Course</option>
+                </select>
+              </div>
+              <div>
+                <label className="type-micro block mb-1">Level</label>
+                <select value={erLevel} onChange={e => setErLevel(e.target.value as typeof erLevel)} className="input-base">
+                  <option value="Beginner">Beginner</option>
+                  <option value="Intermediate">Intermediate</option>
+                  <option value="Advanced">Advanced</option>
+                </select>
+              </div>
+            </div>
+            <div><label className="type-micro block mb-1">Duration</label><input value={erDuration} onChange={e => setErDuration(e.target.value)} className="input-base" maxLength={50} /></div>
+            {erError && <p className="type-micro" style={{ color: '#e5484d' }}>{erError}</p>}
+            <div className="flex gap-2">
+              <button type="submit" disabled={erLoading} className="btn-primary flex items-center gap-2" style={{ opacity: erLoading ? 0.6 : 1 }}>
+                {erLoading ? <Loader2 size={13} className="animate-spin" /> : null} Save Changes
+              </button>
+              <button type="button" onClick={() => setEditResource(null)} className="btn-secondary">Cancel</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 // ── Moodboards tab ────────────────────────────────────────────────────────────
 function MoodboardsAdminTab() {
   const [boards, setBoards] = useState<any[]>([]);
@@ -3824,6 +4095,7 @@ export function AdminPage() {
     { id: 'gallery',  label: 'Gallery',  icon: Image },
     { id: 'team',     label: 'Team',     icon: Users },
     { id: 'events',   label: 'Events',   icon: CalendarDays },
+    { id: 'resources',     label: 'Resources',     icon: BookOpen },
     { id: 'comments',      label: 'Comments',      icon: MessageSquare },
     { id: 'settings',      label: 'Settings',      icon: Settings },
     { id: 'announcements', label: 'Announcements', icon: Mail },
@@ -3867,6 +4139,7 @@ export function AdminPage() {
           {tab === 'gallery' && <motion.div key="gallery" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><GalleryTab /></motion.div>}
           {tab === 'team'    && <motion.div key="team"    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><TeamTab /></motion.div>}
           {tab === 'events'   && <motion.div key="events"    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><EventsTab /></motion.div>}
+          {tab === 'resources' && <motion.div key="resources" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><ResourcesTab /></motion.div>}
           {tab === 'comments' && <motion.div key="comments"  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><CommentsTab /></motion.div>}
           {tab === 'settings'      && <motion.div key="settings"      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><SettingsTab /></motion.div>}
           {tab === 'announcements' && <motion.div key="announcements" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><AnnouncementsTab /></motion.div>}
