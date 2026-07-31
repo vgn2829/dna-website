@@ -80,7 +80,6 @@ function FlipCard({ artwork, target, onClick }: { artwork: Artwork; target: Card
             src={artworkImage(artwork) ?? undefined}
             alt={artwork.title}
             className="h-full w-full object-cover"
-            loading="lazy"
             draggable={false}
           />
           <div
@@ -439,7 +438,6 @@ function StaticFeaturedGrid({ artworks }: { artworks: Artwork[] }) {
             <img
               src={artworkImage(a) ?? undefined}
               alt={a.title}
-              loading="lazy"
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
             />
             <div
