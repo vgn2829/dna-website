@@ -10,9 +10,19 @@ import jwt from 'jsonwebtoken';
 // exposure on a lost/shared device for a meaningful cut in login frequency.
 const STUDENT_TOKEN_TTL = '90d';
 
+// Bypass-issued tokens are deliberately much shorter-lived than normal (90d)
+// sessions: this is the mechanism that makes turning the bypass flag back off
+// actually mean something. A student who logged in via bypass stays signed in
+// for at most 1 day, then must sign in again — at which point, if the flag is
+// off, only real OTP verification will succeed. See routes/auth.ts's
+// bypass-login route and the otp_bypass column (audit trail only, not
+// re-checked per-request — this TTL is the real enforcement).
+const BYPASS_TOKEN_TTL = '1d';
+
 export interface StudentClaims {
   typ: 'student';
   roll: string;
+  bypass?: true;
 }
 
 export function signStudentToken(roll: string): string {
@@ -20,6 +30,14 @@ export function signStudentToken(roll: string): string {
     { typ: 'student', roll: roll.trim().toUpperCase() } satisfies StudentClaims,
     process.env.JWT_SECRET!,
     { algorithm: 'HS256', expiresIn: STUDENT_TOKEN_TTL }
+  );
+}
+
+export function signBypassStudentToken(roll: string): string {
+  return jwt.sign(
+    { typ: 'student', roll: roll.trim().toUpperCase(), bypass: true } satisfies StudentClaims,
+    process.env.JWT_SECRET!,
+    { algorithm: 'HS256', expiresIn: BYPASS_TOKEN_TTL }
   );
 }
 

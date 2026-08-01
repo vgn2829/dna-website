@@ -289,6 +289,17 @@ export const api = {
         session: { rollNumber: string; uniqueId: string; registeredAt: string; name: string; email: string };
         progress: { watchedVideos: string[]; completedQuizzes: string[] };
       }>('POST', '/auth/student/verify-otp', { body: { rollNumber, code } }),
+    // Temporary email-delivery-incident bypass — only usable while an admin has
+    // enabled it (see settings.getPublic's student_otp_bypass_enabled), and only
+    // for a roll number that already has a verified profile. Issues a short-lived
+    // (1-day) token instead of the normal 90-day one.
+    bypassLogin: (rollNumber: string) =>
+      request<{
+        token: string;
+        isNew: boolean;
+        session: { rollNumber: string; uniqueId: string; registeredAt: string; name: string; email: string };
+        progress: { watchedVideos: string[]; completedQuizzes: string[] };
+      }>('POST', '/auth/student/bypass-login', { body: { rollNumber } }),
     markVideoWatched:   (roll: string, videoId: string) => request<void>('POST', `/students/${roll}/progress/videos/${videoId}`, { roll }),
     unmarkVideoWatched: (roll: string, videoId: string) => request<void>('DELETE', `/students/${roll}/progress/videos/${videoId}`, { roll }),
     // Email change (OTP-gated, sent to the NEW address). `roll` is passed only so
