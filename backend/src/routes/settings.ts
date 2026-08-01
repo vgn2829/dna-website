@@ -17,7 +17,7 @@ const passcodeLimiter = rateLimit({
 router.get('/public', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT key, value FROM app_settings WHERE key IN ('public_meet_enabled')`
+      `SELECT key, value FROM app_settings WHERE key IN ('public_meet_enabled', 'student_otp_bypass_enabled')`
     );
     const settings: Record<string, string> = {};
     result.rows.forEach((r: { key: string; value: string }) => {

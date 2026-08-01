@@ -2119,6 +2119,26 @@ function SettingsTab() {
     }
   };
 
+  const handleToggleOtpBypass = async () => {
+    const turningOn = settings.student_otp_bypass_enabled !== 'true';
+    if (turningOn && !confirm(
+      'Enable temporary OTP bypass? Students will be able to log in with just their roll ' +
+      'number, no email verification. Only use this during a real email-delivery incident.'
+    )) return;
+    setSaving(true);
+    const newVal = turningOn ? 'true' : 'false';
+    try {
+      await api.settings.update({ student_otp_bypass_enabled: newVal });
+      setSettings(prev => ({ ...prev, student_otp_bypass_enabled: newVal }));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setError('Failed to update setting');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleUpdatePasscode = async () => {
     if (!newPasscode.trim()) return;
     setSaving(true);
@@ -2193,6 +2213,7 @@ function SettingsTab() {
   );
 
   const isMeetEnabled = settings.public_meet_enabled === 'true';
+  const isOtpBypassEnabled = settings.student_otp_bypass_enabled === 'true';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
@@ -2302,6 +2323,52 @@ function SettingsTab() {
             Share this passcode with coordinators who need to schedule meets.
           </p>
         </div>
+      </div>
+
+      {/* Temporary OTP Bypass (email-delivery incident only) */}
+      <div style={{
+        border: `1px solid ${isOtpBypassEnabled ? 'var(--color-error)' : 'var(--color-border)'}`,
+        borderRadius: 'var(--radius-lg)', overflow: 'hidden',
+      }}>
+        <div style={{
+          padding: '20px 24px', borderBottom: '1px solid var(--color-border)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16,
+        }}>
+          <div>
+            <p style={{ margin: '0 0 2px', fontSize: 15, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+              Temporary OTP Bypass
+            </p>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+              Lets already-registered students sign in with just their roll number, no email
+              code. For email-delivery incidents only — email ownership is not re-verified,
+              so no welcome email is sent, and the bypass session expires within a day.
+            </p>
+          </div>
+          <button
+            onClick={handleToggleOtpBypass}
+            disabled={saving}
+            style={{
+              width: 48, height: 26, borderRadius: 'var(--radius-pill)',
+              background: isOtpBypassEnabled ? 'var(--color-error)' : 'var(--color-border)',
+              border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
+              position: 'relative', transition: 'background 0.2s ease', flexShrink: 0,
+            }}
+          >
+            <div style={{
+              position: 'absolute', top: 3, left: isOtpBypassEnabled ? 26 : 3,
+              width: 20, height: 20, borderRadius: '50%', background: '#fff',
+              transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+            }} />
+          </button>
+        </div>
+        {isOtpBypassEnabled && (
+          <div style={{ padding: '14px 24px', background: 'rgba(220,38,38,0.06)' }}>
+            <p style={{ margin: 0, fontSize: 12.5, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>
+              Bypass is currently ON. Every bypass login is logged server-side with roll number
+              and timestamp. Turn this off as soon as email delivery recovers.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Coordinator Meet Access */}

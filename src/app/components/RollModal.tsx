@@ -25,6 +25,18 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
   const [newUserName, setNewUserName] = useState('');
   const [newUserRoll, setNewUserRoll] = useState('');
   const [shake, setShake] = useState(false);
+  const [bypassEnabled, setBypassEnabled] = useState(false);
+  const [bypassing, setBypassing] = useState(false);
+
+  // Temporary email-delivery-incident bypass — only shown if an admin has
+  // turned it on server-side (see AdminPage's SettingsTab). Checked whenever
+  // the modal opens so a mid-incident toggle takes effect without a reload.
+  useEffect(() => {
+    if (!isRollModalOpen) return;
+    api.settings.getPublic()
+      .then(s => setBypassEnabled(s.student_otp_bypass_enabled === 'true'))
+      .catch(() => setBypassEnabled(false));
+  }, [isRollModalOpen]);
 
   const resetAll = () => {
     setStep('roll');
@@ -106,6 +118,29 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
       setTimeout(() => setShake(false), 450);
     } finally {
       setVerifying(false);
+    }
+  };
+
+  // Temporary bypass: skip OTP entirely for an already-registered roll number.
+  // Only reachable while the admin flag is on; the server independently
+  // enforces the flag and rejects unregistered rolls, so this is a convenience
+  // path, not the source of truth.
+  const handleBypass = async () => {
+    if (!roll.trim()) return;
+    setBypassing(true);
+    setOtpError('');
+    try {
+      const data = await api.students.bypassLogin(roll.trim());
+      login(data.token, data.session, data.progress);
+      clearReverifyNotice();
+      onSuccess?.(data.session.uniqueId);
+      closeRollModal();
+    } catch (err) {
+      setOtpError(errMsg(err, 'Bypass sign-in failed.'));
+      setShake(true);
+      setTimeout(() => setShake(false), 450);
+    } finally {
+      setBypassing(false);
     }
   };
 
@@ -372,6 +407,31 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                         >
                           Use a different roll number
                         </button>
+
+                        {bypassEnabled && (
+                          <div style={{
+                            marginTop: 4, padding: '10px 14px',
+                            background: 'rgba(220,38,38,0.06)',
+                            border: '1px solid rgba(220,38,38,0.2)',
+                            borderRadius: 'var(--radius-sm)',
+                          }}>
+                            <p className="type-micro" style={{ margin: '0 0 6px', color: 'var(--color-ink-muted)' }}>
+                              Having trouble receiving the code? You can skip verification for now.
+                            </p>
+                            <button
+                              onClick={handleBypass}
+                              disabled={bypassing}
+                              style={{
+                                fontSize: 12, fontWeight: 600, color: 'var(--color-error)',
+                                background: 'none', border: 'none',
+                                fontFamily: 'var(--font-body)',
+                                cursor: bypassing ? 'not-allowed' : 'pointer',
+                              }}
+                            >
+                              {bypassing ? 'Signing in...' : 'Skip verification (temporary)'}
+                            </button>
+                          </div>
+                        )}
                       </motion.div>
                     )}
                   </AnimatePresence>

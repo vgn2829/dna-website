@@ -5,7 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { query } from '../db/client';
-import { signStudentToken, requireStudent } from '../middleware/studentAuth';
+import { signStudentToken, signBypassStudentToken, requireStudent } from '../middleware/studentAuth';
 import { sendOtpEmail, sendWelcomeEmail } from '../services/mailer';
 
 export const authRouter = Router();
@@ -197,6 +197,9 @@ authRouter.post('/student/verify-otp', otpVerifyLimiter, async (req, res) => {
     registeredAt = existing[0].registered_at;
     name = existing[0].name;
     email = existing[0].email;
+    // Real OTP success clears any prior bypass flag — this student is no
+    // longer "last logged in via bypass."
+    await query('UPDATE student_sessions SET otp_bypass=false WHERE roll_number=$1', [roll]);
   } else {
     isNew = true;
     name = otp.name ?? '';
@@ -223,6 +226,69 @@ authRouter.post('/student/verify-otp', otpVerifyLimiter, async (req, res) => {
   res.json({
     token,
     isNew,
+    session: { rollNumber: roll, uniqueId, registeredAt, name, email },
+    progress: { watchedVideos: watched.map(r => r.video_id), completedQuizzes: quizzes.map(r => r.domain_id) },
+  });
+});
+
+// ── Temporary OTP bypass (Resend daily-limit incident) ────────────────────────
+// Admin-toggleable via app_settings.student_otp_bypass_enabled (default OFF,
+// flipped from the admin Settings tab — no redeploy needed). Only usable by
+// students who already have a verified profile (name+email on file) — a
+// bypass never collects name/email itself, since bypass means email ownership
+// was never proven, and the welcome email must only ever go out on a real
+// first OTP verification. Bypass-issued tokens carry `bypass: true` and a
+// short 1-day TTL (see signBypassStudentToken) rather than the normal 90-day
+// TTL, so once this flag is turned back off, any lingering bypass session
+// expires on its own within a day and the next login attempt requires real
+// OTP verification. The otp_bypass column on student_sessions is an audit
+// trail only — it is not re-checked per-request.
+
+const bypassLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  message: { error: 'Too many attempts — try again in 15 minutes' },
+});
+
+const bypassLoginSchema = z.object({ rollNumber: ROLL_SCHEMA });
+
+authRouter.post('/student/bypass-login', bypassLoginLimiter, async (req, res) => {
+  const flagRows = await query<{ value: string }>(
+    'SELECT value FROM app_settings WHERE key=$1', ['student_otp_bypass_enabled']
+  );
+  if (flagRows.length === 0 || flagRows[0].value !== 'true') {
+    res.status(403).json({ error: 'OTP bypass is not currently enabled' });
+    return;
+  }
+
+  const parsed = bypassLoginSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid roll number' }); return; }
+  const { rollNumber: roll } = parsed.data;
+
+  const existing = await query<{ unique_id: string; registered_at: string; name: string | null; email: string | null }>(
+    'SELECT unique_id, registered_at, name, email FROM student_sessions WHERE roll_number=$1',
+    [roll]
+  );
+  if (existing.length === 0 || !existing[0].name || !existing[0].email) {
+    res.status(404).json({ error: 'No existing profile for this roll number — real verification is required to register' });
+    return;
+  }
+  const { unique_id: uniqueId, registered_at: registeredAt, name, email } = existing[0];
+
+  await query('UPDATE student_sessions SET otp_bypass=true WHERE roll_number=$1', [roll]);
+
+  // Audit trail: who logged in without email verification today, in case it's
+  // ever needed. Deliberately does NOT call maybeSendWelcome — bypass never
+  // proves email ownership, so the welcome email must never fire here.
+  console.log(`[otp-bypass] login roll=${roll} at=${new Date().toISOString()}`);
+
+  const watched = await query<{ video_id: string }>('SELECT video_id FROM student_watched_videos WHERE roll_number=$1', [roll]);
+  const quizzes = await query<{ domain_id: string }>('SELECT domain_id FROM student_completed_quizzes WHERE roll_number=$1', [roll]);
+
+  const token = signBypassStudentToken(roll);
+  res.json({
+    token,
+    isNew: false,
     session: { rollNumber: roll, uniqueId, registeredAt, name, email },
     progress: { watchedVideos: watched.map(r => r.video_id), completedQuizzes: quizzes.map(r => r.domain_id) },
   });

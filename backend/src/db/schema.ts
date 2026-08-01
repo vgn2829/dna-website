@@ -162,6 +162,17 @@ export async function initSchema(): Promise<void> {
     ADD COLUMN IF NOT EXISTS welcome_email_sent_at TIMESTAMPTZ DEFAULT NULL
   `);
 
+  // Audit trail only — NOT re-checked per-request. TRUE means the student's most
+  // recent login used the temporary OTP-bypass path (no email ownership proven),
+  // set by /auth/student/bypass-login and cleared back to FALSE by a real
+  // verify-otp success. See studentAuth.ts's short-lived bypass token: the actual
+  // "not trusted forever" guarantee comes from that token's 1-day expiry, not
+  // from this column being checked at request time.
+  await pool.query(`
+    ALTER TABLE student_sessions
+    ADD COLUMN IF NOT EXISTS otp_bypass BOOLEAN NOT NULL DEFAULT false
+  `);
+
   // One-time email verification codes for student login (OTP).
   // code_hash is a bcrypt hash; the plaintext code is never stored.
   await pool.query(`
@@ -631,6 +642,16 @@ export async function initSchema(): Promise<void> {
     }
     console.log('App settings seeded');
   }
+
+  // Temporary Resend-quota-incident bypass flag, default OFF. Seeded
+  // unconditionally (unlike the block above, which only runs once on first
+  // boot) via ON CONFLICT DO NOTHING so it's added for existing deployments too.
+  // Admin-toggleable via the Settings tab (PUT /api/settings) — no redeploy needed.
+  await pool.query(`
+    INSERT INTO app_settings (key, value, updated_at)
+    VALUES ('student_otp_bypass_enabled', 'false', NOW()::text)
+    ON CONFLICT (key) DO NOTHING
+  `);
 
   await pool.query(`
     UPDATE team_members
