@@ -23,12 +23,12 @@ interface CardTarget { x: number; y: number; rotation: number; scale: number; op
 
 const lerp = (start: number, end: number, t: number) => start * (1 - t) + end * t;
 
-// Mirrors FeaturedMarquee/HeroScroll: an <img> is only safe to point at
-// mediaUrl for image-type artworks. video/pdf artworks need a generated
-// coverUrl thumbnail — without one, there's no valid image to show.
+// All artworks get a generated coverUrl thumbnail at upload time (see
+// backend generateThumb()); cards are tiny (85x120) so we always want the
+// thumbnail, not the full-res original. mediaUrl is only a fallback for
+// the rare case where thumbnail generation failed and coverUrl is null.
 function artworkImage(a: Artwork): string | null {
-  if (a.mediaType === 'image') return a.mediaUrl;
-  return a.coverUrl;
+  return a.coverUrl ?? a.mediaUrl;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
