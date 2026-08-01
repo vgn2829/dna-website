@@ -9,7 +9,7 @@ import { usePageMeta } from '../components/hooks/use-page-meta';
 // ISO dates (YYYY-MM-DD) are parsed as UTC midnight by spec; appending T12:00
 // forces local-time parsing so .getDate() returns the correct calendar day.
 // Human-readable strings from old localStorage data fall through unchanged.
-function parseEventDate(dateStr: string): number {
+export function parseEventDate(dateStr: string): number {
   return /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
     ? new Date(dateStr + 'T12:00').getTime()
     : new Date(dateStr).getTime();
@@ -40,7 +40,7 @@ function CountUnit({ value, label }: { value: number; label: string }) {
   );
 }
 
-function getStatus(dateStr: string): 'upcoming' | 'live' | 'past' {
+export function getStatus(dateStr: string): 'upcoming' | 'live' | 'past' {
   const d = parseEventDate(dateStr);
   const now = Date.now();
   if (d < now - 7_200_000) return 'past';
