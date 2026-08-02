@@ -644,10 +644,22 @@ export function HeroFlipCards() {
     [artworks],
   );
 
+  // AppDataContext's fetch effect re-runs whenever `roll` changes (e.g. a
+  // student session resolving or being cleared shortly after mount for
+  // re-verification), which flips `loading` back to true even though we
+  // already have a good `artworks` snapshot. Only treat this as the
+  // "nothing loaded yet" case the first time around — once cards have
+  // rendered, a background refetch shouldn't unmount AnimatedFlipHero and
+  // restart its scatter/line/circle sequence + spring physics from
+  // scratch, which visibly flashes cards back to their collapsed mount
+  // position before they re-scatter.
+  const hasLoadedOnce = useRef(false);
+  if (!loading) hasLoadedOnce.current = true;
+
   // While the initial fetch is in flight, show a minimal loading state —
   // not the plain Hero, which used to double as a loading placeholder and
   // then visibly swapped to a different hero design once data resolved.
-  if (loading) {
+  if (loading && !hasLoadedOnce.current) {
     return <HeroLoading />;
   }
 
