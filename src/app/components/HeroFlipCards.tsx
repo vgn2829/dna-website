@@ -669,7 +669,18 @@ export function HeroFlipCards() {
     return <Hero />;
   }
 
-  if (featured.length < MIN_FOR_ANIMATED_HERO) {
+  // Once AnimatedFlipHero has been shown, an admin's toggleFeatured
+  // optimistic update (same-tab, no refetch needed) can move featured.length
+  // back across MIN_FOR_ANIMATED_HERO for the rest of this session. Swapping
+  // branches at that point would unmount/remount AnimatedFlipHero — the same
+  // visible collapse-then-rescatter flash PR #45 fixed for the loading case,
+  // just triggered by count instead of by `loading`. Latch onto the animated
+  // hero once shown and keep it for the session as long as there's still at
+  // least one featured artwork to display.
+  const hasShownAnimatedHero = useRef(false);
+  if (featured.length >= MIN_FOR_ANIMATED_HERO) hasShownAnimatedHero.current = true;
+
+  if (featured.length < MIN_FOR_ANIMATED_HERO && !hasShownAnimatedHero.current) {
     return <StaticFeaturedGrid artworks={featured} />;
   }
 
