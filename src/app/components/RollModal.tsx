@@ -251,7 +251,13 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                             value={roll}
                             onChange={e => { setRoll(e.target.value); setCheckError(''); }}
                             onKeyDown={e => { if (e.key === 'Enter') handleRollContinue(); }}
-                            maxLength={9}
+                            // Matches ROLL_SCHEMA's widened upper bound in
+                            // backend/src/routes/auth.ts (2 digits + up to
+                            // 10 more alphanumeric chars = 12 total) — keep
+                            // these in sync so this field never silently
+                            // truncates a roll number the backend would
+                            // otherwise accept.
+                            maxLength={12}
                             style={{ width: '100%', boxSizing: 'border-box' }}
                             autoFocus
                           />
