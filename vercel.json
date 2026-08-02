@@ -7,6 +7,22 @@
       "permanent": false
     },
     {
+      "source": "/__host_smoke_test__",
+      "has": [
+        { "type": "host", "value": "dna-website-git-diag-redirect-smoke-test-vgn2829s-projects.vercel.app" }
+      ],
+      "destination": "https://example.com/host-matched-smoke-test",
+      "permanent": false
+    },
+    {
+      "source": "/__host_header_smoke_test__",
+      "has": [
+        { "type": "header", "key": "host", "value": "dna-website-git-diag-redirect-smoke-test-vgn2829s-projects.vercel.app" }
+      ],
+      "destination": "https://example.com/host-header-matched-smoke-test",
+      "permanent": false
+    },
+    {
       "source": "/:path*",
       "has": [
         { "type": "host", "value": "dna-website-two.vercel.app" }
