@@ -1,5 +1,31 @@
 {
   "outputDirectory": "dist",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        { "type": "header", "key": "host", "value": "dna-website-two.vercel.app" }
+      ],
+      "destination": "https://www.dnaiitk.site/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        { "type": "header", "key": "host", "value": "dna-website-vgn2829s-projects.vercel.app" }
+      ],
+      "destination": "https://www.dnaiitk.site/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        { "type": "header", "key": "host", "value": "dna-website-git-main-vgn2829s-projects.vercel.app" }
+      ],
+      "destination": "https://www.dnaiitk.site/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
