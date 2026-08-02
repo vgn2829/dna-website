@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Instagram, Linkedin, Mail, Users, ChevronDown, ChevronUp, Sparkles, Loader2 } from 'lucide-react';
 import { useAppData, type TeamMember } from '../context/AppDataContext';
 import { usePageMeta } from '../components/hooks/use-page-meta';
-import { thumbUrl } from '../lib/utils';
 
 function MemberCard({ member, expanded = false, onToggle, size = 'normal' }: {
   member: TeamMember; large?: boolean; expanded?: boolean; onToggle?: () => void; size?: 'normal' | 'small';
@@ -36,7 +35,7 @@ function MemberCard({ member, expanded = false, onToggle, size = 'normal' }: {
       }}>
         {member.photoUrl ? (
           <img
-            src={thumbUrl(member.photoUrl)}
+            src={member.photoUrl}
             alt={member.name}
             style={{
               width: '100%',
