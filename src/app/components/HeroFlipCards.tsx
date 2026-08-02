@@ -681,6 +681,28 @@ export function HeroFlipCards() {
   const hasLoadedOnce = useRef(false);
   if (!loading) hasLoadedOnce.current = true;
 
+  // Once AnimatedFlipHero has been shown, an admin's toggleFeatured
+  // optimistic update (same-tab, no refetch needed) can move featured.length
+  // back across MIN_FOR_ANIMATED_HERO for the rest of this session. Swapping
+  // branches at that point would unmount/remount AnimatedFlipHero — the same
+  // visible collapse-then-rescatter flash PR #45 fixed for the loading case,
+  // just triggered by count instead of by `loading`. Latch onto the animated
+  // hero once shown and keep it for the session as long as there's still at
+  // least one featured artwork to display.
+  //
+  // This ref must be called unconditionally, before any early return below —
+  // calling it after a conditional `return` (as originally written) meant
+  // the loading/empty branches called fewer hooks than the animated-hero
+  // branch, violating the Rules of Hooks. React only detects that mismatch
+  // on the NEXT render, throwing "Rendered more hooks than during the
+  // previous render" and crashing the whole page — which happened whenever
+  // a loading render committed before the fetch resolved (slow network),
+  // but not when the fetch was fast enough to skip the loading render
+  // entirely. That's what produced an intermittent, network-timing-
+  // dependent crash that looked like the hero collapsing.
+  const hasShownAnimatedHero = useRef(false);
+  if (featured.length >= MIN_FOR_ANIMATED_HERO) hasShownAnimatedHero.current = true;
+
   // While the initial fetch is in flight, show a minimal loading state —
   // not the plain Hero, which used to double as a loading placeholder and
   // then visibly swapped to a different hero design once data resolved.
@@ -694,7 +716,7 @@ export function HeroFlipCards() {
     return <Hero />;
   }
 
-  if (featured.length < MIN_FOR_ANIMATED_HERO) {
+  if (featured.length < MIN_FOR_ANIMATED_HERO && !hasShownAnimatedHero.current) {
     return <StaticFeaturedGrid artworks={featured} />;
   }
 
