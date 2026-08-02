@@ -2,24 +2,11 @@
   "outputDirectory": "dist",
   "redirects": [
     {
-      "source": "/__redirect_smoke_test__",
-      "destination": "https://example.com/unconditional-smoke-test",
-      "permanent": false
-    },
-    {
-      "source": "/__host_smoke_test__",
+      "source": "/__prod_host_smoke_test__",
       "has": [
-        { "type": "host", "value": "dna-website-git-diag-redirect-smoke-test-vgn2829s-projects.vercel.app" }
+        { "type": "host", "value": "dna-website-two.vercel.app" }
       ],
-      "destination": "https://example.com/host-matched-smoke-test",
-      "permanent": false
-    },
-    {
-      "source": "/__host_header_smoke_test__",
-      "has": [
-        { "type": "header", "key": "host", "value": "dna-website-git-diag-redirect-smoke-test-vgn2829s-projects.vercel.app" }
-      ],
-      "destination": "https://example.com/host-header-matched-smoke-test",
+      "destination": "https://example.com/prod-host-matched-smoke-test",
       "permanent": false
     },
     {
