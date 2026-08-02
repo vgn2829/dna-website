@@ -84,11 +84,11 @@ export function ResourcesPreview() {
                   {/* Accent bar — width proportional to video count relative to largest domain */}
                   <div style={{ height: 3, borderRadius: 'var(--radius-full)', background: 'var(--color-surface-2)', overflow: 'hidden' }}>
                     <motion.div
-                      initial={{ width: 0 }}
-                      whileInView={{ width: `${barWidth}%` }}
+                      initial={{ scaleX: 0 }}
+                      whileInView={{ scaleX: barWidth / 100 }}
                       viewport={{ once: true }}
                       transition={{ delay: i * 0.05 + 0.3, duration: 1, ease: [0.16, 1, 0.3, 1] }}
-                      style={{ height: '100%', background: domain.color, borderRadius: 'var(--radius-full)' }}
+                      style={{ width: '100%', height: '100%', background: domain.color, borderRadius: 'var(--radius-full)', transformOrigin: 'left' }}
                     />
                   </div>
                 </motion.div>

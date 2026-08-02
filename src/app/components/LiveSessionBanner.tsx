@@ -15,6 +15,20 @@ function safeHttpUrl(url: string | null | undefined): string | null {
   }
 }
 
+// A session more than this far out doesn't need 60s-fresh polling — nothing
+// about it can change in a way the user needs to see within a minute.
+const IMMINENT_WINDOW_MS = 15 * 60 * 1000;
+const ACTIVE_POLL_MS = 60_000;
+const IDLE_POLL_MS = 5 * 60_000;
+
+function needsFastPolling(sessions: LiveSession[]): boolean {
+  const now = Date.now();
+  return sessions.some(s =>
+    s.status === 'live' ||
+    (s.status === 'upcoming' && new Date(s.scheduled_at).getTime() - now <= IMMINENT_WINDOW_MS)
+  );
+}
+
 export default function LiveSessionBanner() {
   const { studentSession } = useStudent();
   const [sessions, setSessions] = useState<LiveSession[]>([]);
@@ -22,19 +36,29 @@ export default function LiveSessionBanner() {
   const [joinCount, setJoinCount] = useState<number>(0);
 
   useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+
     const fetchSessions = async () => {
       try {
         const data = await api.liveSessions.getActive(
           studentSession?.rollNumber
         );
         setSessions(data);
+
+        // Re-arm the interval at the cadence the *new* data calls for — a
+        // session going live (or coming within the imminent window) during
+        // an idle-paced poll should speed the next check back up, not wait
+        // out the rest of a 5-minute cycle.
+        const nextDelay = needsFastPolling(data) ? ACTIVE_POLL_MS : IDLE_POLL_MS;
+        clearInterval(interval);
+        interval = setInterval(fetchSessions, nextDelay);
       } catch {
         // Silent fail — banner is non-critical
       }
     };
 
     fetchSessions();
-    const interval = setInterval(fetchSessions, 60000);
+    interval = setInterval(fetchSessions, ACTIVE_POLL_MS);
     return () => clearInterval(interval);
   }, [studentSession?.rollNumber]);
 

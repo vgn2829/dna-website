@@ -116,11 +116,11 @@ function EventCard({ event, view, delay, onRSVP }: {
           </div>
           <div className="w-full h-0.5 rounded-full" style={{ background: 'var(--color-surface-2)' }}>
             <motion.div
-              className="h-full rounded-full"
-              initial={{ width: 0 }}
-              animate={{ width: `${fillPct}%` }}
+              className="h-full w-full rounded-full"
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: fillPct / 100 }}
               transition={{ duration: 1, delay: 0.2 }}
-              style={{ background: fillPct > 80 ? '#e5484d' : 'var(--color-ink)' }}
+              style={{ background: fillPct > 80 ? '#e5484d' : 'var(--color-ink)', transformOrigin: 'left' }}
             />
           </div>
         </div>
