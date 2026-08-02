@@ -49,7 +49,17 @@ const otpVerifyLimiter = rateLimit({
   message: { error: 'Too many attempts — try again in 15 minutes' },
 });
 
-const ROLL_SCHEMA = z.string().regex(/^[0-9]{2}[a-zA-Z0-9]{4,6}$/i, 'Invalid roll number format')
+// IITK roll number formats vary by program (UG/PG/PhD) and have shifted
+// across admission years — there's no single authoritative spec available
+// here, and the previous {4,6} bound (6-8 chars total) was never
+// documented as deliberate. It silently rejected at least one real
+// student's legitimate 9-digit roll number. Erring wide (6-12 chars total)
+// rather than guessing a tighter "correct" bound, while still requiring
+// the 2-leading-digits-then-alphanumeric shape that's presumably still
+// load-bearing (it's what distinguishes a roll number from arbitrary
+// input). Shared by request-otp, verify-otp, and bypass-login below — one
+// definition, so a future format change only needs updating in one place.
+const ROLL_SCHEMA = z.string().regex(/^[0-9]{2}[a-zA-Z0-9]{4,10}$/i, 'Invalid roll number format')
   .transform(s => s.trim().toUpperCase());
 
 const requestOtpSchema = z.object({
