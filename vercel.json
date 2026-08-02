@@ -18,27 +18,27 @@
       "permanent": false
     },
     {
-      "source": "/:path*",
+      "source": "/(.*)",
       "has": [
         { "type": "host", "value": "dna-website-two.vercel.app" }
       ],
-      "destination": "https://www.dnaiitk.site/:path*",
+      "destination": "https://www.dnaiitk.site/$1",
       "permanent": true
     },
     {
-      "source": "/:path*",
+      "source": "/(.*)",
       "has": [
         { "type": "host", "value": "dna-website-vgn2829s-projects.vercel.app" }
       ],
-      "destination": "https://www.dnaiitk.site/:path*",
+      "destination": "https://www.dnaiitk.site/$1",
       "permanent": true
     },
     {
-      "source": "/:path*",
+      "source": "/(.*)",
       "has": [
         { "type": "host", "value": "dna-website-git-main-vgn2829s-projects.vercel.app" }
       ],
-      "destination": "https://www.dnaiitk.site/:path*",
+      "destination": "https://www.dnaiitk.site/$1",
       "permanent": true
     }
   ],
