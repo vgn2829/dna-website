@@ -10,15 +10,16 @@ import { ThemeProvider } from '../context/ThemeContext';
 import { StudentProvider, useStudent } from '../context/StudentContext';
 import { AppDataProvider } from '../context/AppDataContext';
 
-function SessionGate() {
+function SessionGate({ isAdminPage }: { isAdminPage: boolean }) {
   const { studentSession } = useStudent();
-  if (studentSession) return null;
+  if (isAdminPage || studentSession) return null;
   return <JoinPrompt />;
 }
 
 export function Root() {
   const { pathname } = useLocation();
   const isBoardPage = pathname.startsWith('/moodboards/') && pathname !== '/moodboards';
+  const isAdminPage = pathname.startsWith('/admin');
 
   useEffect(() => {
     if (!isBoardPage) {
@@ -34,10 +35,10 @@ export function Root() {
             className="min-h-screen"
             style={{ background: 'var(--color-canvas)', color: 'var(--color-ink)' }}
           >
-            {!isBoardPage && <LiveSessionBanner />}
+            {!isBoardPage && !isAdminPage && <LiveSessionBanner />}
             {!isBoardPage && <Navigation />}
-            <RollModal />
-            <SessionGate />
+            {!isAdminPage && <RollModal />}
+            <SessionGate isAdminPage={isAdminPage} />
 
             {isBoardPage ? (
               <Outlet />

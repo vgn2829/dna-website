@@ -58,6 +58,25 @@ export interface PastSession {
   description: string | null;
 }
 
+export interface StudentBatchCount {
+  batch: string;
+  count: number;
+}
+
+export interface StudentOverview {
+  total: number;
+  active7d: number;
+  active30d: number;
+  batches: StudentBatchCount[];
+}
+
+export interface StudentRosterEntry {
+  roll_number: string;
+  name: string | null;
+  registered_at: string;
+  last_login: string | null;
+}
+
 export interface BoardMember {
   roll_number: string;
   name: string | null;
@@ -308,6 +327,12 @@ export const api = {
       request<{ sent: boolean; email: string }>('POST', '/auth/student/change-email/request', { body: { email }, roll }),
     verifyEmailChange: (roll: string, code: string) =>
       request<{ success: boolean; email: string }>('POST', '/auth/student/change-email/verify', { body: { code }, roll }),
+    // Admin-only — powers the Overview tab's stat cards and batch chart.
+    getOverview: () =>
+      request<StudentOverview>('GET', '/students/overview', { admin: true }),
+    // Admin-only — lightweight roster (no email) for the batch filter list.
+    getRoster: () =>
+      request<StudentRosterEntry[]>('GET', '/students', { admin: true }),
   },
   boards: {
     getMyBoards: (roll: string) =>

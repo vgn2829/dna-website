@@ -209,7 +209,7 @@ authRouter.post('/student/verify-otp', otpVerifyLimiter, async (req, res) => {
     email = existing[0].email;
     // Real OTP success clears any prior bypass flag — this student is no
     // longer "last logged in via bypass."
-    await query('UPDATE student_sessions SET otp_bypass=false WHERE roll_number=$1', [roll]);
+    await query('UPDATE student_sessions SET otp_bypass=false, last_login=NOW() WHERE roll_number=$1', [roll]);
   } else {
     isNew = true;
     name = otp.name ?? '';
@@ -217,9 +217,9 @@ authRouter.post('/student/verify-otp', otpVerifyLimiter, async (req, res) => {
     uniqueId = `IITK-DnA-${roll}-${uuidv4().slice(0, 4).toUpperCase()}`;
     registeredAt = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
     await query(
-      `INSERT INTO student_sessions(roll_number,unique_id,registered_at,name,email)
-       VALUES($1,$2,$3,$4,$5)
-       ON CONFLICT (roll_number) DO UPDATE SET name=EXCLUDED.name, email=EXCLUDED.email`,
+      `INSERT INTO student_sessions(roll_number,unique_id,registered_at,name,email,last_login)
+       VALUES($1,$2,$3,$4,$5,NOW())
+       ON CONFLICT (roll_number) DO UPDATE SET name=EXCLUDED.name, email=EXCLUDED.email, last_login=NOW()`,
       [roll, uniqueId, registeredAt, name, email]
     );
   }
