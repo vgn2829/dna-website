@@ -22,8 +22,11 @@ export function Root() {
   const isAdminPage = pathname.startsWith('/admin');
 
   useEffect(() => {
+    // #root (not window) is the actual scroll container — see BackToTop.tsx
+    // for why (overflow-x:hidden on #root forces a computed overflow-y:auto).
+    // window.scrollTo here would be a silent no-op.
     if (!isBoardPage) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      document.getElementById('root')?.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [pathname, isBoardPage]);
 
