@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { motion, useTransform, useSpring, useMotionValue } from 'motion/react';
+import { motion, useTransform, useSpring, useMotionValue, type MotionValue } from 'motion/react';
 import { useNavigate } from 'react-router';
 import { useAppData } from '../context/AppDataContext';
 import type { Artwork } from '../context/AppDataContext';
@@ -34,17 +34,53 @@ function artworkImage(a: Artwork): string | null {
 // ─────────────────────────────────────────────────────────────────────────
 // FlipCard — front shows the artwork image, back shows title/artist.
 // ─────────────────────────────────────────────────────────────────────────
-function FlipCard({ artwork, target, onClick }: { artwork: Artwork; target: CardTarget; onClick: () => void }) {
+// target is either a fixed CardTarget (scatter/line phases — a real phase
+// transition, so it's fine to let Motion's `animate` spring engine own it
+// and re-render on phase change) or a single shared
+// MotionValue<CardTarget[]> continuously derived from the scroll/mouse
+// springs (circle phase), indexed per-card by `index`. In the MotionValue
+// case we read this card's x/y/rotation/scale via useTransform and feed
+// them into `style`, which Motion writes straight to the DOM on every
+// spring tick — no React re-render, unlike the old
+// `.on('change', setState)` path.
+function FlipCard({
+  artwork,
+  target,
+  index,
+  onClick,
+}: {
+  artwork: Artwork;
+  target: CardTarget | MotionValue<CardTarget[]>;
+  index: number;
+  onClick: () => void;
+}) {
+  const isLive = typeof target === 'object' && 'get' in target;
+
+  // Hooks must run unconditionally — when `target` is a plain CardTarget
+  // these derived values are simply unused.
+  const liveTargets = isLive ? (target as MotionValue<CardTarget[]>) : undefined;
+  const liveX = useTransform(() => liveTargets?.get()[index]?.x ?? 0);
+  const liveY = useTransform(() => liveTargets?.get()[index]?.y ?? 0);
+  const liveRotate = useTransform(() => liveTargets?.get()[index]?.rotation ?? 0);
+  const liveScale = useTransform(() => liveTargets?.get()[index]?.scale ?? 1);
+  const liveOpacity = useTransform(() => liveTargets?.get()[index]?.opacity ?? 1);
+
+  const staticTarget = isLive ? undefined : (target as CardTarget);
+
   return (
     <motion.div
-      animate={{
-        x: target.x,
-        y: target.y,
-        rotate: target.rotation,
-        scale: target.scale,
-        opacity: target.opacity,
-      }}
-      transition={{ type: 'spring', stiffness: 40, damping: 15 }}
+      {...(staticTarget
+        ? {
+            animate: {
+              x: staticTarget.x,
+              y: staticTarget.y,
+              rotate: staticTarget.rotation,
+              scale: staticTarget.scale,
+              opacity: staticTarget.opacity,
+            },
+            transition: { type: 'spring', stiffness: 40, damping: 15 },
+          }
+        : {})}
       style={{
         position: 'absolute',
         width: IMG_WIDTH,
@@ -52,6 +88,9 @@ function FlipCard({ artwork, target, onClick }: { artwork: Artwork; target: Card
         transformStyle: 'preserve-3d',
         perspective: 1000,
         cursor: 'pointer',
+        ...(isLive
+          ? { x: liveX, y: liveY, rotate: liveRotate, scale: liveScale, opacity: liveOpacity }
+          : {}),
       }}
       className="group"
       onClick={onClick}
@@ -175,6 +214,27 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
     const atMax = () => scrollRef.current >= MAX_SCROLL;
     const atMin = () => scrollRef.current <= 0;
 
+    // Native wheel/touchmove can fire far faster than the display refresh
+    // rate (OS scroll acceleration in particular can emit dozens of events
+    // per frame). Accumulate raw deltas as they arrive but only commit them
+    // to virtualScroll.set() once per animation frame, so downstream spring
+    // updates run at most at display refresh rate instead of native event
+    // rate — the accumulation/clamping math itself is unchanged.
+    let pendingDelta = 0;
+    let rafId: number | null = null;
+    const flush = () => {
+      rafId = null;
+      if (pendingDelta === 0) return;
+      const newScroll = Math.min(Math.max(scrollRef.current + pendingDelta, 0), MAX_SCROLL);
+      pendingDelta = 0;
+      scrollRef.current = newScroll;
+      virtualScroll.set(newScroll);
+    };
+    const queueDelta = (deltaY: number) => {
+      pendingDelta += deltaY;
+      if (rafId === null) rafId = requestAnimationFrame(flush);
+    };
+
     const handleWheel = (e: WheelEvent) => {
       // Let the browser scroll normally once we've maxed out the virtual
       // range and the user keeps scrolling down (or is at 0 and scrolling
@@ -183,9 +243,7 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
       if ((atMax() && e.deltaY > 0) || (atMin() && e.deltaY < 0)) return;
 
       e.preventDefault();
-      const newScroll = Math.min(Math.max(scrollRef.current + e.deltaY, 0), MAX_SCROLL);
-      scrollRef.current = newScroll;
-      virtualScroll.set(newScroll);
+      queueDelta(e.deltaY);
     };
 
     // Wheel/trackpad deltaY is frequently amplified by OS-level scroll
@@ -209,9 +267,7 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
       if ((atMax() && deltaY > 0) || (atMin() && deltaY < 0)) return;
 
       e.preventDefault();
-      const newScroll = Math.min(Math.max(scrollRef.current + deltaY, 0), MAX_SCROLL);
-      scrollRef.current = newScroll;
-      virtualScroll.set(newScroll);
+      queueDelta(deltaY);
     };
 
     container.addEventListener('wheel', handleWheel, { passive: false });
@@ -221,6 +277,7 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
       container.removeEventListener('wheel', handleWheel);
       container.removeEventListener('touchstart', handleTouchStart);
       container.removeEventListener('touchmove', handleTouchMove);
+      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [virtualScroll]);
 
@@ -239,28 +296,128 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const handleMouseMove = (e: MouseEvent) => {
-      const rect = container.getBoundingClientRect();
-      const relativeX = e.clientX - rect.left;
+
+    // Cache the container's bounding rect instead of calling
+    // getBoundingClientRect() on every mousemove — that forces a
+    // synchronous layout read at native mousemove frequency. The rect only
+    // actually changes on resize/scroll of ancestors, so re-measure there
+    // instead of on every pointer move.
+    let rect = container.getBoundingClientRect();
+    const updateRect = () => { rect = container.getBoundingClientRect(); };
+    const resizeObserver = new ResizeObserver(updateRect);
+    resizeObserver.observe(container);
+    window.addEventListener('scroll', updateRect, { passive: true });
+
+    // Batch mousemove updates to at most once per animation frame, same
+    // reasoning as the wheel/touch handlers above.
+    let pendingClientX: number | null = null;
+    let rafId: number | null = null;
+    const flush = () => {
+      rafId = null;
+      if (pendingClientX === null) return;
+      const relativeX = pendingClientX - rect.left;
       const normalizedX = (relativeX / rect.width) * 2 - 1;
+      pendingClientX = null;
       mouseX.set(normalizedX * 100);
     };
+    const handleMouseMove = (e: MouseEvent) => {
+      pendingClientX = e.clientX;
+      if (rafId === null) rafId = requestAnimationFrame(flush);
+    };
+
     container.addEventListener('mousemove', handleMouseMove);
-    return () => container.removeEventListener('mousemove', handleMouseMove);
+    return () => {
+      container.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('scroll', updateRect);
+      resizeObserver.disconnect();
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
   }, [mouseX]);
 
-  const [morphValue, setMorphValue] = useState(0);
-  const [rotateValue, setRotateValue] = useState(0);
-  const [parallaxValue, setParallaxValue] = useState(0);
-  useEffect(() => {
-    const unsubMorph = smoothMorph.on('change', setMorphValue);
-    const unsubRotate = smoothScrollRotate.on('change', setRotateValue);
-    const unsubParallax = smoothMouseX.on('change', setParallaxValue);
-    return () => { unsubMorph(); unsubRotate(); unsubParallax(); };
-  }, [smoothMorph, smoothScrollRotate, smoothMouseX]);
+  // Circle-phase card positions used to be recomputed by reading morph/
+  // rotate/parallax out of React state (`.on('change', setState)`), which
+  // re-rendered this whole component — and every card's trig/lerp math —
+  // on every spring physics tick while settling, not just once per input
+  // event. Instead, derive one MotionValue<CardTarget[]> straight from the
+  // source springs via useTransform: Motion recomputes this on each spring
+  // tick without touching React's render cycle at all, and writes the
+  // result to the DOM through each FlipCard's `style` (see below). Real
+  // state transitions (phase, containerSize, artworks) still legitimately
+  // re-render, since this callback re-closes over them.
+  const circleTargets = useTransform(
+    [smoothMorph, smoothScrollRotate, smoothMouseX],
+    ([morphValue, rotateValue, parallaxValue]: [number, number, number]): CardTarget[] => {
+      const isMobile = containerSize.width < 768;
+      const minDimension = Math.min(containerSize.width, containerSize.height);
 
-  const introContentVisible = phase === 'circle' && morphValue < 0.5;
-  const arcContentVisible = morphValue > 0.8;
+      const clearanceT = Math.max(0, Math.min(1, (minDimension - 400) / (900 - 400)));
+      const circleRadiusMultiplier = 0.68 - clearanceT * (0.68 - 0.49);
+      const circleRadius = Math.min(minDimension * circleRadiusMultiplier, 490);
+
+      const baseRadius = Math.min(containerSize.width, containerSize.height * 1.5);
+      const arcRadius = baseRadius * (isMobile ? 1.4 : 1.1) * 1.4;
+      const arcApexY = containerSize.height * (isMobile ? 0.35 : 0.25);
+      const arcCenterY = arcApexY + arcRadius;
+      const spreadAngle = isMobile ? 100 : 130;
+      const startAngle = -90 - spreadAngle / 2;
+      const step = spreadAngle / (total - 1 || 1);
+
+      const scrollProgress = Math.min(Math.max(rotateValue / 360, 0), 1);
+      const maxRotation = spreadAngle * 0.8;
+      const boundedRotation = -scrollProgress * maxRotation;
+
+      return Array.from({ length: total }, (_, i) => {
+        // A. Circle position (scroll progress 0)
+        const circleAngle = (i / total) * 360;
+        const circleRad = (circleAngle * Math.PI) / 180;
+        const circlePos = {
+          x: Math.cos(circleRad) * circleRadius,
+          y: Math.sin(circleRad) * circleRadius,
+          rotation: circleAngle + 90,
+        };
+
+        // B. Bottom-arc position (scroll progress 1) — convex "rainbow"
+        // arc with the apex near the top of the viewport.
+        const currentArcAngle = startAngle + i * step + boundedRotation;
+        const arcRad = (currentArcAngle * Math.PI) / 180;
+        const arcPos = {
+          x: Math.cos(arcRad) * arcRadius + parallaxValue,
+          y: Math.sin(arcRad) * arcRadius + arcCenterY,
+          rotation: currentArcAngle + 90,
+          scale: isMobile ? 1.4 : 1.8,
+        };
+
+        // C. Interpolate circle → arc by scroll-driven morph progress.
+        return {
+          x: lerp(circlePos.x, arcPos.x, morphValue),
+          y: lerp(circlePos.y, arcPos.y, morphValue),
+          rotation: lerp(circlePos.rotation, arcPos.rotation, morphValue),
+          scale: lerp(1, arcPos.scale, morphValue),
+          opacity: 1,
+        };
+      });
+    },
+  );
+
+  // Intro/arc content visibility also used to be driven by the morphValue
+  // state mirror. These derive straight from the same spring instead —
+  // MotionValue<boolean>/<number> written to `style`/`animate` via the
+  // opacity transforms below, so no state mirror is needed here either.
+  // Gated to 0 outside the circle phase so intro content stays hidden during
+  // scatter/line, matching the old `introContentVisible` behavior — but the
+  // continuous fade-with-morph while in circle phase is driven by the
+  // spring directly instead of a per-tick state mirror.
+  const introHeadingOpacity = useTransform(smoothMorph, m =>
+    phase === 'circle' ? Math.max(0, 1 - m * 2) : 0,
+  );
+  const introCaptionOpacity = useTransform(smoothMorph, m =>
+    phase === 'circle' ? Math.max(0, 0.5 - m) : 0,
+  );
+  const introBlur = useTransform(smoothMorph, m =>
+    phase === 'circle' && m < 0.5 ? 'blur(0px)' : 'blur(10px)',
+  );
+  const arcContentOpacity = useTransform(smoothMorph, m => (m > 0.8 ? 1 : 0));
+  const arcContentY = useTransform(smoothMorph, m => (m > 0.8 ? 0 : 20));
 
   return (
     <div
@@ -273,10 +430,12 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
         style={{ perspective: 1000 }}
       >
         {/* Intro content — visible only while the circle is freshly formed,
-            before the scroll-driven arc morph begins. */}
+            before the scroll-driven arc morph begins. Opacity/blur now
+            track the morph spring directly via `style` (no React
+            re-render per tick) instead of an `animate` target recomputed
+            from state on every spring change. */}
         <div className="absolute z-0 flex flex-col items-center justify-center text-center pointer-events-none top-1/2 -translate-y-1/2 px-4">
           <motion.h1
-            animate={introContentVisible ? { opacity: 1 - morphValue * 2, filter: 'blur(0px)' } : { opacity: 0, filter: 'blur(10px)' }}
             transition={{ duration: 1 }}
             className="type-display-xl"
             // Overrides the shared .type-display-xl font-size (clamp floor
@@ -284,15 +443,24 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
             // on narrow viewports the circle formation shrinks faster than
             // a 40px floor allows the text to, causing cards to overlap
             // the heading horizontally (see circleRadius below).
-            style={{ maxWidth: 700, fontSize: 'clamp(28px, 6vw, 85px)' }}
+            style={{
+              maxWidth: 700,
+              fontSize: 'clamp(28px, 6vw, 85px)',
+              opacity: introHeadingOpacity,
+              filter: introBlur,
+            }}
           >
             Design and Animation Club.
           </motion.h1>
           <motion.p
-            animate={introContentVisible ? { opacity: 0.5 - morphValue } : { opacity: 0 }}
             transition={{ duration: 1, delay: 0.2 }}
             className="type-caption"
-            style={{ marginTop: 16, letterSpacing: '0.2em', textTransform: 'uppercase' }}
+            style={{
+              marginTop: 16,
+              letterSpacing: '0.2em',
+              textTransform: 'uppercase',
+              opacity: introCaptionOpacity,
+            }}
           >
             Scroll to explore
           </motion.p>
@@ -300,9 +468,9 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
 
         {/* Arc-active content — fades in once the arc has formed. */}
         <motion.div
-          animate={arcContentVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
           transition={{ duration: 0.6 }}
           className="absolute top-[10%] z-10 flex flex-col items-center justify-center text-center pointer-events-none px-4"
+          style={{ opacity: arcContentOpacity, y: arcContentY }}
         >
           <h2 className="type-display-lg" style={{ marginBottom: 16, maxWidth: 700 }}>
             Explore Our Vision
@@ -318,86 +486,29 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
 
         <div className="relative flex items-center justify-center w-full h-full">
           {artworks.map((artwork, i) => {
-            let target: CardTarget;
-
-            if (phase === 'scatter') {
-              target = scatterPositions[i];
-            } else if (phase === 'line') {
-              const lineSpacing = 100;
-              const lineTotalWidth = total * lineSpacing;
-              target = { x: i * lineSpacing - lineTotalWidth / 2, y: 0, rotation: 0, scale: 1, opacity: 1 };
-            } else {
-              const isMobile = containerSize.width < 768;
-              const minDimension = Math.min(containerSize.width, containerSize.height);
-
-              // A. Circle position (scroll progress 0)
-              // Base multiplier (0.49) scaled up proportionally with
-              // IMG_WIDTH/IMG_HEIGHT (85/120 vs the original 60/85) to
-              // preserve the same arc-length-to-card-width spacing ratio
-              // around the circle. On top of that, the multiplier itself
-              // scales continuously from 0.49 (large viewports) up to 0.68
-              // (narrow viewports, minDimension <= 400) — a flat 0.49
-              // multiplier leaves the circle too small to clear the
-              // "Design and Animation Club." heading horizontally once
-              // minDimension drops below ~800px (the heading's clamp()
-              // font-size floor shrinks slower than the circle does), so
-              // narrower viewports get a proportionally larger circle
-              // radius to compensate. A single isMobile-gated multiplier
-              // can't serve both ends smoothly — this avoids a hard cliff
-              // right at the 768px isMobile threshold.
-              const clearanceT = Math.max(0, Math.min(1, (minDimension - 400) / (900 - 400)));
-              const circleRadiusMultiplier = 0.68 - clearanceT * (0.68 - 0.49);
-              const circleRadius = Math.min(minDimension * circleRadiusMultiplier, 490);
-              const circleAngle = (i / total) * 360;
-              const circleRad = (circleAngle * Math.PI) / 180;
-              const circlePos = {
-                x: Math.cos(circleRad) * circleRadius,
-                y: Math.sin(circleRad) * circleRadius,
-                rotation: circleAngle + 90,
-              };
-
-              // B. Bottom-arc position (scroll progress 1) — convex "rainbow"
-              // arc with the apex near the top of the viewport.
-              const baseRadius = Math.min(containerSize.width, containerSize.height * 1.5);
-              // The 1.4x factor here matches the same proportional scaling
-              // applied to the circle radius when card size grew (60x85 ->
-              // 85x120) — without it, cards crowd in the arc (spacing ratio
-              // dropped to ~1.5x card width vs the circle's ~2.6x).
-              const arcRadius = baseRadius * (isMobile ? 1.4 : 1.1) * 1.4;
-              const arcApexY = containerSize.height * (isMobile ? 0.35 : 0.25);
-              const arcCenterY = arcApexY + arcRadius;
-              const spreadAngle = isMobile ? 100 : 130;
-              const startAngle = -90 - spreadAngle / 2;
-              const step = spreadAngle / (total - 1 || 1);
-
-              const scrollProgress = Math.min(Math.max(rotateValue / 360, 0), 1);
-              const maxRotation = spreadAngle * 0.8;
-              const boundedRotation = -scrollProgress * maxRotation;
-
-              const currentArcAngle = startAngle + i * step + boundedRotation;
-              const arcRad = (currentArcAngle * Math.PI) / 180;
-              const arcPos = {
-                x: Math.cos(arcRad) * arcRadius + parallaxValue,
-                y: Math.sin(arcRad) * arcRadius + arcCenterY,
-                rotation: currentArcAngle + 90,
-                scale: isMobile ? 1.4 : 1.8,
-              };
-
-              // C. Interpolate circle → arc by scroll-driven morph progress.
-              target = {
-                x: lerp(circlePos.x, arcPos.x, morphValue),
-                y: lerp(circlePos.y, arcPos.y, morphValue),
-                rotation: lerp(circlePos.rotation, arcPos.rotation, morphValue),
-                scale: lerp(1, arcPos.scale, morphValue),
-                opacity: 1,
-              };
-            }
+            // Scatter/line are real phase transitions (only 2 of them,
+            // total, over the component's lifetime) — a fixed CardTarget
+            // here is fine, FlipCard springs to it via `animate`. Circle
+            // phase's continuous scroll/mouse-driven position instead comes
+            // from the shared circleTargets MotionValue computed above, so
+            // FlipCard reads it directly without React re-rendering this map.
+            const target: CardTarget | MotionValue<CardTarget[]> =
+              phase === 'scatter'
+                ? scatterPositions[i]
+                : phase === 'line'
+                  ? (() => {
+                      const lineSpacing = 100;
+                      const lineTotalWidth = total * lineSpacing;
+                      return { x: i * lineSpacing - lineTotalWidth / 2, y: 0, rotation: 0, scale: 1, opacity: 1 };
+                    })()
+                  : circleTargets;
 
             return (
               <FlipCard
                 key={artwork.id}
                 artwork={artwork}
                 target={target}
+                index={i}
                 onClick={() => navigate(`/gallery?art=${artwork.id}`)}
               />
             );
