@@ -2,22 +2,6 @@
   "outputDirectory": "dist",
   "redirects": [
     {
-      "source": "/__prod_host_smoke_test__",
-      "has": [
-        { "type": "host", "value": "dna-website-two.vercel.app" }
-      ],
-      "destination": "https://example.com/prod-host-matched-smoke-test",
-      "permanent": false
-    },
-    {
-      "source": "/__wildcard_smoke_test__/:path*",
-      "has": [
-        { "type": "host", "value": "dna-website-two.vercel.app" }
-      ],
-      "destination": "https://example.com/wildcard-matched-smoke-test/:path*",
-      "permanent": false
-    },
-    {
       "source": "/(.*)",
       "has": [
         { "type": "host", "value": "dna-website-two.vercel.app" }
