@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAppData, type Artwork } from '../context/AppDataContext';
+import { thumbUrl } from '../lib/utils';
 
 function ArtworkCard({ a, i }: { a: Artwork; i: number }) {
   const navigate = useNavigate();
@@ -21,7 +22,7 @@ function ArtworkCard({ a, i }: { a: Artwork; i: number }) {
       <div style={{ height: 220, position: 'relative', background: 'var(--color-surface-2)', overflow: 'hidden' }}>
         {(a.mediaType === 'image' && a.mediaUrl) || ((a.mediaType === 'video' || a.mediaType === 'pdf') && a.coverUrl) ? (
           <img
-            src={a.coverUrl ?? a.mediaUrl}
+            src={thumbUrl(a.coverUrl ?? a.mediaUrl)}
             alt={a.title}
             loading="lazy"
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}

@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
 import { Instagram, Linkedin, Mail, Loader2 } from 'lucide-react';
 import { useAppData, type TeamMember } from '../context/AppDataContext';
+import { thumbUrl } from '../lib/utils';
 
 const ACCENTS = ['#007AFF', '#BF5AF2', '#FF375F', '#FF9500', '#34C759', '#00D4FF'];
 
@@ -31,7 +32,7 @@ function MemberCard({ member, index, large = false }: { member: TeamMember; inde
       }}>
         {member.photoUrl ? (
           <img
-            src={member.photoUrl}
+            src={thumbUrl(member.photoUrl)}
             alt={member.name}
             style={{
               width: '100%',
