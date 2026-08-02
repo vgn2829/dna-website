@@ -181,6 +181,23 @@ export async function initSchema(): Promise<void> {
     ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ DEFAULT NULL
   `);
 
+  // Append-only login history — one row per successful verify-otp, never
+  // overwritten (unlike student_sessions.last_login, which only tracks the
+  // most recent login). Powers the admin overview's day-wise activity chart.
+  // No FK to student_sessions, matching session_joins' precedent: an event
+  // log shouldn't be coupled to the entity table's lifecycle. Indexed on
+  // logged_in_at since every query against this table groups/filters by
+  // date — the one event-log table here whose access pattern isn't by FK.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS login_events (
+      id           TEXT        PRIMARY KEY,
+      roll_number  TEXT        NOT NULL,
+      logged_in_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_login_events_logged_in_at ON login_events(logged_in_at);
+  `);
+
   // One-time email verification codes for student login (OTP).
   // code_hash is a bcrypt hash; the plaintext code is never stored.
   await pool.query(`

@@ -224,6 +224,10 @@ authRouter.post('/student/verify-otp', otpVerifyLimiter, async (req, res) => {
     );
   }
 
+  // Append-only login history, alongside (not instead of) the last_login
+  // update above — powers the admin overview's day-wise activity chart.
+  await query('INSERT INTO login_events(id, roll_number) VALUES($1, $2)', [uuidv4(), roll]);
+
   // Send the welcome email once per student — on registration, or on the first
   // login afterwards for anyone who never received it. Fire-and-forget so a slow
   // email API can't delay the login response.

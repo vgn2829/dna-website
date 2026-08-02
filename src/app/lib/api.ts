@@ -63,11 +63,26 @@ export interface StudentBatchCount {
   count: number;
 }
 
+export interface DailyActivityDay {
+  date: string; // YYYY-MM-DD
+  batches: Record<string, number>;
+  total: number;
+}
+
+export interface DailyActivity {
+  since: string;
+  days: DailyActivityDay[];
+}
+
 export interface StudentOverview {
   total: number;
   active7d: number;
   active30d: number;
   batches: StudentBatchCount[];
+  // null until MIN_DAYS_OF_DATA worth of login_events has accumulated —
+  // render a "collecting data" placeholder instead of a sparse chart.
+  dailyActivity: DailyActivity | null;
+  collectingSince: string | null;
 }
 
 export interface StudentRosterEntry {

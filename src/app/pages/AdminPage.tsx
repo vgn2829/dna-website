@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout, Send, TriangleAlert, LayoutDashboard } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
 import { api, setAdminToken, clearAdminToken, type SessionJoins, type CoordinatorMember, type EventRegistrants, type StudentOverview, type StudentRosterEntry } from '../lib/api';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
 import imageCompression from 'browser-image-compression';
 
@@ -495,6 +495,25 @@ function StatCard({ label, value, sub }: { label: string; value: React.ReactNode
 
 const BATCH_BAR_COLOR = 'var(--color-accent-blue)';
 
+function DailyActivityTooltip({ active, payload }: { active?: boolean; payload?: { payload: import('../lib/api').DailyActivityDay }[] }) {
+  if (!active || !payload || payload.length === 0) return null;
+  const day = payload[0].payload;
+  const batchEntries = Object.entries(day.batches).sort((a, b) => a[0].localeCompare(b[0]));
+  return (
+    <div className="card p-3" style={{ boxShadow: 'var(--shadow-level-2)' }}>
+      <p className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>
+        {new Date(day.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+      </p>
+      <p className="type-body-sm font-semibold mt-0.5">{day.total} active</p>
+      <div className="mt-1.5 space-y-0.5">
+        {batchEntries.map(([batch, count]) => (
+          <p key={batch} className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>{batch}: {count}</p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function OverviewTab() {
   const [overview, setOverview] = useState<StudentOverview | null>(null);
   const [roster, setRoster] = useState<StudentRosterEntry[]>([]);
@@ -552,6 +571,38 @@ function OverviewTab() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+        )}
+      </div>
+
+      <div className="card p-4">
+        <p className="type-caption mb-4">Daily activity</p>
+        {overview.dailyActivity ? (
+          overview.dailyActivity.days.length === 0 ? (
+            <p className="type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>No activity in the last 30 days.</p>
+          ) : (
+            <div style={{ width: '100%', height: 220 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={overview.dailyActivity.days} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fill: 'var(--color-ink-muted)', fontSize: 12 }}
+                    axisLine={{ stroke: 'var(--color-hairline)' }}
+                    tickLine={false}
+                    tickFormatter={(d: string) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                  />
+                  <YAxis allowDecimals={false} tick={{ fill: 'var(--color-ink-muted)', fontSize: 12 }} axisLine={false} tickLine={false} width={36} />
+                  <Tooltip content={<DailyActivityTooltip />} cursor={{ fill: 'var(--color-surface-2)' }} />
+                  <Bar dataKey="total" radius={[6, 6, 0, 0]} maxBarSize={32} fill={BATCH_BAR_COLOR} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )
+        ) : (
+          <p className="type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>
+            {overview.collectingSince
+              ? `Collecting daily activity data since ${new Date(overview.collectingSince).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} — check back in a few days.`
+              : 'Daily activity tracking starts now — check back in a few days.'}
+          </p>
         )}
       </div>
 
