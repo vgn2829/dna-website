@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import { Video, BookOpen, Trophy, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAppData } from '../context/AppDataContext';
+import { getDomainIcon } from '../lib/domain-icons';
 
 export function ResourcesPreview() {
   const navigate = useNavigate();
@@ -47,6 +48,7 @@ export function ResourcesPreview() {
                 [BookOpen,  domain.tagline || 'Learn at your own pace'],
                 [Trophy,    domain.quizzes.length > 0 ? 'Knowledge quiz included' : 'More content coming soon'],
               ];
+              const DomainIcon = getDomainIcon(domain.icon);
               return (
                 <motion.div
                   key={domain.id}
@@ -60,7 +62,7 @@ export function ResourcesPreview() {
                   onClick={() => navigate('/academy')}
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
-                    <i className={`fa-solid ${domain.icon}`} style={{ fontSize: 24, color: domain.color }} />
+                    <DomainIcon size={24} style={{ color: domain.color }} />
                     <span className="type-caption" style={{ background: 'var(--color-surface-2)', padding: '3px 10px', borderRadius: 'var(--radius-pill)', color: 'var(--color-ink)' }}>
                       {domain.videos.length} videos
                     </span>

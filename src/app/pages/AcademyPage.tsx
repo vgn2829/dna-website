@@ -5,6 +5,7 @@ import { useStudent } from '../context/StudentContext';
 import { useAppData } from '../context/AppDataContext';
 import { api } from '../lib/api';
 import { usePageMeta } from '../components/hooks/use-page-meta';
+import { getDomainIcon } from '../lib/domain-icons';
 
 const DIFF_COLORS: Record<string, string> = {
   Beginner:     '#3ecf5f',
@@ -207,6 +208,7 @@ export function AcademyPage() {
                 const watched = d.videos.filter(v => studentProgress.watchedVideos.includes(v.id)).length;
                 const pct = d.videos.length ? Math.round((watched / d.videos.length) * 100) : 0;
                 const c = DOMAIN_COLORS[key] ?? '#fff';
+                const DomainIcon = getDomainIcon(d.icon);
                 return (
                   <button
                     key={key}
@@ -218,8 +220,8 @@ export function AcademyPage() {
                     }}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="type-body-sm" style={{ color: isActive ? 'var(--color-ink)' : 'var(--color-ink-muted)' }}>
-                        <i className={`fa-solid ${d.icon} mr-2`} style={{ color: isActive ? c : undefined }} />
+                      <span className="type-body-sm flex items-center gap-2" style={{ color: isActive ? 'var(--color-ink)' : 'var(--color-ink-muted)' }}>
+                        <DomainIcon size={14} style={{ color: isActive ? c : undefined }} />
                         {d.title}
                       </span>
                       <span className="type-micro">{pct}%</span>
@@ -255,6 +257,7 @@ export function AcademyPage() {
                         const d = domains[key];
                         const earned = studentProgress.completedQuizzes.includes(key);
                         const c = DOMAIN_COLORS[key] ?? '#fff';
+                        const DomainIcon = getDomainIcon(d.icon);
                         return (
                           <div key={key} title={d.title}
                             className="w-8 h-8 rounded-full flex items-center justify-center type-micro"
@@ -262,7 +265,7 @@ export function AcademyPage() {
                               background: earned ? `${c}18` : 'var(--color-surface-2)',
                               color: earned ? c : 'var(--color-ink-muted)',
                             }}>
-                            <i className={`fa-solid ${d.icon}`} />
+                            <DomainIcon size={14} />
                           </div>
                         );
                       })}

@@ -6,6 +6,7 @@ import { useAppData, type Artwork } from '../context/AppDataContext';
 import { useStudent } from '../context/StudentContext';
 import { api, type Board } from '../lib/api';
 import { usePageMeta } from '../components/hooks/use-page-meta';
+import { thumbUrl } from '../lib/utils';
 
 const DOMAIN_COLORS: Record<string, string> = {
   'UI/UX Design': '#007AFF', Photoshop: '#BF5AF2', Illustrator: '#FF9F0A', '3D Animation': '#FF375F',
@@ -337,10 +338,6 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
       </motion.div>
     </motion.div>
   );
-}
-
-function thumbUrl(url: string): string {
-  return `${url}?width=300&quality=75`;
 }
 
 function MediaThumbnail({ art }: { art: Artwork }) {
