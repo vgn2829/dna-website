@@ -67,8 +67,33 @@ function FlipCard({
 
   const staticTarget = isLive ? undefined : (target as CardTarget);
 
+  // FlipCard always first mounts during the 'scatter' phase (phase starts
+  // at 'scatter', and this card's `key` never changes across phases, so
+  // it's the same instance throughout) — at that moment `target` already
+  // *is* this card's scatter position (see the ternary in AnimatedFlipHero
+  // below). Capture whatever `target` is on first render as `initial`, so
+  // Motion has a correct pre-scatter resting state to paint immediately.
+  // Without this, Motion has no `initial` at all and paints the first
+  // frame at its untransformed rest state (transform: none, opacity: 1) —
+  // every card fully visible and stacked at dead-center — before
+  // springing/fading out to the real scatter position on the next tick.
+  // That's the collapse-to-center flash: not a data race with the
+  // artworks fetch, just a missing `initial`.
+  const initialTargetRef = useRef<CardTarget | null>(null);
+  if (initialTargetRef.current === null) {
+    initialTargetRef.current = staticTarget ?? { x: 0, y: 0, rotation: 0, scale: 0.6, opacity: 0 };
+  }
+  const initialTarget = initialTargetRef.current;
+
   return (
     <motion.div
+      initial={{
+        x: initialTarget.x,
+        y: initialTarget.y,
+        rotate: initialTarget.rotation,
+        scale: initialTarget.scale,
+        opacity: initialTarget.opacity,
+      }}
       {...(staticTarget
         ? {
             animate: {
