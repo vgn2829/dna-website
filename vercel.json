@@ -10,6 +10,14 @@
       "permanent": false
     },
     {
+      "source": "/__wildcard_smoke_test__/:path*",
+      "has": [
+        { "type": "host", "value": "dna-website-two.vercel.app" }
+      ],
+      "destination": "https://example.com/wildcard-matched-smoke-test/:path*",
+      "permanent": false
+    },
+    {
       "source": "/:path*",
       "has": [
         { "type": "host", "value": "dna-website-two.vercel.app" }
