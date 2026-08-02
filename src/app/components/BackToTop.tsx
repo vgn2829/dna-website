@@ -6,9 +6,15 @@ export function BackToTop() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setVisible(window.scrollY > 300);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    // #root (not window) is the actual scroll container — its overflow-x:hidden
+    // (see globals.css, added for a Safari position:fixed fix on board pages)
+    // forces the browser to compute overflow-y:auto on it too, so #root scrolls
+    // instead of window. window.scrollY would never move past 0 here.
+    const scrollEl = document.getElementById('root');
+    if (!scrollEl) return;
+    const onScroll = () => setVisible(scrollEl.scrollTop > 300);
+    scrollEl.addEventListener('scroll', onScroll, { passive: true });
+    return () => scrollEl.removeEventListener('scroll', onScroll);
   }, []);
 
   return (
@@ -19,7 +25,7 @@ export function BackToTop() {
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.8 }}
           transition={{ duration: 0.2 }}
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          onClick={() => document.getElementById('root')?.scrollTo({ top: 0, behavior: 'smooth' })}
           aria-label="Back to top"
           style={{
             position: 'fixed',
