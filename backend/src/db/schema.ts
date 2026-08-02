@@ -173,6 +173,14 @@ export async function initSchema(): Promise<void> {
     ADD COLUMN IF NOT EXISTS otp_bypass BOOLEAN NOT NULL DEFAULT false
   `);
 
+  // NULL = never logged in since this column existed (only registered_at is
+  // known for such rows). Set on every successful verify-otp, not just the
+  // first — this is what "active" is computed from in the admin overview.
+  await pool.query(`
+    ALTER TABLE student_sessions
+    ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ DEFAULT NULL
+  `);
+
   // One-time email verification codes for student login (OTP).
   // code_hash is a bcrypt hash; the plaintext code is never stored.
   await pool.query(`

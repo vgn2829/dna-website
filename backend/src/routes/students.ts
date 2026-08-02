@@ -2,6 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { query } from '../db/client';
 import { requireStudent } from '../middleware/studentAuth';
+import { requireAdmin } from '../middleware/adminAuth';
 import { param } from '../routeParams';
 
 const progressWriteLimiter = rateLimit({
@@ -75,3 +76,70 @@ studentsRouter.delete('/:roll/progress/videos/:videoId', progressWriteLimiter, r
 
 // Quiz completion is recorded server-side by POST /domains/:id/quiz/submit
 // (graded), so there is no client-asserted quiz-completion endpoint here.
+
+// GET /api/students/overview — admin only. Powers the Overview tab's stat
+// cards and batch breakdown. Batch is derived from the roll number's first
+// two digits (ROLL_SCHEMA guarantees every valid roll starts with 2 digits),
+// bucketed into "Other" outside a plausible admission-year range so a
+// syntactically-valid-but-nonsense roll (e.g. "99xyz01") can't masquerade as
+// a real batch.
+const MIN_BATCH_YEAR = 20;
+const MAX_BATCH_YEAR = 30;
+
+studentsRouter.get('/overview', requireAdmin, async (req, res) => {
+  try {
+    const rows = await query<{ roll_number: string; last_login: string | null }>(
+      'SELECT roll_number, last_login FROM student_sessions',
+      []
+    );
+
+    const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
+    let active7 = 0;
+    let active30 = 0;
+    const batchCounts = new Map<string, number>();
+
+    for (const row of rows) {
+      const yearDigits = row.roll_number.slice(0, 2);
+      const yearNum = Number(yearDigits);
+      const batch = yearNum >= MIN_BATCH_YEAR && yearNum <= MAX_BATCH_YEAR ? `Y${yearDigits}` : 'Other';
+      batchCounts.set(batch, (batchCounts.get(batch) ?? 0) + 1);
+
+      if (row.last_login) {
+        const age = now - new Date(row.last_login).getTime();
+        if (age <= 7 * DAY) active7++;
+        if (age <= 30 * DAY) active30++;
+      }
+    }
+
+    const batches = [...batchCounts.entries()]
+      .map(([batch, count]) => ({ batch, count }))
+      .sort((a, b) => a.batch.localeCompare(b.batch));
+
+    res.json({
+      total: rows.length,
+      active7d: active7,
+      active30d: active30,
+      batches,
+    });
+  } catch (err) {
+    console.error('Students overview error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/students — admin only. Lightweight roster (no email) for the
+// Overview tab's batch filter list. Full contact details stay behind
+// existing student-facing endpoints — this is deliberately minimal.
+studentsRouter.get('/', requireAdmin, async (req, res) => {
+  try {
+    const rows = await query<{ roll_number: string; name: string | null; registered_at: string; last_login: string | null }>(
+      'SELECT roll_number, name, registered_at, last_login FROM student_sessions ORDER BY roll_number ASC',
+      []
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('List students error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});

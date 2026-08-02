@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout, Send, TriangleAlert } from 'lucide-react';
+import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout, Send, TriangleAlert, LayoutDashboard } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
-import { api, setAdminToken, clearAdminToken, type SessionJoins, type CoordinatorMember, type EventRegistrants } from '../lib/api';
+import { api, setAdminToken, clearAdminToken, type SessionJoins, type CoordinatorMember, type EventRegistrants, type StudentOverview, type StudentRosterEntry } from '../lib/api';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from 'recharts';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
 import imageCompression from 'browser-image-compression';
 
@@ -479,7 +480,123 @@ function RegistrantsModal({ event, onClose }: { event: ClubEvent; onClose: () =>
   );
 }
 
-type Tab = 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings' | 'announcements' | 'sessions' | 'moodboards';
+type Tab = 'overview' | 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings' | 'announcements' | 'sessions' | 'moodboards';
+
+// ── Overview tab ─────────────────────────────────────────────────────────────
+function StatCard({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
+  return (
+    <div className="card p-4">
+      <p className="type-caption">{label}</p>
+      <p className="type-headline mt-1">{value}</p>
+      {sub && <p className="type-micro mt-1" style={{ color: 'var(--color-ink-muted)' }}>{sub}</p>}
+    </div>
+  );
+}
+
+const BATCH_BAR_COLOR = 'var(--color-accent-blue)';
+
+function OverviewTab() {
+  const [overview, setOverview] = useState<StudentOverview | null>(null);
+  const [roster, setRoster] = useState<StudentRosterEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [batchFilter, setBatchFilter] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [ov, r] = await Promise.all([api.students.getOverview(), api.students.getRoster()]);
+        setOverview(ov);
+        setRoster(r);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load overview');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  if (loading) return <div className="flex justify-center py-16"><Loader2 size={20} className="animate-spin" style={{ color: 'var(--color-ink-muted)' }} /></div>;
+  if (error) return <p className="type-body-sm" style={{ color: 'var(--color-error)' }}>{error}</p>;
+  if (!overview) return null;
+
+  const batchOf = (roll: string) => {
+    const digits = roll.slice(0, 2);
+    const n = Number(digits);
+    return n >= 20 && n <= 30 ? `Y${digits}` : 'Other';
+  };
+
+  const filteredRoster = batchFilter ? roster.filter(s => batchOf(s.roll_number) === batchFilter) : roster;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard label="Total registered" value={overview.total} />
+        <StatCard label="Active (7 days)" value={overview.active7d} sub="Logged in within the last week" />
+        <StatCard label="Active (30 days)" value={overview.active30d} sub="Logged in within the last month" />
+      </div>
+
+      <div className="card p-4">
+        <p className="type-caption mb-4">Students by batch</p>
+        {overview.batches.length === 0 ? (
+          <p className="type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>No students registered yet.</p>
+        ) : (
+          <div style={{ width: '100%', height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={overview.batches} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <XAxis dataKey="batch" tick={{ fill: 'var(--color-ink-muted)', fontSize: 12 }} axisLine={{ stroke: 'var(--color-hairline)' }} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fill: 'var(--color-ink-muted)', fontSize: 12 }} axisLine={false} tickLine={false} width={36} />
+                <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={48}>
+                  {overview.batches.map(b => <Cell key={b.batch} fill={BATCH_BAR_COLOR} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      <div className="card p-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <p className="type-caption">Roster {batchFilter ? `— ${batchFilter}` : ''}</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setBatchFilter(null)}
+              className="px-3 py-1 rounded-full type-micro transition-all"
+              style={batchFilter === null
+                ? { background: 'var(--color-surface-2)', color: 'var(--color-ink)', borderRadius: 'var(--radius-pill)' }
+                : { background: 'var(--color-surface-1)', color: 'var(--color-ink-muted)', borderRadius: 'var(--radius-pill)' }}>
+              All
+            </button>
+            {overview.batches.map(b => (
+              <button
+                key={b.batch}
+                onClick={() => setBatchFilter(b.batch)}
+                className="px-3 py-1 rounded-full type-micro transition-all"
+                style={batchFilter === b.batch
+                  ? { background: 'var(--color-surface-2)', color: 'var(--color-ink)', borderRadius: 'var(--radius-pill)' }
+                  : { background: 'var(--color-surface-1)', color: 'var(--color-ink-muted)', borderRadius: 'var(--radius-pill)' }}>
+                {b.batch} · {b.count}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-1 max-h-80 overflow-y-auto">
+          {filteredRoster.length === 0 ? (
+            <p className="type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>No students in this batch.</p>
+          ) : filteredRoster.map(s => (
+            <div key={s.roll_number} className="flex items-center gap-3 py-2" style={{ borderBottom: '1px solid var(--color-hairline-soft)' }}>
+              <span className="type-body-sm" style={{ minWidth: 90 }}>{s.roll_number}</span>
+              <span className="type-body-sm flex-1 truncate">{s.name ?? '—'}</span>
+              <span className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>
+                {s.last_login ? `Last login ${new Date(s.last_login).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}` : 'Never logged in'}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Academy tab ──────────────────────────────────────────────────────────────
 function AcademyTab() {
@@ -588,8 +705,33 @@ function AcademyTab() {
 
   const domain = domains[activeDomain];
 
+  const domainVideoCounts = Object.values(domains).map(d => ({ domain: d.title, count: d.videos.length, color: d.color }));
+  const totalVideos = domainVideoCounts.reduce((sum, d) => sum + d.count, 0);
+
   return (
     <div className="space-y-6">
+      <div className="card p-4">
+        <div className="flex items-center justify-between mb-4">
+          <p className="type-caption">Videos by domain</p>
+          <p className="type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>{totalVideos} total</p>
+        </div>
+        {domainVideoCounts.length === 0 ? (
+          <p className="type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>No domains yet.</p>
+        ) : (
+          <div style={{ width: '100%', height: 180 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={domainVideoCounts} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <XAxis dataKey="domain" tick={{ fill: 'var(--color-ink-muted)', fontSize: 12 }} axisLine={{ stroke: 'var(--color-hairline)' }} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fill: 'var(--color-ink-muted)', fontSize: 12 }} axisLine={false} tickLine={false} width={28} />
+                <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={48}>
+                  {domainVideoCounts.map(d => <Cell key={d.domain} fill={d.color} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
       <div className="card p-5">
         <div className="flex items-center justify-between mb-4">
           <p className="type-headline">Domains</p>
@@ -827,6 +969,27 @@ function GalleryTab() {
   const domainTitles = Object.values(domains).map(d => d.title.toUpperCase());
   const featuredCount = artworks.filter(a => a.featured).length;
 
+  // Artwork.domain is a free-text title, not a domain_id FK — real data has
+  // custom/orphaned values (deleted domains, freeform "other" entries) that
+  // match no current domain. Bucket those into "Other" rather than dropping
+  // them, and color it distinctly so a large Other slice reads as a data-
+  // hygiene signal instead of blending in as just another domain.
+  const OTHER_COLOR = 'var(--color-ink-muted)';
+  const domainArtworkCounts = (() => {
+    const counts = new Map<string, number>();
+    for (const a of artworks) {
+      const normalized = a.domain.trim().toUpperCase();
+      const idx = domainTitles.indexOf(normalized);
+      const key = idx === -1 ? 'Other' : Object.values(domains)[idx].title;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...counts.entries()].map(([name, count]) => ({
+      domain: name,
+      count,
+      color: name === 'Other' ? OTHER_COLOR : (Object.values(domains).find(d => d.title === name)?.color ?? BATCH_BAR_COLOR),
+    }));
+  })();
+
   const [bulkQueue, setBulkQueue] = useState<BulkItem[]>([]);
   const [bulkUploading, setBulkUploading] = useState(false);
   const [bulkMode, setBulkMode] = useState(false);
@@ -1033,6 +1196,29 @@ function GalleryTab() {
   };
 
   return (
+    <div className="space-y-6">
+      <div className="card p-4">
+        <div className="flex items-center justify-between mb-4">
+          <p className="type-caption">Artworks by domain</p>
+          <p className="type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>{artworks.length} total</p>
+        </div>
+        {domainArtworkCounts.length === 0 ? (
+          <p className="type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>No artworks yet.</p>
+        ) : (
+          <div style={{ width: '100%', height: 180 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={domainArtworkCounts} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <XAxis dataKey="domain" tick={{ fill: 'var(--color-ink-muted)', fontSize: 12 }} axisLine={{ stroke: 'var(--color-hairline)' }} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fill: 'var(--color-ink-muted)', fontSize: 12 }} axisLine={false} tickLine={false} width={28} />
+                <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={48}>
+                  {domainArtworkCounts.map(d => <Cell key={d.domain} fill={d.color} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
     <div className="grid lg:grid-cols-5 gap-6">
       <div className="lg:col-span-2 card p-5 space-y-4">
         <p className="type-headline flex items-center gap-2"><Upload size={14} /> Upload Media</p>
@@ -1429,6 +1615,7 @@ function GalleryTab() {
         </div>
       )}
 
+    </div>
     </div>
   );
 }
@@ -3882,11 +4069,12 @@ function MoodboardsAdminTab() {
 // ── Main AdminPage ─────────────────────────────────────────────────────────────
 export function AdminPage() {
   const [authed, setAuthed] = useState(false);
-  const [tab, setTab] = useState<Tab>('academy');
+  const [tab, setTab] = useState<Tab>('overview');
 
   if (!authed) return <AdminLogin onSuccess={() => setAuthed(true)} />;
 
   const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'academy',  label: 'Academy',  icon: Video },
     { id: 'gallery',  label: 'Gallery',  icon: Image },
     { id: 'team',     label: 'Team',     icon: Users },
@@ -3930,6 +4118,7 @@ export function AdminPage() {
         </div>
 
         <AnimatePresence mode="wait">
+          {tab === 'overview' && <motion.div key="overview" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><OverviewTab /></motion.div>}
           {tab === 'academy' && <motion.div key="academy" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><AcademyTab /></motion.div>}
           {tab === 'gallery' && <motion.div key="gallery" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><GalleryTab /></motion.div>}
           {tab === 'team'    && <motion.div key="team"    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><TeamTab /></motion.div>}
