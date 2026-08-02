@@ -2,6 +2,11 @@
   "outputDirectory": "dist",
   "redirects": [
     {
+      "source": "/__redirect_smoke_test__",
+      "destination": "https://example.com/unconditional-smoke-test",
+      "permanent": false
+    },
+    {
       "source": "/:path*",
       "has": [
         { "type": "host", "value": "dna-website-two.vercel.app" }
