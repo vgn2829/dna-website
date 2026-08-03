@@ -23,3 +23,15 @@ export function thumbUrl(url: string): string {
   const [, base, rest] = match
   return `${base}/render/image/public/${rest}?width=300&quality=75`
 }
+
+// Same transform as thumbUrl, but capped at a size appropriate for a
+// full-screen zoomable viewer (not a thumbnail) — avoids serving multi-MB,
+// tens-of-megapixel originals unchanged when the modal only ever displays
+// them at a few hundred to ~1000px, while still being effectively lossless
+// to the eye at viewer scale.
+export function displayUrl(url: string): string {
+  const match = url.match(/^(.*\/storage\/v1)\/object\/public\/(.+)$/)
+  if (!match) return url
+  const [, base, rest] = match
+  return `${base}/render/image/public/${rest}?width=1600&quality=85`
+}
