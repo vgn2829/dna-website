@@ -40,19 +40,26 @@ import { api } from '../lib/api';
 // Scoped to the reported bug: copies the full original image, not the
 // in-canvas crop/flip transform — acceptable since the bug is "no image
 // pastes at all", not "the pasted image doesn't match the crop".
-async function tryCopySingleImageAsRealImage(editor: Editor): Promise<boolean> {
-  const shapes = editor.getSelectedShapes();
-  if (shapes.length !== 1) return false;
-
-  const shape = shapes[0];
-  if (!editor.isShapeOfType<TLImageShape>(shape, 'image')) return false;
-
-  const assetId = shape.props.assetId;
-  if (!assetId) return false;
-
-  try {
+//
+// navigator.clipboard.write() must be CALLED synchronously within the
+// original user-gesture call stack — Safari (and potentially other
+// browsers) rejects it with NotAllowedError if even one `await` happens
+// first, since that breaks the "transient user activation" the Clipboard
+// API requires (confirmed via a real-world Safari clipboard fix:
+// https://github.com/inveniosoftware/invenio-app-rdm/pull/3379, itself
+// citing https://wolfgangrittner.dev/how-to-use-clipboard-api-in-safari/).
+// The original version of this function awaited resolveAssetUrl/fetch/
+// createImageBitmap/canvas.toBlob BEFORE calling write() — which worked in
+// permissive test environments but silently failed in stricter browsers,
+// producing a blank clipboard with no fallback (see below). The fix: build
+// the whole async chain as a single Promise<Blob> and pass THAT directly
+// into ClipboardItem, so the write() call itself happens with no awaits
+// ahead of it — the async work still happens, just resolved internally by
+// the Clipboard API rather than before the call.
+function buildPngBlob(editor: Editor, assetId: TLImageShape['props']['assetId']): Promise<Blob> {
+  return (async () => {
     const src = await editor.resolveAssetUrl(assetId, { shouldResolveToOriginal: true });
-    if (!src) return false;
+    if (!src) throw new Error('Could not resolve asset URL');
 
     const sourceBlob = await fetch(src).then(r => {
       if (!r.ok) throw new Error(`Fetch failed: ${r.status}`);
@@ -64,23 +71,40 @@ async function tryCopySingleImageAsRealImage(editor: Editor): Promise<boolean> {
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return false;
+    if (!ctx) throw new Error('Could not get 2d canvas context');
     ctx.drawImage(bitmap, 0, 0);
 
     const pngBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-    if (!pngBlob) return false;
+    if (!pngBlob) throw new Error('Canvas toBlob returned null');
+    return pngBlob;
+  })();
+}
 
-    await navigator.clipboard.write([
-      new ClipboardItem({ 'image/png': pngBlob }),
-    ]);
-    return true;
-  } catch (err) {
-    // Network failure, CORS block on fetch(), clipboard permission denial,
-    // etc. — fall through to Tldraw's default text-based copy so this is
-    // never worse than the pre-existing behavior.
-    console.warn('Real-image clipboard copy failed, falling back to default copy:', err);
-    return false;
-  }
+function tryCopySingleImageAsRealImage(editor: Editor): Promise<boolean> {
+  const shapes = editor.getSelectedShapes();
+  if (shapes.length !== 1) return Promise.resolve(false);
+
+  const shape = shapes[0];
+  if (!editor.isShapeOfType<TLImageShape>(shape, 'image')) return Promise.resolve(false);
+
+  const assetId = shape.props.assetId;
+  if (!assetId) return Promise.resolve(false);
+
+  // Call write() synchronously (no await before it) — per the Clipboard API
+  // spec, if the ClipboardItem's promise value rejects, write()'s own
+  // returned promise rejects too, so the async failure still surfaces here.
+  return navigator.clipboard.write([
+    new ClipboardItem({ 'image/png': buildPngBlob(editor, assetId) }),
+  ]).then(
+    () => true,
+    (err) => {
+      // Network failure, CORS block on fetch(), clipboard permission
+      // denial, etc. — fall through to Tldraw's default text-based copy so
+      // this is never worse than the pre-existing behavior.
+      console.warn('Real-image clipboard copy failed, falling back to default copy:', err);
+      return false;
+    }
+  );
 }
 
 function isEditingTextElsewhere(): boolean {
@@ -121,8 +145,16 @@ function ClipboardOverride() {
         if (!succeeded) {
           // Fall back to Tldraw's actual default copy behavior (the same
           // handler the menu/shortcut would have run) so a failure here is
-          // never worse than today's pre-existing behavior.
-          void defaultMenuCopy('kbd');
+          // never worse than today's pre-existing behavior. Tldraw's own
+          // copy path has the same async-before-write structure as the one
+          // fixed above (it awaits editor.resolveAssetsInContent before its
+          // internal navigator.clipboard.write call) and has no internal
+          // try/catch, so it can also reject in strict browsers — catch it
+          // here so a second failure is a logged no-op, not an unhandled
+          // promise rejection.
+          defaultMenuCopy('kbd').catch(err => {
+            console.warn('Fallback default copy also failed:', err);
+          });
         }
       });
     };
