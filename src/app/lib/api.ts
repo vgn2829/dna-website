@@ -219,6 +219,21 @@ async function uploadPutRequest<T>(path: string, formData: FormData): Promise<T>
   return data as T;
 }
 
+async function studentUploadRequest<T>(path: string, formData: FormData): Promise<T> {
+  const headers: Record<string, string> = {};
+  const tok = getStudentToken();
+  if (tok) headers['Authorization'] = `Bearer ${tok}`;
+  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: formData });
+  const data = await res.json() as T | { message?: unknown; error?: unknown };
+  if (res.status === 401) { clearStudentToken(); throw new Error('SESSION_EXPIRED'); }
+  if (!res.ok) {
+    const d = data as { message?: unknown; error?: unknown };
+    const msg = d.message ?? d.error ?? res.statusText;
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  }
+  return data as T;
+}
+
 export const api = {
   auth: {
     adminLogin: (password: string) =>
@@ -390,6 +405,14 @@ export const api = {
         'GET', `/boards/${boardId}/canvas`,
         roll ? { roll } : {}
       ),
+    uploadCanvasFile: (boardId: string, file: File, fileId: string) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('fileId', fileId);
+      return studentUploadRequest<{ fileId: string; url: string }>(
+        `/boards/${boardId}/canvas-files`, formData
+      );
+    },
   },
   liveSessions: {
     getActive: (roll?: string) =>

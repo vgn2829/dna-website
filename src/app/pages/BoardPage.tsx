@@ -426,6 +426,7 @@ export default function BoardPage() {
               </div>
             }>
               <TldrawCanvas
+                boardId={id!}
                 theme={theme}
                 initialData={canvasData}
                 onSave={handleSave}
