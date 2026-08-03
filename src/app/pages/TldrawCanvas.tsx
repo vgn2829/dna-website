@@ -12,6 +12,7 @@ import {
   useMenuClipboardEvents,
   type Editor,
   type TLAsset,
+  type TLAssetPartial,
   type TLAssetStore,
   type TLImageShape,
   type TLStoreSnapshot,
@@ -151,6 +152,70 @@ function randomFileId(): string {
   return `canvas_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+const DATA_URI_MIME_EXT: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/svg+xml': 'svg',
+};
+
+// Boards created before the Supabase-Storage upload fix (see PR #57) still
+// have image/video assets with a base64 data: URI as their src, embedded
+// directly in canvas_data. A single such asset can be several MB, which
+// blows past /api/boards' JSON body limit and makes the save silently
+// 413 — losing every edit in that save, not just the image. Migrating
+// each legacy asset to a real uploaded URL on the very next save (rather
+// than only handling this for newly-added images) is what actually closes
+// the gap for boards that already exist, instead of just capping the risk
+// with a bigger limit that the same board will eventually outgrow again as
+// more images get added.
+async function migrateLegacyBase64Assets(editor: Editor, boardId: string): Promise<void> {
+  const legacyAssets = editor.getAssets().filter(
+    (a): a is TLAsset & { props: { src: string } } =>
+      (a.type === 'image' || a.type === 'video') &&
+      typeof a.props.src === 'string' &&
+      a.props.src.startsWith('data:')
+  );
+  if (legacyAssets.length === 0) return;
+
+  const updates = await Promise.allSettled(
+    legacyAssets.map(async asset => {
+      const mimeMatch = asset.props.src.match(/^data:([^;]+);base64,/);
+      const mimeType = mimeMatch?.[1];
+      const ext = mimeType ? DATA_URI_MIME_EXT[mimeType] : undefined;
+      if (!ext) throw new Error(`Unsupported legacy asset mime type: ${mimeType}`);
+
+      const blob = await fetch(asset.props.src).then(r => r.blob());
+      const file = new File([blob], `${asset.id}.${ext}`, { type: mimeType });
+      const { url } = await api.boards.uploadCanvasFile(boardId, file, randomFileId());
+      // editor.updateAssets shallow-merges { ...existing, ...partial } — a
+      // partial `props` object REPLACES the whole props key rather than
+      // merging into it, so every other prop (w, h, name, fileSize,
+      // mimeType, isAnimated) must be carried through here, not just src.
+      return { id: asset.id, type: asset.type, props: { ...asset.props, src: url } } as TLAssetPartial;
+    })
+  );
+
+  const succeeded = updates
+    .filter((r): r is PromiseFulfilledResult<TLAssetPartial> => r.status === 'fulfilled')
+    .map(r => r.value);
+
+  if (succeeded.length > 0) {
+    // history: 'ignore' via updateAssets's own internal `run` call would be
+    // ideal, but updateAssets doesn't expose that option — this still goes
+    // through the normal 'user'/'document' path, which just means the
+    // migration itself gets picked up by the next debounced save too
+    // (harmless: assets are already URLs by then, so it's a no-op pass).
+    editor.updateAssets(succeeded);
+  }
+
+  const failed = updates.filter(r => r.status === 'rejected');
+  if (failed.length > 0) {
+    console.warn(`Failed to migrate ${failed.length} legacy embedded image(s) to storage:`, failed);
+  }
+}
+
 interface TldrawCanvasProps {
   boardId: string;
   theme: 'dark' | 'light';
@@ -281,6 +346,15 @@ export function TldrawCanvas({
                   // empty canvas — ignore
                 }
               }, 200);
+              // One-time, opportunistic migration of any legacy base64-embedded
+              // assets to real uploaded URLs — done once at load time (not on
+              // every save) so it doesn't add latency to the debounced save
+              // path once a board is clean. Runs in the background; if it
+              // finishes, the very next debounced save persists the migrated
+              // URLs instead of the base64 blobs.
+              migrateLegacyBase64Assets(editor, boardIdRef.current).catch(err => {
+                console.warn('Legacy asset migration failed:', err);
+              });
             } catch (err) {
               console.warn('Failed to load snapshot:', err);
             }

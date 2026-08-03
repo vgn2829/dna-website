@@ -57,10 +57,17 @@ export function createApp() {
   // Board canvas_data used to need a much larger allowance (6mb) because
   // Tldraw's default asset store inlines dropped/pasted images as base64
   // data URLs directly in the snapshot. Images now upload to Supabase Storage
-  // via canvas-files and only their (short) URLs land in canvas_data, so this
-  // only needs to cover shape/style metadata for a large board plus the odd
-  // small pasted-SVG shape — 1mb is generous headroom for that.
-  app.use('/api/boards', express.json({ limit: '1mb' }));
+  // via canvas-files and only their (short) URLs land in canvas_data, so a
+  // clean, URL-only board needs barely more than shape/style metadata.
+  //
+  // 3mb (not 1mb) is deliberate safety margin, not a leftover: boards created
+  // before this fix (or the client-side legacy-asset migration in
+  // TldrawCanvas.tsx) can still have base64-embedded images in canvas_data
+  // for a window after load, while that migration re-uploads them in the
+  // background. Without this margin, a save that lands mid-migration (or
+  // from a client that hasn't picked up the migration code yet) would 413
+  // and silently drop the whole edit — worse than a slightly larger limit.
+  app.use('/api/boards', express.json({ limit: '3mb' }));
   app.use('/api/notify', express.json({ limit: '1mb' }));
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({

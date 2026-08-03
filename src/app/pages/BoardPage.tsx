@@ -33,6 +33,19 @@ export default function BoardPage() {
   const [canvasLoading, setCanvasLoading] = useState(true);
   const [canvasReady, setCanvasReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [retryingSave, setRetryingSave] = useState(false);
+  // Holds the most recent snapshot that failed to save, so Retry resends the
+  // actual lost edit rather than just re-triggering the debounce (which by
+  // then may be showing a different, newer in-memory state if the user kept
+  // editing after the failure).
+  const lastFailedSnapshotRef = useRef<unknown>(null);
+  // A stale 'saved' -> 'idle' timer from an earlier successful save must not
+  // silently hide a LATER save's failure banner (e.g. save A succeeds and
+  // schedules its idle-reset, save B for a newer edit fails before that timer
+  // fires, then A's timer resets status back to idle and drops B's Retry
+  // action). Tracking + cancelling it on every new save start/failure closes
+  // that race.
+  const savedStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const rollRef = useRef(studentSession?.rollNumber);
   useEffect(() => { rollRef.current = studentSession?.rollNumber; }, [studentSession?.rollNumber]);
@@ -121,15 +134,43 @@ export default function BoardPage() {
   const handleSave = useCallback(async (snapshot: unknown) => {
     if (!id || !studentSession?.rollNumber) return;
     try {
+      if (savedStatusTimerRef.current) clearTimeout(savedStatusTimerRef.current);
       setSaveStatus('saving');
       await api.boards.saveCanvas(id, studentSession.rollNumber, JSON.stringify(snapshot));
+      lastFailedSnapshotRef.current = null;
       setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      savedStatusTimerRef.current = setTimeout(() => {
+        // Only clear back to idle if nothing newer (e.g. a later failure)
+        // has already changed the status — belt-and-braces on top of the
+        // clearTimeout above.
+        setSaveStatus(status => status === 'saved' ? 'idle' : status);
+      }, 2000);
     } catch {
+      // Deliberately does NOT auto-dismiss: a save failure means the user's
+      // last edit isn't persisted, and a badge that disappears after a few
+      // seconds is easy to miss entirely (this is the exact silent-data-loss
+      // gap this fix closes). Stays visible with a Retry action until the
+      // user retries successfully or explicitly dismisses it.
+      if (savedStatusTimerRef.current) clearTimeout(savedStatusTimerRef.current);
+      lastFailedSnapshotRef.current = snapshot;
       setSaveStatus('error');
-      setTimeout(() => setSaveStatus('idle'), 3000);
     }
   }, [id, studentSession?.rollNumber]);
+
+  const handleRetrySave = useCallback(async () => {
+    if (!lastFailedSnapshotRef.current) return;
+    setRetryingSave(true);
+    try {
+      await handleSave(lastFailedSnapshotRef.current);
+    } finally {
+      setRetryingSave(false);
+    }
+  }, [handleSave]);
+
+  const handleDismissSaveError = useCallback(() => {
+    lastFailedSnapshotRef.current = null;
+    setSaveStatus('idle');
+  }, []);
 
   const handleCopy = async () => {
     try {
@@ -310,16 +351,14 @@ export default function BoardPage() {
             }}>
               {board.visibility}
             </span>
-            {saveStatus !== 'idle' && (
-              <span style={{
-                fontSize: 11, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
-                color: saveStatus === 'error'
-                  ? 'var(--color-error)'
-                  : saveStatus === 'saving' ? textMuted : 'var(--color-success)',
-              }}>
-                {saveStatus === 'saving' && 'Saving...'}
-                {saveStatus === 'saved' && 'Saved'}
-                {saveStatus === 'error' && 'Save failed'}
+            {saveStatus === 'saving' && (
+              <span style={{ fontSize: 11, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', color: textMuted }}>
+                Saving...
+              </span>
+            )}
+            {saveStatus === 'saved' && (
+              <span style={{ fontSize: 11, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', color: 'var(--color-success)' }}>
+                Saved
               </span>
             )}
           </div>
@@ -394,6 +433,47 @@ export default function BoardPage() {
             )}
           </div>
         </div>
+
+        {/* Save-failure banner — deliberately NOT part of the transient
+            save-status pill above: it persists until the user retries
+            successfully or dismisses it, since a failed save means real
+            edits aren't persisted and a badge that vanishes in a few
+            seconds is exactly how that goes unnoticed. Anchored just below
+            the top bar (which is 48px tall), same as the canvas area. */}
+        {saveStatus === 'error' && (
+          <div style={{
+            position: 'absolute', top: 48, left: 0, right: 0,
+            padding: '8px 16px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+            background: 'var(--color-error)', color: '#fff',
+            fontSize: 12, fontFamily: 'var(--font-body)', fontWeight: 500,
+            zIndex: 20,
+          }}>
+            <span>Save failed — your last change to this board hasn&apos;t been saved.</span>
+            <button
+              onClick={handleRetrySave}
+              disabled={retryingSave}
+              style={{
+                padding: '3px 10px', background: 'rgba(255,255,255,0.2)',
+                border: '1px solid rgba(255,255,255,0.4)', borderRadius: 'var(--radius-pill)',
+                color: '#fff', fontSize: 11, fontFamily: 'var(--font-body)', fontWeight: 600,
+                cursor: retryingSave ? 'default' : 'pointer', opacity: retryingSave ? 0.7 : 1,
+              }}
+            >
+              {retryingSave ? 'Retrying...' : 'Retry'}
+            </button>
+            <button
+              onClick={handleDismissSaveError}
+              style={{
+                padding: '3px 8px', background: 'none', border: 'none',
+                color: 'rgba(255,255,255,0.85)', fontSize: 11, fontFamily: 'var(--font-body)',
+                cursor: 'pointer', textDecoration: 'underline',
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Canvas area */}
         <div style={{ position: 'absolute', top: 48, left: 0, right: 0, bottom: 0 }}>
