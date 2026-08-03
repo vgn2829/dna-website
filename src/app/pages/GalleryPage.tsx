@@ -6,7 +6,7 @@ import { useAppData, type Artwork } from '../context/AppDataContext';
 import { useStudent } from '../context/StudentContext';
 import { api, type Board } from '../lib/api';
 import { usePageMeta } from '../components/hooks/use-page-meta';
-import { thumbUrl } from '../lib/utils';
+import { thumbUrl, displayUrl } from '../lib/utils';
 
 const DOMAIN_COLORS: Record<string, string> = {
   'UI/UX Design': '#007AFF', Photoshop: '#BF5AF2', Illustrator: '#FF9F0A', '3D Animation': '#FF375F',
@@ -34,6 +34,7 @@ function ZoomImage({ src, alt, onAspectRatio }: { src: string; alt: string; onAs
   const [scale, setScale] = useState(1);
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [imgError, setImgError] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const dragging = useRef(false);
   const last = useRef({ x: 0, y: 0 });
   return (
@@ -57,6 +58,7 @@ function ZoomImage({ src, alt, onAspectRatio }: { src: string; alt: string; onAs
             if (onAspectRatio && img.naturalWidth && img.naturalHeight) {
               onAspectRatio(img.naturalWidth / img.naturalHeight);
             }
+            setLoaded(true);
           }}
           onError={() => setImgError(true)}
           style={{
@@ -67,11 +69,17 @@ function ZoomImage({ src, alt, onAspectRatio }: { src: string; alt: string; onAs
             objectFit: 'contain',
             display: 'block',
             userSelect: 'none',
+            opacity: loaded ? 1 : 0,
             transform: `scale(${scale}) translate(${pos.x / scale}px, ${pos.y / scale}px)`,
-            transition: dragging.current ? 'none' : 'transform 0.2s',
+            transition: dragging.current ? 'none' : 'opacity 0.2s, transform 0.2s',
             borderRadius: 'inherit',
           }}
         />
+      )}
+      {!imgError && !loaded && (
+        <div className="absolute inset-0 flex items-center justify-center" style={{ pointerEvents: 'none' }}>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', border: '2.5px solid var(--color-hairline)', borderTopColor: 'var(--color-ink-muted)', animation: 'spin 0.8s linear infinite' }} />
+        </div>
       )}
       {!imgError && (
         <div className="absolute bottom-3 right-3 flex gap-1.5">
@@ -83,24 +91,37 @@ function ZoomImage({ src, alt, onAspectRatio }: { src: string; alt: string; onAs
   );
 }
 
+function VideoViewer({ artwork }: { artwork: Artwork }) {
+  const [ready, setReady] = useState(false);
+  return (
+    <div className="w-full h-full flex items-center justify-center relative" style={{ background: 'var(--color-canvas)', borderRadius: 'var(--radius-xl)' }}>
+      <video
+        controls
+        autoPlay
+        preload="metadata"
+        poster={artwork.coverUrl ?? undefined}
+        src={artwork.mediaUrl}
+        onLoadedData={() => setReady(true)}
+        style={{ maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', display: 'block', background: 'transparent', objectFit: 'contain' }}
+      >
+        Your browser does not support video.
+      </video>
+      {!ready && (
+        <div className="absolute inset-0 flex items-center justify-center" style={{ pointerEvents: 'none' }}>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', border: '2.5px solid var(--color-hairline)', borderTopColor: 'var(--color-ink-muted)', animation: 'spin 0.8s linear infinite' }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MediaViewer({ artwork, onAspectRatio, isMobile }: { artwork: Artwork; onAspectRatio?: (ratio: number) => void; isMobile?: boolean }) {
   const [pdfLoadFailed, setPdfLoadFailed] = useState(false);
   if (artwork.mediaType === 'image') {
-    return <ZoomImage src={artwork.mediaUrl} alt={artwork.title} onAspectRatio={onAspectRatio} />;
+    return <ZoomImage src={displayUrl(artwork.mediaUrl)} alt={artwork.title} onAspectRatio={onAspectRatio} />;
   }
   if (artwork.mediaType === 'video') {
-    return (
-      <div className="w-full h-full flex items-center justify-center" style={{ background: 'var(--color-canvas)', borderRadius: 'var(--radius-xl)' }}>
-        <video
-          controls
-          autoPlay
-          src={artwork.mediaUrl}
-          style={{ maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', display: 'block', background: 'transparent', objectFit: 'contain' }}
-        >
-          Your browser does not support video.
-        </video>
-      </div>
-    );
+    return <VideoViewer artwork={artwork} />;
   }
   // PDF — always use the actual PDF viewer, never coverUrl
   const pdfViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(artwork.mediaUrl)}&embedded=true`;
