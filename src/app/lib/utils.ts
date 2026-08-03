@@ -17,11 +17,17 @@ export function cn(...inputs: ClassValue[]) {
 // so this applies equally regardless of which field it's given. URLs that
 // don't match the expected Supabase object shape (e.g. the local-storage
 // dev fallback, which doesn't support transforms) pass through unchanged.
+//
+// resize=contain is required: without it, Supabase defaults to resize=cover,
+// which crops to fit `width` against the image's ORIGINAL (unscaled) height
+// instead of scaling proportionally — confirmed by curl to badly crop any
+// source image wider than the requested `width` (e.g. a 3510x4961 original
+// requested at width=1600 came back as 1600x4961, not 1600x2261).
 export function thumbUrl(url: string): string {
   const match = url.match(/^(.*\/storage\/v1)\/object\/public\/(.+)$/)
   if (!match) return url
   const [, base, rest] = match
-  return `${base}/render/image/public/${rest}?width=300&quality=75`
+  return `${base}/render/image/public/${rest}?width=300&quality=75&resize=contain`
 }
 
 // Same transform as thumbUrl, but capped at a size appropriate for a
@@ -33,5 +39,5 @@ export function displayUrl(url: string): string {
   const match = url.match(/^(.*\/storage\/v1)\/object\/public\/(.+)$/)
   if (!match) return url
   const [, base, rest] = match
-  return `${base}/render/image/public/${rest}?width=1600&quality=85`
+  return `${base}/render/image/public/${rest}?width=1600&quality=85&resize=contain`
 }
