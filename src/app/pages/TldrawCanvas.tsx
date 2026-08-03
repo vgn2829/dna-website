@@ -8,13 +8,132 @@ import {
   Tldraw,
   getSnapshot,
   loadSnapshot,
+  useEditor,
+  useMenuClipboardEvents,
   type Editor,
   type TLAsset,
   type TLAssetStore,
+  type TLImageShape,
   type TLStoreSnapshot,
 } from 'tldraw';
 import 'tldraw/tldraw.css';
 import { api } from '../lib/api';
+
+// Tldraw's own copy handler never puts real image bytes on the clipboard —
+// it always serializes the selection (shapes + resolved assets) into its
+// own round-trip text format (lz-string-compressed JSON), written as
+// text/html + text/plain, with no image/* MIME entry. Pasting into a
+// non-Tldraw app (Canva, Notes, etc.) then falls back to inserting that
+// blob as literal text — for an old base64-sourced image this is a
+// multi-megabyte wall of garbled text; for a Supabase-URL-sourced image
+// it's a short but still useless compressed string.
+//
+// This only overrides the single-image-shape-selection case: fetch the
+// resolved asset's original source (data: URI or http(s) URL, both work
+// with fetch()), draw it to a canvas, and write a real image/png
+// ClipboardItem so external apps get an actual image. Any other selection
+// (multiple shapes, non-image shapes, mixed, or none) is left completely
+// alone — Tldraw's own document-level `copy` listener (registered inside
+// <TldrawUi>, bubble phase, unconditionally) still runs unchanged.
+//
+// Scoped to the reported bug: copies the full original image, not the
+// in-canvas crop/flip transform — acceptable since the bug is "no image
+// pastes at all", not "the pasted image doesn't match the crop".
+async function tryCopySingleImageAsRealImage(editor: Editor): Promise<boolean> {
+  const shapes = editor.getSelectedShapes();
+  if (shapes.length !== 1) return false;
+
+  const shape = shapes[0];
+  if (!editor.isShapeOfType<TLImageShape>(shape, 'image')) return false;
+
+  const assetId = shape.props.assetId;
+  if (!assetId) return false;
+
+  try {
+    const src = await editor.resolveAssetUrl(assetId, { shouldResolveToOriginal: true });
+    if (!src) return false;
+
+    const sourceBlob = await fetch(src).then(r => {
+      if (!r.ok) throw new Error(`Fetch failed: ${r.status}`);
+      return r.blob();
+    });
+
+    const bitmap = await createImageBitmap(sourceBlob);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return false;
+    ctx.drawImage(bitmap, 0, 0);
+
+    const pngBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+    if (!pngBlob) return false;
+
+    await navigator.clipboard.write([
+      new ClipboardItem({ 'image/png': pngBlob }),
+    ]);
+    return true;
+  } catch (err) {
+    // Network failure, CORS block on fetch(), clipboard permission denial,
+    // etc. — fall through to Tldraw's default text-based copy so this is
+    // never worse than the pre-existing behavior.
+    console.warn('Real-image clipboard copy failed, falling back to default copy:', err);
+    return false;
+  }
+}
+
+function isEditingTextElsewhere(): boolean {
+  const el = document.activeElement;
+  if (!el) return false;
+  if (el.getAttribute('contenteditable')) return true;
+  const tag = el.tagName.toLowerCase();
+  return tag === 'input' || tag === 'textarea';
+}
+
+// Rendered as a child of <Tldraw> purely to reach editor context via
+// useEditor()/useMenuClipboardEvents() — renders nothing itself.
+function ClipboardOverride() {
+  const editor = useEditor();
+  const { copy: defaultMenuCopy } = useMenuClipboardEvents();
+
+  useEffect(() => {
+    // Capture phase runs before Tldraw's own bubble-phase `copy` listener
+    // (registered by useNativeClipboardEvents inside <TldrawUi>, with no
+    // capture option), regardless of React effect mount ordering — so this
+    // reliably gets first look at every copy event on the page.
+    const onCopyCapture = (e: ClipboardEvent) => {
+      if (!editor.getInstanceState().isFocused) return;
+      if (editor.getEditingShapeId() !== null) return;
+      if (isEditingTextElsewhere()) return;
+
+      const shapes = editor.getSelectedShapes();
+      if (shapes.length !== 1) return;
+      if (!editor.isShapeOfType<TLImageShape>(shapes[0], 'image')) return;
+
+      // Claim the event now (synchronously, in capture phase) so Tldraw's
+      // bubble-phase listener never runs for this single-image case, even
+      // though the actual fetch/encode/write below is async.
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      tryCopySingleImageAsRealImage(editor).then(succeeded => {
+        if (!succeeded) {
+          // Fall back to Tldraw's actual default copy behavior (the same
+          // handler the menu/shortcut would have run) so a failure here is
+          // never worse than today's pre-existing behavior.
+          void defaultMenuCopy('kbd');
+        }
+      });
+    };
+
+    document.addEventListener('copy', onCopyCapture, { capture: true });
+    return () => {
+      document.removeEventListener('copy', onCopyCapture, { capture: true });
+    };
+  }, [editor, defaultMenuCopy]);
+
+  return null;
+}
 
 // Supabase Storage only serves these image types through canvas-files
 // (see backend CANVAS_MIME_EXT) — restrict Tldraw's accepted types to match,
@@ -172,7 +291,9 @@ export function TldrawCanvas({
             source: 'user',
           });
         }}
-      />
+      >
+        <ClipboardOverride />
+      </Tldraw>
     </div>
   );
 }
