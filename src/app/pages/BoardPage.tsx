@@ -39,6 +39,13 @@ export default function BoardPage() {
   // then may be showing a different, newer in-memory state if the user kept
   // editing after the failure).
   const lastFailedSnapshotRef = useRef<unknown>(null);
+  // A stale 'saved' -> 'idle' timer from an earlier successful save must not
+  // silently hide a LATER save's failure banner (e.g. save A succeeds and
+  // schedules its idle-reset, save B for a newer edit fails before that timer
+  // fires, then A's timer resets status back to idle and drops B's Retry
+  // action). Tracking + cancelling it on every new save start/failure closes
+  // that race.
+  const savedStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const rollRef = useRef(studentSession?.rollNumber);
   useEffect(() => { rollRef.current = studentSession?.rollNumber; }, [studentSession?.rollNumber]);
@@ -127,17 +134,24 @@ export default function BoardPage() {
   const handleSave = useCallback(async (snapshot: unknown) => {
     if (!id || !studentSession?.rollNumber) return;
     try {
+      if (savedStatusTimerRef.current) clearTimeout(savedStatusTimerRef.current);
       setSaveStatus('saving');
       await api.boards.saveCanvas(id, studentSession.rollNumber, JSON.stringify(snapshot));
       lastFailedSnapshotRef.current = null;
       setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      savedStatusTimerRef.current = setTimeout(() => {
+        // Only clear back to idle if nothing newer (e.g. a later failure)
+        // has already changed the status — belt-and-braces on top of the
+        // clearTimeout above.
+        setSaveStatus(status => status === 'saved' ? 'idle' : status);
+      }, 2000);
     } catch {
       // Deliberately does NOT auto-dismiss: a save failure means the user's
       // last edit isn't persisted, and a badge that disappears after a few
       // seconds is easy to miss entirely (this is the exact silent-data-loss
       // gap this fix closes). Stays visible with a Retry action until the
       // user retries successfully or explicitly dismisses it.
+      if (savedStatusTimerRef.current) clearTimeout(savedStatusTimerRef.current);
       lastFailedSnapshotRef.current = snapshot;
       setSaveStatus('error');
     }
