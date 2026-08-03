@@ -2,17 +2,38 @@ import {
   useEffect,
   useRef,
   useCallback,
+  useMemo,
 } from 'react';
 import {
   Tldraw,
   getSnapshot,
   loadSnapshot,
   type Editor,
+  type TLAsset,
+  type TLAssetStore,
   type TLStoreSnapshot,
 } from 'tldraw';
 import 'tldraw/tldraw.css';
+import { api } from '../lib/api';
+
+// Supabase Storage only serves these image types through canvas-files
+// (see backend CANVAS_MIME_EXT) — restrict Tldraw's accepted types to match,
+// and disallow video entirely, so the client never attempts an upload the
+// server is guaranteed to reject.
+const ACCEPTED_IMAGE_MIME_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'image/svg+xml',
+];
+
+function randomFileId(): string {
+  return `canvas_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
 
 interface TldrawCanvasProps {
+  boardId: string;
   theme: 'dark' | 'light';
   initialData: unknown;
   onSave: (snapshot: unknown) => void;
@@ -20,6 +41,7 @@ interface TldrawCanvasProps {
 }
 
 export function TldrawCanvas({
+  boardId,
   theme,
   initialData,
   onSave,
@@ -31,6 +53,22 @@ export function TldrawCanvas({
   const onSaveRef = useRef(onSave);
   const initialDataRef = useRef<unknown>(initialData);
   const snapshotLoadedRef = useRef(false);
+
+  const boardIdRef = useRef(boardId);
+  useEffect(() => { boardIdRef.current = boardId; }, [boardId]);
+
+  // Uploads real image files to Supabase Storage (via the canvas-files
+  // endpoint) instead of Tldraw's default of inlining them as base64 data
+  // URLs in canvas_data. Real URLs are stable, small, and identical for
+  // every viewer — no payload-size races, no per-user visibility gap.
+  const assetStore: TLAssetStore = useMemo(() => ({
+    upload: async (_asset: TLAsset, file: File) => {
+      const { url } = await api.boards.uploadCanvasFile(
+        boardIdRef.current, file, randomFileId()
+      );
+      return url;
+    },
+  }), []);
 
   useEffect(() => {
     onSaveRef.current = onSave;
@@ -104,6 +142,9 @@ export function TldrawCanvas({
         hideUi={readOnly}
         autoFocus
         inferDarkMode={false}
+        assets={assetStore}
+        acceptedImageMimeTypes={ACCEPTED_IMAGE_MIME_TYPES}
+        acceptedVideoMimeTypes={[]}
         onMount={(editor: Editor) => {
           editorRef.current = editor;
 

@@ -50,10 +50,17 @@ export function createApp() {
   );
 
   // Small global JSON limit to cap request-body DoS. Routes that legitimately
-  // carry large JSON (board canvas state / pasted data images, admin email HTML)
-  // get their own larger parser first — express.json() short-circuits once a body
-  // has been parsed, so the first matching limit wins.
-  app.use('/api/boards', express.json({ limit: '6mb' }));
+  // carry large JSON (board canvas state, admin email HTML) get their own
+  // larger parser first — express.json() short-circuits once a body has been
+  // parsed, so the first matching limit wins.
+  //
+  // Board canvas_data used to need a much larger allowance (6mb) because
+  // Tldraw's default asset store inlines dropped/pasted images as base64
+  // data URLs directly in the snapshot. Images now upload to Supabase Storage
+  // via canvas-files and only their (short) URLs land in canvas_data, so this
+  // only needs to cover shape/style metadata for a large board plus the odd
+  // small pasted-SVG shape — 1mb is generous headroom for that.
+  app.use('/api/boards', express.json({ limit: '1mb' }));
   app.use('/api/notify', express.json({ limit: '1mb' }));
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({
