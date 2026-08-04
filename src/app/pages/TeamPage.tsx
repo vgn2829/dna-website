@@ -184,10 +184,10 @@ export function TeamPage() {
         <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-16">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-6">
             <Users size={16} className="text-cyan-400" />
-            <span className="text-sm font-medium text-white/80">The People Behind DnA</span>
+            <span className="text-sm font-medium" style={{ color: 'var(--color-ink-muted)' }}>The People Behind DnA</span>
           </div>
           <h1 className="text-5xl md:text-7xl font-bold mb-5">Meet Our <span className="gradient-text">Team</span></h1>
-          <p className="text-white/60 text-lg max-w-2xl mx-auto">A passionate group of designers, animators, and creative thinkers dedicated to building a vibrant design culture at IIT Kanpur.</p>
+          <p className="text-lg max-w-2xl mx-auto" style={{ color: 'var(--color-ink-muted)' }}>A passionate group of designers, animators, and creative thinkers dedicated to building a vibrant design culture at IIT Kanpur.</p>
         </motion.div>
 
         {faculty.length > 0 && (
@@ -262,9 +262,9 @@ export function TeamPage() {
           className="glass-strong rounded-3xl p-10 text-center"
           style={{ background: 'linear-gradient(135deg, rgba(0,122,255,0.08), rgba(191,90,242,0.08))' }}>
           <h3 className="text-2xl font-bold mb-3">Want to join the team?</h3>
-          <p className="text-white/60 mb-6 max-w-md mx-auto">We recruit each semester. If you are passionate about design or animation, we would love to have you.</p>
+          <p className="mb-6 max-w-md mx-auto" style={{ color: 'var(--color-ink-muted)' }}>We recruit each semester. If you are passionate about design or animation, we would love to have you.</p>
           <div className="flex justify-center gap-3 flex-wrap">
-            <button className="px-6 py-3 rounded-2xl glass text-white font-semibold hover:bg-white/10 transition-colors">Learn more</button>
+            <button className="px-6 py-3 rounded-2xl glass glass-hover font-semibold transition-colors" style={{ color: 'var(--color-ink)' }}>Learn more</button>
             <a
               href="https://www.instagram.com/dnaiitk/"
               target="_blank"

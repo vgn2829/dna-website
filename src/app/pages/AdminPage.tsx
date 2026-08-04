@@ -3537,7 +3537,7 @@ function SessionsTab() {
             <div style={{
               border: '1px solid var(--color-border)',
               borderRadius: 'var(--radius-lg)', padding: 24,
-              background: 'var(--color-surface)',
+              background: 'var(--color-surface-1)',
               display: 'flex', flexDirection: 'column', gap: 16,
             }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
@@ -3659,7 +3659,7 @@ function SessionsTab() {
                 <div key={s.id} style={{
                   border: '1px solid var(--color-border)',
                   borderRadius: 'var(--radius-lg)', padding: '18px 20px',
-                  background: 'var(--color-surface)',
+                  background: 'var(--color-surface-1)',
                   display: 'flex', justifyContent: 'space-between',
                   alignItems: 'flex-start', gap: 16,
                 }}>
@@ -3760,7 +3760,7 @@ function SessionsTab() {
                   padding: '14px 16px',
                   borderRadius: 'var(--radius-md)',
                   border: selectedPast === s.id ? '1px solid var(--color-brand)' : '1px solid var(--color-border)',
-                  background: selectedPast === s.id ? 'rgba(233,30,140,0.06)' : 'var(--color-surface)',
+                  background: selectedPast === s.id ? 'rgba(233,30,140,0.06)' : 'var(--color-surface-1)',
                   cursor: 'pointer',
                   display: 'flex',
                   flexDirection: 'column',
@@ -3988,7 +3988,7 @@ function MoodboardsAdminTab() {
             <div key={board.id} style={{
               border: '1px solid var(--color-border)',
               borderRadius: 'var(--radius-lg)', padding: '16px 18px',
-              background: 'var(--color-surface)',
+              background: 'var(--color-surface-1)',
               display: 'flex', justifyContent: 'space-between',
               alignItems: 'center', gap: 16, flexWrap: 'wrap',
             }}>
@@ -4001,7 +4001,7 @@ function MoodboardsAdminTab() {
                   <span style={{
                     fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
                     padding: '2px 8px', borderRadius: 'var(--radius-pill)',
-                    background: board.visibility === 'shared' ? 'rgba(233,30,140,0.1)' : 'rgba(255,255,255,0.06)',
+                    background: board.visibility === 'shared' ? 'rgba(233,30,140,0.1)' : 'var(--color-surface-2)',
                     color: board.visibility === 'shared' ? 'var(--color-brand)' : 'var(--color-ink-muted)',
                     fontFamily: 'var(--font-body)',
                   }}>
@@ -4010,7 +4010,7 @@ function MoodboardsAdminTab() {
                   <span style={{
                     fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
                     padding: '2px 8px', borderRadius: 'var(--radius-pill)',
-                    background: board.edit_mode === 'anyone' ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.04)',
+                    background: board.edit_mode === 'anyone' ? 'rgba(34,197,94,0.1)' : 'var(--color-surface-2)',
                     color: board.edit_mode === 'anyone' ? 'var(--color-success)' : 'var(--color-ink-muted)',
                     fontFamily: 'var(--font-body)',
                   }}>
