@@ -373,7 +373,7 @@ function FontPairing() {
         Showing pair {safeIdx+1} of {currentPool.length} in <span style={{color:T.inkMuted}}>{strat.label}</span>
       </div>
 
-      <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:40,border:"1px solid rgba(255,255,255,0.06)",position:"relative",overflow:"hidden",minHeight:260}}>
+      <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:40,border:`1px solid ${T.hairlineSoft}`,position:"relative",overflow:"hidden",minHeight:260}}>
         <div style={{position:"absolute",top:-80,right:-80,width:280,height:280,borderRadius:"50%",background:strat.gradient,opacity:0.13,filter:"blur(70px)",pointerEvents:"none"}}/>
         <div style={{display:"flex",gap:7,marginBottom:22,flexWrap:"wrap"}}>
           <span style={{padding:"4px 10px",borderRadius:6,background:T.surface2,color:T.inkMuted,fontFamily:"var(--font-body)",fontSize:11,fontWeight:500}}>
@@ -417,13 +417,13 @@ function FontPairing() {
 
         <div style={{display:"flex",gap:10,marginTop:24,flexWrap:"wrap"}}>
           {[{label:"Display",name:pair.display,w:pair.dw},{label:"Body",name:pair.body,w:pair.bw}].map((f:any)=>(
-            <div key={f.label} style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:"16px",border:"1px solid rgba(255,255,255,0.06)",flex:1,minWidth:120}}>
+            <div key={f.label} style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:"16px",border:`1px solid ${T.hairlineSoft}`,flex:1,minWidth:120}}>
               <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkMuted,letterSpacing:".06em",textTransform:"uppercase",marginBottom:4}}>{f.label}</div>
               <div style={{fontFamily:`'${f.name}',serif,sans-serif`,fontWeight:f.w,fontSize:16,color:T.ink,marginBottom:2}}>{f.name}</div>
               <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkDim}}>weight {f.w}</div>
             </div>
           ))}
-          <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:"16px",border:"1px solid rgba(255,255,255,0.06)",minWidth:130}}>
+          <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:"16px",border:`1px solid ${T.hairlineSoft}`,minWidth:130}}>
             <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkMuted,letterSpacing:".06em",textTransform:"uppercase",marginBottom:8}}>Pairing score</div>
             {[["Category",catScore],["X-height",xhScore],["Weight Δ",wScore]].map(([k,v]:any)=>(
               <div key={k} style={{marginBottom:6}}>
@@ -603,7 +603,7 @@ function ContrastChecker() {
 
   return (
     <div style={{display:"flex",gap:24,flexDirection:"column"}}>
-      <div style={{borderRadius:"var(--radius-xl)",padding:40,background:isHex(bg)?bg:T.canvas,border:"1px solid rgba(255,255,255,0.06)",minHeight:160,display:"flex",flexDirection:"column",justifyContent:"center",position:"relative"}}>
+      <div style={{borderRadius:"var(--radius-xl)",padding:40,background:isHex(bg)?bg:T.canvas,border:`1px solid ${T.hairlineSoft}`,minHeight:160,display:"flex",flexDirection:"column",justifyContent:"center",position:"relative"}}>
         <div style={{fontFamily:"var(--font-body)",letterSpacing:"-3px",fontSize:64,fontWeight:700,lineHeight:1,color:isHex(fg)?fg:T.ink}}>Aa</div>
         <p style={{fontFamily:"var(--font-body)",fontSize:15,lineHeight:1.5,letterSpacing:"-0.15px",margin:"12px 0 0",color:isHex(fg)?fg:T.ink,opacity:0.85}}>
           Contrast ratio: <strong>{rStr}:1</strong>
@@ -636,7 +636,7 @@ function ContrastChecker() {
         </div>
       </div>
 
-      <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:24,border:"1px solid rgba(255,255,255,0.06)"}}>
+      <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:24,border:`1px solid ${T.hairlineSoft}`}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
           <span style={{fontFamily:"var(--font-body)",fontSize:13,color:T.inkMuted}}>Contrast ratio</span>
           <span style={{fontFamily:"var(--font-body)",fontSize:13,fontWeight:600,color:rc}}>{rStr}:1</span>
@@ -675,7 +675,7 @@ function ContrastChecker() {
                 onMouseEnter={(e:any)=>e.currentTarget.style.borderColor=s.hex}
                 onMouseLeave={(e:any)=>e.currentTarget.style.borderColor=T.hairline}>
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-                  <div style={{width:32,height:32,borderRadius:8,background:s.hex,border:`1px solid rgba(255,255,255,0.1)`,flexShrink:0}}/>
+                  <div style={{width:32,height:32,borderRadius:8,background:s.hex,border:`1px solid ${T.hairline}`,flexShrink:0}}/>
                   <div>
                     <div style={{fontFamily:"var(--font-mono)",fontSize:12,color:T.ink}}>{s.hex.toUpperCase()}</div>
                     <div style={{fontFamily:"var(--font-body)",fontSize:10,color:T.inkMuted}}>{cRatio(s.hex,bg).toFixed(1)}:1</div>
@@ -820,7 +820,7 @@ function ImageConverter(){
       ):(
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
           {[{label:"Original",src:preview,meta:info?`${info.w}×${info.h} · ${info.size}KB`:""},{label:"Output",src:converted?.preview||converted?.url,meta:converted?`${converted.w}×${converted.h} · ${converted.size}KB`:""}].map((p:any)=>(
-            <div key={p.label} style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",overflow:"hidden",border:"1px solid rgba(255,255,255,0.06)"}}>
+            <div key={p.label} style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",overflow:"hidden",border:`1px solid ${T.hairlineSoft}`}}>
               <div style={{padding:"10px 16px",borderBottom:`1px solid ${T.hairline}`,display:"flex",justifyContent:"space-between"}}>
                 <span style={{fontFamily:"var(--font-body)",fontSize:12,color:T.inkMuted}}>{p.label}</span>
                 {p.meta&&<span style={{fontFamily:"var(--font-mono)",fontSize:11,color:T.inkMuted}}>{p.meta}</span>}
@@ -834,7 +834,7 @@ function ImageConverter(){
         </div>
       )}
       {preview&&(
-        <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:24,border:"1px solid rgba(255,255,255,0.06)",display:"flex",gap:20,flexWrap:"wrap",alignItems:"flex-end"}}>
+        <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:24,border:`1px solid ${T.hairlineSoft}`,display:"flex",gap:20,flexWrap:"wrap",alignItems:"flex-end"}}>
           <div>
             <label style={ss.label}>Format</label>
             <div style={{display:"flex",gap:8}}>
@@ -1264,7 +1264,7 @@ function GridCalculator(){
           </button>
         </div>
         {fmtId==="custom"&&(
-          <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",border:"1px solid rgba(255,255,255,0.06)",padding:"24px",display:"flex",gap:12,marginTop:10}}>
+          <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",border:`1px solid ${T.hairlineSoft}`,padding:"24px",display:"flex",gap:12,marginTop:10}}>
             {[["customW","Width (px)"],["customH","Height (px)"]].map(([k,l])=>(
               <div key={k} style={{width:130}}>
                 <label style={ss.label}>{l}</label>
@@ -1291,7 +1291,7 @@ function GridCalculator(){
         );
       })}
 
-      <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:24,border:"1px solid rgba(255,255,255,0.06)",display:"flex",gap:12,alignItems:"flex-start"}}>
+      <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:24,border:`1px solid ${T.hairlineSoft}`,display:"flex",gap:12,alignItems:"flex-start"}}>
         <span style={{fontSize:22,marginRight:12,flexShrink:0}}>{sys.icon}</span>
         <div>
           <div style={{fontFamily:"var(--font-body)",fontSize:13,fontWeight:600,color:T.ink,marginBottom:3}}>{sys.label}</div>
@@ -1299,7 +1299,7 @@ function GridCalculator(){
         </div>
       </div>
 
-      <div style={{background:"var(--color-canvas)",borderRadius:"var(--radius-xl)",overflow:"hidden",border:"1px solid rgba(255,255,255,0.06)",padding:12}}>
+      <div style={{background:"var(--color-canvas)",borderRadius:"var(--radius-xl)",overflow:"hidden",border:`1px solid ${T.hairlineSoft}`,padding:12}}>
         <canvas ref={canvasRef} width={680} height={440} style={{width:"100%",height:"auto",display:"block",borderRadius:10}}/>
       </div>
 
@@ -1328,7 +1328,7 @@ function GridCalculator(){
             {l:"Inner area",   v:`${IW}×${IH}px`},
             {l:"Aspect ratio", v:`${(IW/IH).toFixed(3)}:1`},
           ].map((s:any)=>(
-            <div key={s.l} style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-lg)",padding:"11px 13px",border:"1px solid rgba(255,255,255,0.06)"}}>
+            <div key={s.l} style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-lg)",padding:"11px 13px",border:`1px solid ${T.hairlineSoft}`}}>
               <div style={{fontFamily:"var(--font-body)",fontSize:9,color:"var(--color-ink-muted)",letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:3}}>{s.l}</div>
               <div style={{fontFamily:"var(--font-mono)",fontSize:14,fontWeight:600,color:"var(--color-ink)"}}>{s.v}</div>
             </div>
@@ -1337,7 +1337,7 @@ function GridCalculator(){
       )}
 
       {(controlDefs[system]||[]).length>0&&(
-        <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:24,border:"1px solid rgba(255,255,255,0.06)"}}>
+        <div style={{background:"var(--color-surface-1)",borderRadius:"var(--radius-xl)",padding:24,border:`1px solid ${T.hairlineSoft}`}}>
           <div style={{fontFamily:"var(--font-body)",fontSize:10,fontWeight:600,color:"var(--color-ink-muted)",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Parameters</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:16}}>
             {(controlDefs[system]||[]).map((c:any)=>(

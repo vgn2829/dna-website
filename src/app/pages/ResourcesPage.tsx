@@ -80,12 +80,12 @@ export function ResourcesPage() {
         >
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-6">
             <BookOpen size={16} className="text-blue-400" />
-            <span className="text-sm font-medium text-white/80">Learning Hub</span>
+            <span className="text-sm font-medium" style={{ color: 'var(--color-ink-muted)' }}>Learning Hub</span>
           </div>
           <h1 className="text-5xl md:text-7xl font-bold mb-5">
             Learning <span className="gradient-text">Resources</span>
           </h1>
-          <p className="text-white/60 text-lg max-w-2xl mx-auto">
+          <p className="text-lg max-w-2xl mx-auto" style={{ color: 'var(--color-ink-muted)' }}>
             Curated tutorials, courses & guides to help you master design and animation — hand-picked by club members.
           </p>
         </motion.div>
@@ -99,13 +99,14 @@ export function ResourcesPage() {
         >
           <div className="flex flex-col md:flex-row gap-4 mb-6">
             <div className="relative flex-1">
-              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-ink-muted)' }} />
               <input
                 type="text"
                 placeholder="Search resources, authors, tags…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-blue-400/50 transition-colors"
+                className="w-full rounded-2xl pl-12 pr-4 py-3 focus:outline-none focus:border-blue-400/50 transition-colors"
+                style={{ background: 'var(--color-surface-1)', border: '1px solid var(--color-hairline)', color: 'var(--color-ink)' }}
               />
             </div>
             <div className="flex gap-2">
@@ -116,8 +117,9 @@ export function ResourcesPage() {
                   className={`px-4 py-2 rounded-xl text-sm font-semibold capitalize transition-all ${
                     selectedType === t
                       ? 'bg-blue-500/20 text-blue-400 border border-blue-400/30'
-                      : 'glass text-white/60 hover:text-white'
+                      : 'glass glass-hover'
                   }`}
+                  style={selectedType === t ? undefined : { color: 'var(--color-ink-muted)' }}
                 >
                   {t}
                 </button>
@@ -130,11 +132,10 @@ export function ResourcesPage() {
               <button
                 key={domain}
                 onClick={() => setSelectedDomain(domain)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  selectedDomain === domain
-                    ? 'bg-white text-black'
-                    : 'glass text-white/60 hover:text-white'
-                }`}
+                className="px-4 py-1.5 rounded-full text-sm font-medium transition-all glass glass-hover"
+                style={selectedDomain === domain
+                  ? { background: 'var(--color-inverse-canvas)', color: 'var(--color-canvas)' }
+                  : { color: 'var(--color-ink-muted)' }}
               >
                 {domain}
               </button>
@@ -145,10 +146,10 @@ export function ResourcesPage() {
         {/* Results count */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-bold sr-only">Browse Resources</h2>
-          <p className="text-white/50 text-sm">
-            <span className="text-white font-semibold">{filtered.length}</span> resources found
+          <p className="text-sm" style={{ color: 'var(--color-ink-muted)' }}>
+            <span className="font-semibold" style={{ color: 'var(--color-ink)' }}>{filtered.length}</span> resources found
           </p>
-          <div className="flex items-center gap-2 text-white/40 text-sm">
+          <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-ink-muted)' }}>
             <Filter size={14} />
             Filtered results
           </div>
@@ -186,14 +187,14 @@ export function ResourcesPage() {
                       </div>
                       <div className="flex items-center gap-1">
                         <Star size={12} className="text-yellow-400 fill-yellow-400" />
-                        <span className="text-sm font-semibold text-white/80">{resource.rating}</span>
+                        <span className="text-sm font-semibold" style={{ color: 'var(--color-ink-muted)' }}>{resource.rating}</span>
                       </div>
                     </div>
 
                     <h3 className="text-lg font-bold mb-1 group-hover:gradient-text transition-all leading-tight">
                       {resource.title}
                     </h3>
-                    <p className="text-white/50 text-sm mb-4">by {resource.author}</p>
+                    <p className="text-sm mb-4" style={{ color: 'var(--color-ink-muted)' }}>by {resource.author}</p>
 
                     <div className="flex flex-wrap gap-1.5 mb-5">
                       {resource.tags.map((tag) => (
@@ -208,7 +209,7 @@ export function ResourcesPage() {
                     </div>
 
                     <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-3 text-white/50">
+                      <div className="flex items-center gap-3" style={{ color: 'var(--color-ink-muted)' }}>
                         <div className="flex items-center gap-1">
                           <Clock size={12} />
                           {resource.duration}
@@ -224,7 +225,7 @@ export function ResourcesPage() {
                           {resource.level}
                         </span>
                       </div>
-                      <ExternalLink size={14} className="text-white/30 group-hover:text-white/70 transition-colors" />
+                      <ExternalLink size={14} className="transition-colors" style={{ color: 'var(--color-ink-muted)' }} />
                     </div>
                   </div>
                 </motion.div>
@@ -239,7 +240,7 @@ export function ResourcesPage() {
             animate={{ opacity: 1 }}
             className="text-center py-24"
           >
-            <p className="text-white/40 text-lg">No resources match your search.</p>
+            <p className="text-lg" style={{ color: 'var(--color-ink-muted)' }}>No resources match your search.</p>
             <button
               onClick={() => { setSearchQuery(''); setSelectedDomain('All'); setSelectedType('All'); }}
               className="mt-4 text-blue-400 hover:text-blue-300 text-sm font-semibold"
@@ -257,7 +258,7 @@ export function ResourcesPage() {
           className="mt-16 glass-strong rounded-3xl p-10 text-center"
         >
           <h2 className="text-2xl font-bold mb-3">Have a resource to share?</h2>
-          <p className="text-white/60 mb-6 max-w-md mx-auto">
+          <p className="mb-6 max-w-md mx-auto" style={{ color: 'var(--color-ink-muted)' }}>
             Found something amazing? Submit it to our curated library and help the community grow.
           </p>
           <GlassButton
