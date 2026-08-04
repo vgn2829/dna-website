@@ -179,6 +179,20 @@ studentsRouter.get('/overview', requireAdmin, async (req, res) => {
   }
 });
 
+// GET /api/students/count — public. Just the registered-student total, for the
+// homepage "Active Members" stat. A raw count isn't sensitive the way the full
+// /overview payload is (roll numbers, batches, activity), so this skips
+// requireAdmin — but it's still rate-limited since it's unauthenticated.
+studentsRouter.get('/count', existsLimiter, async (_req, res) => {
+  try {
+    const rows = await query<{ count: number }>('SELECT COUNT(*)::int AS count FROM student_sessions', []);
+    res.json({ total: rows[0]?.count ?? 0 });
+  } catch (err) {
+    console.error('Students count error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/students — admin only. Lightweight roster (no email) for the
 // Overview tab's batch filter list. Full contact details stay behind
 // existing student-facing endpoints — this is deliberately minimal.

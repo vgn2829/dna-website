@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, useSpring, useTransform } from 'motion/react';
 import { Users, Award, Palette, Calendar } from 'lucide-react';
+import { api } from '../lib/api';
 
 function Counter({ target }: { target: number }) {
   const [vis, setVis] = useState(false);
@@ -16,14 +17,40 @@ function Counter({ target }: { target: number }) {
   return <span ref={ref}><motion.span>{display}</motion.span></span>;
 }
 
-const STATS = [
-  { Icon: Users,    label: 'Active Members',     value: 250 },
+// Active Members rounds down to the nearest round increment so it reads
+// consistently with its still-hardcoded "50+"/"500+"/"30+" siblings instead of
+// showing an exact, oddly-specific figure (e.g. "247+") next to them.
+function roundDownForDisplay(n: number): number {
+  if (n >= 500) return Math.floor(n / 100) * 100;
+  if (n >= 100) return Math.floor(n / 50) * 50;
+  if (n >= 10)  return Math.floor(n / 10) * 10;
+  return n;
+}
+
+const FALLBACK_MEMBERS = 250;
+
+const STATIC_STATS = [
   { Icon: Award,    label: 'Workshops Conducted', value: 50  },
   { Icon: Palette,  label: 'Artworks Created',    value: 500 },
   { Icon: Calendar, label: 'Events This Year',    value: 30  },
 ];
 
 export function Stats() {
+  const [memberCount, setMemberCount] = useState(FALLBACK_MEMBERS);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.students.getCount()
+      .then(({ total }) => { if (!cancelled && total > 0) setMemberCount(roundDownForDisplay(total)); })
+      .catch(err => console.error('Failed to load member count:', err));
+    return () => { cancelled = true; };
+  }, []);
+
+  const STATS = [
+    { Icon: Users, label: 'Active Members', value: memberCount },
+    ...STATIC_STATS,
+  ];
+
   return (
     <section style={{ background: 'var(--color-canvas)', padding: '0 0 96px' }}>
       <div className="page-container">

@@ -360,6 +360,9 @@ export const api = {
     // Admin-only — powers the Overview tab's stat cards and batch chart.
     getOverview: () =>
       request<StudentOverview>('GET', '/students/overview', { admin: true }),
+    // Public — just the registered-student total, for the homepage stat card.
+    getCount: () =>
+      request<{ total: number }>('GET', '/students/count'),
     // Admin-only — lightweight roster (no email) for the batch filter list.
     getRoster: () =>
       request<StudentRosterEntry[]>('GET', '/students', { admin: true }),
