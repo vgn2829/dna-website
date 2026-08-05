@@ -8,6 +8,7 @@ import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import { getStorage } from '../storage';
 import { param } from '../routeParams';
+import { ensurePersonalWorkspace } from './workspaces';
 
 const router = Router();
 
@@ -511,6 +512,14 @@ router.post('/', createBoardLimiter, requireStudent, async (req: Request, res: R
       name: z.string().min(1).max(100),
       description: z.string().max(300).optional(),
       visibility: z.enum(['private', 'shared']).default('private'),
+      // Optional (workspace/organization layer, Commit 4/9): if omitted,
+      // falls back to the caller's auto-provisioned personal workspace
+      // below, so every existing caller of this route (including every
+      // pre-workspace-layer test) keeps working unchanged. If provided,
+      // the caller must already be a member of that workspace (any
+      // role) — otherwise a board could be silently created inside a
+      // workspace its creator has no business putting content into.
+      workspace_id: z.string().optional(),
     });
 
     const parsed = schema.parse(req.body);
@@ -521,6 +530,20 @@ router.post('/', createBoardLimiter, requireStudent, async (req: Request, res: R
     );
     const ownerName = (studentResult.rows[0] as { name: string } | undefined)?.name ?? null;
 
+    let workspaceId: string;
+    if (parsed.workspace_id) {
+      const membership = await pool.query(
+        'SELECT 1 FROM workspace_members WHERE workspace_id = $1 AND roll_number = $2',
+        [parsed.workspace_id, roll]
+      );
+      if (membership.rows.length === 0) {
+        return res.status(403).json({ error: 'Not a member of that workspace' });
+      }
+      workspaceId = parsed.workspace_id;
+    } else {
+      workspaceId = await ensurePersonalWorkspace(roll, ownerName);
+    }
+
     const id = uuidv4();
     const roomId = uuidv4();
     const now = new Date().toISOString();
@@ -528,12 +551,12 @@ router.post('/', createBoardLimiter, requireStudent, async (req: Request, res: R
     const result = await pool.query(`
       INSERT INTO boards
         (id, name, description, owner_roll,
-         owner_name, visibility, room_id, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         owner_name, visibility, room_id, created_at, updated_at, workspace_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)
       RETURNING *
     `, [
       id, parsed.name, parsed.description ?? null,
-      roll, ownerName, parsed.visibility, roomId, now,
+      roll, ownerName, parsed.visibility, roomId, now, workspaceId,
     ]);
 
     res.status(201).json({ ...result.rows[0], item_count: 0, member_count: 0, is_favorite: false });
