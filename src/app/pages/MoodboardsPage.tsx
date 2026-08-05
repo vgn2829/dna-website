@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
+import { toast } from 'sonner';
 import { api, type Board, type Workspace } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
+import { WorkspacesPanel } from '../components/WorkspacesPanel';
+import { WorkspaceSettingsModal } from '../components/WorkspaceSettingsModal';
 
 // Cache keys are workspace-qualified (workspace/organization layer):
 // `null` (the "All workspaces" default — see activeWorkspaceId below)
@@ -267,6 +270,8 @@ export default function MoodboardsPage() {
   // to narrow every list below to just that workspace.
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [showWorkspacesPanel, setShowWorkspacesPanel] = useState(false);
+  const [settingsWorkspaceId, setSettingsWorkspaceId] = useState<string | null>(null);
   const [myBoards, setMyBoards] = useState<Board[]>([]);
   const [sharedBoards, setSharedBoards] = useState<Board[]>([]);
   const [archivedBoards, setArchivedBoards] = useState<Board[]>([]);
@@ -660,44 +665,97 @@ export default function MoodboardsPage() {
         </div>
       </motion.div>
 
-      {/* Workspace switcher — only shown once there's more than the
-          personal workspace to switch between, so a user who has never
-          created/joined a real workspace sees no change to this page at
-          all. "All" (activeWorkspaceId = null) is always first and is the
-          default on load, preserving the exact pre-existing unscoped
-          behavior for every list below. */}
-      {studentSession && workspaces.length > 1 && (
+      {/* Workspace switcher — the pill row is only shown once there's more
+          than the personal workspace to switch between, so a user who has
+          never created/joined a real workspace sees no change to this
+          page at all. "All" (activeWorkspaceId = null) is always first
+          and is the default on load, preserving the exact pre-existing
+          unscoped behavior for every list below. The "Manage" affordance
+          is shown whenever signed in (even with just the personal
+          workspace) since it's also the discovery path for CREATING a
+          first real workspace. */}
+      {studentSession && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+          {workspaces.length > 1 && (
+            <>
+              <button
+                onClick={() => handleWorkspaceSwitch(null)}
+                style={{
+                  padding: '6px 14px', borderRadius: 'var(--radius-pill)',
+                  border: `1px solid ${activeWorkspaceId === null ? 'var(--color-brand)' : 'var(--color-border)'}`,
+                  background: activeWorkspaceId === null ? 'var(--color-brand)' : 'none',
+                  color: activeWorkspaceId === null ? '#fff' : 'var(--color-ink-muted)',
+                  fontSize: 13, fontWeight: activeWorkspaceId === null ? 600 : 400,
+                  fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >
+                All Workspaces
+              </button>
+              {workspaces.map(ws => (
+                <button
+                  key={ws.id}
+                  onClick={() => handleWorkspaceSwitch(ws.id)}
+                  style={{
+                    padding: '6px 14px', borderRadius: 'var(--radius-pill)',
+                    border: `1px solid ${activeWorkspaceId === ws.id ? 'var(--color-brand)' : 'var(--color-border)'}`,
+                    background: activeWorkspaceId === ws.id ? 'var(--color-brand)' : 'none',
+                    color: activeWorkspaceId === ws.id ? '#fff' : 'var(--color-ink-muted)',
+                    fontSize: 13, fontWeight: activeWorkspaceId === ws.id ? 600 : 400,
+                    fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {ws.is_personal ? 'Personal' : ws.name}
+                </button>
+              ))}
+            </>
+          )}
           <button
-            onClick={() => handleWorkspaceSwitch(null)}
+            onClick={() => setShowWorkspacesPanel(true)}
             style={{
               padding: '6px 14px', borderRadius: 'var(--radius-pill)',
-              border: `1px solid ${activeWorkspaceId === null ? 'var(--color-brand)' : 'var(--color-border)'}`,
-              background: activeWorkspaceId === null ? 'var(--color-brand)' : 'none',
-              color: activeWorkspaceId === null ? '#fff' : 'var(--color-ink-muted)',
-              fontSize: 13, fontWeight: activeWorkspaceId === null ? 600 : 400,
+              border: '1px solid var(--color-border)', background: 'none',
+              color: 'var(--color-ink-muted)', fontSize: 13,
               fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+              display: 'flex', alignItems: 'center', gap: 6,
             }}
           >
-            All Workspaces
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            Manage Workspaces
           </button>
-          {workspaces.map(ws => (
-            <button
-              key={ws.id}
-              onClick={() => handleWorkspaceSwitch(ws.id)}
-              style={{
-                padding: '6px 14px', borderRadius: 'var(--radius-pill)',
-                border: `1px solid ${activeWorkspaceId === ws.id ? 'var(--color-brand)' : 'var(--color-border)'}`,
-                background: activeWorkspaceId === ws.id ? 'var(--color-brand)' : 'none',
-                color: activeWorkspaceId === ws.id ? '#fff' : 'var(--color-ink-muted)',
-                fontSize: 13, fontWeight: activeWorkspaceId === ws.id ? 600 : 400,
-                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}
-            >
-              {ws.is_personal ? 'Personal' : ws.name}
-            </button>
-          ))}
         </div>
+      )}
+
+      <WorkspacesPanel
+        open={showWorkspacesPanel}
+        onClose={() => setShowWorkspacesPanel(false)}
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
+        roll={studentSession?.rollNumber ?? ''}
+        onSwitch={workspaceId => { handleWorkspaceSwitch(workspaceId); setShowWorkspacesPanel(false); }}
+        onOpenSettings={workspaceId => setSettingsWorkspaceId(workspaceId)}
+        onWorkspaceCreated={workspace => setWorkspaces(prev => [...prev, workspace])}
+      />
+
+      {settingsWorkspaceId && studentSession && (
+        <WorkspaceSettingsModal
+          workspaceId={settingsWorkspaceId}
+          roll={studentSession.rollNumber}
+          onClose={() => setSettingsWorkspaceId(null)}
+          onRenamed={(workspaceId, name) => setWorkspaces(prev => prev.map(w => w.id === workspaceId ? { ...w, name } : w))}
+          onDeleted={workspaceId => {
+            setWorkspaces(prev => prev.filter(w => w.id !== workspaceId));
+            if (activeWorkspaceId === workspaceId) handleWorkspaceSwitch(null);
+            setSettingsWorkspaceId(null);
+          }}
+          onLeft={workspaceId => {
+            setWorkspaces(prev => prev.filter(w => w.id !== workspaceId));
+            if (activeWorkspaceId === workspaceId) handleWorkspaceSwitch(null);
+            setSettingsWorkspaceId(null);
+          }}
+        />
       )}
 
       {/* Tabs + search + sort */}
