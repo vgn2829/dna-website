@@ -611,6 +611,8 @@ export default function MoodboardsPage() {
 
   const activeBoards = tab === 'mine' ? myBoards : tab === 'shared' ? sharedBoards : archivedBoards;
   const activeLoading = tab === 'mine' ? myLoading : tab === 'shared' ? sharedLoading : archivedLoading;
+  const activeWorkspace = activeWorkspaceId ? workspaces.find(w => w.id === activeWorkspaceId) ?? null : null;
+  const activeWorkspaceLabel = activeWorkspace ? (activeWorkspace.is_personal ? 'Personal' : activeWorkspace.name) : null;
 
   const filteredSortedBoards = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -904,9 +906,11 @@ export default function MoodboardsPage() {
               <p style={{ color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', fontSize: 15, marginBottom: 20 }}>
                 {search.trim()
                   ? `No boards match "${search.trim()}".`
-                  : tab === 'mine' ? 'No boards yet. Create one to start collecting inspiration.'
-                  : tab === 'shared' ? 'No shared boards yet.'
-                  : 'No archived boards.'}
+                  : tab === 'mine'
+                  ? activeWorkspaceLabel ? `No boards in ${activeWorkspaceLabel} yet. Create one to start collecting inspiration.` : 'No boards yet. Create one to start collecting inspiration.'
+                  : tab === 'shared'
+                  ? activeWorkspaceLabel ? `No shared boards in ${activeWorkspaceLabel} yet.` : 'No shared boards yet.'
+                  : activeWorkspaceLabel ? `No archived boards in ${activeWorkspaceLabel}.` : 'No archived boards.'}
               </p>
               {tab === 'mine' && !search.trim() && (
                 <button

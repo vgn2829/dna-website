@@ -210,9 +210,23 @@ export function WorkspaceSettingsModal({
           }}
         >
           {loading ? (
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', textAlign: 'center', padding: '20px 0' }}>
-              Loading...
-            </p>
+            // Matches MoodboardsPage.tsx's SkeletonCard convention
+            // (.skeleton-pulse over var(--color-surface-2) blocks shaped
+            // to mimic real content) rather than a plain "Loading..."
+            // string, so the settings modal doesn't visually regress
+            // relative to the rest of the app's loading states.
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="skeleton-pulse" style={{ width: '60%', height: 22, borderRadius: 'var(--radius-sm)', background: 'var(--color-surface-2)' }} />
+              {[0, 1, 2].map(i => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0' }}>
+                  <div className="skeleton-pulse" style={{ width: 32, height: 32, borderRadius: 'var(--radius-full)', background: 'var(--color-surface-2)' }} />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div className="skeleton-pulse" style={{ width: '40%', height: 12, borderRadius: 'var(--radius-sm)', background: 'var(--color-surface-2)' }} />
+                    <div className="skeleton-pulse" style={{ width: '65%', height: 10, borderRadius: 'var(--radius-sm)', background: 'var(--color-surface-2)' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : loadError || !workspace ? (
             <>
               <p style={{ margin: 0, fontSize: 13, color: 'var(--color-error)', fontFamily: 'var(--font-body)', textAlign: 'center', padding: '20px 0' }}>
