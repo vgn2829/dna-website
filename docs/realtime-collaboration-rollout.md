@@ -1,11 +1,11 @@
-# Realtime Collaboration — Rollout Notes (Commits 1–4)
+# Realtime Collaboration — Rollout Notes (Commits 1–5)
 
 This covers everything needed to run and verify the realtime foundation
 (WebSocket transport + room lifecycle, commits `77ea49b`/`7393ab9`), the
-frontend `@tldraw/sync` integration (Commit 3, `cdb1dc6`), and the presence
-layer (Commit 4). As of Commit 4, a realtime-enabled board shows live
-cursors, a collaborator list, and follow — genuinely multiplayer, not just
-synced.
+frontend `@tldraw/sync` integration (Commit 3, `cdb1dc6`), the presence
+layer (Commit 4, `a0317b6`), and version history (Commit 5). As of Commit 5,
+every board — realtime-enabled or not — automatically maintains a
+recoverable timeline of past states, browsable and restorable from the UI.
 
 ## What changed
 
@@ -126,6 +126,131 @@ listing who's currently present or a way to follow someone.
   effect (it only updates a separate reactive atom the presence derivation
   reads from) — so this cannot cause a spurious reconnect right after the
   identity resolves.
+
+### Commit 5 additions (version history — dedicated layer on top of persistence)
+
+**Applies to every board**, not just realtime-enabled ones — a checkpoint
+just reads through `RoomManager.getCurrentSnapshot` (if a live room exists)
+or falls back to `BoardCanvasPersistence.load` (if not), so it works
+identically for a board that's never had `realtime_enabled` flipped.
+
+**Why the history layer stays independent of the realtime transport**
+(architectural rationale, also documented at the top of
+`versionHistoryService.ts` itself): `RoomManager` gained exactly one new
+notification — `onSnapshotChanged(roomId)`, no payload, mirroring
+`TLSocketRoom`'s own `onDataChange` contract — plus two accessors it
+already needed for other reasons (`getCurrentSnapshot`, and a new
+`restoreSnapshot`). `VersionHistoryService` and `RestoreService` never
+import anything WebSocket- or `TLSocketRoom`-specific; by the time a
+`RoomSnapshot` reaches either service, it's just data. Concretely, this
+means `RoomManager` could be replaced by an entirely different transport
+(or even a batch import pipeline that never opens a live room) and the
+history layer would keep working unchanged, as long as its two inputs —
+"something changed" and "give me the current snapshot" — are still
+satisfied. The reverse holds too: `rooms.ts` has zero import of, or
+reference to, anything under `realtime/history/`.
+
+- **Schema**: new `board_versions` table (`id, board_id, snapshot,
+  created_by_roll, created_by_name, created_at, trigger, description,
+  restored_from_version_id, metadata`) + an index on `(board_id,
+  created_at DESC)`. Deliberately NOT an extension of `boards.canvas_data`
+  — see the migration's own comment on why mixing "current state" and
+  "history of past states" in one column would be wrong (unbounded growth
+  in a column every live client's autosave also writes to). `metadata` is
+  reserved, unused this commit, so a future feature (e.g. a compare/diff
+  view wanting cheap summary stats) doesn't need another migration.
+- **`backend/src/realtime/rooms.ts`**: `RoomManager` gained
+  `onSnapshotChanged`, `getCurrentSnapshot(roomId)`, and
+  `restoreSnapshot(roomId, snapshot)`. The last one is the one genuinely
+  new *behavior*, not just a new accessor — see its own extensive doc
+  comment for the verified-against-source finding that
+  `TLSocketRoom.loadSnapshot()` closes every connected client's socket and
+  builds a brand-new internal room (there is no other API for this in the
+  installed version). Each client's own `ReconnectManager` (already proven
+  automatic for network drops/server restarts in Commits 3/4's QA) brings
+  them back within seconds, resyncing to the restored content through the
+  same path any fresh connection uses. This is a deliberate, single,
+  coordinated reconnect — not custom protocol code, not a "storm."
+  `restoreSnapshot` also explicitly triggers a persist, since
+  `loadSnapshot` itself never fires `onDataChange` (confirmed by reading
+  `TLSocketRoom.js`) — without that, a restore would silently revert on
+  the next server restart.
+- **New service modules**, `backend/src/realtime/history/`:
+  - `versionStorage.ts` — pure Postgres access (create/list/get/count/prune
+    versions). No decisions live here.
+  - `versionTimeline.ts` — cursor-based pagination (`getPage`) and
+    retention (`enforceRetention`, capped at `MAX_VERSIONS_PER_BOARD = 100`,
+    run opportunistically after every new version rather than on a
+    schedule — this codebase has no in-process cron; see
+    `routes/internal.ts`'s own comment on why).
+  - `versionHistoryService.ts` — the checkpoint DECISION-maker: debounced
+    inactivity checkpoints (60s quiet), immediate major-change checkpoints
+    (document-count delta ≥ 20 since the last checkpoint — a cheap proxy,
+    not a real diff), a 30s rate limit across both automatic triggers, and
+    explicit-trigger methods (`checkpointExplicit`/`checkpointRename`/
+    `checkpointArchive`) called from REST routes. Both `VersionStorage` and
+    `VersionTimeline` are constructor-injectable (defaulting to the real
+    modules) specifically so this service's decision logic is unit-testable
+    without a database — see `tests/version-history.test.ts`.
+  - `restoreService.ts` — orchestrates restore: reads the target version
+    (never modifies or deletes it), hot-swaps a live room or falls back to
+    direct persistence, and always writes a NEW version (`trigger:
+    'restore'`, `restoredFromVersionId` pointing at the source) — never
+    routed through `VersionHistoryService`'s dedup/rate-limit guard, since
+    a restore is always a deliberate action that must never be silently
+    coalesced with a recent unrelated checkpoint.
+- **New REST endpoints**, `backend/src/routes/versions.ts` (a dedicated
+  router, not routes bolted onto `boards.ts` — see that file's own comment
+  on why: `boards.ts` has zero realtime dependency today and is used
+  standalone by existing tests; threading history services through it would
+  force every test call site to carry realtime wiring it doesn't need):
+  - `GET /api/boards/:id/versions` — paginated, metadata-only list.
+  - `POST /api/boards/:id/versions` — explicit "save a version now."
+  - `POST /api/boards/:id/versions/:versionId/restore` — restore.
+  - Mounted only when `server.ts` passes real service instances to
+    `createApp({ versionHistoryService, restoreService })` — every test
+    call site (`createApp()` with no args) gets an app with these routes
+    absent entirely, which is correct: there's no `RoomManager` behind them
+    to test against in that context.
+  - **Permission model**: reuses the same owner/member/`edit_mode` rules as
+    `boards.ts` (a local `canEditBoard` helper, not the WS transport's
+    advisory-only `role`) — restore goes through Express/`requireStudent`,
+    so this is REAL server-side write enforcement, closing exactly the gap
+    `roomAccess.ts`'s own "known limitation" comment flagged as required
+    before version history could ship.
+- **`backend/src/routes/boards.ts`**: `PUT /:id` (rename/archive) now calls
+  an injectable `checkpointHook` (defaults to a no-op) after a successful
+  rename or fresh archive (`is_archived === true` specifically — restoring
+  FROM archive isn't a content event). Injected via `setCheckpointHook`
+  from `server.ts`, not imported directly, for the same test-isolation
+  reason the versions router is separate.
+- **Frontend**: `src/app/lib/api.ts` gained `BoardVersion`/`VersionPage`
+  types and `getVersions`/`createVersion`/`restoreVersion`.
+  `src/app/components/VersionHistoryPanel.tsx` is a deliberately dumb
+  REST-list-plus-confirm-dialog panel — zero WebSocket/tldraw/sync
+  awareness, matching the existing Share/Collaborators modal shape in
+  `BoardPage.tsx`. Lazy-loaded (`lazy(() => import(...))`) and only fetches
+  when actually opened (`showVersionHistory` state), so a board where no
+  one ever opens the panel never triggers the `GET /versions` request or
+  downloads the panel's own JS chunk — verified via the build output
+  (`VersionHistoryPanel` code-splits into its own ~8.6kB chunk, separate
+  from `TldrawCanvas`/`TldrawCanvasSync`/the shared tldraw-core chunk).
+  `BoardPage.tsx` also shows a brief "collaborators will reconnect" hint
+  after a restore that had a live room, using the `hadLiveRoom` flag the
+  restore endpoint returns — purely informational; the actual reconnect
+  status is still `TldrawCanvasSync`'s own connection banner (built in
+  Commit 3), unchanged by this commit.
+
+**A real bug found and fixed during this commit's own self-review** (not
+asked for, but worth knowing about): the checkpoint dedup guard originally
+applied to every trigger, including `explicit`/`rename`/`archive` — meaning
+a rename happening within 30s of an unrelated auto-checkpoint would be
+silently dropped and its distinct "rename" record would never appear in
+the timeline. Fixed to only dedup the two automatic triggers
+(`inactivity`/`major_change`), where two firing close together for the same
+burst of activity is the actual intended coalescing case — every explicit,
+user-caused event now always writes its own row. Covered by dedicated
+tests (`tests/version-history.test.ts`).
 
 ## Two-layer rollout gate
 
@@ -406,15 +531,75 @@ two browsers/tabs signed in as different students where noted).
     (server restart), and 13 (manual-path fallback) — none of that behavior
     should have changed; presence is additive.
 
+## Commit 5 — manual QA (version history)
+
+Same setup as Commit 3/4's checklists (pilot board, `REALTIME_ENABLED=true`
+for the realtime-specific scenarios below; version history itself works on
+any board, realtime-enabled or not, since it reads through persistence when
+no live room exists).
+
+1. **Two browsers** — open the same board as two different students. In one
+   browser, open "History." Confirm the panel loads a list (or the empty
+   state on a brand-new board) without affecting the other browser's
+   session.
+2. **Restore while connected** — with both browsers open and both showing
+   live cursors, restore an older version from one browser. Confirm: the
+   confirmation dialog appears before anything happens; after confirming,
+   both browsers' canvases update to the restored content within a few
+   seconds; the restoring browser shows the "collaborators will reconnect"
+   hint; the OTHER browser's connection banner (Commit 3) briefly shows a
+   reconnect and then clears — this is the expected, deliberate
+   `loadSnapshot`-driven reconnect, not a bug.
+3. **Restore after reconnect** — disconnect one browser's network
+   (devtools offline), restore a version from the OTHER (still-connected)
+   browser, then restore the first browser's network. Confirm it reconnects
+   cleanly and ends up showing the restored content (not stale content, not
+   a duplicate/ghost session).
+4. **Large board** — on a board with substantial content (many shapes),
+   confirm restoring doesn't visibly corrupt shapes/assets and completes in
+   a reasonable time.
+5. **Rapid edits** — make many small edits in quick succession (drag a
+   shape around continuously for 60+ seconds). Confirm this does NOT create
+   a new version per edit — only a single inactivity checkpoint (~60s after
+   edits stop) or a major-change checkpoint if the edit crossed the
+   document-count threshold, whichever fires first.
+6. **Offline → reconnect** — go offline mid-edit, make local changes,
+   restore connectivity. Confirm normal Commit 3 resync behavior is
+   unaffected by version history running in the background.
+7. **Duplicate tabs** — open the same board in two tabs as the same
+   student, restore from one tab. Confirm the other tab also updates (same
+   reconnect path as #2, since both tabs are separate WebSocket sessions to
+   the same room) and neither tab is left showing stale content.
+8. **Server restart** — create a version, restart the backend process,
+   confirm the version is still listed afterward (it's in Postgres, not
+   in-memory) and that the room's current content — including anything
+   restored before the restart — persisted correctly (`restoreSnapshot`
+   explicitly triggers a persist for exactly this reason).
+9. **Long version history** — create/accumulate more than one page of
+   versions (or temporarily lower `MAX_VERSIONS_PER_BOARD`/page size for
+   testing). Confirm "load more" pagination works, and that once the
+   100-version retention cap is exceeded, the oldest versions are pruned
+   (rename/archive/explicit/restore versions are pruned by age like any
+   other — retention is not trigger-aware, only recency-aware).
+10. **Permissions** — confirm a student without edit access on the board
+    (not owner, not a member with edit rights) cannot restore (403 from the
+    endpoint, not just a hidden button) — this is real server-side
+    enforcement, unlike the WS-layer `role` limitation noted below.
+
 ## What's explicitly NOT yet built (don't test for these)
 
-- No comments, sticky notes, version history, notifications, or plugins.
-- No server-side write enforcement for `role: 'viewer'` — documented as a
-  known limitation in `roomAccess.ts`, must be resolved before Comments /
-  Sticky Notes / Version History / public sharing / team workspaces. In
-  Commit 3 terms: a `readOnly` client hides the UI (`hideUi`) but nothing
-  server-side rejects a write if one were sent anyway — same trust model
-  the manual path already had, not a new gap.
+- No comments, sticky notes, notifications, or plugins.
+- No compare/diff view, branching, or merge — version history is strictly
+  linear (each restore appends a new version; nothing is ever overwritten).
+- No server-side write enforcement for `role: 'viewer'` on the live
+  WebSocket transport itself — documented as a known limitation in
+  `roomAccess.ts`, must be resolved before Comments / Sticky Notes / public
+  sharing / team workspaces. In Commit 3 terms: a `readOnly` client hides
+  the UI (`hideUi`) but nothing server-side rejects a write if one were sent
+  anyway — same trust model the manual path already had, not a new gap.
+  (Version history's own REST endpoints are NOT subject to this gap — see
+  Commit 5's permission model above, which enforces real server-side checks
+  independent of the WS `role`.)
 - No UI to flip `board.realtime_enabled` from the app itself — still a
   manual DB flip per "Enabling a pilot board" above.
 - No admin visibility into `RoomManager`'s diagnostic accessors

@@ -1,4 +1,4 @@
-import { TLSocketRoom } from '@tldraw/sync-core';
+import { TLSocketRoom, type RoomSnapshot } from '@tldraw/sync-core';
 import type { TLRecord } from '@tldraw/tlschema';
 import type { WebSocket } from 'ws';
 import type { RoomPersistence } from './roomPersistence';
@@ -27,6 +27,16 @@ interface ManagedRoom<SessionMeta> {
 
 const PERSIST_DEBOUNCE_MS = 2000;
 
+// Fired whenever a room's document actually changed — the ONLY thing
+// version history (or any future consumer) learns from RoomManager about
+// content. No snapshot, no diff, no "how much changed" — just "look, if
+// you care." Deliberately mirrors TLSocketRoom's own onDataChange contract
+// (`() => void`, no payload) rather than inventing a richer event: the
+// consumer (VersionHistoryService) already has to call getCurrentSnapshot
+// itself to decide anything, so a payload here would just be a stale copy
+// nobody should trust over a fresh read anyway.
+export type SnapshotChangedListener = (roomId: string) => void;
+
 export class RoomManager<SessionMeta = void> {
   private rooms = new Map<string, ManagedRoom<SessionMeta>>();
   // Per-room in-flight creation promise — prevents two concurrent
@@ -35,8 +45,36 @@ export class RoomManager<SessionMeta = void> {
   // browser tabs opening the same board at nearly the same instant).
   private creating = new Map<string, Promise<ManagedRoom<SessionMeta>>>();
   private persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private snapshotChangedListeners = new Set<SnapshotChangedListener>();
 
   constructor(private persistence: RoomPersistence) {}
+
+  // Registered by the composition root (server.ts), not by RoomManager's
+  // own constructor options — keeps this class usable with zero listeners
+  // (every existing call site, and any future one that doesn't care about
+  // history) while letting exactly one more (VersionHistoryService) attach
+  // without RoomManager importing or knowing anything about versions,
+  // checkpoints, or Postgres. Returns an unsubscribe function per the
+  // standard listener-registration shape used elsewhere in this codebase.
+  onSnapshotChanged(listener: SnapshotChangedListener): () => void {
+    this.snapshotChangedListeners.add(listener);
+    return () => this.snapshotChangedListeners.delete(listener);
+  }
+
+  private notifySnapshotChanged(roomId: string): void {
+    for (const listener of this.snapshotChangedListeners) {
+      try {
+        listener(roomId);
+      } catch (err) {
+        // A listener throwing (e.g. VersionHistoryService's checkpoint
+        // decision hitting an unexpected error) must never break the
+        // room's own persistence or any other registered listener —
+        // this notification is a side channel, not part of the critical
+        // save path.
+        console.error(`Realtime: snapshotChanged listener threw for room ${roomId}:`, err);
+      }
+    }
+  }
 
   private async getOrCreateRoom(roomId: string): Promise<ManagedRoom<SessionMeta>> {
     const existing = this.rooms.get(roomId);
@@ -63,6 +101,7 @@ export class RoomManager<SessionMeta = void> {
         },
         onDataChange: () => {
           this.schedulePersist(roomId);
+          this.notifySnapshotChanged(roomId);
         },
       });
       const managed: ManagedRoom<SessionMeta> = { room };
@@ -157,6 +196,56 @@ export class RoomManager<SessionMeta = void> {
 
   getActiveSessionCount(roomId: string): number {
     return this.rooms.get(roomId)?.room.getNumActiveSessions() ?? 0;
+  }
+
+  // Read-only peek at a room's CURRENT live content, for a caller (checkpoint
+  // decision logic) that needs to inspect it — never mutates anything. Returns
+  // null if the room isn't currently loaded in memory (no one has connected
+  // to it since the last server restart/teardown); callers that need the
+  // latest persisted state regardless of whether a room is live should read
+  // through RoomPersistence.load(roomId) instead, which is exactly what
+  // VersionHistoryService does for its non-realtime checkpoint triggers
+  // (rename, archive) — see history/versionHistoryService.ts.
+  getCurrentSnapshot(roomId: string): RoomSnapshot | null {
+    return this.rooms.get(roomId)?.room.getCurrentSnapshot() ?? null;
+  }
+
+  // Hot-swaps a LIVE room's content — this is the one operation RestoreService
+  // needs from RoomManager that isn't already exposed, and it belongs here
+  // (not in RestoreService directly) because only RoomManager holds the
+  // TLSocketRoom instances. Returns false (does nothing) if the room isn't
+  // currently loaded — RestoreService's caller (the restore REST endpoint)
+  // handles that case by writing directly through RoomPersistence instead;
+  // there's no live room to disconnect in the first place, so "no reconnect
+  // storm" is trivially true when nobody's connected.
+  //
+  // IMPORTANT, verified against @tldraw/sync-core's own source (not assumed):
+  // TLSocketRoom.loadSnapshot() closes every currently-connected session's
+  // socket and constructs a brand-new internal TLSyncRoom — it does not
+  // hot-swap content while keeping sessions attached, because there is no
+  // other API for this in the installed version. Each connected client's own
+  // ReconnectManager (already verified automatic for network drops/server
+  // restarts in Commit 3/4's manual QA) detects the close and reconnects
+  // within seconds, re-syncing to the restored content through the exact
+  // same path getOrCreateRoom uses for any other fresh connection. This is
+  // one clean, coordinated reconnect cycle caused deliberately by a real
+  // content change — not a "storm," and not something this method or
+  // RestoreService adds custom protocol code to avoid; it reuses the
+  // reconnect machinery already proven safe elsewhere in this codebase.
+  //
+  // loadSnapshot does NOT trigger onDataChange (confirmed by reading
+  // TLSocketRoom.js — that callback only fires from the constructor's
+  // initial-clock check and from handleSocketMessage, never from
+  // loadSnapshot), so persistence must be triggered explicitly here rather
+  // than relying on the normal onDataChange → schedulePersist path, or a
+  // restored board would silently revert to its pre-restore state on the
+  // next server restart.
+  restoreSnapshot(roomId: string, snapshot: RoomSnapshot): boolean {
+    const managed = this.rooms.get(roomId);
+    if (!managed) return false;
+    managed.room.loadSnapshot(snapshot);
+    void this.persistNow(roomId);
+    return true;
   }
 
   // Server-restart handling: deliberately a no-op to define, not a gap.

@@ -133,6 +133,29 @@ export interface BoardDetail extends Board {
   members: BoardMember[];
 }
 
+// Mirrors backend/src/realtime/history/versionStorage.ts's BoardVersion —
+// deliberately metadata only, no snapshot content (see that file's own
+// comment on why: the timeline list must stay cheap regardless of history
+// length or board size — never download all snapshots on board open).
+export type VersionTrigger =
+  | 'explicit' | 'inactivity' | 'major_change' | 'restore' | 'rename' | 'archive';
+
+export interface BoardVersion {
+  id: string;
+  boardId: string;
+  createdByRoll: string | null;
+  createdByName: string | null;
+  createdAt: string;
+  trigger: VersionTrigger;
+  description: string | null;
+  restoredFromVersionId: string | null;
+}
+
+export interface VersionPage {
+  versions: BoardVersion[];
+  hasMore: boolean;
+}
+
 export interface AppSettings {
   public_meet_enabled: string;
   public_meet_passcode?: string;
@@ -511,6 +534,24 @@ export const api = {
       if (token) url.searchParams.set('token', token);
       return url.toString();
     },
+    // Version history (Commit 5) — lazily called only when the Version
+    // History panel is actually opened (see VersionHistoryPanel.tsx), never
+    // on board load, per the "never download all snapshots on board open"
+    // requirement — this endpoint doesn't return snapshot content at all,
+    // only metadata, so it's cheap even so.
+    getVersions: (boardId: string, roll: string, opts?: { limit?: number; before?: string }) => {
+      const params = new URLSearchParams();
+      if (opts?.limit) params.set('limit', String(opts.limit));
+      if (opts?.before) params.set('before', opts.before);
+      const qs = params.toString();
+      return request<VersionPage>('GET', `/boards/${boardId}/versions${qs ? `?${qs}` : ''}`, { roll });
+    },
+    createVersion: (boardId: string, roll: string, description?: string) =>
+      request<BoardVersion>('POST', `/boards/${boardId}/versions`, { body: { description }, roll }),
+    restoreVersion: (boardId: string, roll: string, versionId: string) =>
+      request<{ success: boolean; version: BoardVersion; hadLiveRoom: boolean }>(
+        'POST', `/boards/${boardId}/versions/${versionId}/restore`, { roll }
+      ),
   },
   liveSessions: {
     getActive: (roll?: string) =>

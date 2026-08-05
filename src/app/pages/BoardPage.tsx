@@ -17,6 +17,15 @@ const TldrawCanvas = lazy(() =>
 const TldrawCanvasSync = lazy(() =>
   import('./TldrawCanvasSync').then(m => ({ default: m.TldrawCanvasSync }))
 );
+// Version history (Commit 5) — lazy-loaded so its bundle weight (and the
+// GET /versions request it triggers on mount) is paid only when a user
+// actually opens the panel, per the "lazy-load version history, never
+// download all snapshots on board open" requirement. Applies to every
+// board (realtime-enabled or not) — see VersionHistoryPanel.tsx's own
+// header comment on why this is orthogonal to which canvas component renders.
+const VersionHistoryPanel = lazy(() =>
+  import('../components/VersionHistoryPanel').then(m => ({ default: m.VersionHistoryPanel }))
+);
 
 function getSiteTheme(): 'dark' | 'light' {
   try {
@@ -87,6 +96,14 @@ export default function BoardPage() {
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  // Shown briefly after a restore on a board with connected collaborators —
+  // see restoreVersion's hadLiveRoom in api.ts and rooms.ts's own comment on
+  // why a restore causes one clean, deliberate reconnect cycle for everyone
+  // currently connected (not a "storm" — this hint exists so that expected
+  // reconnect doesn't read as an error to whoever's watching it happen).
+  const [showReconnectHint, setShowReconnectHint] = useState(false);
 
   const isOwner = board?.owner_roll === studentSession?.rollNumber;
   const isMember = board
@@ -430,6 +447,19 @@ export default function BoardPage() {
                 ))}
               </div>
             )}
+
+            <button
+              onClick={() => setShowVersionHistory(true)}
+              title="Version History"
+              style={{
+                padding: '5px 12px', background: 'none',
+                border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
+                color: textMuted, fontSize: 12,
+                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              History
+            </button>
 
             <button
               onClick={() => setShowShare(true)}
@@ -982,6 +1012,54 @@ export default function BoardPage() {
                 </button>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Version History panel — lazy-loaded, and its own data fetch only
+          starts once mounted (i.e. once opened), per VersionHistoryPanel.tsx's
+          own comment on the performance requirement this satisfies. */}
+      <AnimatePresence>
+        {showVersionHistory && studentSession?.rollNumber && (
+          <Suspense fallback={null}>
+            <VersionHistoryPanel
+              boardId={board.id}
+              actorRoll={studentSession.rollNumber}
+              isOwnerOrMember={isMember}
+              onClose={() => setShowVersionHistory(false)}
+              onRestored={(hadLiveRoom) => {
+                if (hadLiveRoom) {
+                  setShowReconnectHint(true);
+                  setTimeout(() => setShowReconnectHint(false), 5000);
+                }
+              }}
+            />
+          </Suspense>
+        )}
+      </AnimatePresence>
+
+      {/* Reconnect hint — see showReconnectHint's own declaration comment
+          for why this exists: a restore on a board with connected
+          collaborators causes one clean, deliberate reconnect cycle for
+          everyone (verified against @tldraw/sync-core's actual behavior in
+          rooms.ts), which without this would look identical to an
+          unexplained disconnect. Purely informational — TldrawCanvasSync's
+          own connection banner (already built in Commit 3) is what actually
+          reports the live reconnect status; this is just context for why
+          it's about to happen. */}
+      <AnimatePresence>
+        {showReconnectHint && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            style={{
+              position: 'fixed', top: 60, left: '50%', transform: 'translateX(-50%)',
+              zIndex: 9998, padding: '8px 16px', borderRadius: 'var(--radius-pill)',
+              background: 'var(--color-surface-1)', border: '1px solid var(--color-hairline)',
+              color: 'var(--color-ink-muted)', fontSize: 12, fontFamily: 'var(--font-body)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+            }}
+          >
+            Board restored — collaborators will briefly reconnect.
           </motion.div>
         )}
       </AnimatePresence>

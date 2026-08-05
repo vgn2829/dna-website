@@ -905,4 +905,45 @@ export async function initSchema(): Promise<void> {
     VALUES ('event_reminder', 'Event Reminder', 'Reminder: {{title}} starts soon — DnA Club IITK', $1, $2)
     ON CONFLICT (id) DO NOTHING
   `, [reminderBody, new Date().toISOString()]);
+
+  // Version history (Commit 5) — deliberately a separate table, not an
+  // extension of boards.canvas_data. canvas_data holds exactly one thing
+  // (the room's current live/persisted state); board_versions holds a
+  // timeline of past states, unbounded in count, each a full standalone
+  // snapshot. Mixing the two would mean every version read/write touches
+  // the same row every live client's autosave also writes to, and would
+  // cap "how much history" at "however big one TEXT column comfortably
+  // gets" — see realtime/history/ for the service layer that owns writing
+  // to this table; RoomManager and roomPersistence.ts never reference it.
+  //
+  // metadata is a JSON TEXT column reserved for future extensibility (e.g.
+  // shape/document counts computed at checkpoint time, so a future compare/
+  // diff view wouldn't need to re-parse every snapshot to show a summary) —
+  // unused by this commit, present so a later feature doesn't need another
+  // migration for it.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS board_versions (
+      id                      TEXT PRIMARY KEY,
+      board_id                TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+      snapshot                TEXT NOT NULL,
+      created_by_roll         TEXT,
+      created_by_name         TEXT,
+      created_at              TEXT NOT NULL,
+      trigger                 TEXT NOT NULL,
+      description             TEXT,
+      restored_from_version_id TEXT REFERENCES board_versions(id) ON DELETE SET NULL,
+      metadata                TEXT
+    )
+  `);
+
+  // Every timeline/pagination read in VersionTimeline filters by board_id
+  // and orders by created_at — without this index that's a sequential scan
+  // per board on every "open version history" click, which gets worse as
+  // history accumulates for exactly the boards most likely to be inspected.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS board_versions_board_id_created_at_idx
+    ON board_versions (board_id, created_at DESC)
+  `);
+
+  console.log('board_versions migration done');
 }

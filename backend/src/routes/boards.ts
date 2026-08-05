@@ -11,6 +11,24 @@ import { param } from '../routeParams';
 
 const router = Router();
 
+// ─────────────────────────────────────────────────────────────────────────
+// Version-history checkpoint hook (Commit 5) — deliberately an optional,
+// injectable function rather than boards.ts importing VersionHistoryService
+// directly. boards.ts is pure Postgres + Supabase Storage with no realtime
+// dependency today, used standalone by every existing test
+// (tests/otp-auth.test.ts, tests/rsvp-capacity.test.ts both call
+// createApp() with zero realtime wiring) — making it import the history
+// module directly would mean it always needs a live RoomManager behind it,
+// even in contexts that have never needed one. Defaults to a no-op; only
+// server.ts's real boot path calls setCheckpointHook, after constructing a
+// real VersionHistoryService (see server.ts's own comment on why that
+// construction has to happen before app.ts mounts any routers).
+type CheckpointHook = (boardId: string, trigger: 'rename' | 'archive', actorRoll: string, actorName: string | null) => void;
+let checkpointHook: CheckpointHook = () => {};
+export function setCheckpointHook(hook: CheckpointHook): void {
+  checkpointHook = hook;
+}
+
 const createBoardLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 15,
@@ -574,6 +592,24 @@ router.put('/:id', requireStudent, async (req: Request, res: Response) => {
       WHERE b.id = $2
       GROUP BY b.id, bf.roll_number
     `, [roll, req.params.id]);
+
+    const updated = result.rows[0] as { owner_name: string | null };
+
+    // Fire-and-forget: a checkpoint failing must never fail the rename/
+    // archive request itself (the actual metadata update above already
+    // succeeded) — checkpointHook is synchronous-looking but its real
+    // implementation (server.ts) is async internally and handles its own
+    // errors; this call site doesn't await it on purpose, matching the
+    // "restore/checkpoint problems are recoverable, never fatal to the
+    // request" philosophy already used throughout realtime/rooms.ts.
+    // Only fires for an actual rename (name provided) or a fresh archive
+    // (is_archived === true specifically — restoring FROM archive doesn't
+    // change board content, so it isn't a checkpoint-worthy moment).
+    if (parsed.name !== undefined) {
+      checkpointHook(param(req.params.id), 'rename', roll, updated.owner_name);
+    } else if (parsed.is_archived === true) {
+      checkpointHook(param(req.params.id), 'archive', roll, updated.owner_name);
+    }
 
     res.json(result.rows[0]);
   } catch (err) {
