@@ -649,6 +649,20 @@ export async function initSchema(): Promise<void> {
 
   console.log('boards.is_archived / updated_at / thumbnail_url migration done');
 
+  // Per-board opt-in for the realtime collaboration rollout (see realtime/).
+  // Defaults false for both existing and newly created boards — a board only
+  // gets the @tldraw/sync path if explicitly flipped, independent of the
+  // REALTIME_ENABLED global kill switch (both must be true for a given
+  // board to use realtime). Rollback never needs a migration: unset the env
+  // var, or flip this back to false, and the board falls back to the
+  // existing manual save/load path unchanged.
+  await pool.query(`
+    ALTER TABLE boards
+    ADD COLUMN IF NOT EXISTS realtime_enabled BOOLEAN NOT NULL DEFAULT false
+  `);
+
+  console.log('boards.realtime_enabled migration done');
+
   // Per-user, not per-board: two students can independently star the same
   // shared board, so this can't be a column on boards.
   await pool.query(`

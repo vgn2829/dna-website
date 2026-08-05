@@ -24,10 +24,12 @@ if (process.env.NODE_ENV === 'production' && !process.env.RESEND_API_KEY) {
   process.exit(1);
 }
 
+import http from 'http';
 import { pool, query } from './db/client';
 import { initSchema } from './db/schema';
 import bcrypt from 'bcryptjs';
 import { createApp } from './app';
+import { attachRealtimeServer } from './realtime/server';
 
 async function main() {
   await initSchema();
@@ -42,7 +44,22 @@ async function main() {
 
   const PORT = Number(process.env.PORT ?? 4000);
   const app = createApp();
-  app.listen(PORT, () => {
+  // http.createServer(app) instead of app.listen() directly so the realtime
+  // WS upgrade handler can attach to the same server/port — Express keeps
+  // handling every normal HTTP request exactly as before; this only adds an
+  // 'upgrade' listener alongside it. See realtime/server.ts.
+  const httpServer = http.createServer(app);
+
+  // Commit 1 of the realtime rollout: transport only, no room logic yet.
+  // A connection under REALTIME_PATH_PREFIX is accepted and immediately
+  // closed with a policy-violation code — proves the handshake path works
+  // end-to-end (env flag, upgrade routing, auth-less baseline) before
+  // realtime/rooms.ts adds TLSocketRoom wiring on top in the next commit.
+  attachRealtimeServer(httpServer, (_req, ws) => {
+    ws.close(1008, 'realtime rooms not yet implemented');
+  });
+
+  httpServer.listen(PORT, () => {
     const storage = (hasSupabaseUrl && hasSupabaseKey) ? 'Supabase Storage' : 'local disk';
     console.log(`DnA Club API running on port ${PORT} [storage: ${storage}]`);
   });
