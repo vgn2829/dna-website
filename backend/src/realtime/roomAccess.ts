@@ -138,33 +138,88 @@ export interface RoomAccessDenied {
 
 interface BoardAccessRow {
   id: string; owner_roll: string; visibility: string; edit_mode: string;
-  realtime_enabled: boolean; is_archived: boolean;
+  realtime_enabled: boolean; is_archived: boolean; workspace_id: string;
+}
+
+// WORKSPACE-CEILING CLASSIFICATION (workspace/organization layer) — the
+// one new input classifyBoardAccess grows below. A workspace role
+// (owner/admin/member in workspace_members — see that table's own doc
+// comment in schema.ts for why those three tiers exist and why they're
+// orthogonal to RoomRole) is not itself a RoomRole; it answers "what's
+// the best board-access tier that membership ALONE would justify," which
+// classifyBoardAccess then only consults as a fallback, never a
+// override — see that function's own comment for the exact precedence.
+// All three workspace-management tiers ceiling identically at 'editor':
+// the owner/admin/member split governs who can rename/delete the
+// workspace or manage its membership, a concern classifyBoardAccess
+// never touches.
+const WORKSPACE_ROLE_CEILING: Record<'owner' | 'admin' | 'member', RoomRole> = {
+  owner: 'editor',
+  admin: 'editor',
+  member: 'editor',
+};
+
+async function getWorkspaceRoleCeiling(workspaceId: string, roll: string): Promise<RoomRole> {
+  const result = await pool.query(
+    'SELECT role FROM workspace_members WHERE workspace_id = $1 AND roll_number = $2',
+    [workspaceId, roll]
+  );
+  if (result.rows.length === 0) return 'commenter';
+  const { role } = result.rows[0] as { role: string };
+  return WORKSPACE_ROLE_CEILING[role as 'owner' | 'admin' | 'member'] ?? 'commenter';
 }
 
 // The actual role classification, factored out to accept an
 // ALREADY-FETCHED board row — this is the one place ownership/membership/
-// visibility/edit_mode/archive facts turn into a RoomRole, reused by
-// every caller below regardless of whether they looked the board up by
-// room_id (the realtime WS path) or by id (routes/comments.ts,
+// visibility/edit_mode/archive/workspace facts turn into a RoomRole,
+// reused by every caller below regardless of whether they looked the
+// board up by room_id (the realtime WS path) or by id (routes/comments.ts,
 // routes/versions.ts — REST endpoints that only ever see board.id from
 // their URL param, never room_id). Splitting the LOOKUP (by room_id vs by
 // id) from the CLASSIFICATION (this function) is what makes "one source
 // of truth" true for both callers without forcing REST endpoints to
 // either duplicate the room_id join or pretend they have a roomId they
 // don't.
-function classifyBoardAccess(board: BoardAccessRow, roll: string, isMember: boolean): RoomRole {
+//
+// WORKSPACE ROLE IS A CEILING, ONLY ON SHARED BOARDS — this is a strict
+// precedence chain, not a MAX. isOwner and an explicit board_members row
+// are BOARD-LEVEL grants and always win outright, exactly as before this
+// feature existed: workspace role never widens what an explicit grant (or
+// its absence) already determined for those two cases. The workspace
+// ceiling is only ever consulted as a FALLBACK, and only for a board
+// whose visibility is 'shared' — a 'private' board opts out of the
+// workspace default entirely. This is the actual "board-level sharing
+// narrows the workspace default" mechanism the product decision asked
+// for: board_members has no "restrict" semantics (only "grant"), so the
+// only way to keep a private board off the workspace's blanket editor
+// access is to keep it visibility='private' and manage its access purely
+// via board_members, same as before workspaces existed. (A private board
+// with no board_members row for this roll never even reaches this
+// function — canRead in checkBoardAccessForRoll/getBoardRole rejects it
+// first, same as today.)
+//
+// ARCHIVE HANDLING PRESERVES PRE-WORKSPACE SEMANTICS EXACTLY: an owner's
+// role identity is 'owner' regardless of is_archived (they didn't stop
+// owning it — see this file's header comment on the real production bug
+// this asymmetry already guards against). Every OTHER path to 'editor'
+// (explicit board_members row, edit_mode='anyone', or the new workspace
+// ceiling) is gated by `!board.is_archived` for the role IDENTITY itself,
+// not just deferred to roleCanWriteCanvas — this exactly mirrors the
+// original canWrite-driven classification (`isOwner ? 'owner' : canWrite
+// ? 'editor' : 'commenter'`, where canWrite already required
+// `!is_archived`), which every existing regression test in
+// room-access.test.ts asserts against (e.g. "downgrades a member to
+// commenter on an archived board"). roleCanWriteCanvas's own isArchived
+// check is a second, independent gate on top of this — belt and braces,
+// not the only place is_archived is consulted.
+async function classifyBoardAccess(board: BoardAccessRow, roll: string, isMember: boolean): Promise<RoomRole> {
   const isOwner = board.owner_roll === roll;
-  // Same edit_mode semantics as boards.ts's canEdit: owner/member can always
-  // write; a shared board with edit_mode='anyone' lets any signed-in student
-  // write even without an explicit membership row. An archived board is
-  // read-only regardless of what edit_mode/membership would otherwise
-  // allow — archiving is a deliberate "stop changing this" action (see
-  // boards.ts's PUT /:id), and every permission check honoring anything
-  // less would silently let a collaborator keep editing a board its owner
-  // just told the rest of the app to freeze.
-  const canWrite = !board.is_archived
-    && (isOwner || isMember || (board.edit_mode === 'anyone' && board.visibility === 'shared'));
-  return isOwner ? 'owner' : canWrite ? 'editor' : 'commenter';
+  if (isOwner) return 'owner';
+  if (board.is_archived) return 'commenter';
+  if (isMember) return 'editor';
+  if (board.edit_mode === 'anyone' && board.visibility === 'shared') return 'editor';
+  if (board.visibility === 'shared') return getWorkspaceRoleCeiling(board.workspace_id, roll);
+  return 'commenter';
 }
 
 async function isBoardMember(boardId: string, roll: string, isOwner: boolean): Promise<boolean> {
@@ -202,7 +257,7 @@ async function checkBoardAccessForRoll(roomId: string, roll: string): Promise<Ro
   // client URL, not assumed. Fixed by querying on the column that's
   // actually being looked up by.
   const result = await pool.query(
-    `SELECT id, owner_roll, visibility, edit_mode, realtime_enabled, is_archived FROM boards WHERE room_id = $1`,
+    `SELECT id, owner_roll, visibility, edit_mode, realtime_enabled, is_archived, workspace_id FROM boards WHERE room_id = $1`,
     [roomId]
   );
   if (result.rows.length === 0) {
@@ -234,7 +289,7 @@ async function checkBoardAccessForRoll(roomId: string, roll: string): Promise<Ro
     return { ok: false, reason: 'permission_denied', code: 1008 };
   }
 
-  return { ok: true, roll, role: classifyBoardAccess(board, roll, isMember), isArchived: board.is_archived };
+  return { ok: true, roll, role: await classifyBoardAccess(board, roll, isMember), isArchived: board.is_archived };
 }
 
 export async function checkRoomAccess(roomId: string, token: string | null): Promise<RoomAccessResult | RoomAccessDenied> {
@@ -290,7 +345,7 @@ export interface BoardRoleResult {
 // roleCanWriteCanvas, never assume/omit it.
 export async function getBoardRole(boardId: string, roll: string): Promise<BoardRoleResult | null> {
   const result = await pool.query(
-    `SELECT id, owner_roll, visibility, edit_mode, realtime_enabled, is_archived FROM boards WHERE id = $1`,
+    `SELECT id, owner_roll, visibility, edit_mode, realtime_enabled, is_archived, workspace_id FROM boards WHERE id = $1`,
     [boardId]
   );
   if (result.rows.length === 0) return null;
@@ -301,7 +356,7 @@ export async function getBoardRole(boardId: string, roll: string): Promise<Board
   const canRead = isMember || board.visibility === 'shared';
   if (!canRead) return null;
 
-  return { role: classifyBoardAccess(board, roll, isMember), isArchived: board.is_archived };
+  return { role: await classifyBoardAccess(board, roll, isMember), isArchived: board.is_archived };
 }
 
 // Used only by the REST pre-check endpoint (routes/realtime.ts) to give

@@ -57,7 +57,7 @@ async function createBoard(opts: {
   editMode?: 'members_only' | 'anyone';
   realtimeEnabled?: boolean;
   isArchived?: boolean;
-}): Promise<void> {
+}): Promise<string> {
   const now = new Date().toISOString();
   const workspaceId = await ensureWorkspace(opts.ownerRoll);
   await query(
@@ -68,12 +68,27 @@ async function createBoard(opts: {
       opts.roomId, opts.realtimeEnabled ?? true, opts.isArchived ?? false, workspaceId,
     ]
   );
+  return workspaceId;
 }
 
 async function addMember(boardId: string, roll: string): Promise<void> {
   await query(
     `INSERT INTO board_members (board_id, roll_number, name, added_at) VALUES ($1, $2, $3, $4)`,
     [boardId, roll, `Student ${roll}`, new Date().toISOString()]
+  );
+}
+
+// Adds roll to workspaceId as a plain 'member' — the tier that ceilings at
+// 'editor' for classifyBoardAccess's workspace fallback branch (see
+// roomAccess.ts's WORKSPACE_ROLE_CEILING). NOT the same as addMember
+// above, which grants BOARD-level access (board_members) — these tests
+// specifically want a roll that has ONLY workspace membership, no
+// board_members row, to isolate the new ceiling branch from the
+// pre-existing explicit-grant branch.
+async function addWorkspaceMember(workspaceId: string, roll: string): Promise<void> {
+  await query(
+    `INSERT INTO workspace_members (workspace_id, roll_number, role, name, added_at) VALUES ($1, $2, 'member', $3, $4)`,
+    [workspaceId, roll, `Student ${roll}`, new Date().toISOString()]
   );
 }
 
@@ -338,6 +353,65 @@ describe('getBoardRole (board.id-keyed, used by REST endpoints)', () => {
     expect(result?.role).toBe('owner');
     expect(result?.isArchived).toBe(true);
     expect(roleCanWriteCanvas(result!.role, result!.isArchived)).toBe(false);
+  });
+});
+
+describe('workspace-ceiling classification (workspace/organization layer)', () => {
+  it('grants a workspace member the editor ceiling on a shared board, with no board_members row at all', async () => {
+    const workspaceId = await createBoard({ id: 'board-W1', roomId: 'room-W1', ownerRoll: 'OWNER30', visibility: 'shared' });
+    await addWorkspaceMember(workspaceId, 'WSMEMBER30');
+
+    const result = await checkRoomAccessForRoll('room-W1', 'WSMEMBER30');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.role).toBe('editor');
+  });
+
+  it('does NOT grant a workspace member any access on a private board with no board_members row — the actual narrowing lever', async () => {
+    const workspaceId = await createBoard({ id: 'board-W2', roomId: 'room-W2', ownerRoll: 'OWNER31', visibility: 'private' });
+    await addWorkspaceMember(workspaceId, 'WSMEMBER31');
+
+    const result = await checkRoomAccessForRoll('room-W2', 'WSMEMBER31');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('permission_denied');
+  });
+
+  it('still gives a total stranger (not a workspace member, not a board member) only commenter on a shared board', async () => {
+    await createBoard({ id: 'board-W3', roomId: 'room-W3', ownerRoll: 'OWNER32', visibility: 'shared' });
+
+    const result = await checkRoomAccessForRoll('room-W3', 'STRANGER32');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.role).toBe('commenter');
+  });
+
+  it('REGRESSION: the archived-board write freeze holds for a workspace-ceiling-only editor, not just board_members-granted editors', async () => {
+    const workspaceId = await createBoard({
+      id: 'board-W4', roomId: 'room-W4', ownerRoll: 'OWNER33', visibility: 'shared', isArchived: true,
+    });
+    await addWorkspaceMember(workspaceId, 'WSMEMBER33');
+
+    const result = await getBoardRole('board-W4', 'WSMEMBER33');
+    expect(result?.role).toBe('commenter');
+    expect(roleCanWriteCanvas(result!.role, result!.isArchived)).toBe(false);
+  });
+
+  it('an explicit board_members grant always wins over workspace role, even for a workspace owner/admin', async () => {
+    const workspaceId = await createBoard({ id: 'board-W5', roomId: 'room-W5', ownerRoll: 'OWNER34', visibility: 'private' });
+    await addWorkspaceMember(workspaceId, 'WSMEMBER34');
+    await addMember('board-W5', 'WSMEMBER34');
+
+    const result = await checkRoomAccessForRoll('room-W5', 'WSMEMBER34');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.role).toBe('editor');
+  });
+
+  it('workspace role never widens board ownership — a workspace member is never classified as owner of a board they do not own', async () => {
+    const workspaceId = await createBoard({ id: 'board-W6', roomId: 'room-W6', ownerRoll: 'OWNER35', visibility: 'shared' });
+    await addWorkspaceMember(workspaceId, 'WSMEMBER35');
+
+    const result = await checkRoomAccessForRoll('room-W6', 'WSMEMBER35');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.role).toBe('editor');
+    expect(result.ok && result.role).not.toBe('owner');
   });
 });
 

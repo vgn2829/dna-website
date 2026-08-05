@@ -88,7 +88,7 @@ async function createBoard(opts: {
   id: string; roomId: string; ownerRoll: string;
   visibility?: 'private' | 'shared'; editMode?: 'members_only' | 'anyone';
   isArchived?: boolean;
-}): Promise<void> {
+}): Promise<string> {
   const now = new Date().toISOString();
   const workspaceId = await ensureWorkspace(opts.ownerRoll);
   await query(
@@ -96,6 +96,7 @@ async function createBoard(opts: {
      VALUES ($1, 'Periodic Revalidation Test', $2, 'Owner', $3, $4, $5, $5, $6, true, $7, $8)`,
     [opts.id, opts.ownerRoll, opts.visibility ?? 'private', opts.editMode ?? 'members_only', now, opts.roomId, opts.isArchived ?? false, workspaceId]
   );
+  return workspaceId;
 }
 
 async function addMember(boardId: string, roll: string): Promise<void> {
@@ -126,6 +127,35 @@ describe('startPeriodicRevalidation', () => {
 
       expect(fakeManager.disconnected).toEqual([{ roomId: 'room-1', sessionId: 'session-1' }]);
       expect(fakeManager.writeAccessUpdates).toHaveLength(0); // fully disconnected, not just downgraded
+    } finally {
+      stop();
+    }
+  });
+
+  it('downgrades a session whose ONLY access was workspace-ceiling membership, once that workspace_members row is revoked mid-session', async () => {
+    const workspaceId = await createBoard({ id: 'board-1w', roomId: 'room-1w', ownerRoll: 'OWNER1W', visibility: 'shared' });
+    const now = new Date().toISOString();
+    await query(
+      `INSERT INTO workspace_members (workspace_id, roll_number, role, name, added_at) VALUES ($1, $2, 'member', $3, $4)`,
+      [workspaceId, 'WSMEMBER1W', 'WS Member', now]
+    );
+
+    const fakeManager = new FakeRoomManagerForRevalidation();
+    fakeManager.sessionsByRoom.set('room-1w', [{ sessionId: 'session-1w', meta: { roll: 'WSMEMBER1W', role: 'editor' } }]);
+
+    const stop = startPeriodicRevalidation(fakeManager as unknown as RoomManager<StudentSessionMeta>, () => ['room-1w'], TEST_INTERVAL_MS);
+    try {
+      await query('DELETE FROM workspace_members WHERE workspace_id = $1 AND roll_number = $2', [workspaceId, 'WSMEMBER1W']);
+
+      // A shared board with no workspace ceiling still leaves the caller
+      // at 'commenter' (any signed-in student can read a shared board) —
+      // so this is a write-access downgrade, not a full disconnect,
+      // exactly mirroring the archived-board case below.
+      await waitUntil(() => fakeManager.writeAccessUpdates.some(u => u.canWriteCanvas === false));
+
+      expect(fakeManager.disconnected).toHaveLength(0);
+      expect(fakeManager.writeAccessUpdates[fakeManager.writeAccessUpdates.length - 1])
+        .toEqual({ roomId: 'room-1w', sessionId: 'session-1w', canWriteCanvas: false });
     } finally {
       stop();
     }

@@ -87,6 +87,23 @@ async function addMember(boardId: string, roll: string): Promise<void> {
   );
 }
 
+// Adds roll as a plain workspace 'member' (ceilings at 'editor' via
+// getBoardRole -> classifyBoardAccess's new workspace fallback branch),
+// looking up the board's auto-provisioned workspace_id rather than
+// threading it through createBoard's own return value — keeps this
+// helper usable without changing createBoard's existing string-boardId
+// return type every other test in this file already depends on.
+async function addWorkspaceMemberViaBoard(boardId: string, roll: string): Promise<void> {
+  const result = await query<{ workspace_id: string }>(
+    'SELECT workspace_id FROM boards WHERE id = $1', [boardId]
+  );
+  const workspaceId = result[0].workspace_id;
+  await query(
+    `INSERT INTO workspace_members (workspace_id, roll_number, role, name, added_at) VALUES ($1, $2, 'member', $3, $4)`,
+    [workspaceId, roll, `Student ${roll}`, new Date().toISOString()]
+  );
+}
+
 beforeEach(async () => {
   await query('TRUNCATE "board_comments", "board_members", "boards", "workspace_members", "workspaces" CASCADE');
 });
@@ -217,6 +234,30 @@ describe('Comments — permissions', () => {
       .send({ content: 'Nice board!', anchorType: 'canvas', anchorX: 5, anchorY: 5 });
 
     expect(res.status).toBe(201);
+  });
+
+  it('lets a workspace member (no board_members row) comment on a shared board, but refuses them on a private board with no explicit grant', async () => {
+    await registerStudent('OWNER11B');
+    await registerStudent('WSMEMBER11B');
+    const sharedBoardId = await createBoard({ ownerRoll: 'OWNER11B', visibility: 'shared', editMode: 'members_only' });
+    await addWorkspaceMemberViaBoard(sharedBoardId, 'WSMEMBER11B');
+
+    const onShared = await request(app)
+      .post(`/api/boards/${sharedBoardId}/comments`)
+      .set('Authorization', `Bearer ${tokenFor('WSMEMBER11B')}`)
+      .send({ content: 'Via workspace ceiling', anchorType: 'canvas', anchorX: 1, anchorY: 1 });
+    expect(onShared.status).toBe(201);
+
+    // Same roll, same workspace, but a PRIVATE board with no explicit
+    // board_members grant — workspace membership alone must not unlock
+    // it (the actual "board-level sharing narrows the workspace
+    // default" mechanism; see roomAccess.ts's classifyBoardAccess).
+    const privateBoardId = await createBoard({ ownerRoll: 'OWNER11B', visibility: 'private' });
+    const onPrivate = await request(app)
+      .post(`/api/boards/${privateBoardId}/comments`)
+      .set('Authorization', `Bearer ${tokenFor('WSMEMBER11B')}`)
+      .send({ content: 'Should be refused', anchorType: 'canvas', anchorX: 1, anchorY: 1 });
+    expect(onPrivate.status).toBe(403);
   });
 
   it('does NOT let a read-only viewer resolve a thread (requires board-edit access)', async () => {
