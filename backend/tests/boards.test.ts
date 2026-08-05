@@ -388,3 +388,178 @@ describe('canAccess/isMember/canEdit consolidation onto getBoardRole (Commit 6/9
     expect(del.status).toBe(403);
   });
 });
+
+describe('Board collaborator management (Sharing & Invite Flow)', () => {
+  it('lets the owner add a registered student as a collaborator', async () => {
+    await registerStudent('COLLAB1');
+    await registerStudent('COLLAB1-NEW');
+    const { id } = await createBoardDirect({ ownerRoll: 'COLLAB1', visibility: 'private' });
+
+    const res = await request(app)
+      .post(`/api/boards/${id}/members`)
+      .set('Authorization', `Bearer ${tokenFor('COLLAB1')}`)
+      .send({ roll_number: 'COLLAB1-NEW' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+
+    const detail = await request(app).get(`/api/boards/${id}`).set('Authorization', `Bearer ${tokenFor('COLLAB1')}`);
+    expect(detail.body.members).toHaveLength(1);
+    expect(detail.body.members[0].roll_number).toBe('COLLAB1-NEW');
+  });
+
+  it('404s adding a roll number that has never registered', async () => {
+    await registerStudent('COLLAB2');
+    const { id } = await createBoardDirect({ ownerRoll: 'COLLAB2', visibility: 'private' });
+
+    const res = await request(app)
+      .post(`/api/boards/${id}/members`)
+      .set('Authorization', `Bearer ${tokenFor('COLLAB2')}`)
+      .send({ roll_number: 'NEVER-REGISTERED' });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('adding an already-added collaborator again is idempotent (ON CONFLICT DO NOTHING) -- second call still succeeds, member list does not duplicate', async () => {
+    await registerStudent('COLLAB3');
+    await registerStudent('COLLAB3-MEMBER');
+    const { id } = await createBoardDirect({ ownerRoll: 'COLLAB3', visibility: 'private' });
+
+    await request(app)
+      .post(`/api/boards/${id}/members`)
+      .set('Authorization', `Bearer ${tokenFor('COLLAB3')}`)
+      .send({ roll_number: 'COLLAB3-MEMBER' });
+
+    const second = await request(app)
+      .post(`/api/boards/${id}/members`)
+      .set('Authorization', `Bearer ${tokenFor('COLLAB3')}`)
+      .send({ roll_number: 'COLLAB3-MEMBER' });
+    expect(second.status).toBe(200);
+
+    const detail = await request(app).get(`/api/boards/${id}`).set('Authorization', `Bearer ${tokenFor('COLLAB3')}`);
+    expect(detail.body.members).toHaveLength(1);
+  });
+
+  it('403s a non-owner (even an explicit collaborator) trying to add another collaborator', async () => {
+    await registerStudent('COLLAB4');
+    await registerStudent('COLLAB4-MEMBER');
+    await registerStudent('COLLAB4-TARGET');
+    const { id } = await createBoardDirect({ ownerRoll: 'COLLAB4', visibility: 'private' });
+    await addBoardMemberDirect(id, 'COLLAB4-MEMBER');
+
+    const res = await request(app)
+      .post(`/api/boards/${id}/members`)
+      .set('Authorization', `Bearer ${tokenFor('COLLAB4-MEMBER')}`)
+      .send({ roll_number: 'COLLAB4-TARGET' });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('lets the owner remove a collaborator, and the removed roll loses write access immediately', async () => {
+    await registerStudent('COLLAB5');
+    await registerStudent('COLLAB5-MEMBER');
+    const { id } = await createBoardDirect({ ownerRoll: 'COLLAB5', visibility: 'private' });
+    await addBoardMemberDirect(id, 'COLLAB5-MEMBER');
+
+    const res = await request(app)
+      .delete(`/api/boards/${id}/members/COLLAB5-MEMBER`)
+      .set('Authorization', `Bearer ${tokenFor('COLLAB5')}`);
+    expect(res.status).toBe(200);
+
+    const write = await request(app)
+      .put(`/api/boards/${id}/canvas`)
+      .set('Authorization', `Bearer ${tokenFor('COLLAB5-MEMBER')}`)
+      .send({ canvas_data: '{}' });
+    expect(write.status).toBe(403);
+  });
+
+  it('403s a non-owner trying to remove a collaborator', async () => {
+    await registerStudent('COLLAB6');
+    await registerStudent('COLLAB6-MEMBER');
+    await registerStudent('COLLAB6-OTHER');
+    const { id } = await createBoardDirect({ ownerRoll: 'COLLAB6', visibility: 'private' });
+    await addBoardMemberDirect(id, 'COLLAB6-MEMBER');
+    await addBoardMemberDirect(id, 'COLLAB6-OTHER');
+
+    const res = await request(app)
+      .delete(`/api/boards/${id}/members/COLLAB6-OTHER`)
+      .set('Authorization', `Bearer ${tokenFor('COLLAB6-MEMBER')}`);
+
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('Board visibility and edit_mode switching (Sharing & Invite Flow)', () => {
+  it('lets the owner switch a private board to shared, unlocking read access for a non-member', async () => {
+    await registerStudent('VIS1');
+    await registerStudent('VIS1-STRANGER');
+    const { id } = await createBoardDirect({ ownerRoll: 'VIS1', visibility: 'private' });
+
+    const before = await request(app).get(`/api/boards/${id}`).set('Authorization', `Bearer ${tokenFor('VIS1-STRANGER')}`);
+    expect(before.status).toBe(403);
+
+    const update = await request(app)
+      .put(`/api/boards/${id}`)
+      .set('Authorization', `Bearer ${tokenFor('VIS1')}`)
+      .send({ visibility: 'shared' });
+    expect(update.status).toBe(200);
+    expect(update.body.visibility).toBe('shared');
+
+    const after = await request(app).get(`/api/boards/${id}`).set('Authorization', `Bearer ${tokenFor('VIS1-STRANGER')}`);
+    expect(after.status).toBe(200);
+  });
+
+  it('lets the owner switch back to private, immediately revoking a non-member\'s read access', async () => {
+    await registerStudent('VIS2');
+    await registerStudent('VIS2-STRANGER');
+    const { id } = await createBoardDirect({ ownerRoll: 'VIS2', visibility: 'shared' });
+
+    const before = await request(app).get(`/api/boards/${id}`).set('Authorization', `Bearer ${tokenFor('VIS2-STRANGER')}`);
+    expect(before.status).toBe(200);
+
+    await request(app)
+      .put(`/api/boards/${id}`)
+      .set('Authorization', `Bearer ${tokenFor('VIS2')}`)
+      .send({ visibility: 'private' });
+
+    const after = await request(app).get(`/api/boards/${id}`).set('Authorization', `Bearer ${tokenFor('VIS2-STRANGER')}`);
+    expect(after.status).toBe(403);
+  });
+
+  it('edit_mode=anyone on a shared board lets a non-member write; switching back to members_only revokes it', async () => {
+    await registerStudent('VIS3');
+    await registerStudent('VIS3-STRANGER');
+    const { id } = await createBoardDirect({ ownerRoll: 'VIS3', visibility: 'shared', editMode: 'anyone' });
+
+    const before = await request(app)
+      .put(`/api/boards/${id}/canvas`)
+      .set('Authorization', `Bearer ${tokenFor('VIS3-STRANGER')}`)
+      .send({ canvas_data: '{}' });
+    expect(before.status).toBe(200);
+
+    await request(app)
+      .put(`/api/boards/${id}`)
+      .set('Authorization', `Bearer ${tokenFor('VIS3')}`)
+      .send({ edit_mode: 'members_only' });
+
+    const after = await request(app)
+      .put(`/api/boards/${id}/canvas`)
+      .set('Authorization', `Bearer ${tokenFor('VIS3-STRANGER')}`)
+      .send({ canvas_data: '{}' });
+    expect(after.status).toBe(403);
+  });
+
+  it('403s a non-owner trying to change visibility or edit_mode', async () => {
+    await registerStudent('VIS4');
+    await registerStudent('VIS4-MEMBER');
+    const { id } = await createBoardDirect({ ownerRoll: 'VIS4', visibility: 'private' });
+    await addBoardMemberDirect(id, 'VIS4-MEMBER');
+
+    const res = await request(app)
+      .put(`/api/boards/${id}`)
+      .set('Authorization', `Bearer ${tokenFor('VIS4-MEMBER')}`)
+      .send({ visibility: 'shared' });
+
+    expect(res.status).toBe(403);
+  });
+});
