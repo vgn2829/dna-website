@@ -618,6 +618,52 @@ export async function initSchema(): Promise<void> {
   console.log('boards.canvas_data migration done');
 
   await pool.query(`
+    ALTER TABLE boards
+    ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT false
+  `);
+
+  await pool.query(`
+    ALTER TABLE boards
+    ADD COLUMN IF NOT EXISTS updated_at TEXT
+  `);
+
+  await pool.query(`
+    UPDATE boards
+    SET updated_at = created_at
+    WHERE updated_at IS NULL
+  `);
+
+  await pool.query(`
+    ALTER TABLE boards
+    ALTER COLUMN updated_at SET NOT NULL
+  `);
+
+  // Not read/written anywhere yet — reserved so the thumbnails phase doesn't
+  // need another migration. See board list/detail responses: this always
+  // comes back null today, and clients already treat a missing thumbnail as
+  // "show the placeholder".
+  await pool.query(`
+    ALTER TABLE boards
+    ADD COLUMN IF NOT EXISTS thumbnail_url TEXT DEFAULT NULL
+  `);
+
+  console.log('boards.is_archived / updated_at / thumbnail_url migration done');
+
+  // Per-user, not per-board: two students can independently star the same
+  // shared board, so this can't be a column on boards.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS board_favorites (
+      board_id    TEXT NOT NULL REFERENCES boards(id)
+                  ON DELETE CASCADE,
+      roll_number TEXT NOT NULL,
+      created_at  TEXT NOT NULL,
+      PRIMARY KEY (board_id, roll_number)
+    )
+  `);
+
+  console.log('board_favorites migration done');
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS board_members (
       board_id    TEXT NOT NULL REFERENCES boards(id)
                   ON DELETE CASCADE,

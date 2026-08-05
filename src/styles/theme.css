@@ -503,11 +503,52 @@
   ::-webkit-scrollbar       { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: var(--color-canvas); }
   ::-webkit-scrollbar-thumb { background: var(--color-surface-2); border-radius: 3px; }
+
+  /* ── Moodboard cards ── */
+  @keyframes skeleton-pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+  .skeleton-pulse {
+    animation: skeleton-pulse 1.4s ease-in-out infinite;
+  }
+
+  /* Star only shows on hover/focus unless the board is already favorited —
+     avoids a wall of dim stars on every card while keeping the affordance
+     discoverable and always visible once acted on. */
+  .board-card-star {
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .board-card:hover .board-card-star,
+  .board-card:focus-within .board-card-star,
+  .board-card-star[data-favorite="true"] {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    /* Touch devices have no hover — keep the star reachable without a tap-to-reveal step. */
+    .board-card-star { opacity: 1; }
+  }
 }
 
 @media (max-width: 768px) {
   .page-container {
     padding: 0 16px;
+  }
+
+  .moodboards-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .moodboards-toolbar > div:last-child {
+    padding-bottom: 16px;
+  }
+  .moodboards-toolbar input[type="text"] {
+    width: 100% !important;
+  }
+
+  .moodboards-card-grid {
+    grid-template-columns: 1fr !important;
   }
 }
 

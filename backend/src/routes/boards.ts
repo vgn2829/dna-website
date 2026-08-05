@@ -73,7 +73,7 @@ async function canEdit(boardId: string, roll: string): Promise<boolean> {
 }
 
 // GET /api/boards
-// Returns boards owned by or shared with this student
+// Returns non-archived boards owned by or shared with this student
 router.get('/', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
@@ -81,17 +81,22 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
     const result = await pool.query(`
       SELECT DISTINCT
         b.*,
-        COUNT(bi.id)::int as item_count,
-        COUNT(bm.roll_number)::int as member_count
+        COUNT(DISTINCT bi.id)::int as item_count,
+        COUNT(DISTINCT bm.roll_number)::int as member_count,
+        (bf.roll_number IS NOT NULL) as is_favorite
       FROM boards b
       LEFT JOIN board_items bi ON bi.board_id = b.id
       LEFT JOIN board_members bm ON bm.board_id = b.id
-      WHERE b.owner_roll = $1
-        OR b.id IN (
-          SELECT board_id FROM board_members
-          WHERE roll_number = $1
+      LEFT JOIN board_favorites bf ON bf.board_id = b.id AND bf.roll_number = $1
+      WHERE NOT b.is_archived
+        AND (
+          b.owner_roll = $1
+          OR b.id IN (
+            SELECT board_id FROM board_members
+            WHERE roll_number = $1
+          )
         )
-      GROUP BY b.id
+      GROUP BY b.id, bf.roll_number
       ORDER BY b.created_at DESC
     `, [roll]);
 
@@ -102,30 +107,154 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/boards/shared
-// Returns all shared boards (for discovery)
-router.get('/shared', async (req: Request, res: Response) => {
+// GET /api/boards/archived
+// Returns this student's own archived boards
+router.get('/archived', requireStudent, async (req: Request, res: Response) => {
   try {
+    const roll = req.studentRoll!;
+
     const result = await pool.query(`
       SELECT
         b.*,
-        COUNT(bi.id)::int as item_count,
-        COUNT(bm.roll_number)::int as member_count
+        COUNT(DISTINCT bi.id)::int as item_count,
+        COUNT(DISTINCT bm.roll_number)::int as member_count,
+        (bf.roll_number IS NOT NULL) as is_favorite
       FROM boards b
       LEFT JOIN board_items bi ON bi.board_id = b.id
       LEFT JOIN board_members bm ON bm.board_id = b.id
-      WHERE b.visibility = 'shared'
-      GROUP BY b.id
+      LEFT JOIN board_favorites bf ON bf.board_id = b.id AND bf.roll_number = $1
+      WHERE b.is_archived AND b.owner_roll = $1
+      GROUP BY b.id, bf.roll_number
+      ORDER BY b.updated_at DESC
+    `, [roll]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Get archived boards error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/boards/shared
+// Returns all shared, non-archived boards (for discovery)
+router.get('/shared', optionalStudent, async (req: Request, res: Response) => {
+  try {
+    const roll = req.studentRoll;
+
+    const result = await pool.query(`
+      SELECT
+        b.*,
+        COUNT(DISTINCT bi.id)::int as item_count,
+        COUNT(DISTINCT bm.roll_number)::int as member_count,
+        (bf.roll_number IS NOT NULL) as is_favorite
+      FROM boards b
+      LEFT JOIN board_items bi ON bi.board_id = b.id
+      LEFT JOIN board_members bm ON bm.board_id = b.id
+      LEFT JOIN board_favorites bf ON bf.board_id = b.id AND bf.roll_number = $1
+      WHERE b.visibility = 'shared' AND NOT b.is_archived
+      GROUP BY b.id, bf.roll_number
       ORDER BY b.created_at DESC
-    `);
+    `, [roll ?? null]);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
+// POST /api/boards/:id/favorite
+// Star a board (any signed-in student who can access it)
+router.post('/:id/favorite', requireStudent, async (req: Request, res: Response) => {
+  try {
+    const roll = req.studentRoll!;
+    const access = await canAccess(param(req.params.id), roll);
+    if (!access) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    await pool.query(`
+      INSERT INTO board_favorites (board_id, roll_number, created_at)
+      VALUES ($1, $2, $3)
+      ON CONFLICT DO NOTHING
+    `, [req.params.id, roll, new Date().toISOString()]);
+
+    res.json({ success: true, is_favorite: true });
+  } catch (err) {
+    console.error('Favorite board error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/boards/:id/favorite
+// Unstar a board
+router.delete('/:id/favorite', requireStudent, async (req: Request, res: Response) => {
+  try {
+    const roll = req.studentRoll!;
+    await pool.query(
+      'DELETE FROM board_favorites WHERE board_id = $1 AND roll_number = $2',
+      [req.params.id, roll]
+    );
+    res.json({ success: true, is_favorite: false });
+  } catch (err) {
+    console.error('Unfavorite board error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/boards/:id/duplicate
+// Duplicate a board's metadata + canvas content (owner or member — mirrors
+// canEdit's audience, since duplicating is a read of content you can already
+// edit). The copy is always private with no members, owned by the requester,
+// regardless of the source board's visibility/sharing — sharing is a
+// deliberate choice the duplicator makes fresh, not inherited.
+router.post('/:id/duplicate', requireStudent, async (req: Request, res: Response) => {
+  try {
+    const roll = req.studentRoll!;
+
+    const access = await canEdit(param(req.params.id), roll);
+    if (!access) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const sourceResult = await pool.query(
+      'SELECT name, description, canvas_data FROM boards WHERE id = $1',
+      [req.params.id]
+    );
+    if (sourceResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Board not found' });
+    }
+    const source = sourceResult.rows[0] as { name: string; description: string | null; canvas_data: string | null };
+
+    const studentResult = await pool.query(
+      'SELECT name FROM student_sessions WHERE roll_number = $1',
+      [roll]
+    );
+    const ownerName = (studentResult.rows[0] as { name: string } | undefined)?.name ?? null;
+
+    const id = uuidv4();
+    const roomId = uuidv4();
+    const now = new Date().toISOString();
+    const copyName = `${source.name} (copy)`.slice(0, 100);
+
+    const result = await pool.query(`
+      INSERT INTO boards
+        (id, name, description, owner_roll, owner_name,
+         visibility, room_id, created_at, updated_at, canvas_data)
+      VALUES ($1, $2, $3, $4, $5, 'private', $6, $7, $7, $8)
+      RETURNING *
+    `, [
+      id, copyName, source.description,
+      roll, ownerName, roomId, now, source.canvas_data,
+    ]);
+
+    res.status(201).json({ ...result.rows[0], item_count: 0, member_count: 0, is_favorite: false });
+  } catch (err) {
+    console.error('Duplicate board error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/boards/admin/all
-// Returns all boards from all users (admin only)
+// Returns all boards from all users (admin only), including archived
 router.get('/admin/all', requireAdmin, async (req: Request, res: Response) => {
   try {
     const result = await pool.query(`
@@ -234,9 +363,9 @@ router.put('/:id/canvas', requireStudent, async (req: Request, res: Response) =>
 
     await pool.query(`
       UPDATE boards
-      SET canvas_data = $1
-      WHERE id = $2
-    `, [canvas_data, req.params.id]);
+      SET canvas_data = $1, updated_at = $2
+      WHERE id = $3
+    `, [canvas_data, new Date().toISOString(), req.params.id]);
 
     res.json({ success: true });
   } catch (err) {
@@ -320,8 +449,16 @@ router.get('/:id', optionalStudent, async (req: Request, res: Response) => {
       ORDER BY added_at ASC
     `, [req.params.id]);
 
+    const isFavorite = roll
+      ? (await pool.query(
+          'SELECT 1 FROM board_favorites WHERE board_id = $1 AND roll_number = $2',
+          [req.params.id, roll]
+        )).rows.length > 0
+      : false;
+
     res.json({
       ...board,
+      is_favorite: isFavorite,
       items: itemsResult.rows,
       members: membersResult.rows,
     });
@@ -366,7 +503,7 @@ router.post('/', createBoardLimiter, requireStudent, async (req: Request, res: R
       roll, ownerName, parsed.visibility, roomId, now,
     ]);
 
-    res.status(201).json(result.rows[0]);
+    res.status(201).json({ ...result.rows[0], item_count: 0, member_count: 0, is_favorite: false });
   } catch (err) {
     if (err instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid request' });
@@ -392,6 +529,7 @@ router.put('/:id', requireStudent, async (req: Request, res: Response) => {
       description: z.string().max(300).optional(),
       visibility: z.enum(['private', 'shared']).optional(),
       edit_mode: z.enum(['members_only', 'anyone']).optional(),
+      is_archived: z.boolean().optional(),
     });
 
     const parsed = schema.parse(req.body);
@@ -403,16 +541,39 @@ router.put('/:id', requireStudent, async (req: Request, res: Response) => {
     if (parsed.description !== undefined) { fields.push(`description = $${i++}`); values.push(parsed.description); }
     if (parsed.visibility !== undefined) { fields.push(`visibility = $${i++}`); values.push(parsed.visibility); }
     if (parsed.edit_mode !== undefined) { fields.push(`edit_mode = $${i++}`); values.push(parsed.edit_mode); }
+    if (parsed.is_archived !== undefined) { fields.push(`is_archived = $${i++}`); values.push(parsed.is_archived); }
 
     if (fields.length === 0) {
       return res.status(400).json({ error: 'Nothing to update' });
     }
 
+    fields.push(`updated_at = $${i++}`);
+    values.push(new Date().toISOString());
+
     values.push(req.params.id);
-    const result = await pool.query(`
+    await pool.query(`
       UPDATE boards SET ${fields.join(', ')}
-      WHERE id = $${i} RETURNING *
+      WHERE id = $${i}
     `, values);
+
+    // Re-select with the same join shape as the list endpoints (item_count,
+    // member_count, is_favorite) — a bare RETURNING * from the UPDATE above
+    // omits those, and callers on the dashboard replace their whole cached
+    // board object with this response, which would otherwise silently wipe
+    // is_favorite/counts client-side after any rename/archive/visibility change.
+    const result = await pool.query(`
+      SELECT
+        b.*,
+        COUNT(DISTINCT bi.id)::int as item_count,
+        COUNT(DISTINCT bm.roll_number)::int as member_count,
+        (bf.roll_number IS NOT NULL) as is_favorite
+      FROM boards b
+      LEFT JOIN board_items bi ON bi.board_id = b.id
+      LEFT JOIN board_members bm ON bm.board_id = b.id
+      LEFT JOIN board_favorites bf ON bf.board_id = b.id AND bf.roll_number = $1
+      WHERE b.id = $2
+      GROUP BY b.id, bf.roll_number
+    `, [roll, req.params.id]);
 
     res.json(result.rows[0]);
   } catch (err) {

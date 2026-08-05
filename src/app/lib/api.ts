@@ -121,6 +121,10 @@ export interface Board {
   item_count: number;
   member_count: number;
   created_at: string;
+  updated_at: string;
+  is_archived: boolean;
+  is_favorite: boolean;
+  thumbnail_url: string | null;
 }
 
 export interface BoardDetail extends Board {
@@ -428,16 +432,24 @@ export const api = {
   boards: {
     getMyBoards: (roll: string) =>
       request<Board[]>('GET', '/boards', { roll }),
-    getShared: () =>
-      request<Board[]>('GET', '/boards/shared'),
+    getArchived: (roll: string) =>
+      request<Board[]>('GET', '/boards/archived', { roll }),
+    getShared: (roll?: string) =>
+      request<Board[]>('GET', '/boards/shared', roll ? { roll } : {}),
     create: (roll: string, data: { name: string; description?: string; visibility?: 'private' | 'shared' }) =>
       request<Board>('POST', '/boards', { body: data, roll }),
-    update: (id: string, roll: string, data: { name?: string; description?: string; visibility?: 'private' | 'shared'; edit_mode?: 'members_only' | 'anyone' }) =>
+    update: (id: string, roll: string, data: { name?: string; description?: string; visibility?: 'private' | 'shared'; edit_mode?: 'members_only' | 'anyone'; is_archived?: boolean }) =>
       request<Board>('PUT', `/boards/${id}`, { body: data, roll }),
     getBoard: (id: string, roll?: string) =>
       request<BoardDetail>('GET', `/boards/${id}`, { roll }),
     delete: (id: string, roll: string) =>
       request<{ success: boolean }>('DELETE', `/boards/${id}`, { roll }),
+    duplicate: (id: string, roll: string) =>
+      request<Board>('POST', `/boards/${id}/duplicate`, { roll }),
+    favorite: (id: string, roll: string) =>
+      request<{ success: boolean; is_favorite: boolean }>('POST', `/boards/${id}/favorite`, { roll }),
+    unfavorite: (id: string, roll: string) =>
+      request<{ success: boolean; is_favorite: boolean }>('DELETE', `/boards/${id}/favorite`, { roll }),
     // Board items API — kept for potential future use
     // Currently the canvas uses Excalidraw for content
     getItems: (id: string, roll?: string) =>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { api, type Board } from '../lib/api';
@@ -6,6 +6,7 @@ import { useStudent } from '../context/StudentContext';
 
 const CACHE_KEY_MY = 'dna_boards_mine';
 const CACHE_KEY_SHARED = 'dna_boards_shared';
+const CACHE_KEY_ARCHIVED = 'dna_boards_archived';
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 function readCache<T>(key: string): T | null {
@@ -34,31 +35,92 @@ function writeCache<T>(key: string, data: T): void {
 export function clearBoardsCache(): void {
   sessionStorage.removeItem(CACHE_KEY_MY);
   sessionStorage.removeItem(CACHE_KEY_SHARED);
+  sessionStorage.removeItem(CACHE_KEY_ARCHIVED);
 }
 
-type Tab = 'mine' | 'shared';
+type Tab = 'mine' | 'shared' | 'archived';
+type SortKey = 'newest' | 'oldest' | 'alpha' | 'edited';
 
-function BoardCard({ board, onClick, onMenuOpen, ownerRoll }: {
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'edited', label: 'Last Edited' },
+  { key: 'newest', label: 'Newest' },
+  { key: 'oldest', label: 'Oldest' },
+  { key: 'alpha', label: 'Alphabetical' },
+];
+
+function sortBoards(boards: Board[], sort: SortKey): Board[] {
+  const copy = [...boards];
+  switch (sort) {
+    case 'newest':
+      return copy.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    case 'oldest':
+      return copy.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    case 'alpha':
+      return copy.sort((a, b) => a.name.localeCompare(b.name));
+    case 'edited':
+    default:
+      return copy.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  }
+}
+
+function timeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}d ago`;
+  const wk = Math.floor(day / 7);
+  if (wk < 5) return `${wk}w ago`;
+  const mo = Math.floor(day / 30);
+  if (mo < 12) return `${mo}mo ago`;
+  return `${Math.floor(day / 365)}y ago`;
+}
+
+function StarIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={filled ? 0 : 2}>
+      <path d="M12 2.5l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9-6.3 3.9 1.7-7-5.4-4.7 7.1-.6z" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerRoll, favoriteBusy }: {
   board: Board;
   onClick: () => void;
   onMenuOpen?: (e: React.MouseEvent, board: Board) => void;
+  onToggleFavorite?: (board: Board) => void;
   ownerRoll?: string | null;
+  favoriteBusy?: boolean;
 }) {
+  const isOwner = ownerRoll === board.owner_roll;
+
   return (
     <div
       onClick={onClick}
+      className="board-card"
       style={{
         border: '1px solid var(--color-border)',
         borderRadius: 'var(--radius-lg)',
         overflow: 'hidden',
         background: 'var(--color-surface-1)',
         cursor: 'pointer',
-        transition: 'background 0.15s',
+        transition: 'background 0.15s, transform 0.15s, box-shadow 0.15s',
       }}
-      onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-2)')}
-      onMouseLeave={e => (e.currentTarget.style.background = 'var(--color-surface-1)')}
+      onMouseEnter={e => {
+        e.currentTarget.style.background = 'var(--color-surface-2)';
+        e.currentTarget.style.transform = 'translateY(-2px)';
+        e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.12)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = 'var(--color-surface-1)';
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = 'none';
+      }}
     >
-      {/* Cover grid placeholder */}
+      {/* Cover placeholder — real thumbnails are a follow-up phase */}
       <div style={{
         width: '100%',
         aspectRatio: '16 / 9',
@@ -73,7 +135,36 @@ function BoardCard({ board, onClick, onMenuOpen, ownerRoll }: {
         {[0.04, 0.06, 0.08, 0.10].map((alpha, i) => (
           <div key={i} style={{ background: `rgba(233,30,140,${alpha})` }} />
         ))}
-        {onMenuOpen && ownerRoll === board.owner_roll && (
+
+        {onToggleFavorite && (
+          <button
+            onClick={e => { e.stopPropagation(); onToggleFavorite(board); }}
+            disabled={favoriteBusy}
+            title={board.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+            className="board-card-star"
+            data-favorite={board.is_favorite}
+            style={{
+              position: 'absolute',
+              top: 8, left: 8,
+              width: 28, height: 28,
+              borderRadius: '50%',
+              background: 'rgba(0,0,0,0.5)',
+              backdropFilter: 'blur(4px)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              color: board.is_favorite ? '#ffd54a' : '#fff',
+              cursor: favoriteBusy ? 'default' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 2,
+              opacity: board.is_favorite ? 1 : undefined,
+            }}
+          >
+            <StarIcon filled={board.is_favorite} />
+          </button>
+        )}
+
+        {onMenuOpen && isOwner && (
           <button
             onClick={e => { e.stopPropagation(); onMenuOpen(e, board); }}
             style={{
@@ -105,6 +196,8 @@ function BoardCard({ board, onClick, onMenuOpen, ownerRoll }: {
           <h3 style={{
             margin: 0, fontSize: 15, fontWeight: 600,
             color: 'var(--color-ink)', fontFamily: 'var(--font-body)', lineHeight: 1.3,
+            overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box',
+            WebkitLineClamp: 1, WebkitBoxOrient: 'vertical',
           }}>
             {board.name}
           </h3>
@@ -125,11 +218,32 @@ function BoardCard({ board, onClick, onMenuOpen, ownerRoll }: {
         <p style={{ margin: 0, fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
           {board.item_count} item{board.item_count !== 1 ? 's' : ''}
           {board.member_count > 0 ? ` · ${board.member_count + 1} members` : ''}
+          {' · '}edited {timeAgo(board.updated_at)}
         </p>
       </div>
     </div>
   );
 }
+
+function SkeletonCard() {
+  return (
+    <div style={{
+      border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)',
+      overflow: 'hidden', background: 'var(--color-surface-1)',
+    }}>
+      <div className="skeleton-pulse" style={{ width: '100%', aspectRatio: '16 / 9', background: 'var(--color-surface-2)' }} />
+      <div style={{ padding: '14px 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="skeleton-pulse" style={{ height: 15, width: '70%', borderRadius: 4, background: 'var(--color-surface-2)' }} />
+        <div className="skeleton-pulse" style={{ height: 11, width: '45%', borderRadius: 4, background: 'var(--color-surface-2)' }} />
+        <div className="skeleton-pulse" style={{ height: 11, width: '55%', borderRadius: 4, background: 'var(--color-surface-2)' }} />
+      </div>
+    </div>
+  );
+}
+
+const CARD_GRID_STYLE: React.CSSProperties = {
+  display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16,
+};
 
 export default function MoodboardsPage() {
   const navigate = useNavigate();
@@ -137,8 +251,11 @@ export default function MoodboardsPage() {
   const [tab, setTab] = useState<Tab>('mine');
   const [myBoards, setMyBoards] = useState<Board[]>([]);
   const [sharedBoards, setSharedBoards] = useState<Board[]>([]);
+  const [archivedBoards, setArchivedBoards] = useState<Board[]>([]);
   const [myLoading, setMyLoading] = useState(false);
   const [sharedLoading, setSharedLoading] = useState(true);
+  const [archivedLoading, setArchivedLoading] = useState(false);
+  const [archivedLoaded, setArchivedLoaded] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ name: '', description: '', visibility: 'private' as 'private' | 'shared' });
   const [creating, setCreating] = useState(false);
@@ -154,6 +271,15 @@ export default function MoodboardsPage() {
   const [inviteSuccess, setInviteSuccess] = useState('');
   const [confirmDeleteBoard, setConfirmDeleteBoard] = useState<Board | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [favoriteBusyId, setFavoriteBusyId] = useState<string | null>(null);
+  const [archivingId, setArchivingId] = useState<string | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [renameBoard, setRenameBoard] = useState<Board | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renaming, setRenaming] = useState(false);
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<SortKey>('edited');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const cached = readCache<Board[]>(CACHE_KEY_SHARED);
@@ -161,17 +287,17 @@ export default function MoodboardsPage() {
       setSharedBoards(cached);
       setSharedLoading(false);
       // Still re-fetch in background to stay fresh
-      api.boards.getShared()
+      api.boards.getShared(studentSession?.rollNumber)
         .then(data => { setSharedBoards(data); writeCache(CACHE_KEY_SHARED, data); })
         .catch(() => {});
       return;
     }
     setSharedLoading(true);
-    api.boards.getShared()
+    api.boards.getShared(studentSession?.rollNumber)
       .then(data => { setSharedBoards(data); writeCache(CACHE_KEY_SHARED, data); })
       .catch(() => {})
       .finally(() => setSharedLoading(false));
-  }, []);
+  }, [studentSession?.rollNumber]);
 
   useEffect(() => {
     if (!studentSession?.rollNumber) return;
@@ -191,6 +317,46 @@ export default function MoodboardsPage() {
       .catch(() => {})
       .finally(() => setMyLoading(false));
   }, [studentSession?.rollNumber]);
+
+  // Archived boards are fetched lazily — only once the user actually opens
+  // that tab — since most sessions never look at it.
+  useEffect(() => {
+    if (tab !== 'archived' || !studentSession?.rollNumber || archivedLoaded) return;
+    const cached = readCache<Board[]>(CACHE_KEY_ARCHIVED);
+    if (cached) {
+      setArchivedBoards(cached);
+      setArchivedLoaded(true);
+      api.boards.getArchived(studentSession.rollNumber)
+        .then(data => { setArchivedBoards(data); writeCache(CACHE_KEY_ARCHIVED, data); })
+        .catch(() => {});
+      return;
+    }
+    setArchivedLoading(true);
+    api.boards.getArchived(studentSession.rollNumber)
+      .then(data => { setArchivedBoards(data); writeCache(CACHE_KEY_ARCHIVED, data); setArchivedLoaded(true); })
+      .catch(() => {})
+      .finally(() => setArchivedLoading(false));
+  }, [tab, studentSession?.rollNumber, archivedLoaded]);
+
+  // Keyboard shortcuts: "/" focuses search (unless already typing somewhere),
+  // Escape clears search and closes any open card menu.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isTyping = target && (
+        target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+      );
+      if (e.key === '/' && !isTyping) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === 'Escape') {
+        if (menuBoard) setMenuBoard(null);
+        else if (isTyping && search) setSearch('');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [menuBoard, search]);
 
   const handleCreate = async () => {
     if (!studentSession?.rollNumber || !form.name.trim()) return;
@@ -292,6 +458,8 @@ export default function MoodboardsPage() {
     try {
       await api.boards.delete(board.id, studentSession.rollNumber);
       setMyBoards(prev => prev.filter(b => b.id !== board.id));
+      setArchivedBoards(prev => prev.filter(b => b.id !== board.id));
+      setSharedBoards(prev => prev.filter(b => b.id !== board.id));
       clearBoardsCache();
       setConfirmDeleteBoard(null);
     } catch {
@@ -301,8 +469,117 @@ export default function MoodboardsPage() {
     }
   };
 
-  const activeBoards = tab === 'mine' ? myBoards : sharedBoards;
-  const activeLoading = tab === 'mine' ? myLoading : sharedLoading;
+  const handleToggleFavorite = async (board: Board) => {
+    if (!studentSession?.rollNumber) return;
+    const nextFavorite = !board.is_favorite;
+    const patch = (list: Board[]) => list.map(b => b.id === board.id ? { ...b, is_favorite: nextFavorite } : b);
+    // Optimistic — favoriting is low-stakes and should feel instant; revert on failure.
+    setMyBoards(patch);
+    setSharedBoards(patch);
+    setArchivedBoards(patch);
+    setFavoriteBusyId(board.id);
+    try {
+      if (nextFavorite) await api.boards.favorite(board.id, studentSession.rollNumber);
+      else await api.boards.unfavorite(board.id, studentSession.rollNumber);
+      clearBoardsCache();
+    } catch {
+      const revert = (list: Board[]) => list.map(b => b.id === board.id ? { ...b, is_favorite: board.is_favorite } : b);
+      setMyBoards(revert);
+      setSharedBoards(revert);
+      setArchivedBoards(revert);
+    } finally {
+      setFavoriteBusyId(null);
+    }
+  };
+
+  const handleArchive = async (board: Board, archived: boolean) => {
+    if (!studentSession?.rollNumber) return;
+    setArchivingId(board.id);
+    try {
+      const updated = await api.boards.update(board.id, studentSession.rollNumber, { is_archived: archived });
+      if (archived) {
+        setMyBoards(prev => prev.filter(b => b.id !== board.id));
+        setArchivedBoards(prev => [updated, ...prev.filter(b => b.id !== board.id)]);
+      } else {
+        setArchivedBoards(prev => prev.filter(b => b.id !== board.id));
+        setMyBoards(prev => [updated, ...prev.filter(b => b.id !== board.id)]);
+      }
+      clearBoardsCache();
+      setMenuBoard(null);
+    } catch {
+      console.error('Failed to archive/restore board');
+    } finally {
+      setArchivingId(null);
+    }
+  };
+
+  const handleDuplicate = async (board: Board) => {
+    if (!studentSession?.rollNumber) return;
+    setDuplicatingId(board.id);
+    try {
+      const copy = await api.boards.duplicate(board.id, studentSession.rollNumber);
+      setMyBoards(prev => [copy, ...prev]);
+      clearBoardsCache();
+      setMenuBoard(null);
+    } catch {
+      console.error('Failed to duplicate board');
+    } finally {
+      setDuplicatingId(null);
+    }
+  };
+
+  const openRename = (board: Board) => {
+    setRenameBoard(board);
+    setRenameValue(board.name);
+    setMenuBoard(null);
+  };
+
+  const handleRenameSubmit = async () => {
+    if (!renameBoard || !studentSession?.rollNumber || !renameValue.trim()) return;
+    const trimmed = renameValue.trim();
+    if (trimmed === renameBoard.name) { setRenameBoard(null); return; }
+    setRenaming(true);
+    try {
+      const updated = await api.boards.update(renameBoard.id, studentSession.rollNumber, { name: trimmed });
+      const patch = (list: Board[]) => list.map(b => b.id === updated.id ? updated : b);
+      setMyBoards(patch);
+      setSharedBoards(patch);
+      setArchivedBoards(patch);
+      clearBoardsCache();
+      setRenameBoard(null);
+    } catch {
+      console.error('Failed to rename board');
+    } finally {
+      setRenaming(false);
+    }
+  };
+
+  const activeBoards = tab === 'mine' ? myBoards : tab === 'shared' ? sharedBoards : archivedBoards;
+  const activeLoading = tab === 'mine' ? myLoading : tab === 'shared' ? sharedLoading : archivedLoading;
+
+  const filteredSortedBoards = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const filtered = q
+      ? activeBoards.filter(b =>
+          b.name.toLowerCase().includes(q) ||
+          (b.owner_name?.toLowerCase().includes(q) ?? false) ||
+          (b.description?.toLowerCase().includes(q) ?? false)
+        )
+      : activeBoards;
+    return sortBoards(filtered, sort);
+  }, [activeBoards, search, sort]);
+
+  const favoriteBoards = useMemo(
+    () => sortBoards([...myBoards, ...sharedBoards].filter(b => b.is_favorite), 'edited'),
+    [myBoards, sharedBoards]
+  );
+
+  const recentBoards = useMemo(
+    () => sortBoards(myBoards, 'edited').slice(0, 6),
+    [myBoards]
+  );
+
+  const showRecentRail = tab === 'mine' && !search.trim() && recentBoards.length > 0;
 
   return (
     <div className="page-container" style={{ paddingTop: 80, paddingBottom: 80, minHeight: '100vh' }}>
@@ -333,28 +610,75 @@ export default function MoodboardsPage() {
         </div>
       </motion.div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', marginBottom: 32 }}>
-        {([['mine', 'My Boards'], ['shared', 'Shared Boards']] as [Tab, string][]).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            style={{
-              padding: '10px 16px',
-              background: 'none',
-              border: 'none',
-              borderBottom: tab === key ? '2px solid var(--color-brand)' : '2px solid transparent',
-              marginBottom: -1,
-              color: tab === key ? 'var(--color-brand)' : 'var(--color-ink-muted)',
-              fontSize: 14,
-              fontWeight: tab === key ? 600 : 400,
-              fontFamily: 'var(--font-body)',
-              cursor: 'pointer',
-            }}
+      {/* Tabs + search + sort */}
+      <div className="moodboards-toolbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, borderBottom: '1px solid var(--color-border)', marginBottom: 32, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex' }}>
+          {([['mine', 'My Boards'], ['shared', 'Shared Boards'], ...(studentSession ? [['archived', 'Archived']] : [])] as [Tab, string][]).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              style={{
+                padding: '10px 16px',
+                background: 'none',
+                border: 'none',
+                borderBottom: tab === key ? '2px solid var(--color-brand)' : '2px solid transparent',
+                marginBottom: -1,
+                color: tab === key ? 'var(--color-brand)' : 'var(--color-ink-muted)',
+                fontSize: 14,
+                fontWeight: tab === key ? 600 : 400,
+                fontFamily: 'var(--font-body)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 10, flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', flex: '1 1 auto' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-ink-muted)', pointerEvents: 'none' }}>
+              <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              ref={searchInputRef}
+              className="input-base"
+              type="text"
+              placeholder="Search boards…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ width: 200, paddingLeft: 30, fontSize: 13 }}
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                title="Clear search (Esc)"
+                style={{
+                  position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                  width: 18, height: 18, borderRadius: '50%', border: 'none',
+                  background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)',
+                  fontSize: 11, lineHeight: 1, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                ×
+              </button>
+            )}
+          </div>
+
+          <select
+            value={sort}
+            onChange={e => setSort(e.target.value as SortKey)}
+            className="input-base"
+            style={{ fontSize: 13, padding: '8px 10px', cursor: 'pointer' }}
           >
-            {label}
-          </button>
-        ))}
+            {SORT_OPTIONS.map(o => (
+              <option key={o.key} value={o.key}>{o.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Content */}
@@ -370,35 +694,98 @@ export default function MoodboardsPage() {
             Enter Roll Number
           </button>
         </motion.div>
-      ) : activeLoading ? (
-        <p style={{ color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', fontSize: 14 }}>Loading...</p>
-      ) : activeBoards.length === 0 ? (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', padding: '80px 0' }}>
-          <p style={{ color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', fontSize: 15, marginBottom: 20 }}>
-            {tab === 'mine' ? 'No boards yet. Create one to start collecting inspiration.' : 'No shared boards yet.'}
-          </p>
-          {tab === 'mine' && (
-            <button
-              onClick={() => setShowCreate(true)}
-              style={{ padding: '12px 24px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
-            >
-              + New Board
-            </button>
-          )}
-        </motion.div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-          {activeBoards.map((board, i) => (
-            <motion.div key={board.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-              <BoardCard
-                board={board}
-                onClick={() => navigate(`/moodboards/${board.id}`)}
-                onMenuOpen={tab === 'mine' ? handleCardMenuOpen : undefined}
-                ownerRoll={studentSession?.rollNumber}
-              />
+        <>
+          {/* Favorites rail */}
+          {favoriteBoards.length > 0 && !search.trim() && (
+            <div style={{ marginBottom: 36 }}>
+              <h2 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ color: '#ffd54a' }}><StarIcon filled /></span> Favorites
+              </h2>
+              <div className="moodboards-card-grid" style={CARD_GRID_STYLE}>
+                {favoriteBoards.map(board => (
+                  <BoardCard
+                    key={board.id}
+                    board={board}
+                    onClick={() => navigate(`/moodboards/${board.id}`)}
+                    onMenuOpen={board.owner_roll === studentSession?.rollNumber ? handleCardMenuOpen : undefined}
+                    onToggleFavorite={handleToggleFavorite}
+                    favoriteBusy={favoriteBusyId === board.id}
+                    ownerRoll={studentSession?.rollNumber}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recent rail */}
+          {showRecentRail && (
+            <div style={{ marginBottom: 36 }}>
+              <h2 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                Recent
+              </h2>
+              <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 4 }}>
+                {recentBoards.map(board => (
+                  <div key={board.id} style={{ minWidth: 240, maxWidth: 240, flexShrink: 0 }}>
+                    <BoardCard
+                      board={board}
+                      onClick={() => navigate(`/moodboards/${board.id}`)}
+                      onMenuOpen={handleCardMenuOpen}
+                      onToggleFavorite={handleToggleFavorite}
+                      favoriteBusy={favoriteBusyId === board.id}
+                      ownerRoll={studentSession?.rollNumber}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(showRecentRail || (favoriteBoards.length > 0 && !search.trim())) && (
+            <h2 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+              {tab === 'mine' ? 'All Boards' : tab === 'shared' ? 'Shared Boards' : 'Archived'}
+            </h2>
+          )}
+
+          {activeLoading ? (
+            <div className="moodboards-card-grid" style={CARD_GRID_STYLE}>
+              {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+            </div>
+          ) : filteredSortedBoards.length === 0 ? (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', padding: '80px 0' }}>
+              <p style={{ color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', fontSize: 15, marginBottom: 20 }}>
+                {search.trim()
+                  ? `No boards match "${search.trim()}".`
+                  : tab === 'mine' ? 'No boards yet. Create one to start collecting inspiration.'
+                  : tab === 'shared' ? 'No shared boards yet.'
+                  : 'No archived boards.'}
+              </p>
+              {tab === 'mine' && !search.trim() && (
+                <button
+                  onClick={() => setShowCreate(true)}
+                  style={{ padding: '12px 24px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                >
+                  + New Board
+                </button>
+              )}
             </motion.div>
-          ))}
-        </div>
+          ) : (
+            <div className="moodboards-card-grid" style={CARD_GRID_STYLE}>
+              {filteredSortedBoards.map((board, i) => (
+                <motion.div key={board.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 12) * 0.03 }}>
+                  <BoardCard
+                    board={board}
+                    onClick={() => navigate(`/moodboards/${board.id}`)}
+                    onMenuOpen={tab !== 'shared' && board.owner_roll === studentSession?.rollNumber ? handleCardMenuOpen : undefined}
+                    onToggleFavorite={handleToggleFavorite}
+                    favoriteBusy={favoriteBusyId === board.id}
+                    ownerRoll={studentSession?.rollNumber}
+                  />
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Create board modal */}
@@ -512,7 +899,12 @@ export default function MoodboardsPage() {
               }}
             >
               {[
+                { label: 'Rename', onClick: () => openRename(menuBoard), danger: false },
+                { label: 'Duplicate', onClick: () => handleDuplicate(menuBoard), danger: false },
                 { label: 'Share & Invite', onClick: () => { setShowCardShare(menuBoard); setMenuBoard(null); }, danger: false },
+                menuBoard.is_archived
+                  ? { label: 'Restore', onClick: () => handleArchive(menuBoard, false), danger: false }
+                  : { label: 'Archive', onClick: () => handleArchive(menuBoard, true), danger: false },
                 { label: 'Delete Board', onClick: () => { setConfirmDeleteBoard(menuBoard); setMenuBoard(null); }, danger: true },
               ].map(item => (
                 <button
@@ -718,6 +1110,54 @@ export default function MoodboardsPage() {
                 </button>
                 <button
                   onClick={() => setConfirmDeleteBoard(null)}
+                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Rename modal */}
+      <AnimatePresence>
+        {renameBoard && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+            onClick={() => setRenameBoard(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}
+            >
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
+                Rename Board
+              </h3>
+              <input
+                className="input-base"
+                type="text"
+                value={renameValue}
+                onChange={e => setRenameValue(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleRenameSubmit(); }}
+                style={{ width: '100%', boxSizing: 'border-box' }}
+                autoFocus
+                maxLength={100}
+              />
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={handleRenameSubmit}
+                  disabled={renaming || !renameValue.trim()}
+                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: renaming || !renameValue.trim() ? 'not-allowed' : 'pointer', opacity: renaming || !renameValue.trim() ? 0.6 : 1 }}
+                >
+                  {renaming ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={() => setRenameBoard(null)}
                   style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
                 >
                   Cancel

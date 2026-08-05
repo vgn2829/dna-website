@@ -509,6 +509,7 @@ export default function BoardPage() {
                 boardId={id!}
                 theme={theme}
                 initialData={canvasData}
+                pendingItems={board.items}
                 onSave={handleSave}
                 readOnly={!isMember && board.edit_mode === 'members_only'}
               />

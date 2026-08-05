@@ -5,7 +5,9 @@ import {
   useMemo,
 } from 'react';
 import {
+  AssetRecordType,
   Tldraw,
+  createShapeId,
   getSnapshot,
   loadSnapshot,
   useEditor,
@@ -18,7 +20,7 @@ import {
   type TLStoreSnapshot,
 } from 'tldraw';
 import 'tldraw/tldraw.css';
-import { api } from '../lib/api';
+import { api, type BoardItem } from '../lib/api';
 
 // Tldraw's own copy handler never puts real image bytes on the clipboard —
 // it always serializes the selection (shapes + resolved assets) into its
@@ -248,10 +250,93 @@ async function migrateLegacyBase64Assets(editor: Editor, boardId: string): Promi
   }
 }
 
+function loadImageSize(src: string): Promise<{ w: number; h: number }> {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => resolve({ w: img.naturalWidth || 300, h: img.naturalHeight || 300 });
+    img.onerror = () => resolve({ w: 300, h: 300 });
+    img.src = src;
+  });
+}
+
+const ITEM_GRID_COLS = 4;
+const ITEM_GRID_CELL = 340;
+const ITEM_GRID_GAP = 40;
+
+// "Save to Moodboard" (GalleryPage) writes rows into board_items via a REST
+// endpoint that predates this tldraw-based canvas — that table was the
+// content model before the canvas rewrite, and nothing here ever read it
+// back, so a saved item vanished with no error (see PR discussion / Phase 0
+// audit). This materializes any not-yet-placed board_items as real image
+// shapes on load. Shape/asset ids are deterministic (derived from the
+// item id), so a re-run on a later visit is a no-op for items already
+// placed — editor.getShape(id) is the dedup check. Once placed, the item
+// is a normal canvas shape: it moves/deletes/persists like anything else,
+// and board_items is never consulted again for it.
+async function injectPendingBoardItems(editor: Editor, items: BoardItem[]): Promise<void> {
+  const toPlace = items.filter(item => !editor.getShape(createShapeId(item.id)));
+  if (toPlace.length === 0) return;
+
+  const viewport = editor.getViewportPageBounds();
+  const originX = viewport.x + 80;
+  const originY = viewport.y + 80;
+
+  const sizes = await Promise.all(toPlace.map(item => loadImageSize(item.image_url)));
+
+  const assets: TLAsset[] = [];
+  const shapePartials: Array<{
+    id: ReturnType<typeof createShapeId>;
+    type: 'image';
+    x: number;
+    y: number;
+    props: { w: number; h: number; assetId: ReturnType<typeof AssetRecordType.createId>; url: string };
+  }> = [];
+
+  toPlace.forEach((item, i) => {
+    const { w, h } = sizes[i];
+    // Cap displayed size so a huge source photo doesn't dwarf the board;
+    // aspect ratio is preserved since both dimensions scale together.
+    const scale = Math.min(1, 280 / Math.max(w, h));
+    const dw = Math.round(w * scale);
+    const dh = Math.round(h * scale);
+
+    const assetId = AssetRecordType.createId(item.id);
+    const shapeId = createShapeId(item.id);
+    const col = i % ITEM_GRID_COLS;
+    const row = Math.floor(i / ITEM_GRID_COLS);
+
+    assets.push(
+      AssetRecordType.create({
+        id: assetId,
+        type: 'image',
+        props: {
+          w, h,
+          name: item.note ?? 'Saved from gallery',
+          src: item.image_url,
+          mimeType: null,
+          isAnimated: false,
+        },
+      })
+    );
+
+    shapePartials.push({
+      id: shapeId,
+      type: 'image',
+      x: originX + col * (ITEM_GRID_CELL + ITEM_GRID_GAP),
+      y: originY + row * (ITEM_GRID_CELL + ITEM_GRID_GAP),
+      props: { w: dw, h: dh, assetId, url: '' },
+    });
+  });
+
+  editor.createAssets(assets);
+  editor.createShapes(shapePartials);
+}
+
 interface TldrawCanvasProps {
   boardId: string;
   theme: 'dark' | 'light';
   initialData: unknown;
+  pendingItems?: BoardItem[];
   onSave: (snapshot: unknown) => void;
   readOnly?: boolean;
 }
@@ -260,6 +345,7 @@ export function TldrawCanvas({
   boardId,
   theme,
   initialData,
+  pendingItems,
   onSave,
   readOnly = false,
 }: TldrawCanvasProps) {
@@ -268,6 +354,7 @@ export function TldrawCanvas({
   const lastSavedRef = useRef<string>('');
   const onSaveRef = useRef(onSave);
   const initialDataRef = useRef<unknown>(initialData);
+  const pendingItemsRef = useRef<BoardItem[]>(pendingItems ?? []);
   const snapshotLoadedRef = useRef(false);
 
   const boardIdRef = useRef(boardId);
@@ -366,11 +453,40 @@ export function TldrawCanvas({
 
           editor.user.updateUserPreferences({ colorScheme: theme });
 
-          if (initialDataRef.current && !snapshotLoadedRef.current) {
+          if (!snapshotLoadedRef.current) {
             snapshotLoadedRef.current = true;
-            try {
-              const snap = initialDataRef.current as TLStoreSnapshot;
-              loadSnapshot(editor.store, snap);
+
+            if (initialDataRef.current) {
+              try {
+                const snap = initialDataRef.current as TLStoreSnapshot;
+                loadSnapshot(editor.store, snap);
+                // One-time, opportunistic migration of any legacy base64-embedded
+                // assets to real uploaded URLs — done once at load time (not on
+                // every save) so it doesn't add latency to the debounced save
+                // path once a board is clean. Runs in the background; if it
+                // finishes, the very next debounced save persists the migrated
+                // URLs instead of the base64 blobs.
+                migrateLegacyBase64Assets(editor, boardIdRef.current).catch(err => {
+                  console.warn('Legacy asset migration failed:', err);
+                });
+              } catch (err) {
+                console.warn('Failed to load snapshot:', err);
+              }
+            }
+
+            // Materialize any board_items saved via "Save to Moodboard"
+            // (e.g. from the Gallery) that aren't on the canvas yet — see
+            // injectPendingBoardItems for why this table needs draining here.
+            // Independent of whether a snapshot existed: a brand-new board
+            // can still have pending items with no prior canvas_data.
+            const pending = pendingItemsRef.current;
+            const placeItems = pending.length > 0
+              ? injectPendingBoardItems(editor, pending).catch(err => {
+                  console.warn('Failed to place pending board items:', err);
+                })
+              : Promise.resolve();
+
+            placeItems.finally(() => {
               setTimeout(() => {
                 try {
                   editor.zoomToFit({ animation: { duration: 200 } });
@@ -378,18 +494,7 @@ export function TldrawCanvas({
                   // empty canvas — ignore
                 }
               }, 200);
-              // One-time, opportunistic migration of any legacy base64-embedded
-              // assets to real uploaded URLs — done once at load time (not on
-              // every save) so it doesn't add latency to the debounced save
-              // path once a board is clean. Runs in the background; if it
-              // finishes, the very next debounced save persists the migrated
-              // URLs instead of the base64 blobs.
-              migrateLegacyBase64Assets(editor, boardIdRef.current).catch(err => {
-                console.warn('Legacy asset migration failed:', err);
-              });
-            } catch (err) {
-              console.warn('Failed to load snapshot:', err);
-            }
+            });
           }
 
           editor.store.listen(handleChange, {
