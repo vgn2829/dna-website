@@ -1016,4 +1016,154 @@ export async function initSchema(): Promise<void> {
   `);
 
   console.log('board_comments migration done');
+
+  // Workspaces (Commit 1 of the workspace/organization layer) — the
+  // grouping unit every board now belongs to. Boards themselves stay a
+  // flat table (no owner_roll/visibility/edit_mode changes here); this
+  // only adds the membership layer above them. Deliberately NOT built on
+  // audience_groups/audience_group_members (see those tables, further
+  // above in this file) — those back event/meet scheduling only
+  // (routes/liveSessions.ts, routes/coordinators.ts), zero references
+  // from boards/realtime/comments/versions code, and entangling them
+  // would couple two unrelated features for no benefit.
+  //
+  // is_personal marks the one-per-user workspace every student gets
+  // automatically (lazily provisioned — see ensurePersonalWorkspace in
+  // routes/workspaces.ts — or backfilled below for pre-existing boards):
+  // it never appears in a "create workspace" flow, can't be renamed,
+  // deleted, or left, and every route in routes/workspaces.ts that
+  // mutates a workspace 400s if targeting one. This is an app-layer
+  // invariant (no DB trigger enforcing it), matching how single board
+  // ownership is already enforced by convention rather than a constraint
+  // elsewhere in this file.
+  //
+  // owner_roll is a raw string, no FK — same convention as
+  // boards.owner_roll (see that column's own history in this file): it
+  // records who created the workspace, it is NOT the source of truth for
+  // permissions after creation (workspace_members is), same relationship
+  // boards.owner_roll has to board_members.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS workspaces (
+      id           TEXT PRIMARY KEY,
+      name         TEXT NOT NULL,
+      is_personal  BOOLEAN NOT NULL DEFAULT false,
+      owner_roll   TEXT NOT NULL,
+      created_at   TEXT NOT NULL
+    )
+  `);
+
+  // Role tiers: owner / admin / member — three, not RoomRole's four,
+  // because a workspace role is only ever consulted by
+  // realtime/roomAccess.ts as a CEILING that feeds into
+  // classifyBoardAccess (see that function), never as a final per-board
+  // role by itself. owner and admin and member all ceiling at 'editor' —
+  // this table's role column is a workspace-MANAGEMENT-permission axis
+  // (who can rename the workspace, add/remove members, change roles),
+  // completely orthogonal to board access, which is why it doesn't need
+  // to mirror RoomRole's tiering at all. Exactly one 'owner' per
+  // workspace is enforced at the application layer (routes/workspaces.ts),
+  // not a partial unique index — same reasoning as boards.owner_roll
+  // needing no uniqueness constraint (1:1 by construction, checked in
+  // code, not the DB).
+  //
+  // role is plain TEXT, validated by zod at the route layer — this file
+  // never uses Postgres CHECK/enum types for this kind of field
+  // (visibility, edit_mode follow the same pattern above); no reason to
+  // introduce a new convention here.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS workspace_members (
+      workspace_id  TEXT NOT NULL REFERENCES workspaces(id)
+                    ON DELETE CASCADE,
+      roll_number   TEXT NOT NULL,
+      role          TEXT NOT NULL DEFAULT 'member',
+      name          TEXT,
+      added_at      TEXT NOT NULL,
+      PRIMARY KEY (workspace_id, roll_number)
+    )
+  `);
+
+  console.log('workspaces / workspace_members migration done');
+
+  // boards.workspace_id — added nullable first (existing rows have no
+  // workspace yet, backfilled immediately below), same nullable ->
+  // backfill -> NOT NULL rollout already used in this file for room_id
+  // (above) and updated_at (above). ON DELETE RESTRICT (the default, no
+  // ON DELETE clause needed beyond the bare REFERENCES) is deliberate:
+  // a workspace can't be deleted while boards still point at it —
+  // routes/workspaces.ts's DELETE handler pre-checks and returns a clean
+  // 409 rather than ever hitting this constraint in normal operation, but
+  // the constraint itself is what makes "a board can never end up
+  // orphaned by a workspace delete" true even if that pre-check is ever
+  // bypassed or races.
+  await pool.query(`
+    ALTER TABLE boards
+    ADD COLUMN IF NOT EXISTS workspace_id TEXT REFERENCES workspaces(id)
+  `);
+
+  // Backfill: one personal workspace per distinct existing owner_roll.
+  // Grouped by owner_roll ALONE, not (owner_roll, owner_name) — nothing
+  // enforces owner_name is consistent across a given owner_roll's boards
+  // (it's a denormalized display string, populated per-board at creation
+  // time), so grouping by both could split one real owner into multiple
+  // backfilled personal workspaces if their stored name ever varied.
+  // WHERE workspace_id IS NULL makes this idempotent across repeated
+  // boots (this file has no migration-version table — every migration
+  // here is designed to be a safe no-op on a second run).
+  await pool.query(`
+    INSERT INTO workspaces (id, name, is_personal, owner_roll, created_at)
+    SELECT
+      gen_random_uuid()::text,
+      COALESCE(MIN(owner_name), owner_roll) || '''s Workspace',
+      true,
+      owner_roll,
+      MIN(created_at)
+    FROM boards
+    WHERE workspace_id IS NULL
+    GROUP BY owner_roll
+  `);
+
+  // Seed workspace_members with each backfilled personal workspace's
+  // owner as role='owner' — without this, a pre-existing board's owner
+  // would pass classifyBoardAccess via the isOwner branch (unaffected by
+  // workspace role either way) but would not show up as a member of
+  // their own personal workspace in routes/workspaces.ts's listing
+  // endpoints.
+  await pool.query(`
+    INSERT INTO workspace_members (workspace_id, roll_number, role, name, added_at)
+    SELECT w.id, w.owner_roll, 'owner', bn.owner_name, w.created_at
+    FROM workspaces w
+    LEFT JOIN LATERAL (
+      SELECT owner_name FROM boards
+      WHERE owner_roll = w.owner_roll AND owner_name IS NOT NULL
+      LIMIT 1
+    ) bn ON true
+    WHERE w.is_personal
+    ON CONFLICT (workspace_id, roll_number) DO NOTHING
+  `);
+
+  await pool.query(`
+    UPDATE boards b
+    SET workspace_id = w.id
+    FROM workspaces w
+    WHERE b.workspace_id IS NULL AND w.owner_roll = b.owner_roll AND w.is_personal
+  `);
+
+  await pool.query(`
+    ALTER TABLE boards
+    ALTER COLUMN workspace_id SET NOT NULL
+  `);
+
+  // Every scoped board list/lookup (routes/workspaces.ts, boards.ts's
+  // workspace-filtered list routes, roomAccess.ts's workspace-ceiling
+  // check) filters or joins on this column — without the index those
+  // degrade to a sequential scan as boards grows. No separate index is
+  // needed on workspace_members: its PRIMARY KEY (workspace_id,
+  // roll_number) already covers the workspace-ceiling lookup's access
+  // pattern (workspace_id leading).
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_boards_workspace_id
+    ON boards (workspace_id)
+  `);
+
+  console.log('boards.workspace_id backfill migration done');
 }

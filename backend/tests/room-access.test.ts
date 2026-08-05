@@ -27,6 +27,28 @@ import { checkRoomAccess, checkRoomAccessForRoll, getBoardRole, getRoomBoardStat
 // very first check is the global kill switch.
 // ─────────────────────────────────────────────────────────────────────────
 
+// Every board needs a workspace_id (NOT NULL since the workspace-layer
+// migration in schema.ts). Tests here don't exercise workspace-ceiling
+// access at all (that's room-access.test.ts's own future workspace-role
+// coverage, added alongside classifyBoardAccess's workspace branch) — this
+// just gives each fixture board a minimal personal workspace owned by the
+// same roll, so the owner-branch tests in this file are completely
+// unaffected: classifyBoardAccess's isOwner check short-circuits before
+// the workspace ceiling is ever consulted.
+async function ensureWorkspace(ownerRoll: string): Promise<string> {
+  const id = `workspace-test-${Math.random().toString(36).slice(2, 10)}`;
+  const now = new Date().toISOString();
+  await query(
+    `INSERT INTO workspaces (id, name, is_personal, owner_roll, created_at) VALUES ($1, 'Test Workspace', true, $2, $3)`,
+    [id, ownerRoll, now]
+  );
+  await query(
+    `INSERT INTO workspace_members (workspace_id, roll_number, role, name, added_at) VALUES ($1, $2, 'owner', 'Owner', $3)`,
+    [id, ownerRoll, now]
+  );
+  return id;
+}
+
 async function createBoard(opts: {
   id: string;
   roomId: string;
@@ -37,12 +59,13 @@ async function createBoard(opts: {
   isArchived?: boolean;
 }): Promise<void> {
   const now = new Date().toISOString();
+  const workspaceId = await ensureWorkspace(opts.ownerRoll);
   await query(
-    `INSERT INTO boards (id, name, owner_roll, owner_name, visibility, edit_mode, created_at, updated_at, room_id, realtime_enabled, is_archived)
-     VALUES ($1, 'Room Access Test Board', $2, 'Owner', $3, $4, $5, $5, $6, $7, $8)`,
+    `INSERT INTO boards (id, name, owner_roll, owner_name, visibility, edit_mode, created_at, updated_at, room_id, realtime_enabled, is_archived, workspace_id)
+     VALUES ($1, 'Room Access Test Board', $2, 'Owner', $3, $4, $5, $5, $6, $7, $8, $9)`,
     [
       opts.id, opts.ownerRoll, opts.visibility ?? 'private', opts.editMode ?? 'members_only', now,
-      opts.roomId, opts.realtimeEnabled ?? true, opts.isArchived ?? false,
+      opts.roomId, opts.realtimeEnabled ?? true, opts.isArchived ?? false, workspaceId,
     ]
   );
 }
@@ -59,7 +82,7 @@ function tokenFor(roll: string): string {
 }
 
 beforeEach(async () => {
-  await query('TRUNCATE "board_members", "boards" CASCADE');
+  await query('TRUNCATE "board_members", "boards", "workspace_members", "workspaces" CASCADE');
   process.env.REALTIME_ENABLED = 'true';
 });
 

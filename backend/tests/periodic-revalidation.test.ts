@@ -65,16 +65,36 @@ async function waitUntil(predicate: () => boolean, timeoutMs = 2000): Promise<vo
 
 const TEST_INTERVAL_MS = 20;
 
+// Every board needs a workspace_id (NOT NULL since the workspace-layer
+// migration in schema.ts). This suite doesn't exercise workspace-ceiling
+// access — just gives each fixture board a minimal personal workspace
+// owned by the same roll, so existing owner/board_members-driven
+// permission behavior under test here is completely unaffected.
+async function ensureWorkspace(ownerRoll: string): Promise<string> {
+  const id = `workspace-test-${Math.random().toString(36).slice(2, 10)}`;
+  const now = new Date().toISOString();
+  await query(
+    `INSERT INTO workspaces (id, name, is_personal, owner_roll, created_at) VALUES ($1, 'Test Workspace', true, $2, $3)`,
+    [id, ownerRoll, now]
+  );
+  await query(
+    `INSERT INTO workspace_members (workspace_id, roll_number, role, name, added_at) VALUES ($1, $2, 'owner', 'Owner', $3)`,
+    [id, ownerRoll, now]
+  );
+  return id;
+}
+
 async function createBoard(opts: {
   id: string; roomId: string; ownerRoll: string;
   visibility?: 'private' | 'shared'; editMode?: 'members_only' | 'anyone';
   isArchived?: boolean;
 }): Promise<void> {
   const now = new Date().toISOString();
+  const workspaceId = await ensureWorkspace(opts.ownerRoll);
   await query(
-    `INSERT INTO boards (id, name, owner_roll, owner_name, visibility, edit_mode, created_at, updated_at, room_id, realtime_enabled, is_archived)
-     VALUES ($1, 'Periodic Revalidation Test', $2, 'Owner', $3, $4, $5, $5, $6, true, $7)`,
-    [opts.id, opts.ownerRoll, opts.visibility ?? 'private', opts.editMode ?? 'members_only', now, opts.roomId, opts.isArchived ?? false]
+    `INSERT INTO boards (id, name, owner_roll, owner_name, visibility, edit_mode, created_at, updated_at, room_id, realtime_enabled, is_archived, workspace_id)
+     VALUES ($1, 'Periodic Revalidation Test', $2, 'Owner', $3, $4, $5, $5, $6, true, $7, $8)`,
+    [opts.id, opts.ownerRoll, opts.visibility ?? 'private', opts.editMode ?? 'members_only', now, opts.roomId, opts.isArchived ?? false, workspaceId]
   );
 }
 
@@ -86,7 +106,7 @@ async function addMember(boardId: string, roll: string): Promise<void> {
 }
 
 beforeEach(async () => {
-  await query('TRUNCATE "board_members", "boards" CASCADE');
+  await query('TRUNCATE "board_members", "boards", "workspace_members", "workspaces" CASCADE');
   process.env.REALTIME_ENABLED = 'true';
 });
 
