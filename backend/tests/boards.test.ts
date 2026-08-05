@@ -93,3 +93,52 @@ describe('POST /api/boards — workspace_id wiring (Commit 4/9)', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('GET /api/boards, /api/boards/archived — workspace scoping (Commit 5/9)', () => {
+  it('GET / with no workspace_id returns boards across ALL of the caller\'s workspaces, unscoped (unchanged default)', async () => {
+    await registerStudent('LISTB1');
+    const teamA = await request(app).post('/api/workspaces').set('Authorization', `Bearer ${tokenFor('LISTB1')}`).send({ name: 'Team A' });
+    await request(app).post('/api/boards').set('Authorization', `Bearer ${tokenFor('LISTB1')}`).send({ name: 'Personal Board' });
+    await request(app).post('/api/boards').set('Authorization', `Bearer ${tokenFor('LISTB1')}`).send({ name: 'Team A Board', workspace_id: teamA.body.id });
+
+    const res = await request(app).get('/api/boards').set('Authorization', `Bearer ${tokenFor('LISTB1')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+  });
+
+  it('GET /?workspace_id= narrows to exactly that workspace\'s boards', async () => {
+    await registerStudent('LISTB2');
+    const teamA = await request(app).post('/api/workspaces').set('Authorization', `Bearer ${tokenFor('LISTB2')}`).send({ name: 'Team A' });
+    await request(app).post('/api/boards').set('Authorization', `Bearer ${tokenFor('LISTB2')}`).send({ name: 'Personal Board' });
+    await request(app).post('/api/boards').set('Authorization', `Bearer ${tokenFor('LISTB2')}`).send({ name: 'Team A Board', workspace_id: teamA.body.id });
+
+    const res = await request(app)
+      .get('/api/boards')
+      .query({ workspace_id: teamA.body.id })
+      .set('Authorization', `Bearer ${tokenFor('LISTB2')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].name).toBe('Team A Board');
+  });
+
+  it('GET /archived respects the same scoping', async () => {
+    await registerStudent('LISTB3');
+    const teamA = await request(app).post('/api/workspaces').set('Authorization', `Bearer ${tokenFor('LISTB3')}`).send({ name: 'Team A' });
+    const personalBoard = await request(app).post('/api/boards').set('Authorization', `Bearer ${tokenFor('LISTB3')}`).send({ name: 'Old Personal' });
+    const teamBoard = await request(app).post('/api/boards').set('Authorization', `Bearer ${tokenFor('LISTB3')}`).send({ name: 'Old Team A', workspace_id: teamA.body.id });
+    await request(app).put(`/api/boards/${personalBoard.body.id}`).set('Authorization', `Bearer ${tokenFor('LISTB3')}`).send({ is_archived: true });
+    await request(app).put(`/api/boards/${teamBoard.body.id}`).set('Authorization', `Bearer ${tokenFor('LISTB3')}`).send({ is_archived: true });
+
+    const unscoped = await request(app).get('/api/boards/archived').set('Authorization', `Bearer ${tokenFor('LISTB3')}`);
+    expect(unscoped.body).toHaveLength(2);
+
+    const scoped = await request(app)
+      .get('/api/boards/archived')
+      .query({ workspace_id: teamA.body.id })
+      .set('Authorization', `Bearer ${tokenFor('LISTB3')}`);
+    expect(scoped.body).toHaveLength(1);
+    expect(scoped.body[0].name).toBe('Old Team A');
+  });
+});

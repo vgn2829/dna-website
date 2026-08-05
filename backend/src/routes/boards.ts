@@ -107,10 +107,19 @@ async function canEdit(boardId: string, roll: string): Promise<boolean> {
 }
 
 // GET /api/boards
-// Returns non-archived boards owned by or shared with this student
+// Returns non-archived boards owned by or shared with this student.
+// Optional ?workspace_id= narrows to a single workspace (workspace/
+// organization layer, Commit 5/9) — absent by default, so this stays
+// "every board I own or am a member of, across ALL workspaces" unless a
+// caller opts in, exactly its pre-existing semantic. This route does NOT
+// additionally surface workspace-ceiling-only access (a shared board
+// reachable only via workspace membership, no owner/board_members row) —
+// that's intentionally GET /shared's job (see below); "my boards" means
+// "boards I explicitly own or was explicitly added to," unchanged.
 router.get('/', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
+    const workspaceId = typeof req.query.workspace_id === 'string' ? req.query.workspace_id : undefined;
 
     const result = await pool.query(`
       SELECT DISTINCT
@@ -130,9 +139,10 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
             WHERE roll_number = $1
           )
         )
+        AND ($2::text IS NULL OR b.workspace_id = $2)
       GROUP BY b.id, bf.roll_number
       ORDER BY b.created_at DESC
-    `, [roll]);
+    `, [roll, workspaceId ?? null]);
 
     res.json(result.rows);
   } catch (err) {
@@ -142,10 +152,13 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
 });
 
 // GET /api/boards/archived
-// Returns this student's own archived boards
+// Returns this student's own archived boards. Optional ?workspace_id=
+// narrows to a single workspace, same additive/unscoped-by-default
+// treatment as GET / above.
 router.get('/archived', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
+    const workspaceId = typeof req.query.workspace_id === 'string' ? req.query.workspace_id : undefined;
 
     const result = await pool.query(`
       SELECT
@@ -158,9 +171,10 @@ router.get('/archived', requireStudent, async (req: Request, res: Response) => {
       LEFT JOIN board_members bm ON bm.board_id = b.id
       LEFT JOIN board_favorites bf ON bf.board_id = b.id AND bf.roll_number = $1
       WHERE b.is_archived AND b.owner_roll = $1
+        AND ($2::text IS NULL OR b.workspace_id = $2)
       GROUP BY b.id, bf.roll_number
       ORDER BY b.updated_at DESC
-    `, [roll]);
+    `, [roll, workspaceId ?? null]);
 
     res.json(result.rows);
   } catch (err) {
