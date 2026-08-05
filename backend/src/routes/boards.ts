@@ -178,9 +178,25 @@ router.get('/archived', requireStudent, async (req: Request, res: Response) => {
 
 // GET /api/boards/shared
 // Returns all shared, non-archived boards (for discovery)
+// Workspace scoping (workspace/organization layer, Commit 7/9) — this
+// route used to return EVERY shared, non-archived board across the
+// entire app, with no tenancy boundary at all. That's a real leak once
+// multiple workspaces exist: a private team's shared boards would
+// otherwise surface in every OTHER workspace's "discover" feed. Rolled
+// out in two steps to avoid a breaking-change window (see Commit 9,
+// which removes the fallback below once the frontend always sends the
+// param): for now, ?workspace_id= is OPTIONAL — when present, results
+// are scoped to that workspace; when absent, this still returns the old
+// global, unscoped result (logged once per call so the gap is visible
+// in server logs, not silently masked) until every caller has migrated.
 router.get('/shared', optionalStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll;
+    const workspaceId = typeof req.query.workspace_id === 'string' ? req.query.workspace_id : undefined;
+
+    if (!workspaceId) {
+      console.warn('GET /api/boards/shared called without workspace_id — returning unscoped (deprecated) global result');
+    }
 
     const result = await pool.query(`
       SELECT
@@ -193,9 +209,10 @@ router.get('/shared', optionalStudent, async (req: Request, res: Response) => {
       LEFT JOIN board_members bm ON bm.board_id = b.id
       LEFT JOIN board_favorites bf ON bf.board_id = b.id AND bf.roll_number = $1
       WHERE b.visibility = 'shared' AND NOT b.is_archived
+        AND ($2::text IS NULL OR b.workspace_id = $2)
       GROUP BY b.id, bf.roll_number
       ORDER BY b.created_at DESC
-    `, [roll ?? null]);
+    `, [roll ?? null, workspaceId ?? null]);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });

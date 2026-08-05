@@ -195,6 +195,56 @@ describe('GET /api/boards, /api/boards/archived — workspace scoping (Commit 5/
   });
 });
 
+describe('GET /api/boards/shared — workspace scoping (Commit 7/9)', () => {
+  it('without workspace_id, still returns the old GLOBAL result (deprecated fallback, unchanged for now)', async () => {
+    await registerStudent('SHAREDB1');
+    await registerStudent('SHAREDB1-OTHER');
+    await createBoardDirect({ ownerRoll: 'SHAREDB1', visibility: 'shared' });
+    await createBoardDirect({ ownerRoll: 'SHAREDB1-OTHER', visibility: 'shared' });
+
+    const res = await request(app)
+      .get('/api/boards/shared')
+      .set('Authorization', `Bearer ${tokenFor('SHAREDB1')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('with ?workspace_id=, narrows to ONLY that workspace\'s shared boards — a shared board in workspace A is absent from workspace B\'s scoped results', async () => {
+    await registerStudent('SHAREDB2');
+    await registerStudent('SHAREDB2-OTHER');
+    const { id: boardA, workspaceId: wsA } = await createBoardDirect({ ownerRoll: 'SHAREDB2', visibility: 'shared' });
+    const { workspaceId: wsB } = await createBoardDirect({ ownerRoll: 'SHAREDB2-OTHER', visibility: 'shared' });
+
+    const scopedToA = await request(app)
+      .get('/api/boards/shared')
+      .query({ workspace_id: wsA })
+      .set('Authorization', `Bearer ${tokenFor('SHAREDB2')}`);
+    expect(scopedToA.body).toHaveLength(1);
+    expect(scopedToA.body[0].id).toBe(boardA);
+
+    const scopedToB = await request(app)
+      .get('/api/boards/shared')
+      .query({ workspace_id: wsB })
+      .set('Authorization', `Bearer ${tokenFor('SHAREDB2')}`);
+    expect(scopedToB.body.some((b: { id: string }) => b.id === boardA)).toBe(false);
+  });
+
+  it('scoping excludes private boards in that workspace, same as the unscoped result always did', async () => {
+    await registerStudent('SHAREDB3');
+    const { workspaceId } = await createBoardDirect({ ownerRoll: 'SHAREDB3', visibility: 'shared' });
+    await createBoardDirect({ ownerRoll: 'SHAREDB3', visibility: 'private', workspaceId });
+
+    const res = await request(app)
+      .get('/api/boards/shared')
+      .query({ workspace_id: workspaceId })
+      .set('Authorization', `Bearer ${tokenFor('SHAREDB3')}`);
+
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].visibility).toBe('shared');
+  });
+});
+
 describe('canAccess/isMember/canEdit consolidation onto getBoardRole (Commit 6/9)', () => {
   // Boards here are created directly via SQL (createBoardDirect), not
   // through POST /api/boards — that route's createBoardLimiter (15/60s,
