@@ -146,6 +146,7 @@ export interface Workspace {
   created_at: string;
   role: 'owner' | 'admin' | 'member';
   member_count: number;
+  board_count: number;
 }
 
 export interface WorkspaceMember {

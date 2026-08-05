@@ -92,9 +92,16 @@ export async function ensurePersonalWorkspace(roll: string, name: string | null)
 
 // GET /api/workspaces
 // List every workspace the caller is a member of, with their role and a
-// member count. Always includes the caller's personal workspace (lazily
-// provisioned here if it doesn't exist yet) so the frontend switcher
-// never has to special-case "no workspaces yet".
+// member count AND board count (sharing/dashboard UI). Always includes
+// the caller's personal workspace (lazily provisioned here if it doesn't
+// exist yet) so the frontend switcher/panel never has to special-case
+// "no workspaces yet".
+//
+// board_count added for the Workspaces panel's dashboard cards — a pure
+// aggregate over the existing boards.workspace_id column (no schema
+// change), counted the same way item_count/member_count already are on
+// boards.ts's own list routes (COUNT DISTINCT via a LEFT JOIN, so a
+// workspace with zero boards still returns 0, not an omitted row).
 router.get('/', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
@@ -109,10 +116,12 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
       SELECT
         w.*,
         wm.role,
-        COUNT(DISTINCT wm2.roll_number)::int as member_count
+        COUNT(DISTINCT wm2.roll_number)::int as member_count,
+        COUNT(DISTINCT b.id)::int as board_count
       FROM workspaces w
       JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.roll_number = $1
       LEFT JOIN workspace_members wm2 ON wm2.workspace_id = w.id
+      LEFT JOIN boards b ON b.workspace_id = w.id
       GROUP BY w.id, wm.role
       ORDER BY w.is_personal DESC, w.created_at ASC
     `, [roll]);

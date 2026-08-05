@@ -72,7 +72,27 @@ describe('GET /api/workspaces — list mine', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
-    expect(res.body[0]).toMatchObject({ is_personal: true, role: 'owner', member_count: 1 });
+    expect(res.body[0]).toMatchObject({ is_personal: true, role: 'owner', member_count: 1, board_count: 0 });
+  });
+
+  it('board_count reflects the number of boards in that workspace', async () => {
+    await registerStudent('LIST4');
+    const workspace = await request(app).post('/api/workspaces').set('Authorization', `Bearer ${tokenFor('LIST4')}`).send({ name: 'Team' });
+    const now = new Date().toISOString();
+    for (const suffix of ['a', 'b']) {
+      await query(
+        `INSERT INTO boards (id, name, owner_roll, owner_name, visibility, edit_mode, created_at, updated_at, room_id, workspace_id)
+         VALUES ($1, 'Board', $2, 'Owner', 'private', 'members_only', $3, $3, $4, $5)`,
+        [`board-count-${suffix}`, 'LIST4', now, `room-count-${suffix}`, workspace.body.id]
+      );
+    }
+
+    const res = await request(app)
+      .get('/api/workspaces')
+      .set('Authorization', `Bearer ${tokenFor('LIST4')}`);
+
+    const team = res.body.find((w: { id: string }) => w.id === workspace.body.id);
+    expect(team.board_count).toBe(2);
   });
 
   it('lists both the personal workspace and any explicitly created ones, personal first', async () => {
