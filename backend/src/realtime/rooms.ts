@@ -2,6 +2,7 @@ import { TLSocketRoom, type RoomSnapshot } from '@tldraw/sync-core';
 import type { TLRecord } from '@tldraw/tlschema';
 import type { WebSocket } from 'ws';
 import type { RoomPersistence } from './roomPersistence';
+import { createRoomSocketGate } from './roomSocketGate';
 
 // ─────────────────────────────────────────────────────────────────────────
 // ROOM MANAGER — owns the lifecycle of in-memory TLSocketRoom instances.
@@ -19,10 +20,36 @@ import type { RoomPersistence } from './roomPersistence';
 // (Phase 2) will want to attach user info to a session, comments/mentions
 // will want to know who's connected — this class's job is room lifecycle,
 // not deciding what metadata matters.
+//
+// WRITE ENFORCEMENT (Commit 7) — every session now carries a mutable
+// `canWriteCanvas` flag (set at join() time, re-evaluated live by
+// updateSessionWriteAccess()/disconnectSession()) that gates writes at
+// the transport layer via roomSocketGate.ts — see that file's own header
+// comment for the full mechanism and why this is the correct extension
+// point given @tldraw/sync-core 2.4.4's real, verified API surface.
+// RoomManager still does no authorization ITSELF (join()'s caller —
+// connectionHandler.ts — is still the only place checkRoomAccess is
+// consulted for the initial connect, per the single-authorization-hook
+// design); RoomManager's new job is just holding the current decision per
+// session and threading it into the gate, plus exposing
+// updateSessionWriteAccess()/disconnectSession()/getSessionMetas() for a
+// caller (the periodic re-check in connectionHandler.ts) that wants to
+// update or act on that decision after the fact without tearing down and
+// reconstructing the session.
 // ─────────────────────────────────────────────────────────────────────────
+
+interface ManagedSession<SessionMeta> {
+  canWriteCanvas: boolean;
+  // Stored here (not read back from TLSocketRoom, which has no public
+  // accessor for a session's meta) so getSessionMetas() can hand it to
+  // the periodic re-validator without RoomManager needing a new
+  // TLSocketRoom API that doesn't exist.
+  meta: SessionMeta;
+}
 
 interface ManagedRoom<SessionMeta> {
   room: TLSocketRoom<TLRecord, SessionMeta>;
+  sessions: Map<string, ManagedSession<SessionMeta>>;
 }
 
 const PERSIST_DEBOUNCE_MS = 2000;
@@ -85,26 +112,29 @@ export class RoomManager<SessionMeta = void> {
 
     const createPromise = (async (): Promise<ManagedRoom<SessionMeta>> => {
       const initialSnapshot = await this.persistence.load(roomId);
-      const room = new TLSocketRoom<TLRecord, SessionMeta>({
-        initialSnapshot: initialSnapshot ?? undefined,
-        onSessionRemoved: (_room, { numSessionsRemaining }) => {
-          if (numSessionsRemaining === 0) {
-            // Last participant left — persist immediately (not on the
-            // debounce timer, which may not fire again for a room with no
-            // one left to trigger onDataChange) and tear the room down so
-            // memory doesn't accumulate for boards no one is actively
-            // editing. A later connection re-creates the room fresh from
-            // persistence via getOrCreateRoom above.
-            void this.persistNow(roomId);
-            this.teardownRoom(roomId);
-          }
-        },
-        onDataChange: () => {
-          this.schedulePersist(roomId);
-          this.notifySnapshotChanged(roomId);
-        },
-      });
-      const managed: ManagedRoom<SessionMeta> = { room };
+      const managed: ManagedRoom<SessionMeta> = {
+        sessions: new Map(),
+        room: new TLSocketRoom<TLRecord, SessionMeta>({
+          initialSnapshot: initialSnapshot ?? undefined,
+          onSessionRemoved: (_room, { sessionId, numSessionsRemaining }) => {
+            managed.sessions.delete(sessionId);
+            if (numSessionsRemaining === 0) {
+              // Last participant left — persist immediately (not on the
+              // debounce timer, which may not fire again for a room with no
+              // one left to trigger onDataChange) and tear the room down so
+              // memory doesn't accumulate for boards no one is actively
+              // editing. A later connection re-creates the room fresh from
+              // persistence via getOrCreateRoom above.
+              void this.persistNow(roomId);
+              this.teardownRoom(roomId);
+            }
+          },
+          onDataChange: () => {
+            this.schedulePersist(roomId);
+            this.notifySnapshotChanged(roomId);
+          },
+        }),
+      };
       this.rooms.set(roomId, managed);
       return managed;
     })();
@@ -160,8 +190,17 @@ export class RoomManager<SessionMeta = void> {
   // authorized the connection — this method does no authorization itself,
   // per the single-authorization-hook design (see roomAccess.ts). `meta` is
   // opaque session data the caller wants attached to this connection.
-  async join(roomId: string, sessionId: string, socket: WebSocket, meta: SessionMeta): Promise<void> {
+  //
+  // `canWriteCanvas` is the initial write-permission decision for this
+  // session (Commit 7) — computed by the caller from roomAccess.ts's role
+  // (roleCanWriteCanvas), not derived here, so RoomManager stays
+  // authorization-agnostic exactly as its own doc comment requires. Stored
+  // per-session (ManagedSession) so revalidateSession() can update it
+  // later without needing a new socket/connection.
+  async join(roomId: string, sessionId: string, socket: WebSocket, meta: SessionMeta, canWriteCanvas: boolean): Promise<void> {
     const managed = await this.getOrCreateRoom(roomId);
+    managed.sessions.set(sessionId, { canWriteCanvas, meta });
+
     // TLSocketRoom tracks its own session count internally (see
     // getActiveSessionCount below) and is what drives onSessionRemoved's
     // numSessionsRemaining — a closed socket moves its session to a pending
@@ -182,9 +221,62 @@ export class RoomManager<SessionMeta = void> {
     // asserts the shape TLSocketRoom's own overload guarantees for a
     // non-void SessionMeta, without weakening handleSocketConnect's
     // signature or reaching for `any`.
+    //
+    // The socket passed to TLSocketRoom is NOT the raw `socket` param —
+    // it's wrapped by createRoomSocketGate, which reads
+    // managed.sessions.get(sessionId).canWriteCanvas fresh on every
+    // incoming message (not just at connect time), so a later
+    // revalidateSession() call takes effect immediately on the next
+    // message, with no need to reconnect or reconstruct anything. See
+    // roomSocketGate.ts's own header comment for the full mechanism.
+    const gatedSocket = createRoomSocketGate(socket, {
+      canWriteCanvas: () => managed.sessions.get(sessionId)?.canWriteCanvas ?? false,
+      onWriteRejected: () => {
+        console.warn(`Realtime: dropped an unauthorized write from session ${sessionId} in room ${roomId}`);
+      },
+    });
+
     managed.room.handleSocketConnect(
-      { sessionId, socket, meta } as Parameters<typeof managed.room.handleSocketConnect>[0]
+      { sessionId, socket: gatedSocket, meta } as Parameters<typeof managed.room.handleSocketConnect>[0]
     );
+  }
+
+  // Updates an already-connected session's write permission without
+  // touching its socket/connection — used by connectionHandler.ts's
+  // periodic re-validation (Commit 7's answer to "permission changes
+  // live" / "board archived while connected" / "board deleted while
+  // connected"). Returns false if the session is no longer known (already
+  // disconnected), so the caller can stop tracking it.
+  updateSessionWriteAccess(roomId: string, sessionId: string, canWriteCanvas: boolean): boolean {
+    const session = this.rooms.get(roomId)?.sessions.get(sessionId);
+    if (!session) return false;
+    session.canWriteCanvas = canWriteCanvas;
+    return true;
+  }
+
+  // Forcibly disconnects one session — used by the same periodic
+  // re-validation when access has been fully revoked (not just
+  // downgraded to read-only), e.g. removed as a board member on a
+  // private board, or the board was deleted. Reuses TLSocketRoom's own
+  // documented public close path (the same one a client disconnect goes
+  // through), not a custom teardown.
+  disconnectSession(roomId: string, sessionId: string): void {
+    this.rooms.get(roomId)?.room.handleSocketError(sessionId);
+  }
+
+  // All currently-known session ids for a room, paired with their
+  // SessionMeta — used by the periodic re-validator to know who to
+  // re-check without RoomManager itself needing to know what "re-check"
+  // means (that logic stays in connectionHandler.ts / roomAccess.ts).
+  // Reads from RoomManager's own tracked ManagedSession (set at join()
+  // time), not from TLSocketRoom — TLSocketRoom has no public accessor
+  // for a session's meta after handleSocketConnect.
+  getSessionMetas(roomId: string): Array<{ sessionId: string; meta: SessionMeta }> {
+    const managed = this.rooms.get(roomId);
+    if (!managed) return [];
+    return Array.from(managed.sessions.entries()).map(([sessionId, session]) => ({
+      sessionId, meta: session.meta,
+    }));
   }
 
   // Diagnostic/ops accessor — how many rooms are currently live in memory.
@@ -196,6 +288,16 @@ export class RoomManager<SessionMeta = void> {
 
   getActiveSessionCount(roomId: string): number {
     return this.rooms.get(roomId)?.room.getNumActiveSessions() ?? 0;
+  }
+
+  // Every currently-loaded room's id — used by connectionHandler.ts's
+  // periodic re-validator (Commit 7) to know which rooms have sessions
+  // worth re-checking, without maintaining a separate parallel list of
+  // "active" rooms itself. A room with zero sessions is already torn down
+  // by onSessionRemoved (see getOrCreateRoom), so every id returned here
+  // genuinely has at least one connected session.
+  getActiveRoomIds(): string[] {
+    return Array.from(this.rooms.keys());
   }
 
   // Read-only peek at a room's CURRENT live content, for a caller (checkpoint

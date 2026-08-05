@@ -1,14 +1,19 @@
-# Realtime Collaboration — Rollout Notes (Commits 1–6)
+# Realtime Collaboration — Rollout Notes (Commits 1–7)
 
 This covers everything needed to run and verify the realtime foundation
 (WebSocket transport + room lifecycle, commits `77ea49b`/`7393ab9`), the
 frontend `@tldraw/sync` integration (Commit 3, `cdb1dc6`), the presence
-layer (Commit 4, `a0317b6`), version history (Commit 5), and comments
-(Commit 6). As of Commit 5, every board — realtime-enabled or not —
-automatically maintains a recoverable timeline of past states, browsable
-and restorable from the UI. As of Commit 6, every board also supports
+layer (Commit 4, `a0317b6`), version history (Commit 5), comments
+(Commit 6), and real server-side permission enforcement (Commit 7). As of
+Commit 5, every board — realtime-enabled or not — automatically
+maintains a recoverable timeline of past states, browsable and
+restorable from the UI. As of Commit 6, every board also supports
 threaded, pinned comments (canvas- or shape-anchored), with live push
-updates on boards where realtime is enabled.
+updates on boards where realtime is enabled. As of Commit 7, canvas
+writes over the realtime transport are enforced server-side — a
+Commenter/Viewer session can no longer write to the document just
+because a client happened to send one; the write never reaches the
+document, never broadcasts, and never persists.
 
 ## What changed
 
@@ -399,6 +404,186 @@ needs the real board `id`, not `room_id`). Both are now fixed — see
 by 10 new regression tests in `tests/room-access.test.ts` (verified to
 actually fail against the old code, not just pass trivially, by
 temporarily reverting the fix and re-running them).
+
+### Commit 7 additions (real server-side permission enforcement)
+
+**Goal**: replace the advisory-only realtime permission model with true
+server-side enforcement. Before this commit, `roomAccess.ts` computed the
+correct role for a connecting session, but nothing stopped a Commenter/
+Viewer session from sending a write anyway — the client's own `readOnly`
+UI flag was the only thing standing in the way, and a modified/malicious
+client could bypass it trivially. This commit closes that gap for the
+canvas transport specifically (Comments' and Version History's REST
+endpoints already had real enforcement since Commits 5/6 — see those
+sections above).
+
+**Research findings, before any code was written** (per the spec's
+explicit "research first" requirement): read `@tldraw/sync-core` 2.4.4's
+actual source directly, not assumed from its types or docs.
+- `TLSocketRoom.handleSocketConnect()` installs its own `'message'`
+  listener on whatever socket it's given, and that listener
+  unconditionally calls `this.room.handleMessage(sessionId, data)` — the
+  one call that mutates the document — after any per-message hooks run.
+- The only per-message hook, `onAfterReceiveMessage`, fires with the
+  fully-parsed message but its return value is discarded; nothing checks
+  whether it threw before proceeding to the mutation anyway. It can
+  observe a write, never block one.
+- There is no "readonly session" or permission concept anywhere in the
+  package.
+- The one thing `TLSocketRoom` DOES accept, `@public` and explicitly
+  documented for exactly this purpose, is an arbitrary `WebSocketMinimal`
+  — a small structural interface (`addEventListener?`,
+  `removeEventListener?`, `send`, `close`, `readyState`) "compatible with
+  the standard WebSocket interface... Bun.serve" — built for wrapping
+  whatever transport you hand it.
+
+**Mechanism** (`backend/src/realtime/roomSocketGate.ts`, the ONLY file in
+this codebase that knows anything about `@tldraw/sync-core`'s
+client→server wire framing — see its own extensive header comment):
+`RoomManager.join()` now wraps the real `ws` socket in a thin
+`WebSocketMinimal`-compatible proxy before handing it to
+`TLSocketRoom.handleSocketConnect`. The proxy classifies each incoming
+message by its top-level `type` field only (`push` is the sole
+write-carrying client→server message type; `connect`/`ping` always pass)
+— it never parses, mutates, or reconstructs document operations. A `push`
+from a session whose role doesn't permit writes is silently dropped
+*before* `TLSocketRoom`'s own listener ever sees it, so it never reaches
+`room.handleMessage()`, never mutates `this.room`, never broadcasts to
+other sessions, never persists, and never fires `onDataChange` (so it
+cannot affect version history either) — true prevention, not a
+reactive rollback. `canWriteCanvas()` is re-evaluated per message (not
+cached at connect time), so a live permission downgrade (see periodic
+re-validation below) takes effect on the very next message with no
+reconnect needed.
+
+**Four-tier role model** (`roomAccess.ts`): `RoomRole` is now
+`'owner' | 'editor' | 'commenter' | 'viewer'`, computed by
+`checkRoomAccess`/`checkRoomAccessForRoll` (room_id-keyed, for the WS
+paths) and `getBoardRole` (board.id-keyed, for REST endpoints) — the same
+classification function (`classifyBoardAccess`) underlies both, so REST
+and realtime can never disagree about who can do what. There is still no
+`role` column on `board_members`; these four tiers are a classification
+of the same ownership/membership/visibility/edit_mode facts the app
+already had, not new permission storage — Commenter is exactly the
+"read access but not board-edit access" tier Commit 6's comments
+permission model already computed, now given a first-class name and, new
+in this commit, enforced at the canvas transport too. **`RoomRole` is
+identity, not capability** — `roleCanWriteCanvas(role, isArchived)`
+takes `isArchived` as a required second argument rather than being a
+pure function of role, specifically because an archived board's owner is
+still, correctly, `'owner'` (they didn't stop owning it) but cannot
+write — see the real bug below that resulted from getting this
+distinction wrong initially.
+
+**Live revocation** (`connectionHandler.ts`'s `startPeriodicRevalidation`,
+15s interval): re-runs `checkRoomAccessForRoll` for every currently
+connected session and applies the result via `RoomManager`'s new
+`updateSessionWriteAccess`/`disconnectSession` — a downgrade (e.g.
+archived, edit_mode changed) updates the session in place with no
+disconnect; a full revocation (removed from a private board, board
+deleted, realtime disabled) force-disconnects the session so the
+client's own reconnect logic hits `checkRoomAccess` again and gets the
+current, real reason.
+
+**Client-facing errors** (`routes/realtime.ts`'s new
+`GET /api/boards/:roomId/access` pre-check, called by
+`TldrawCanvasSync.tsx` before ever opening a WebSocket): verified
+directly against `@tldraw/sync-core`'s `ClientWebSocketAdapter` source
+that any WS close code other than its own hardcoded `NOT_FOUND` (4099) is
+treated as a transient `'offline'` status by `useSync`'s
+`ReconnectManager`, which then retries indefinitely — a
+`permission_denied` close would otherwise look identical to a network
+blip to the client and retry forever against a condition that will never
+change. The REST pre-check sidesteps this entirely: the frontend learns
+the specific reason (`permission_denied` / `session_expired` /
+`board_archived` / `board_not_found` / `realtime_disabled`) before
+attempting to connect at all, and shows a distinct message per reason
+(`AccessDeniedScreen` in `TldrawCanvasSync.tsx`). While connected, the
+same endpoint is polled every 20s (`ACCESS_POLL_INTERVAL_MS`) so a
+permission revoked mid-session is reflected in the UI promptly — this is
+a poll, not an in-band push over the document-sync socket; see the next
+paragraph for why.
+
+**Three real bugs found and fixed during this commit's own development**
+(the first two caught by this commit's own new tests failing on first
+write, the third caught during manual QA before it ever reached a test —
+none assumed correct, all reproduced/verified before and after the fix):
+
+1. **Chunked pushes bypassed the write gate entirely.** The gate's first
+   implementation forwarded each raw message fragment to `TLSocketRoom`
+   immediately as it arrived, only checking `canWriteCanvas()` once the
+   *final* fragment completed classification — but `TLSocketRoom` does
+   its own, completely independent chunk reassembly on whatever raw
+   frames it sees, so the first N-1 fragments of a chunked push from a
+   read-only session had already reached it before the gate "dropped"
+   the last one. Any edit large enough to exceed `@tldraw/sync-core`'s
+   ~256KB chunk threshold would have silently bypassed enforcement
+   completely. Fixed by buffering every fragment of a message currently
+   being classified and flushing (or dropping) the whole buffered
+   sequence as one unit only once classification completes. Caught by
+   `tests/room-socket-gate.test.ts`'s own chunked-push test failing on
+   first write.
+2. **An owner could still write to an archived board.** An intermediate
+   version of `classifyBoardAccess` computed `canWrite` correctly
+   (incorporating `is_archived`) but then discarded it for the owner
+   branch (`isOwner ? 'owner' : canWrite ? 'editor' : 'commenter'`),
+   combined with an initial `roleCanWriteCanvas(role)` that was a pure
+   function of role with no archive awareness — meaning the board
+   owner, specifically, could keep writing to a canvas the "Board
+   archived" write-freeze was supposed to guarantee was frozen for
+   everyone. Reproduced live against a real server (a direct REST
+   pre-check call showing `canWriteCanvas: true` on an archived board)
+   before fixing, and now covered by two explicit regression tests
+   (verified to fail against the reintroduced bug, not just pass
+   trivially).
+3. **The gate's original design sent a custom notice back over the
+   document-sync socket on a rejected write** (`{ type:
+   'permission_denied_notice', ... }`), intended as defense-in-depth for
+   a permission revoked mid-session. Re-reading `@tldraw/sync-core`'s
+   `TLSyncClient` source during this commit's own review revealed that
+   any message `type` the client doesn't already recognize hits its
+   `handleServerEvent`'s `default: exhaustiveSwitchError(event)` branch,
+   which **throws** — this would have crashed the client's message-
+   handling loop instead of being safely ignored. Removed entirely
+   before it shipped; the gate is now completely silent on the wire, and
+   the REST poll above is the sole mechanism for surfacing a
+   mid-session revocation to the UI.
+
+**Mutation-path audit** (per the spec's explicit AUDIT requirement):
+every write path under `realtime/`, `routes/comments.ts`,
+`routes/versions.ts` was traced and confirmed to go through
+`getBoardRole`/`roleCanWriteCanvas`/`roleCanComment` before mutating
+anything. The audit also surfaced the same defect class already fixed in
+`roomAccess.ts` present in `routes/boards.ts`'s own long-standing
+`canEdit()` helper (used by `PUT /:id/canvas`, `POST /:id/duplicate`,
+`POST /:id/canvas-files`, `POST /:id/items`) — it never checked
+`is_archived` either, so a member could still save canvas content or
+upload files to an archived board via plain REST even though the
+realtime WS layer and version-restore path both correctly refused
+writes. Fixed the same way (an `is_archived` check added to `canEdit`,
+scoped to leave `PUT /:id`'s own `isOwner` check — the archive/rename/
+unarchive action itself — untouched, since that must keep working on an
+archived board).
+
+**Testing**: `tests/room-socket-gate.test.ts` (12 tests) unit-tests the
+gate in isolation — push classification, chunk buffering, forward/drop
+behavior, and the "never sends anything back over the socket" invariant
+— using only literal JSON strings matching `@tldraw/sync-core`'s public
+`TLPushRequest`/`TLConnectRequest`/`TLPingRequest` shapes, never
+hand-constructing an actual tldraw wire handshake (see
+`tests/realtime-rooms.test.ts`'s own pre-existing comment on why that's
+avoided — the real `connect` message's exact shape is `@internal`).
+`tests/room-access.test.ts` gained the four-tier role model, the
+archived-board write freeze (including the two owner-specific regression
+tests), `checkRoomAccessForRoll`, and `getBoardRole` coverage.
+`tests/periodic-revalidation.test.ts` (6 tests) verifies live
+downgrade/disconnect behavior against a fake `RoomManager` and the real
+`checkRoomAccessForRoll` (hits the local test DB) — using **real timers**
+with a short interval override, not `vi.useFakeTimers()`, since mixing
+fake timers with `checkRoomAccessForRoll`'s real Postgres I/O produced
+non-deterministic failures (fake-timer advancement doesn't reliably wait
+for actual socket I/O to complete) — confirmed directly by writing the
+fake-timer version first and watching it fail on first run, not assumed.
 
 ## Two-layer rollout gate
 
@@ -804,6 +989,70 @@ refresh/reopen of the panel to see someone else's change.
     that resolved-by-default filtering keeps the visible pin count
     manageable.
 
+## Commit 7 — manual QA (permission enforcement)
+
+Same setup as Commit 3–6's checklists.
+
+1. **Two browsers, viewer vs editor** — open the same shared board as an
+   owner/editor in one browser and a non-member (commenter tier) in
+   another. Confirm the editor's edits sync live to the commenter's view
+   (read still works), and confirm the commenter's `<Tldraw>` renders
+   read-only (`hideUi`) — this now reflects the SERVER's computed
+   `canWriteCanvas`, not a client-side guess.
+2. **A modified/malicious client cannot bypass read-only** — this is the
+   core of what Commit 7 fixes, and isn't testable from the normal UI (by
+   design, the UI just doesn't offer write controls to a commenter).
+   Verified instead via `tests/room-socket-gate.test.ts`'s unit tests and
+   this commit's own manual QA scripts (see the commit message) sending a
+   raw, hand-built `push` message as a commenter/viewer session directly
+   — confirm server logs show "dropped an unauthorized write" and the
+   socket stays open with no crash, no error frame, and the document
+   snapshot is unchanged.
+3. **Permission changes live** — with a member connected and editing,
+   remove them as a board member from another session/tab. Confirm
+   within ~15s (the periodic re-validation interval) their session either
+   downgrades (still connected, now read-only) or disconnects (if they
+   also lost read access), without needing to refresh.
+4. **Board archived while connected** — archive a board while a member
+   has it open. Confirm their session downgrades to read-only in place
+   (no disconnect — they still have read access) within ~15s, and that a
+   REST attempt to save canvas content, checkpoint a version, or restore
+   a version all now return 403.
+5. **Board deleted while connected** — delete a board while someone has
+   it open. Confirm their session is force-disconnected within ~15s.
+6. **Reconnect after a permission change** — after being disconnected per
+   #3/#5, confirm the client's own reconnect attempt gets a clean,
+   accurate denial (via the REST pre-check, not a confusing generic
+   error) rather than retrying forever.
+7. **Refresh** — reload the page as a commenter/viewer. Confirm the REST
+   pre-check (`GET /api/boards/:roomId/access`) is what renders the
+   correct read-only/denied state immediately, before any WebSocket
+   connection is attempted.
+8. **Duplicate tabs** — open the same board in two tabs as the same
+   editor. Confirm both connect and sync independently; a write in one
+   tab appears in the other exactly as before Commit 7 (this commit adds
+   no restriction between a user's own tabs).
+9. **Offline then reconnect** — same as Commit 3's own offline test;
+   Commit 7 adds no new offline-handling code (useSync's own
+   ReconnectManager is unchanged), only confirms the reconnect attempt
+   re-validates permission from scratch via a fresh `checkRoomAccess`
+   call.
+10. **Session expired** — use an expired/invalid JWT (or clear the stored
+    token) and attempt to open a board. Confirm the REST pre-check
+    reports `session_expired` and a clear message is shown, not a raw
+    connection-failed screen.
+11. **Comments and version history still work correctly alongside the
+    canvas write-gate** — resolve/reopen a comment as an editor,
+    view/restore version history as an editor, confirm a commenter can
+    still create/reply to comments (comments are NOT frozen by an
+    archived board, only canvas writes and version-history writes are —
+    see this commit's own architecture notes above) but cannot resolve
+    threads or view/restore version history.
+12. **Large boards** — confirm the write gate's per-message classification
+    (a cheap substring check before a full JSON parse — see
+    `roomSocketGate.ts`) doesn't introduce a noticeable latency increase
+    on a board with heavy, frequent edit traffic.
+
 ## What's explicitly NOT yet built (don't test for these)
 
 - No sticky notes, notifications, AI, or plugins.
@@ -813,17 +1062,18 @@ refresh/reopen of the panel to see someone else's change.
   themselves have replies), @mentions (the `mentions` column exists,
   reserved, unused), or comment notifications — all explicitly out of
   scope for Commit 6 per its own spec.
-- No server-side write enforcement for `role: 'viewer'` on the live
-  WebSocket **document-sync** transport itself (comments' own REST
-  endpoints ARE fully server-side enforced — see Commit 6's permission
-  model above) — documented as a known limitation in `roomAccess.ts`,
-  must be resolved before Sticky Notes / public sharing / team
-  workspaces. In Commit 3 terms: a `readOnly` client hides the UI
-  (`hideUi`) but nothing server-side rejects a tldraw document write if
-  one were sent anyway — same trust model the manual path already had,
-  not a new gap. (Version history's and Comments' own REST endpoints are
-  NOT subject to this gap.)
 - No UI to flip `board.realtime_enabled` from the app itself — still a
   manual DB flip per "Enabling a pilot board" above.
 - No admin visibility into `RoomManager`'s diagnostic accessors
   (`getActiveRoomCount`/`getActiveSessionCount`) — not wired to any endpoint.
+- The reserved `'viewer'` role (read-only, cannot comment) has no code
+  path that produces it yet — no sharing mode exists today that grants
+  read access without also granting comment rights. The type and its
+  enforcement (`roleCanComment`) exist so a future stricter sharing mode
+  doesn't need a new tier invented from scratch.
+- Comments and presence data are NOT subject to the periodic
+  re-validation interval — only canvas write capability is actively
+  re-checked every 15s. A comment REST call is re-validated on every
+  request already (no interval needed, since it's not a persistent
+  connection); presence is inherently tied to the same document-sync
+  session the write gate already covers.

@@ -6,6 +6,7 @@ import { param } from '../routeParams';
 import * as versionTimeline from '../realtime/history/versionTimeline';
 import type { VersionHistoryService } from '../realtime/history/versionHistoryService';
 import type { RestoreService } from '../realtime/history/restoreService';
+import { getBoardRole, roleCanWriteCanvas } from '../realtime/roomAccess';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Version history REST endpoints — deliberately a separate router/file
@@ -21,27 +22,18 @@ import type { RestoreService } from '../realtime/history/restoreService';
 // backend test file for what CAN be tested in isolation — the service
 // logic, via a fake RoomManager, not these HTTP routes).
 //
-// Permission model: reuses the same owner/member/edit_mode rules as
-// routes/boards.ts (not the realtime WS layer's advisory-only `role` — see
-// roomAccess.ts's own doc comment listing "Version History: a restore is a
-// write; must be permission-checked" as a required-before-shipping item).
-// Restore goes through Express/requireStudent, so this check is REAL
-// server-side enforcement, not the WS transport's advisory-only equivalent.
+// Permission model (Commit 7): uses roomAccess.ts's getBoardRole/
+// roleCanWriteCanvas — the SAME classification the realtime write gate
+// itself now enforces (roomSocketGate.ts) — rather than this file's own
+// former canEditBoard helper. That helper had a real, previously
+// unnoticed gap this refactor closes: it never checked board.is_archived,
+// so restoring a version (a write) on an archived board was permitted —
+// inconsistent with the realtime canvas layer's own archived-board
+// write-freeze (see roomAccess.ts's classifyBoardAccess). Restore goes
+// through Express/requireStudent, so this check is REAL server-side
+// enforcement, not the WS transport's advisory-only equivalent that used
+// to exist before Commit 7.
 // ─────────────────────────────────────────────────────────────────────────
-
-async function canEditBoard(boardId: string, roll: string): Promise<boolean> {
-  const board = await pool.query(
-    'SELECT owner_roll, visibility, edit_mode FROM boards WHERE id = $1', [boardId]
-  );
-  if (board.rows.length === 0) return false;
-  const b = board.rows[0] as { owner_roll: string; visibility: string; edit_mode: string };
-  if (b.owner_roll === roll) return true;
-  if (b.edit_mode === 'anyone' && b.visibility === 'shared') return true;
-  const mem = await pool.query(
-    'SELECT 1 FROM board_members WHERE board_id = $1 AND roll_number = $2', [boardId, roll]
-  );
-  return mem.rows.length > 0;
-}
 
 async function getBoardRoomId(boardId: string): Promise<string | null> {
   const result = await pool.query('SELECT room_id FROM boards WHERE id = $1', [boardId]);
@@ -69,8 +61,8 @@ export function createVersionsRouter<SessionMeta = unknown>(services: {
       const roll = req.studentRoll!;
       const boardId = param(req.params.id);
 
-      const canAccess = await canEditBoard(boardId, roll);
-      if (!canAccess) {
+      const boardRole = await getBoardRole(boardId, roll);
+      if (boardRole === null || !roleCanWriteCanvas(boardRole.role, boardRole.isArchived)) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
@@ -102,8 +94,8 @@ export function createVersionsRouter<SessionMeta = unknown>(services: {
       const roll = req.studentRoll!;
       const boardId = param(req.params.id);
 
-      const canEdit = await canEditBoard(boardId, roll);
-      if (!canEdit) {
+      const boardRole = await getBoardRole(boardId, roll);
+      if (boardRole === null || !roleCanWriteCanvas(boardRole.role, boardRole.isArchived)) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
@@ -144,11 +136,12 @@ export function createVersionsRouter<SessionMeta = unknown>(services: {
       const boardId = param(req.params.id);
       const versionId = param(req.params.versionId);
 
-      // Real server-side write enforcement (unlike the WS transport's
-      // advisory-only role) — a restore is exactly the kind of write
-      // roomAccess.ts's known-limitation comment calls out as needing this.
-      const canEdit = await canEditBoard(boardId, roll);
-      if (!canEdit) {
+      // Real server-side write enforcement — a restore is exactly the
+      // kind of write that must be permission-checked, and now also
+      // correctly rejects a restore attempt on an archived board (see
+      // this file's own header comment on the gap this closed).
+      const boardRole = await getBoardRole(boardId, roll);
+      if (boardRole === null || !roleCanWriteCanvas(boardRole.role, boardRole.isArchived)) {
         return res.status(403).json({ error: 'Access denied' });
       }
 

@@ -186,6 +186,24 @@ export interface CommentEvent {
   comment: BoardComment;
 }
 
+// Mirrors backend/src/realtime/roomAccess.ts's RoomAccessDenialReason and
+// RoomRole exactly (Commit 7) — the frontend's copy of the SAME enum
+// values the server computes, never re-derived client-side. See
+// TldrawCanvasSync.tsx for how each denial reason maps to a distinct
+// user-facing message.
+export type RoomAccessDenialReason =
+  | 'realtime_disabled'
+  | 'session_expired'
+  | 'board_not_found'
+  | 'board_archived'
+  | 'permission_denied';
+
+export type RoomRole = 'owner' | 'editor' | 'commenter' | 'viewer';
+
+export type RealtimeAccessCheck =
+  | { ok: true; role: RoomRole; canWriteCanvas: boolean; canComment: boolean }
+  | { ok: false; reason: RoomAccessDenialReason };
+
 export interface AppSettings {
   public_meet_enabled: string;
   public_meet_passcode?: string;
@@ -723,5 +741,16 @@ export const api = {
     // with board.realtime_enabled to decide which canvas component to render.
     getStatus: () =>
       request<{ enabled: boolean }>('GET', '/realtime/status'),
+    // Commit 7 — the REST pre-check TldrawCanvasSync.tsx calls BEFORE
+    // opening the document-sync WebSocket, so a rejection reason
+    // (permission_denied / session_expired / board_archived /
+    // board_not_found / realtime_disabled) is known up front rather than
+    // inferred from a WS close code — see backend/src/routes/realtime.ts's
+    // own comment on why a close code alone isn't reliable here (any code
+    // other than tldraw's own 4099 NOT_FOUND is treated as a transient
+    // "offline" state by @tldraw/sync's ReconnectManager, which then
+    // retries forever against a condition that will never change).
+    getAccess: (roomId: string, roll: string) =>
+      request<RealtimeAccessCheck>('GET', `/realtime/boards/${roomId}/access`, { roll }),
   },
 };

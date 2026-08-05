@@ -7,7 +7,7 @@ import {
   type TLAssetStore,
 } from 'tldraw';
 import 'tldraw/tldraw.css';
-import { api, type BoardItem } from '../lib/api';
+import { api, type BoardItem, type RoomAccessDenialReason } from '../lib/api';
 import {
   ACCEPTED_IMAGE_MIME_TYPES,
   ClipboardOverride,
@@ -81,9 +81,9 @@ import type { CommentsProps } from './commentsProps';
 interface TldrawCanvasSyncProps {
   boardId: string;
   roomId: string;
+  roll: string;
   theme: 'dark' | 'light';
   pendingItems?: BoardItem[];
-  readOnly?: boolean;
   // Commit 6 — see commentsProps.ts.
   comments?: CommentsProps;
 }
@@ -116,6 +116,48 @@ const STATUS_COPY: Record<Exclude<ConnectionState, 'connected'>, { label: string
   offline: { label: 'Offline — changes will sync when you\'re back online', tone: 'warning' },
   failed: { label: 'Connection failed', tone: 'error' },
 };
+
+// Commit 7 — one message per denial reason, per the "meaningful errors,
+// never silently ignored writes" requirement. Mirrors
+// backend/src/realtime/roomAccess.ts's RoomAccessDenialReason exactly —
+// see api.ts's own copy of that type for why this is never re-derived
+// client-side.
+const ACCESS_DENIED_COPY: Record<RoomAccessDenialReason, string> = {
+  permission_denied: "You don't have access to this board.",
+  session_expired: 'Your session has expired — please sign in again.',
+  board_archived: 'This board is archived.',
+  board_not_found: "This board couldn't be found — it may have been deleted.",
+  realtime_disabled: 'Live collaboration is temporarily unavailable.',
+};
+
+function AccessDeniedScreen({ reason, theme }: { reason: RoomAccessDenialReason; theme: 'dark' | 'light' }) {
+  return (
+    <div style={{
+      position: 'absolute', inset: 0,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      gap: 8, background: theme === 'dark' ? '#1a1a1a' : '#f8f8f8',
+      color: theme === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)',
+      fontFamily: 'var(--font-body)', fontSize: 14, textAlign: 'center', padding: 24,
+    }}>
+      <p style={{ margin: 0 }}>{ACCESS_DENIED_COPY[reason]}</p>
+    </div>
+  );
+}
+
+// How often TldrawCanvasSync re-polls the same REST pre-check while
+// already connected, so a permission REVOKED mid-session (removed as a
+// member, board archived/deleted by someone else) is noticed without
+// waiting for a reconnect. NOT the same mechanism as the backend's own
+// 15s periodic re-validation (connectionHandler.ts) — that one actually
+// enforces the write gate server-side regardless of whether this poll
+// ever runs; this poll exists purely so the UI reflects the SAME
+// decision promptly, rather than a student only discovering they'd been
+// downgraded to read-only the next time they tried to type. Deliberately
+// NOT delivered in-band over the document-sync socket — see
+// roomSocketGate.ts's own header comment on why an unrecognized message
+// type on that socket would crash @tldraw/sync's client
+// (exhaustiveSwitchError), verified directly against its source.
+const ACCESS_POLL_INTERVAL_MS = 20_000;
 
 function ConnectionBanner({ state, onRetry }: { state: Exclude<ConnectionState, 'connected'>; onRetry?: () => void }) {
   const { label, tone } = STATUS_COPY[state];
@@ -156,9 +198,9 @@ function ConnectionBanner({ state, onRetry }: { state: Exclude<ConnectionState, 
 export function TldrawCanvasSync({
   boardId,
   roomId,
+  roll,
   theme,
   pendingItems,
-  readOnly = false,
   comments,
 }: TldrawCanvasSyncProps) {
   const boardIdRef = useRef(boardId);
@@ -175,6 +217,69 @@ export function TldrawCanvasSync({
   // reports as unrecoverable, e.g. a rejected/incompatible room).
   const [retryNonce, setRetryNonce] = useState(0);
 
+  // Commit 7 — the REST pre-check (see api.ts's getAccess doc comment for
+  // why a WS close code alone can't reliably tell the client WHY it was
+  // denied). Runs before useSync ever constructs a `uri`, so a
+  // permission_denied/session_expired/board_archived/board_not_found/
+  // realtime_disabled board never even attempts a socket connection —
+  // there is nothing for @tldraw/sync's ReconnectManager to retry forever
+  // against, because it's never invoked in the first place.
+  //
+  // 'checking' is the initial and only truly transient state; 'denied'
+  // and 'allowed' are both terminal until retryNonce changes (a manual
+  // Retry) or the periodic poll below downgrades 'allowed' → 'denied'.
+  type AccessState =
+    | { status: 'checking' }
+    | { status: 'denied'; reason: RoomAccessDenialReason }
+    | { status: 'allowed'; canWriteCanvas: boolean };
+  const [access, setAccess] = useState<AccessState>({ status: 'checking' });
+
+  useEffect(() => {
+    let cancelled = false;
+    setAccess({ status: 'checking' });
+    api.realtime.getAccess(roomId, roll)
+      .then(result => {
+        if (cancelled) return;
+        setAccess(result.ok
+          ? { status: 'allowed', canWriteCanvas: result.canWriteCanvas }
+          : { status: 'denied', reason: result.reason });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // A failed pre-check (network blip hitting THIS request, not the
+        // eventual WS) must not permanently block the board — fall
+        // through to attempting the real connection, which has its own
+        // retry/error UI already. Treating this as 'allowed' optimistically
+        // is safe: the WS upgrade re-runs the exact same checkRoomAccess
+        // server-side regardless of what this pre-check believed.
+        setAccess({ status: 'allowed', canWriteCanvas: false });
+      });
+    return () => { cancelled = true; };
+  }, [roomId, roll, retryNonce]);
+
+  // Re-polls the same pre-check on an interval WHILE already connected,
+  // so a permission revoked mid-session downgrades the UI promptly — see
+  // ACCESS_POLL_INTERVAL_MS's own comment on why this polls rather than
+  // listening for an in-band signal on the document-sync socket itself.
+  useEffect(() => {
+    if (access.status !== 'allowed') return;
+    const interval = setInterval(() => {
+      api.realtime.getAccess(roomId, roll)
+        .then(result => {
+          setAccess(result.ok
+            ? { status: 'allowed', canWriteCanvas: result.canWriteCanvas }
+            : { status: 'denied', reason: result.reason });
+        })
+        .catch(() => {
+          // A single failed poll must not flip an otherwise-fine session
+          // to denied — try again next interval.
+        });
+    }, ACCESS_POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [access.status, roomId, roll]);
+
+  const readOnly = access.status !== 'allowed' || !access.canWriteCanvas;
+
   const assetStore: TLAssetStore = useMemo(() => ({
     upload: async (_asset: TLAsset, file: File) => {
       const { url } = await api.boards.uploadCanvasFile(
@@ -187,10 +292,13 @@ export function TldrawCanvasSync({
   // getRealtimeUrl reads the current student JWT at call time — recomputing
   // it per roomId/retryNonce change (not memoizing across the component's
   // whole lifetime) means a token refresh between mounts is picked up
-  // naturally, with no separate auth-refresh path to build.
+  // naturally, with no separate auth-refresh path to build. Only computed
+  // (and therefore only ever opens a socket) once the pre-check above has
+  // actually allowed this connection — see the `access.status === 'allowed'`
+  // guard on useSync's uri below.
   const uri = useMemo(
-    () => api.boards.getRealtimeUrl(roomId),
-    [roomId, retryNonce]
+    () => access.status === 'allowed' ? api.boards.getRealtimeUrl(roomId) : '',
+    [roomId, retryNonce, access.status]
   );
 
   // Presence identity (id/name/color) — see PresenceProvider.tsx for how
@@ -203,6 +311,13 @@ export function TldrawCanvasSync({
   // parallel presence implementation.
   const userInfo = usePresenceUserInfo();
 
+  // useSync itself has no "don't connect yet" mode — passing an empty uri
+  // when access hasn't been allowed yet would have it attempt (and
+  // immediately fail) a connection to '', so its own status stays
+  // 'loading'/'error' rather than ever reaching 'synced-remote'; the
+  // access-gated screens below (AccessDeniedScreen / the 'checking'
+  // spinner) are what's actually shown to the user during this window,
+  // never useSync's own error UI for an empty-uri attempt.
   const store = useSync({
     uri,
     assets: assetStore,
@@ -283,6 +398,46 @@ export function TldrawCanvasSync({
   useEffect(() => {
     editorRef.current?.user.updateUserPreferences({ colorScheme: theme });
   }, [theme]);
+
+  // Access-denied — the pre-check itself rejected this connection, or the
+  // periodic re-poll downgraded an already-'allowed' session to fully
+  // denied (e.g. removed from a private board, board deleted). Takes
+  // priority over every store/connection-status UI below, since there is
+  // no live document worth showing a connection banner for in this case.
+  if (access.status === 'denied') {
+    return (
+      <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+        <AccessDeniedScreen reason={access.reason} theme={theme} />
+      </div>
+    );
+  }
+
+  // Still waiting on the pre-check's first result — deliberately the same
+  // "Connecting to board…" visual as useSync's own 'loading' state below,
+  // so there's no visible flash/flicker between the two phases.
+  if (access.status === 'checking') {
+    return (
+      <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+        <div style={{
+          position: 'absolute', inset: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: theme === 'dark' ? '#1a1a1a' : '#f8f8f8',
+          color: theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)',
+          fontFamily: 'var(--font-body)', fontSize: 14,
+          flexDirection: 'column', gap: 12,
+        }}>
+          <div style={{
+            width: 20, height: 20,
+            border: `2px solid currentColor`,
+            borderTopColor: 'transparent',
+            borderRadius: 'var(--radius-full)',
+            animation: 'spin 0.8s linear infinite',
+          }} />
+          Connecting to board…
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>

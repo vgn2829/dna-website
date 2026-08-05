@@ -76,12 +76,27 @@ async function isMember(boardId: string, roll: string): Promise<boolean> {
 
 // Write access honours edit_mode: owner and members can always edit; when a board
 // is shared with edit_mode='anyone', any signed-in student may edit too.
+//
+// SECURITY FIX (found via Commit 7's mutation-path audit, same defect class
+// already fixed in realtime/roomAccess.ts's classifyBoardAccess and
+// routes/versions.ts): this used to never check is_archived, meaning a
+// member/owner could still save canvas content, upload canvas files,
+// duplicate, or add items on an archived board via plain REST — even
+// though the realtime WS canvas layer and the version-restore path both
+// correctly refuse writes to an archived board. Archiving is a deliberate
+// "stop changing this" action (see PUT /:id below); every write path
+// needs to honor it consistently, not just the realtime one. This function
+// is NOT used by PUT /:id itself (that uses isOwner, checked separately,
+// so archiving/unarchiving/renaming a board you own still works) — only
+// by the four content-mutation routes below (duplicate, canvas save,
+// canvas-files upload, items).
 async function canEdit(boardId: string, roll: string): Promise<boolean> {
   const board = await pool.query(
-    'SELECT owner_roll, visibility, edit_mode FROM boards WHERE id = $1', [boardId]
+    'SELECT owner_roll, visibility, edit_mode, is_archived FROM boards WHERE id = $1', [boardId]
   );
   if (board.rows.length === 0) return false;
-  const b = board.rows[0] as { owner_roll: string; visibility: string; edit_mode: string };
+  const b = board.rows[0] as { owner_roll: string; visibility: string; edit_mode: string; is_archived: boolean };
+  if (b.is_archived) return false;
   if (b.owner_roll === roll) return true;
   if (b.edit_mode === 'anyone' && b.visibility === 'shared') return true;
   const mem = await pool.query(

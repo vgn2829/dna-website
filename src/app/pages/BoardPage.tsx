@@ -614,45 +614,63 @@ export default function BoardPage() {
         {/* Canvas area */}
         <div style={{ position: 'absolute', top: 48, left: 0, right: 0, bottom: 0 }}>
           {useRealtimeSync ? (
-            // Realtime path: no canvasReady gate — TldrawCanvasSync has no
-            // dependency on the manual loadCanvas() REST fetch above (it
-            // loads its document state over the WebSocket connection
-            // itself, seeded server-side from the same canvas_data column —
-            // see backend/src/realtime/roomPersistence.ts) and shows its
-            // own internal Loading/Connecting UI, so gating it behind an
-            // irrelevant REST call would only add latency for no benefit.
-            <Suspense fallback={
+            !studentSession?.rollNumber ? (
+              // The realtime WS layer always requires a valid student JWT
+              // (checkRoomAccess returns session_expired for an anonymous
+              // request — see roomAccess.ts) — an anonymous visitor could
+              // never actually connect, so this is shown instead of letting
+              // TldrawCanvasSync attempt a pre-check doomed to fail with a
+              // confusing "session expired" message for someone who was
+              // never signed in to begin with.
               <div style={{
                 position: 'absolute', inset: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 background: theme === 'dark' ? '#1a1a1a' : '#f8f8f8',
                 color: textMuted, fontFamily: 'var(--font-body)', fontSize: 14,
               }}>
-                Loading canvas...
+                Sign in to view this board's live session.
               </div>
-            }>
-              {/* PresenceProvider scoped here (not global in Root.tsx) —
-                  presence identity is only meaningful on a realtime board;
-                  every other page has no use for it. See
-                  PresenceProvider.tsx for what it derives and why. */}
-              <PresenceProvider>
-                <TldrawCanvasSync
-                  boardId={id!}
-                  roomId={board.room_id!}
-                  theme={theme}
-                  pendingItems={board.items}
-                  readOnly={!isMember && board.edit_mode === 'members_only'}
-                  comments={studentSession?.rollNumber ? {
-                    commentsApi,
-                    commentMode,
-                    onExitCommentMode: () => setCommentMode(false),
-                    currentRoll: studentSession.rollNumber,
-                    canModerate: canModerateComments,
-                    lastSeenAt,
-                  } : undefined}
-                />
-              </PresenceProvider>
-            </Suspense>
+            ) : (
+              // Realtime path: no canvasReady gate — TldrawCanvasSync has no
+              // dependency on the manual loadCanvas() REST fetch above (it
+              // loads its document state over the WebSocket connection
+              // itself, seeded server-side from the same canvas_data column —
+              // see backend/src/realtime/roomPersistence.ts) and shows its
+              // own internal Loading/Connecting UI, so gating it behind an
+              // irrelevant REST call would only add latency for no benefit.
+              <Suspense fallback={
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: theme === 'dark' ? '#1a1a1a' : '#f8f8f8',
+                  color: textMuted, fontFamily: 'var(--font-body)', fontSize: 14,
+                }}>
+                  Loading canvas...
+                </div>
+              }>
+                {/* PresenceProvider scoped here (not global in Root.tsx) —
+                    presence identity is only meaningful on a realtime board;
+                    every other page has no use for it. See
+                    PresenceProvider.tsx for what it derives and why. */}
+                <PresenceProvider>
+                  <TldrawCanvasSync
+                    boardId={id!}
+                    roomId={board.room_id!}
+                    roll={studentSession.rollNumber}
+                    theme={theme}
+                    pendingItems={board.items}
+                    comments={{
+                      commentsApi,
+                      commentMode,
+                      onExitCommentMode: () => setCommentMode(false),
+                      currentRoll: studentSession.rollNumber,
+                      canModerate: canModerateComments,
+                      lastSeenAt,
+                    }}
+                  />
+                </PresenceProvider>
+              </Suspense>
+            )
           ) : !canvasReady ? (
             <div style={{
               position: 'absolute', inset: 0,

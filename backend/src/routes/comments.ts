@@ -6,6 +6,7 @@ import { param } from '../routeParams';
 import * as commentsStorage from '../realtime/comments/commentsStorage';
 import type { CommentBroadcaster } from '../realtime/comments/commentBroadcaster';
 import type { BoardComment } from '../realtime/comments/commentsStorage';
+import { getBoardRole, roleCanWriteCanvas, roleCanComment } from '../realtime/roomAccess';
 
 // ─────────────────────────────────────────────────────────────────────────
 // COMMENTS REST ENDPOINTS — a dedicated router, same reasoning as
@@ -14,65 +15,44 @@ import type { BoardComment } from '../realtime/comments/commentsStorage';
 // an app with no comment routes mounted rather than needing a
 // CommentBroadcaster it doesn't care about.
 //
-// PERMISSION MODEL (Owner / Editor / Commenter / Viewer from the spec,
-// mapped onto this codebase's actual, existing two-tier board permission
-// system — see roomAccess.ts / routes/boards.ts's canEdit for the model
-// this reuses rather than inventing a third, parallel one):
+// PERMISSION MODEL (Owner / Editor / Commenter / Viewer) — Commit 7
+// replaced this file's own hand-rolled canReadBoard/canEditBoard helpers
+// with roomAccess.ts's getBoardRole(), the same role classification the
+// realtime transport itself now enforces (see roomAccess.ts's own
+// "COMMIT 7" comment). This was a real duplication before: two separate
+// functions computing "can this roll write to this board" from the same
+// owner_roll/edit_mode/visibility/board_members facts, with no guarantee
+// they'd stay in sync if one changed. There is now exactly one place that
+// logic lives.
 //
-//   - "can read" (isMember, or board.visibility === 'shared') is the bar
-//     for creating comments/replies and reading the thread — this is the
-//     Commenter/Viewer-with-comment-rights tier from the spec. Plain
-//     Figma/FigJam/Miro all let anyone with view access comment; there is
-//     no separate "Commenter" role in this app's data model, and adding
-//     one would be exactly the over-engineering the spec's DATA MODEL
-//     section says to avoid ("design the simplest production-quality
-//     schema... do not over-engineer").
-//   - "can edit the board" (canEditBoard — owner/member/edit_mode=anyone,
-//     same helper versions.ts already uses) additionally grants: resolve/
-//     reopen any thread, and edit/delete ANY comment (not just your own).
+//   - roleCanComment(role) (true for owner/editor/commenter, false only
+//     for the reserved 'viewer' tier — see roomAccess.ts) is the bar for
+//     creating comments/replies and reading the thread. Plain Figma/
+//     FigJam/Miro all let anyone with view access comment; there is no
+//     separate DB-level "Commenter" role, and adding one would be exactly
+//     the over-engineering the Commit 6 spec's DATA MODEL section said to
+//     avoid — Commenter is a classification of existing read-access
+//     facts, not new storage.
+//   - roleCanWriteCanvas(role) (true for owner/editor) additionally
+//     grants: resolve/reopen any thread, and edit/delete ANY comment (not
+//     just your own) — this is the canvas-adjacent moderation capability,
+//     reusing the exact same predicate the realtime write gate uses for
+//     the canvas itself (roomSocketGate.ts), not a separate "can edit
+//     comments" concept.
 //   - A comment's OWN AUTHOR may always edit or delete their own comment,
-//     even without board-edit access — this is the "Commenter" tier's
+//     even without write-canvas access — this is the Commenter tier's
 //     actual capability (comment on a board you can't edit, then manage
 //     your own comment), matching Figma's own behavior.
-//   - A true read-only Viewer (no read access at all — private board,
-//     not a member) is rejected by canReadBoard below with 403, same as
-//     every other board-scoped endpoint in this app.
+//   - getBoardRole returning null (no read access at all — private board,
+//     not a member) is rejected with 403, same as every other
+//     board-scoped endpoint in this app.
 //
 // Every check here is REAL server-side enforcement via Express/
-// requireStudent — never the WS transport's advisory-only `role` (see
-// roomAccess.ts's own "known limitation" comment, which explicitly lists
-// Comments as a feature that must close this gap before shipping; this
-// router is that closure for the comments surface, exactly like
-// routes/versions.ts already did for restore).
+// requireStudent — never the WS transport's advisory-only `role` used to
+// be (see roomAccess.ts's own history on that — Commit 7 closed it for
+// the canvas transport itself; this router already had real REST
+// enforcement since Commit 6, now sharing its logic with that fix).
 // ─────────────────────────────────────────────────────────────────────────
-
-async function canReadBoard(boardId: string, roll: string): Promise<boolean> {
-  const board = await pool.query(
-    'SELECT owner_roll, visibility FROM boards WHERE id = $1', [boardId]
-  );
-  if (board.rows.length === 0) return false;
-  const b = board.rows[0] as { owner_roll: string; visibility: string };
-  if (b.owner_roll === roll) return true;
-  if (b.visibility === 'shared') return true;
-  const mem = await pool.query(
-    'SELECT 1 FROM board_members WHERE board_id = $1 AND roll_number = $2', [boardId, roll]
-  );
-  return mem.rows.length > 0;
-}
-
-async function canEditBoard(boardId: string, roll: string): Promise<boolean> {
-  const board = await pool.query(
-    'SELECT owner_roll, visibility, edit_mode FROM boards WHERE id = $1', [boardId]
-  );
-  if (board.rows.length === 0) return false;
-  const b = board.rows[0] as { owner_roll: string; visibility: string; edit_mode: string };
-  if (b.owner_roll === roll) return true;
-  if (b.edit_mode === 'anyone' && b.visibility === 'shared') return true;
-  const mem = await pool.query(
-    'SELECT 1 FROM board_members WHERE board_id = $1 AND roll_number = $2', [boardId, roll]
-  );
-  return mem.rows.length > 0;
-}
 
 async function getBoardRoomId(boardId: string): Promise<string | null> {
   const result = await pool.query('SELECT room_id FROM boards WHERE id = $1', [boardId]);
@@ -111,7 +91,8 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
       const roll = req.studentRoll!;
       const boardId = param(req.params.id);
 
-      if (!(await canReadBoard(boardId, roll))) {
+      const boardRole = await getBoardRole(boardId, roll);
+      if (boardRole === null || !roleCanComment(boardRole.role)) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
@@ -132,7 +113,8 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
       const roll = req.studentRoll!;
       const boardId = param(req.params.id);
 
-      if (!(await canReadBoard(boardId, roll))) {
+      const boardRole = await getBoardRole(boardId, roll);
+      if (boardRole === null || !roleCanComment(boardRole.role)) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
@@ -207,8 +189,11 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
         return res.status(404).json({ error: 'Comment not found' });
       }
       const isAuthor = existing.authorRoll === roll;
-      if (!isAuthor && !(await canEditBoard(boardId, roll))) {
-        return res.status(403).json({ error: 'Access denied' });
+      if (!isAuthor) {
+        const boardRole = await getBoardRole(boardId, roll);
+        if (boardRole === null || !roleCanWriteCanvas(boardRole.role, boardRole.isArchived)) {
+          return res.status(403).json({ error: 'Access denied' });
+        }
       }
 
       const bodySchema = z.object({ content: z.string().trim().min(1).max(CONTENT_MAX_LENGTH) });
@@ -243,8 +228,11 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
         return res.status(404).json({ error: 'Comment not found' });
       }
       const isAuthor = existing.authorRoll === roll;
-      if (!isAuthor && !(await canEditBoard(boardId, roll))) {
-        return res.status(403).json({ error: 'Access denied' });
+      if (!isAuthor) {
+        const boardRole = await getBoardRole(boardId, roll);
+        if (boardRole === null || !roleCanWriteCanvas(boardRole.role, boardRole.isArchived)) {
+          return res.status(403).json({ error: 'Access denied' });
+        }
       }
 
       const deleted = await commentsStorage.softDeleteComment(boardId, commentId);
@@ -271,7 +259,8 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
       const boardId = param(req.params.id);
       const commentId = param(req.params.commentId);
 
-      if (!(await canEditBoard(boardId, roll))) {
+      const boardRole = await getBoardRole(boardId, roll);
+      if (boardRole === null || !roleCanWriteCanvas(boardRole.role, boardRole.isArchived)) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
@@ -303,7 +292,8 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
       const boardId = param(req.params.id);
       const commentId = param(req.params.commentId);
 
-      if (!(await canEditBoard(boardId, roll))) {
+      const boardRole = await getBoardRole(boardId, roll);
+      if (boardRole === null || !roleCanWriteCanvas(boardRole.role, boardRole.isArchived)) {
         return res.status(403).json({ error: 'Access denied' });
       }
 

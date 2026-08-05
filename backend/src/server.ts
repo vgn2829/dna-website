@@ -32,7 +32,7 @@ import { createApp } from './app';
 import { attachRealtimeServer } from './realtime/server';
 import { RoomManager } from './realtime/rooms';
 import { BoardCanvasPersistence } from './realtime/roomPersistence';
-import { createConnectionHandler, type StudentSessionMeta } from './realtime/connectionHandler';
+import { createConnectionHandler, startPeriodicRevalidation, type StudentSessionMeta } from './realtime/connectionHandler';
 import { VersionHistoryService } from './realtime/history/versionHistoryService';
 import { RestoreService } from './realtime/history/restoreService';
 import { CommentBroadcaster } from './realtime/comments/commentBroadcaster';
@@ -140,6 +140,18 @@ async function main() {
   const httpServer = http.createServer(app);
 
   attachRealtimeServer(httpServer, createConnectionHandler(roomManager, commentBroadcaster));
+
+  // Commit 7 — periodic re-validation of every already-connected realtime
+  // session's board access, so a permission revoked/board archived/board
+  // deleted while a session is open takes effect without waiting for that
+  // client to reconnect on its own. See connectionHandler.ts's own
+  // "PERIODIC RE-VALIDATION" comment for the full mechanism. Started
+  // unconditionally (cheap no-op when getActiveRoomIds() is empty, which
+  // it always is when REALTIME_ENABLED is off, since no room ever gets
+  // created in that case) rather than gated behind the same flag
+  // attachRealtimeServer checks — simpler than threading that flag
+  // through here too, and correct either way.
+  startPeriodicRevalidation(roomManager, () => roomManager.getActiveRoomIds());
 
   httpServer.listen(PORT, () => {
     const storage = (hasSupabaseUrl && hasSupabaseKey) ? 'Supabase Storage' : 'local disk';
