@@ -8,6 +8,13 @@ import { clearBoardsCache } from './MoodboardsPage';
 const TldrawCanvas = lazy(() =>
   import('./TldrawCanvas').then(m => ({ default: m.TldrawCanvas }))
 );
+// Realtime rollout (Commit 3): parallel component, not a replacement — see
+// TldrawCanvasSync.tsx's own architectural-decisions header comment.
+// Lazy-loaded the same way TldrawCanvas already is, so a board that never
+// uses realtime never pays for @tldraw/sync's bundle weight.
+const TldrawCanvasSync = lazy(() =>
+  import('./TldrawCanvasSync').then(m => ({ default: m.TldrawCanvasSync }))
+);
 
 function getSiteTheme(): 'dark' | 'light' {
   try {
@@ -51,6 +58,21 @@ export default function BoardPage() {
   useEffect(() => { rollRef.current = studentSession?.rollNumber; }, [studentSession?.rollNumber]);
   const canvasLoadedRef = useRef(false);
 
+  // The global REALTIME_ENABLED kill switch's value — see api.ts's
+  // realtime.getStatus() doc comment on why this needs its own fetch
+  // (deliberately not exposed via /settings/public, so it can't be
+  // toggled at runtime by a DB write, only by a backend redeploy). Starts
+  // false (fail closed: an unknown/unfetched flag must never cause a
+  // realtime-enabled board to attempt a connection it can't complete) and
+  // is combined with board.realtime_enabled below to decide which canvas
+  // component to render.
+  const [realtimeGloballyEnabled, setRealtimeGloballyEnabled] = useState(false);
+  useEffect(() => {
+    api.realtime.getStatus()
+      .then(res => setRealtimeGloballyEnabled(res.enabled))
+      .catch(() => setRealtimeGloballyEnabled(false));
+  }, []);
+
   const [showShare, setShowShare] = useState(false);
   const [copied, setCopied] = useState(false);
   const [updatingVisibility, setUpdatingVisibility] = useState(false);
@@ -68,6 +90,21 @@ export default function BoardPage() {
   const isMember = board
     ? (isOwner || board.members.some(m => m.roll_number === studentSession?.rollNumber))
     : false;
+
+  // The one decision point for realtime vs. manual persistence — everything
+  // else about which component to render flows from this single boolean.
+  // All three must hold: the per-board opt-in (board.realtime_enabled,
+  // defaults false, flipped per-board for the pilot rollout), the global
+  // kill switch (realtimeGloballyEnabled, fetched above), and a non-null
+  // room_id (should always be set — backfilled since the column was added —
+  // but a defensive fallback to the manual path beats a crash if it's ever
+  // missing). Any of these being false/missing/not-yet-loaded falls back to
+  // the existing manual TldrawCanvas — this is the rollback path, not an
+  // error state, so there is no loading gate on realtimeGloballyEnabled
+  // itself: a board briefly renders via TldrawCanvas while that fetch is in
+  // flight, which is always safe/correct behavior, never just a fallback
+  // for a slow network.
+  const useRealtimeSync = Boolean(board?.realtime_enabled) && realtimeGloballyEnabled && Boolean(board?.room_id);
 
   const shareUrl = `${window.location.origin}/moodboards/${board?.id}`;
 
@@ -477,7 +514,33 @@ export default function BoardPage() {
 
         {/* Canvas area */}
         <div style={{ position: 'absolute', top: 48, left: 0, right: 0, bottom: 0 }}>
-          {!canvasReady ? (
+          {useRealtimeSync ? (
+            // Realtime path: no canvasReady gate — TldrawCanvasSync has no
+            // dependency on the manual loadCanvas() REST fetch above (it
+            // loads its document state over the WebSocket connection
+            // itself, seeded server-side from the same canvas_data column —
+            // see backend/src/realtime/roomPersistence.ts) and shows its
+            // own internal Loading/Connecting UI, so gating it behind an
+            // irrelevant REST call would only add latency for no benefit.
+            <Suspense fallback={
+              <div style={{
+                position: 'absolute', inset: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: theme === 'dark' ? '#1a1a1a' : '#f8f8f8',
+                color: textMuted, fontFamily: 'var(--font-body)', fontSize: 14,
+              }}>
+                Loading canvas...
+              </div>
+            }>
+              <TldrawCanvasSync
+                boardId={id!}
+                roomId={board.room_id!}
+                theme={theme}
+                pendingItems={board.items}
+                readOnly={!isMember && board.edit_mode === 'members_only'}
+              />
+            </Suspense>
+          ) : !canvasReady ? (
             <div style={{
               position: 'absolute', inset: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',

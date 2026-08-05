@@ -15,6 +15,7 @@ import boardsRouter from './routes/boards';
 import settingsRouter from './routes/settings';
 import coordinatorsRouter from './routes/coordinators';
 import internalRouter from './routes/internal';
+import realtimeStatusRouter from './routes/realtime';
 
 export function createApp() {
   const app = express();
@@ -98,6 +99,12 @@ export function createApp() {
   app.use('/api/settings',      settingsRouter);
   app.use('/api/coordinators',  coordinatorsRouter);
   app.use('/api/internal',      internalRouter);
+  // Shares the /api/realtime prefix with the WS upgrade path
+  // (REALTIME_PATH_PREFIX in realtime/server.ts) without colliding: WS
+  // upgrades are intercepted via a raw http.Server 'upgrade' listener
+  // (see server.ts), which never reaches Express routing at all — only
+  // normal GET/POST/etc. requests (like this one) go through here.
+  app.use('/api/realtime',      realtimeStatusRouter);
 
   app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 

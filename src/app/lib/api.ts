@@ -125,6 +125,7 @@ export interface Board {
   is_archived: boolean;
   is_favorite: boolean;
   thumbnail_url: string | null;
+  realtime_enabled: boolean;
 }
 
 export interface BoardDetail extends Board {
@@ -486,6 +487,30 @@ export const api = {
         `/boards/${boardId}/canvas-files`, formData
       );
     },
+    // Builds the @tldraw/sync connection URL for a realtime-enabled board's
+    // room. This is the ONLY thing the frontend knows about realtime
+    // persistence — everything past this URL (Postgres, canvas_data,
+    // snapshot load/save timing, room lifecycle/cleanup) is entirely a
+    // backend concern (see backend/src/realtime/). `roomId` is board.room_id,
+    // not board.id — the backend keys rooms by room_id specifically so a
+    // board's primary key is never exposed over the realtime protocol.
+    // sessionId/storeId are NOT appended here: @tldraw/sync's own useSync
+    // hook appends those itself (tab-scoped via tldraw's TAB_ID), and
+    // minting our own would break its reconnect-resumes-the-same-session
+    // behavior — see backend/src/realtime/connectionHandler.ts's matching
+    // comment on the server side of this same contract.
+    getRealtimeUrl: (roomId: string): string => {
+      const token = getStudentToken();
+      // BASE may be a bare path ("/api", when VITE_API_BASE_URL is unset —
+      // REST calls resolve that fine via fetch()'s implicit same-origin
+      // base, but `new URL()` needs an explicit one) or a full origin
+      // ("https://api.example.com/api"). window.location.origin covers
+      // both: it's a no-op base when BASE is already absolute.
+      const url = new URL(`${BASE}/realtime/boards/${roomId}`, window.location.origin);
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      if (token) url.searchParams.set('token', token);
+      return url.toString();
+    },
   },
   liveSessions: {
     getActive: (roll?: string) =>
@@ -575,5 +600,13 @@ export const api = {
         'POST', '/settings/verify-passcode',
         { body: { passcode } }
       ),
+  },
+  realtime: {
+    // The global REALTIME_ENABLED kill switch's value, and nothing else —
+    // see backend/src/routes/realtime.ts's own doc comment on why this is
+    // unauthenticated and deliberately minimal. BoardPage combines this
+    // with board.realtime_enabled to decide which canvas component to render.
+    getStatus: () =>
+      request<{ enabled: boolean }>('GET', '/realtime/status'),
   },
 };
