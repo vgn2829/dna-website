@@ -1,10 +1,11 @@
-# Realtime Collaboration — Rollout Notes (Commits 1, 2 & 3)
+# Realtime Collaboration — Rollout Notes (Commits 1–4)
 
 This covers everything needed to run and verify the realtime foundation
-(WebSocket transport + room lifecycle, commits `77ea49b`/`7393ab9`) and the
-frontend `@tldraw/sync` integration (Commit 3). As of Commit 3, a
-realtime-enabled board is genuinely usable end-to-end through the real UI —
-this is no longer backend-only infrastructure.
+(WebSocket transport + room lifecycle, commits `77ea49b`/`7393ab9`), the
+frontend `@tldraw/sync` integration (Commit 3, `cdb1dc6`), and the presence
+layer (Commit 4). As of Commit 4, a realtime-enabled board shows live
+cursors, a collaborator list, and follow — genuinely multiplayer, not just
+synced.
 
 ## What changed
 
@@ -56,6 +57,75 @@ this is no longer backend-only infrastructure.
   && realtimeGloballyEnabled && Boolean(board.room_id)`, and renders
   `TldrawCanvasSync` or `TldrawCanvas` accordingly — the single decision
   point requirement from the Commit 3 spec.
+
+### Commit 4 additions (presence — frontend only, zero backend changes)
+
+**The most important thing to understand about this commit**: reading
+tldraw's own source confirmed that live cursors, live selections, idle
+detection, join/leave, and cleanup-on-disconnect are ALL already fully
+implemented inside `@tldraw/sync` + `tldraw` core — they activate
+automatically the moment `useSync` is given a real `userInfo`
+(`{ id, name, color }`). `LiveCollaborators` (tldraw's own component,
+rendering cursors/selections/brushes/idle-state) is unconditionally mounted
+inside `<Tldraw>`'s default canvas; `TLSyncRoom.removeSession` (server-side,
+in `@tldraw/sync-core`, unmodified since Commit 2) already deletes a
+disconnected user's presence record and broadcasts the removal — this is
+why Commit 4 needed **zero backend changes**. The actual gap was: (1) no
+real identity was ever passed to `useSync`, so every collaborator showed as
+an anonymous "New User" with a random color, and (2) there was no UI
+listing who's currently present or a way to follow someone.
+
+- **`src/app/lib/utils.ts`**: added `rollToColor(roll)` — the exact
+  avatar-color formula `BoardPage.tsx`'s member/owner avatars already used
+  in three places, extracted so board presence and those avatars can never
+  visually drift apart. `BoardPage.tsx`'s three inline copies now call this
+  instead (behavior-identical, confirmed by inspection — same formula,
+  same output).
+- **`src/app/context/PresenceProvider.tsx`** — derives `TLSyncUserInfo`
+  (`id` = roll number, `name`, `color` = `rollToColor(roll)`) from the
+  signed-in student session. This is the ONLY new identity concern in this
+  commit; it does not touch cursors, selections, or the collaborator list.
+  Scoped locally around `TldrawCanvasSync` in `BoardPage.tsx` (not global in
+  `Root.tsx`) since presence identity has no meaning outside a realtime board.
+- **`src/app/components/hooks/useCollaborators.ts`** — three small hooks
+  built on `Editor`'s public API (`getCollaboratorsOnCurrentPage`,
+  `editor.options.collaborator*TimeoutMs`), NOT a new presence protocol:
+  - `useCollaboratorIds()` — reactive, coarse list of connected user ids
+    (mirrors tldraw's own internal, non-exported `usePeerIds` pattern:
+    derives a stable array via `useComputed`'s `isEqual`, so the list
+    doesn't force a re-render on every cursor pixel move — only on actual
+    join/leave).
+  - `useCollaboratorPresence(userId)` — one user's live `TLInstancePresence`
+    record, scoped so only the component displaying that specific user
+    re-renders on their updates.
+  - `useCollaboratorActivity(presence)` — active/idle/inactive, using
+    `editor.options.collaboratorIdleTimeoutMs`/`collaboratorInactiveTimeoutMs`
+    (tldraw's real configured values, not invented thresholds) so the list's
+    status dot always agrees with whether tldraw is currently rendering that
+    user's cursor.
+- **`src/app/components/hooks/useFollow.ts`** — wraps
+  `editor.startFollowingUser`/`stopFollowingUser`/`getInstanceState().followingUserId`.
+  Confirmed by reading `Editor.ts` directly: tldraw already auto-calls
+  `stopFollowingUser()` if the followed user's presence disappears (they
+  disconnect) — no extra handling needed here for that case.
+- **`src/app/components/CollaboratorList.tsx`** + **`CollaboratorAvatar.tsx`**
+  — the actual new UI: an avatar-stack overlay (top-right of the canvas,
+  capped at 6 visible + a "+N" overflow badge), click an avatar to
+  follow/unfollow. Mounted as a *child* of `<Tldraw>` (same reason
+  `ClipboardOverride` already is — both need `useEditor()`, which requires
+  being inside `<Tldraw>`'s own React tree) but renders as a visual overlay,
+  not canvas content. Uses tldraw's own `stopEventPropagation` utility
+  (the same one tldraw's built-in Watermark overlay uses) so a click on an
+  avatar doesn't fall through to the canvas underneath and deselect
+  shapes/start a drag.
+- **`src/app/pages/TldrawCanvasSync.tsx`**: now reads `usePresenceUserInfo()`
+  and passes it to `useSync({ uri, assets, userInfo })` when a student
+  session exists; mounts `<CollaboratorList />` inside `<Tldraw>`. Confirmed
+  by reading `useSync.js` directly that `userInfo` going from `undefined` to
+  a real value between renders does NOT retrigger the connection-establishing
+  effect (it only updates a separate reactive atom the presence derivation
+  reads from) — so this cannot cause a spurious reconnect right after the
+  identity resolves.
 
 ## Two-layer rollout gate
 
@@ -271,10 +341,73 @@ of that board.
     banner) — this is the regression check that the rollback path is
     genuinely untouched.
 
+## Commit 4 — manual QA (presence)
+
+Same setup as Commit 3's checklist (pilot board, `REALTIME_ENABLED=true`,
+two browsers/tabs signed in as different students where noted).
+
+1. **Real identity, not anonymous** — open a realtime board as two
+   different students in two browsers. Confirm each sees the OTHER's
+   cursor labeled with their real name (not "New User") and colored with
+   their `rollToColor` color — the same color that student's avatar shows
+   elsewhere in the app (e.g. the Collaborators modal on this same board).
+2. **Live cursors** — move the mouse in one browser; confirm the other
+   browser's canvas shows a labeled cursor tracking the movement in
+   roughly real time.
+3. **Live selection** — select a shape in one browser; confirm the other
+   browser shows a colored selection outline around that shape (tldraw's
+   own `CollaboratorShapeIndicator`, not custom UI).
+4. **Collaborator list appears/updates** — with 2+ students connected,
+   confirm the avatar-stack overlay (top-right of the canvas) shows one
+   avatar per connected student, initials/colors matching step 1.
+5. **Join/leave detection** — with the list visible, close one browser's
+   tab. Confirm the departed student's avatar disappears from the OTHER
+   browser's list within the ~10s server-side grace period (Commit 2's
+   session-removal timing — this hasn't changed).
+6. **Rapid join/leave** — open and close the same board rapidly (5-10
+   times in quick succession) in a second browser/tab while a first
+   browser stays connected. Confirm the collaborator list in the first
+   browser doesn't accumulate stale/duplicate/ghost avatars — it should
+   settle back to showing only genuinely-connected users.
+7. **Idle status** — stay connected but stop interacting (no mouse
+   movement/clicks) for over 3 seconds (tldraw's own
+   `collaboratorIdleTimeoutMs`). Confirm the OTHER browser's list shows
+   that avatar with reduced opacity / no active-dot (see
+   `CollaboratorAvatar.tsx`), and that the cursor itself behaves per
+   tldraw's own idle rules (may hide per `LiveCollaborators`'s internal logic).
+8. **Follow participant** — click a collaborator's avatar in the list.
+   Confirm your own viewport starts tracking their camera position/pan/zoom.
+   Click the same avatar again (or another) to stop/switch following.
+9. **Follow + disconnect** — while actively following someone, have them
+   close their browser. Confirm following stops automatically (no error,
+   no stuck camera-lock) — this is tldraw's own built-in behavior
+   (`Editor.ts`'s `startFollowingUser` reactive check), not something this
+   commit implemented.
+10. **Reconnect-safe presence** — with 2+ students connected, drop one's
+    network (devtools offline) for ~10s, then restore it. Confirm: their
+    cursor/avatar disappears from others' views while disconnected (or
+    stays if under the grace period), and reappears correctly (same
+    identity/color, not a duplicate) once reconnected.
+11. **Duplicate tabs** — open the same board in two tabs of the same
+    browser as the same student. Confirm the collaborator list shows this
+    as either one or two entries consistently in a way that doesn't break
+    following (following the "same user, two tabs" case is a known tldraw
+    edge case worth just confirming doesn't crash, not something this
+    commit specifically hardened).
+12. **Memory leaks** — with the collaborator list actively showing 2+
+    users, leave the board open for several minutes (or repeat the
+    rapid-join-leave test from #6 many times). Check the browser's JS heap
+    (devtools Memory tab) doesn't grow unbounded — `useCollaboratorActivity`'s
+    interval is cleaned up per-avatar on unmount (verified by code review;
+    each avatar owns exactly one `editor.timers.setInterval`, cleared in
+    its effect's cleanup function).
+13. **No regression to Commit 3** — re-run Commit 3's own checklist items
+    2 (two browsers), 4 (duplicate tabs), 5 (network interruption), 7
+    (server restart), and 13 (manual-path fallback) — none of that behavior
+    should have changed; presence is additive.
+
 ## What's explicitly NOT yet built (don't test for these)
 
-- No presence, cursors, avatars, or any multi-user awareness UI (Phase 2,
-  not this commit).
 - No comments, sticky notes, version history, notifications, or plugins.
 - No server-side write enforcement for `role: 'viewer'` — documented as a
   known limitation in `roomAccess.ts`, must be resolved before Comments /

@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useStudent } from '../context/StudentContext';
 import { api, type BoardDetail } from '../lib/api';
 import { clearBoardsCache } from './MoodboardsPage';
+import { rollToColor } from '../lib/utils';
+import { PresenceProvider } from '../context/PresenceProvider';
 
 const TldrawCanvas = lazy(() =>
   import('./TldrawCanvas').then(m => ({ default: m.TldrawCanvas }))
@@ -414,7 +416,7 @@ export default function BoardPage() {
                     title={m.name}
                     style={{
                       width: 28, height: 28, borderRadius: 'var(--radius-full)',
-                      background: `hsl(${parseInt(m.roll.slice(-3)) % 360}, 60%, 45%)`,
+                      background: rollToColor(m.roll),
                       border: `2px solid ${surfaceBg}`,
                       marginLeft: i === 0 ? 0 : -8,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -532,13 +534,19 @@ export default function BoardPage() {
                 Loading canvas...
               </div>
             }>
-              <TldrawCanvasSync
-                boardId={id!}
-                roomId={board.room_id!}
-                theme={theme}
-                pendingItems={board.items}
-                readOnly={!isMember && board.edit_mode === 'members_only'}
-              />
+              {/* PresenceProvider scoped here (not global in Root.tsx) —
+                  presence identity is only meaningful on a realtime board;
+                  every other page has no use for it. See
+                  PresenceProvider.tsx for what it derives and why. */}
+              <PresenceProvider>
+                <TldrawCanvasSync
+                  boardId={id!}
+                  roomId={board.room_id!}
+                  theme={theme}
+                  pendingItems={board.items}
+                  readOnly={!isMember && board.edit_mode === 'members_only'}
+                />
+              </PresenceProvider>
             </Suspense>
           ) : !canvasReady ? (
             <div style={{
@@ -809,7 +817,7 @@ export default function BoardPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{
                       width: 32, height: 32, borderRadius: 'var(--radius-full)',
-                      background: `hsl(${parseInt(board.owner_roll.slice(-3)) % 360}, 60%, 45%)`,
+                      background: rollToColor(board.owner_roll),
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-body)',
                     }}>
@@ -834,7 +842,7 @@ export default function BoardPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{
                         width: 32, height: 32, borderRadius: 'var(--radius-full)',
-                        background: `hsl(${parseInt(m.roll_number.slice(-3)) % 360}, 60%, 45%)`,
+                        background: rollToColor(m.roll_number),
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-body)',
                       }}>

@@ -15,6 +15,8 @@ import {
   migrateLegacyBase64Assets,
   randomFileId,
 } from './tldrawCanvasShared';
+import { usePresenceUserInfo } from '../context/PresenceProvider';
+import { CollaboratorList } from '../components/CollaboratorList';
 
 // ─────────────────────────────────────────────────────────────────────────
 // ARCHITECTURAL DECISIONS — read before modifying this file.
@@ -186,9 +188,20 @@ export function TldrawCanvasSync({
     [roomId, retryNonce]
   );
 
+  // Presence identity (id/name/color) — see PresenceProvider.tsx for how
+  // this is derived from the student session. Everything downstream of
+  // this (cursors, selections, idle detection, join/leave) is handled
+  // automatically by useSync/<Tldraw> once userInfo is supplied; see
+  // CollaboratorList.tsx for the one piece that IS custom UI (a
+  // who's-here list + follow control), built on public Editor APIs
+  // (getCollaboratorsOnCurrentPage, startFollowingUser) rather than a
+  // parallel presence implementation.
+  const userInfo = usePresenceUserInfo();
+
   const store = useSync({
     uri,
     assets: assetStore,
+    ...(userInfo ? { userInfo } : {}),
   });
 
   const connectionState = deriveConnectionState(
@@ -331,6 +344,12 @@ export function TldrawCanvasSync({
           onMount={handleMount}
         >
           <ClipboardOverride />
+          {/* Renders as a child of <Tldraw> (not a sibling in this
+              component's own JSX) because CollaboratorList/its hooks call
+              useEditor(), which requires an EditorContext ancestor —
+              exactly the same reason ClipboardOverride is mounted here
+              rather than outside <Tldraw>. */}
+          <CollaboratorList />
         </Tldraw>
       )}
     </div>
