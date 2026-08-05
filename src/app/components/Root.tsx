@@ -9,6 +9,7 @@ import LiveSessionBanner from './LiveSessionBanner';
 import { ThemeProvider } from '../context/ThemeContext';
 import { StudentProvider, useStudent } from '../context/StudentContext';
 import { AppDataProvider } from '../context/AppDataContext';
+import { Toaster } from './ui/sonner';
 
 function SessionGate({ isAdminPage }: { isAdminPage: boolean }) {
   const { studentSession } = useStudent();
@@ -55,6 +56,7 @@ export function Root() {
               </>
             )}
           </div>
+          <Toaster position="bottom-right" richColors closeButton />
         </AppDataProvider>
       </StudentProvider>
     </ThemeProvider>
