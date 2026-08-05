@@ -30,6 +30,9 @@ import { initSchema } from './db/schema';
 import bcrypt from 'bcryptjs';
 import { createApp } from './app';
 import { attachRealtimeServer } from './realtime/server';
+import { RoomManager } from './realtime/rooms';
+import { BoardCanvasPersistence } from './realtime/roomPersistence';
+import { createConnectionHandler, type StudentSessionMeta } from './realtime/connectionHandler';
 
 async function main() {
   await initSchema();
@@ -50,14 +53,14 @@ async function main() {
   // 'upgrade' listener alongside it. See realtime/server.ts.
   const httpServer = http.createServer(app);
 
-  // Commit 1 of the realtime rollout: transport only, no room logic yet.
-  // A connection under REALTIME_PATH_PREFIX is accepted and immediately
-  // closed with a policy-violation code — proves the handshake path works
-  // end-to-end (env flag, upgrade routing, auth-less baseline) before
-  // realtime/rooms.ts adds TLSocketRoom wiring on top in the next commit.
-  attachRealtimeServer(httpServer, (_req, ws) => {
-    ws.close(1008, 'realtime rooms not yet implemented');
-  });
+  // Room lifecycle + persistence are deliberately separate objects composed
+  // here, not a single class — see realtime/rooms.ts and
+  // realtime/roomPersistence.ts's own doc comments for why. connectionHandler
+  // is the only place authorization (roomAccess.ts) and lifecycle (rooms.ts)
+  // meet, keeping both independently reusable for future collaboration
+  // features (comments, presence, etc.) that aren't in scope for this commit.
+  const roomManager = new RoomManager<StudentSessionMeta>(new BoardCanvasPersistence());
+  attachRealtimeServer(httpServer, createConnectionHandler(roomManager));
 
   httpServer.listen(PORT, () => {
     const storage = (hasSupabaseUrl && hasSupabaseKey) ? 'Supabase Storage' : 'local disk';
