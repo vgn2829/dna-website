@@ -22,6 +22,8 @@ import {
   migrateLegacyBase64Assets,
   randomFileId,
 } from './tldrawCanvasShared';
+import { CommentsOverlay } from '../components/CommentsOverlay';
+import type { CommentsProps } from './commentsProps';
 
 interface TldrawCanvasProps {
   boardId: string;
@@ -30,6 +32,10 @@ interface TldrawCanvasProps {
   pendingItems?: BoardItem[];
   onSave: (snapshot: unknown) => void;
   readOnly?: boolean;
+  // Commit 6 — see commentsProps.ts's own comment on why this is one prop
+  // object rather than five separate ones threaded through both canvas
+  // components.
+  comments?: CommentsProps;
 }
 
 export function TldrawCanvas({
@@ -39,6 +45,7 @@ export function TldrawCanvas({
   pendingItems,
   onSave,
   readOnly = false,
+  comments,
 }: TldrawCanvasProps) {
   const editorRef = useRef<Editor | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -195,6 +202,16 @@ export function TldrawCanvas({
         }}
       >
         <ClipboardOverride />
+        {comments && (
+          <CommentsOverlay
+            commentsApi={comments.commentsApi}
+            commentMode={comments.commentMode}
+            onExitCommentMode={comments.onExitCommentMode}
+            currentRoll={comments.currentRoll}
+            canModerate={comments.canModerate}
+            lastSeenAt={comments.lastSeenAt}
+          />
+        )}
       </Tldraw>
     </div>
   );

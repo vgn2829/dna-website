@@ -2,6 +2,7 @@ import type { IncomingMessage } from 'http';
 import type { WebSocket } from 'ws';
 import { checkRoomAccess, type RoomRole } from './roomAccess';
 import { RoomManager } from './rooms';
+import type { CommentBroadcaster } from './comments/commentBroadcaster';
 import type { RealtimeUpgradeHandler } from './server';
 
 export interface StudentSessionMeta {
@@ -15,12 +16,22 @@ export interface StudentSessionMeta {
 // until this rollout). The upgrade path is /api/realtime/boards/<roomId>.
 const BOARD_ROOM_PATH_RE = /^boards\/([0-9a-fA-F-]{36})$/;
 
+// Comments (Commit 6) — a second, sibling path under the same
+// /api/realtime/boards/<roomId>/ prefix, deliberately NOT routed into
+// RoomManager/TLSocketRoom. See commentBroadcaster.ts's own header comment
+// for why comment events need a separate socket rather than piggy-backing
+// on the document sync connection above.
+const COMMENTS_ROOM_PATH_RE = /^boards\/([0-9a-fA-F-]{36})\/comments$/;
+
 // Composes checkRoomAccess (authorization) and RoomManager (lifecycle) into
 // the single onUpgrade callback attachRealtimeServer expects. This is the
 // only place those two modules meet — RoomManager itself never calls
 // checkRoomAccess, and checkRoomAccess never touches TLSocketRoom, so each
 // stays independently testable and reusable (see their own doc comments).
-export function createConnectionHandler(roomManager: RoomManager<StudentSessionMeta>): RealtimeUpgradeHandler {
+export function createConnectionHandler(
+  roomManager: RoomManager<StudentSessionMeta>,
+  commentBroadcaster: CommentBroadcaster
+): RealtimeUpgradeHandler {
   return (req: IncomingMessage, ws: WebSocket, roomPath: string) => {
     // handleConnection is async and called fire-and-forget (attachRealtimeServer's
     // onUpgrade callback is synchronous) — an unhandled rejection here (a DB
@@ -28,7 +39,7 @@ export function createConnectionHandler(roomManager: RoomManager<StudentSessionM
     // would otherwise be a process-crashing unhandled rejection, not just a
     // failed connection. One bad connection attempt must never take down
     // every other room's live sessions.
-    handleConnection(req, ws, roomPath, roomManager).catch(err => {
+    handleConnection(req, ws, roomPath, roomManager, commentBroadcaster).catch(err => {
       console.error('Realtime: unhandled error during connection setup:', err);
       try {
         ws.close(1011, 'Internal error');
@@ -43,17 +54,40 @@ async function handleConnection(
   req: IncomingMessage,
   ws: WebSocket,
   roomPath: string,
-  roomManager: RoomManager<StudentSessionMeta>
+  roomManager: RoomManager<StudentSessionMeta>,
+  commentBroadcaster: CommentBroadcaster
 ): Promise<void> {
   const [pathOnly, query] = roomPath.split('?');
+  const params = new URLSearchParams(query ?? '');
+  const token = params.get('token');
+
+  // Comments path checked FIRST — its regex is a strict superset suffix of
+  // BOARD_ROOM_PATH_RE's shape (same UUID, plus /comments), so it must be
+  // tried before the plain board-room match or it would never be reached.
+  const commentsMatch = COMMENTS_ROOM_PATH_RE.exec(pathOnly);
+  if (commentsMatch) {
+    const roomId = commentsMatch[1];
+    // Same authorization function, same board-permission rules as the
+    // document-sync socket — a viewer who can read the board can also
+    // receive live comment events (comments are readable by anyone with
+    // read access; see routes/comments.ts's own permission model), so
+    // reusing checkRoomAccess's 'editor'|'viewer' result (rather than
+    // requiring 'editor') is correct here, not a downgrade.
+    const access = await checkRoomAccess(roomId, token);
+    if (!access.ok) {
+      ws.close(access.code, access.reason);
+      return;
+    }
+    commentBroadcaster.join(roomId, ws);
+    return;
+  }
+
   const match = BOARD_ROOM_PATH_RE.exec(pathOnly);
   if (!match) {
     ws.close(1008, 'Unknown room path');
     return;
   }
   const roomId = match[1];
-  const params = new URLSearchParams(query ?? '');
-  const token = params.get('token');
 
   // useSync's client (see @tldraw/sync's useSync.js) always appends its own
   // sessionId — tab-scoped via tldraw's TAB_ID — as a query param on every

@@ -17,8 +17,10 @@ import coordinatorsRouter from './routes/coordinators';
 import internalRouter from './routes/internal';
 import realtimeStatusRouter from './routes/realtime';
 import { createVersionsRouter } from './routes/versions';
+import { createCommentsRouter } from './routes/comments';
 import type { VersionHistoryService } from './realtime/history/versionHistoryService';
 import type { RestoreService } from './realtime/history/restoreService';
+import type { CommentBroadcaster } from './realtime/comments/commentBroadcaster';
 
 // Generic over SessionMeta so this accepts whatever concrete
 // RoomManager<SessionMeta>-backed services server.ts actually constructed
@@ -28,9 +30,14 @@ import type { RestoreService } from './realtime/history/restoreService';
 // (its handlers only call checkpointExplicit/restore, neither of which
 // exposes it), so this generic exists purely to make assignment from
 // server.ts's real instances sound, not because routes/versions.ts cares.
+//
+// commentBroadcaster (Commit 6) is NOT generic over SessionMeta — it has
+// no dependency on RoomManager/TLSocketRoom at all (see its own header
+// comment), so it's a concrete, non-generic type here.
 export interface RealtimeAppServices<SessionMeta = unknown> {
   versionHistoryService: VersionHistoryService<SessionMeta>;
   restoreService: RestoreService<SessionMeta>;
+  commentBroadcaster: CommentBroadcaster;
 }
 
 // Optional — only server.ts's real boot path constructs and passes this
@@ -122,6 +129,7 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
   app.use('/api/boards',        boardsRouter);
   if (realtime) {
     app.use('/api/boards', createVersionsRouter(realtime));
+    app.use('/api/boards', createCommentsRouter(realtime.commentBroadcaster));
   }
   app.use('/api/settings',      settingsRouter);
   app.use('/api/coordinators',  coordinatorsRouter);

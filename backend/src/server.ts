@@ -35,6 +35,7 @@ import { BoardCanvasPersistence } from './realtime/roomPersistence';
 import { createConnectionHandler, type StudentSessionMeta } from './realtime/connectionHandler';
 import { VersionHistoryService } from './realtime/history/versionHistoryService';
 import { RestoreService } from './realtime/history/restoreService';
+import { CommentBroadcaster } from './realtime/comments/commentBroadcaster';
 import { setCheckpointHook } from './routes/boards';
 
 // roomId -> boardId: RoomManager and VersionHistoryService's onSnapshotChanged
@@ -121,15 +122,24 @@ async function main() {
     persistCanvasSnapshot: (roomId, snapshot) => persistence.save(roomId, snapshot),
   });
 
+  // Comments (Commit 6) — pure in-memory fan-out, no persistence/lifecycle
+  // dependency at all (see commentBroadcaster.ts's own header comment), so
+  // unlike roomManager it needs no constructor arguments. Shared between
+  // the WS upgrade path (connectionHandler.ts, for live delivery) and the
+  // REST router (routes/comments.ts, for broadcasting after each write) —
+  // the same single-instance-shared-two-ways pattern roomManager itself
+  // already uses.
+  const commentBroadcaster = new CommentBroadcaster();
+
   const PORT = Number(process.env.PORT ?? 4000);
-  const app = createApp({ versionHistoryService, restoreService });
+  const app = createApp({ versionHistoryService, restoreService, commentBroadcaster });
   // http.createServer(app) instead of app.listen() directly so the realtime
   // WS upgrade handler can attach to the same server/port — Express keeps
   // handling every normal HTTP request exactly as before; this only adds an
   // 'upgrade' listener alongside it. See realtime/server.ts.
   const httpServer = http.createServer(app);
 
-  attachRealtimeServer(httpServer, createConnectionHandler(roomManager));
+  attachRealtimeServer(httpServer, createConnectionHandler(roomManager, commentBroadcaster));
 
   httpServer.listen(PORT, () => {
     const storage = (hasSupabaseUrl && hasSupabaseKey) ? 'Supabase Storage' : 'local disk';

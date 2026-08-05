@@ -1,11 +1,14 @@
-# Realtime Collaboration — Rollout Notes (Commits 1–5)
+# Realtime Collaboration — Rollout Notes (Commits 1–6)
 
 This covers everything needed to run and verify the realtime foundation
 (WebSocket transport + room lifecycle, commits `77ea49b`/`7393ab9`), the
 frontend `@tldraw/sync` integration (Commit 3, `cdb1dc6`), the presence
-layer (Commit 4, `a0317b6`), and version history (Commit 5). As of Commit 5,
-every board — realtime-enabled or not — automatically maintains a
-recoverable timeline of past states, browsable and restorable from the UI.
+layer (Commit 4, `a0317b6`), version history (Commit 5), and comments
+(Commit 6). As of Commit 5, every board — realtime-enabled or not —
+automatically maintains a recoverable timeline of past states, browsable
+and restorable from the UI. As of Commit 6, every board also supports
+threaded, pinned comments (canvas- or shape-anchored), with live push
+updates on boards where realtime is enabled.
 
 ## What changed
 
@@ -251,6 +254,151 @@ the timeline. Fixed to only dedup the two automatic triggers
 burst of activity is the actual intended coalescing case — every explicit,
 user-caused event now always writes its own row. Covered by dedicated
 tests (`tests/version-history.test.ts`).
+
+### Commit 6 additions (comments — threaded, pinned, realtime-pushed)
+
+**Applies to every board**, same as version history — comment CRUD works
+over REST regardless of `realtime_enabled`; only the *live push* layer
+(new comments/edits appearing without a refresh) is conditional on
+realtime being available for that board (see "Why comments use a second
+WebSocket channel" below).
+
+**Data model**: one new table, `board_comments` — thread roots and replies
+share it (`parent_comment_id` NULL = root, set = reply). See
+`schema.ts`'s own comment on this table for the full column rationale
+(soft delete via `deleted_at`, resolve state only meaningful on a root,
+`anchor_type`/`anchor_shape_id`/`anchor_x`/`anchor_y` for canvas- vs.
+shape-anchored pins, `mentions` reserved unused for a future feature).
+Deliberately NOT stored in `boards.canvas_data` or as tldraw shape
+records — comments are collaboration metadata, not document content, and
+must never appear in a version-history snapshot or restore. Because
+comments never touch `RoomManager`/`TLSocketRoom` at all, they never fire
+`onDataChange`/`onSnapshotChanged`, so "comment actions never create board
+versions" holds by construction, not by a rule someone has to remember.
+
+**Why comments use a second WebSocket channel, not the existing tldraw
+sync socket** (the spec's own explicit ask: "reuse the existing websocket
+infrastructure... do not build another websocket"): `TLSocketRoom`'s wire
+protocol is tldraw's own binary sync format for `TLRecord` documents —
+there is no supported way to send an out-of-band, non-document message
+over that socket without hand-rolling part of tldraw's own sync wire
+format, exactly the "custom synchronization engine" this whole rollout
+has consistently avoided (see `roomAccess.ts`'s own note reaching the
+same conclusion for permission enforcement). Instead, `connectionHandler.ts`
+now dispatches on the upgrade path suffix: `/api/realtime/boards/<roomId>`
+still goes to `RoomManager`/`TLSocketRoom` exactly as before; the new
+`/api/realtime/boards/<roomId>/comments` path goes to a new
+`CommentBroadcaster` (`backend/src/realtime/comments/commentBroadcaster.ts`)
+— a plain `Map<roomId, Set<WebSocket>>` with a `broadcast()` method, no
+persistence, no lifecycle, no document state. This is still "the existing
+websocket infrastructure," not a new one: same `WebSocketServer` instance,
+same `REALTIME_PATH_PREFIX`, same `checkRoomAccess()` authorization
+function, same global `REALTIME_ENABLED` kill switch. The only new thing
+is the fan-out set itself.
+
+**New backend modules**, `backend/src/realtime/comments/`:
+- `commentsStorage.ts` — pure Postgres access (create/list/get/update/
+  soft-delete/resolve/reopen). No decisions live here, same division of
+  responsibility as `history/versionStorage.ts`.
+- `commentBroadcaster.ts` — the WS fan-out described above. Receive-only
+  from the client's perspective today (no client→server WS messages are
+  defined) — every mutation goes through REST, which is what "do NOT
+  trust the client" required: an attacker holding an open comments socket
+  cannot forge a comment by sending a crafted WS frame, because nothing
+  ever reads incoming frames as a command.
+
+**New REST endpoints**, `backend/src/routes/comments.ts` (a dedicated
+router, same reasoning as `routes/versions.ts` — mounted only when
+`server.ts` passes a real `commentBroadcaster` instance, absent entirely
+in every test call site that doesn't need one):
+- `GET /api/boards/:id/comments[?includeResolved=true]` — flat list of
+  non-deleted comments (roots + replies together; the frontend groups
+  them client-side), resolved-thread roots hidden by default.
+- `POST /api/boards/:id/comments` — create a thread root (anchor
+  required) or a reply (`parentCommentId` set; anchor inherited from the
+  root server-side, never trusted from the client for a reply).
+- `PUT /api/boards/:id/comments/:commentId` — edit content.
+- `DELETE /api/boards/:id/comments/:commentId` — soft delete (row stays,
+  `deleted_at` set — preserves any replies under a deleted root; see
+  `commentsStorage.ts`'s own comment on why this can never be a hard
+  delete).
+- `POST /api/boards/:id/comments/:commentId/resolve` and `/reopen` —
+  thread roots only (rejected with 400 on a reply id).
+
+**Permission model** (the spec's Owner/Editor/Commenter/Viewer, mapped
+onto this codebase's actual, existing two-tier board permission system —
+adding a third role would have meant inventing a new permission tier the
+rest of the app doesn't have, which the spec's own "do not over-engineer"
+guidance argues against):
+- Read access (member, or `visibility: 'shared'`) is the bar for
+  creating comments/replies and reading the thread — this is the
+  Commenter/Viewer-with-comment-rights tier. Matches Figma/FigJam/Miro's
+  own behavior: anyone who can view a board can comment on it.
+- Board-edit access (owner/member/`edit_mode: 'anyone'` on a shared
+  board — the same `canEditBoard` helper `routes/versions.ts` already
+  uses) additionally grants resolving/reopening any thread and
+  editing/deleting ANY comment, not just your own.
+- A comment's own author can always edit or delete THEIR OWN comment,
+  even without board-edit access — this is what makes the Commenter tier
+  actually useful (comment on a board you can't edit, then manage what
+  you wrote), matching Figma's own behavior.
+- Every check is real server-side enforcement via Express/`requireStudent`
+  — never the WS transport's advisory-only `role` (see `roomAccess.ts`'s
+  own "known limitation" comment, which explicitly named Comments as a
+  feature requiring this before shipping).
+
+**Frontend**: `CommentsOverlay.tsx` is mounted as a child of `<Tldraw>` in
+BOTH `TldrawCanvas.tsx` (manual) and `TldrawCanvasSync.tsx` (realtime) —
+identical component, identical behavior, regardless of which persistence
+mode a board uses (same pattern `ClipboardOverride`/`CollaboratorList`
+already established; see `pages/commentsProps.ts` for the shared prop
+shape both canvas components accept). It owns comment-mode click-to-pin
+(a capture-phase `pointerdown` listener on `editor.getContainer()`,
+converting the click to a page-space point via `editor.screenToPage()`,
+with `editor.getShapeAtPoint()` used to decide canvas- vs. shape-anchored),
+zoom-aware pin rendering (`editor.pageToViewport()`, re-computed on every
+camera change via a `useValue`-subscribed `editor.getCamera()` read — a
+pin's on-screen position tracks pan/zoom, but its stored `anchor_x`/
+`anchor_y` never changes just because the user zoomed), and opening/
+closing `CommentThreadPanel.tsx` for the active thread. All actual data
+fetching/mutation/live-sync lives in `useBoardComments.ts`
+(`components/hooks/`), which has zero tldraw dependency and is owned by
+`BoardPage.tsx` (not either canvas component) so comment state survives
+regardless of which canvas component is mounted. `CommentPin.tsx` is
+`memo`'d so re-rendering one pin (its own hover/open state, a new reply)
+never re-renders every other pin on the board.
+
+**Live delta reconciliation**: `useBoardComments`'s WS `onopen` handler
+always triggers one REST re-fetch (cheap — comment lists are small
+relative to canvas snapshots) to reconcile anything missed while
+disconnected, rather than trying to replay a gap of missed WS events —
+the same "REST for initial/catch-up state, WS for live deltas" split
+`@tldraw/sync` itself uses. A dropped comments socket reconnects with a
+short exponential backoff (1s → 15s cap); this is a plain
+`WebSocket`, not `@tldraw/sync`'s `ReconnectManager` (that class is
+internal to `@tldraw/sync-core` and tightly coupled to `TLSocketRoom`'s
+own message protocol), so it needed its own small, bounded retry loop —
+acceptable because correctness never depends on it: REST is always the
+source of truth, WS is purely a live-update convenience layer on top.
+
+**A real, pre-existing bug found during this commit's own manual QA** (not
+introduced by Commit 6, but discovered while live-testing the new comments
+WS channel, and it blocked comments' own live-push layer too): `roomAccess.ts`'s
+`checkRoomAccess()` queried `boards WHERE id = $1`, but every caller —
+the Commit 3 document-sync WS path AND the new Commit 6 comments WS path —
+passes `board.room_id`, not `board.id` (see `api.ts`'s `getRealtimeUrl`/
+`getCommentsRealtimeUrl`, both keyed by `room_id`). Since `room_id` is a
+separately generated UUID (see `schema.ts`'s backfill), it is never equal
+to `id` in practice — meaning **every realtime WebSocket connection has
+been closing immediately with "Board not found" in production since
+Commit 3 shipped**, with zero test coverage catching it. A second,
+related bug in the same function meant even a corrected board lookup
+would still have failed to recognize board members (`board_members.board_id`
+needs the real board `id`, not `room_id`). Both are now fixed — see
+`roomAccess.ts`'s own bug-fix comment for the full detail — and covered
+by 10 new regression tests in `tests/room-access.test.ts` (verified to
+actually fail against the old code, not just pass trivially, by
+temporarily reverting the fix and re-running them).
 
 ## Two-layer rollout gate
 
@@ -586,20 +734,95 @@ no live room exists).
     endpoint, not just a hidden button) — this is real server-side
     enforcement, unlike the WS-layer `role` limitation noted below.
 
+## Commit 6 — manual QA (comments)
+
+Same setup as Commit 3/4/5's checklists. Comment CRUD (create/reply/edit/
+delete/resolve/reopen) works on ANY board via REST; items marked
+"(realtime only)" need `REALTIME_ENABLED=true` AND
+`board.realtime_enabled=true` for the live-push behavior specifically —
+without that, the same action still works, just requires a manual
+refresh/reopen of the panel to see someone else's change.
+
+1. **Create comment** — enter comment mode, click empty canvas. Confirm a
+   pin drops at the click point and a composer opens; typing and
+   submitting creates a thread root pin that persists after closing/
+   reopening the panel.
+2. **Create comment on a shape** — click directly on a shape while in
+   comment mode. Confirm the pin anchors to the shape (not just the click
+   coordinate) — moving the shape afterward should move the pin with it.
+3. **Reply** — open an existing thread, type a reply, press Enter (not
+   Shift+Enter). Confirm it appears in the thread, auto-scrolled into
+   view, and the pin's reply-count badge increments.
+4. **Resolve** — as the board owner/a member, resolve a thread. Confirm
+   it disappears from the default pin view and default comment list, and
+   reappears in an "include resolved" view/toggle if the UI +GET request
+   includeResolved=true, without being deleted.
+5. **Reopen** — reopen a resolved thread. Confirm it reappears in the
+   default view again, unmodified content, at the same pin location.
+6. **Edit** — edit your own comment. Confirm the "(edited)" marker
+   appears once `updatedAt` diverges from `createdAt`, and the content
+   updates for anyone else with the panel open (realtime only) or on
+   their next refresh otherwise.
+7. **Delete** — delete a comment with the confirmation dialog. Confirm it
+   disappears from the thread; deleting a thread ROOT that has replies
+   must not also delete/orphan those replies (the replies stay listed
+   under `includeResolved=true`'s expanded view, or simply remain
+   selectable in the panel).
+8. **Two browsers** (realtime only) — open the same board as two
+   students. Create a comment in one; confirm it appears live in the
+   other without a refresh (both the pin AND, if that thread's panel is
+   open, the thread content).
+9. **Refresh** — reload the page mid-session. Confirm all comments/
+   replies/resolved-state reload correctly from REST (nothing was only
+   ever in memory).
+10. **Reconnect** (realtime only) — drop network (devtools offline),
+    restore it. Confirm the comments WS channel reconnects (its own
+    bounded backoff, independent of the tldraw document-sync socket) and
+    a one-time catch-up re-fetch reconciles anything missed while
+    disconnected.
+11. **Offline → reconnect** — go offline, attempt to create/edit/delete a
+    comment (REST calls will fail while offline — confirm this fails
+    gracefully, not silently, and the UI doesn't show a false-success
+    state), then restore connectivity and confirm normal operation resumes.
+12. **Duplicate tabs** (realtime only) — open the same board in two tabs
+    as the same student. Confirm both tabs' comments WS channels connect
+    independently and both receive live events for actions taken in
+    either tab (or a third party's).
+13. **Permission enforcement** — as a student with read-only access to a
+    shared board (not owner, not a member with edit rights): confirm you
+    CAN create comments/replies, CAN edit/delete your OWN comments, but
+    CANNOT resolve/reopen a thread or edit/delete someone ELSE's comment
+    (403 from the endpoint itself, not just a hidden button).
+14. **Large boards** — on a board with substantial canvas content, confirm
+    comment mode/pin dropping/panel opening stays responsive (pins are
+    independently memoized — see `CommentPin.tsx` — so this should not
+    visibly degrade with more shapes on the canvas).
+15. **Hundreds of comments** — create/accumulate a large number of
+    comments on one board. Confirm the list endpoint and panel remain
+    responsive (no snapshot content is ever fetched for comments, unlike
+    version history's own snapshot payloads — comment rows are small) and
+    that resolved-by-default filtering keeps the visible pin count
+    manageable.
+
 ## What's explicitly NOT yet built (don't test for these)
 
-- No comments, sticky notes, notifications, or plugins.
+- No sticky notes, notifications, AI, or plugins.
 - No compare/diff view, branching, or merge — version history is strictly
   linear (each restore appends a new version; nothing is ever overwritten).
+- No comment branching, threading beyond one level (replies cannot
+  themselves have replies), @mentions (the `mentions` column exists,
+  reserved, unused), or comment notifications — all explicitly out of
+  scope for Commit 6 per its own spec.
 - No server-side write enforcement for `role: 'viewer'` on the live
-  WebSocket transport itself — documented as a known limitation in
-  `roomAccess.ts`, must be resolved before Comments / Sticky Notes / public
-  sharing / team workspaces. In Commit 3 terms: a `readOnly` client hides
-  the UI (`hideUi`) but nothing server-side rejects a write if one were sent
-  anyway — same trust model the manual path already had, not a new gap.
-  (Version history's own REST endpoints are NOT subject to this gap — see
-  Commit 5's permission model above, which enforces real server-side checks
-  independent of the WS `role`.)
+  WebSocket **document-sync** transport itself (comments' own REST
+  endpoints ARE fully server-side enforced — see Commit 6's permission
+  model above) — documented as a known limitation in `roomAccess.ts`,
+  must be resolved before Sticky Notes / public sharing / team
+  workspaces. In Commit 3 terms: a `readOnly` client hides the UI
+  (`hideUi`) but nothing server-side rejects a tldraw document write if
+  one were sent anyway — same trust model the manual path already had,
+  not a new gap. (Version history's and Comments' own REST endpoints are
+  NOT subject to this gap.)
 - No UI to flip `board.realtime_enabled` from the app itself — still a
   manual DB flip per "Enabling a pilot board" above.
 - No admin visibility into `RoomManager`'s diagnostic accessors

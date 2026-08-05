@@ -6,6 +6,7 @@ import { api, type BoardDetail } from '../lib/api';
 import { clearBoardsCache } from './MoodboardsPage';
 import { rollToColor } from '../lib/utils';
 import { PresenceProvider } from '../context/PresenceProvider';
+import { useBoardComments } from '../components/hooks/useBoardComments';
 
 const TldrawCanvas = lazy(() =>
   import('./TldrawCanvas').then(m => ({ default: m.TldrawCanvas }))
@@ -124,6 +125,32 @@ export default function BoardPage() {
   // flight, which is always safe/correct behavior, never just a fallback
   // for a slow network.
   const useRealtimeSync = Boolean(board?.realtime_enabled) && realtimeGloballyEnabled && Boolean(board?.room_id);
+
+  // Comments (Commit 6) — see components/hooks/useBoardComments.ts's own
+  // header comment for why this is owned here (BoardPage) rather than
+  // inside either canvas component: comment state must not depend on
+  // which of TldrawCanvas/TldrawCanvasSync is currently mounted, and both
+  // need the SAME instance passed down via the `comments` prop (see
+  // pages/commentsProps.ts). `live` mirrors useRealtimeSync exactly —
+  // comments still fully work via REST on a manual-save board, just
+  // without the WS live-push layer (see the hook's own comment on this
+  // tradeoff, same one the manual canvas path already accepts for
+  // document content itself).
+  const [commentMode, setCommentMode] = useState(false);
+  // "Unread" is a purely local, this-session concept — no read-receipt
+  // state is persisted server-side (out of scope: no notifications system
+  // per the spec). Reset to "now" whenever comment mode opens, so a pin
+  // is marked unread only if its thread got new activity since the LAST
+  // time this student actually looked, not since some absolute epoch.
+  const [lastSeenAt, setLastSeenAt] = useState(() => Date.now());
+  const commentsApi = useBoardComments({
+    boardId: board?.id ?? '',
+    roll: studentSession?.rollNumber,
+    live: useRealtimeSync,
+    roomId: board?.room_id ?? null,
+  });
+
+  const canModerateComments = isMember;
 
   const shareUrl = `${window.location.origin}/moodboards/${board?.id}`;
 
@@ -449,6 +476,46 @@ export default function BoardPage() {
             )}
 
             <button
+              onClick={() => {
+                setCommentMode(on => {
+                  const next = !on;
+                  // Opening comment mode is treated as "caught up" —
+                  // clears the unread badge/dot state for pins, since the
+                  // student is about to actually look at the board's
+                  // comments. See lastSeenAt's own declaration comment.
+                  if (next) setLastSeenAt(Date.now());
+                  return next;
+                });
+              }}
+              title={commentMode ? 'Exit comment mode' : 'Comment mode — click the canvas to leave a comment'}
+              aria-pressed={commentMode}
+              style={{
+                position: 'relative',
+                padding: '5px 12px',
+                background: commentMode ? 'var(--color-brand)' : 'none',
+                border: commentMode ? 'none' : `1px solid ${borderColor}`,
+                borderRadius: 'var(--radius-pill)',
+                color: commentMode ? '#fff' : textMuted, fontSize: 12,
+                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              Comment
+              {!commentMode && commentsApi.comments.some(
+                c => !c.parentCommentId && !c.resolvedAt && c.authorRoll !== studentSession?.rollNumber
+                  && new Date(c.updatedAt).getTime() > lastSeenAt
+              ) && (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute', top: -2, right: -2,
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: 'var(--color-brand)', border: `2px solid ${surfaceBg}`,
+                  }}
+                />
+              )}
+            </button>
+
+            <button
               onClick={() => setShowVersionHistory(true)}
               title="Version History"
               style={{
@@ -575,6 +642,14 @@ export default function BoardPage() {
                   theme={theme}
                   pendingItems={board.items}
                   readOnly={!isMember && board.edit_mode === 'members_only'}
+                  comments={studentSession?.rollNumber ? {
+                    commentsApi,
+                    commentMode,
+                    onExitCommentMode: () => setCommentMode(false),
+                    currentRoll: studentSession.rollNumber,
+                    canModerate: canModerateComments,
+                    lastSeenAt,
+                  } : undefined}
                 />
               </PresenceProvider>
             </Suspense>
@@ -613,6 +688,14 @@ export default function BoardPage() {
                 pendingItems={board.items}
                 onSave={handleSave}
                 readOnly={!isMember && board.edit_mode === 'members_only'}
+                comments={studentSession?.rollNumber ? {
+                  commentsApi,
+                  commentMode,
+                  onExitCommentMode: () => setCommentMode(false),
+                  currentRoll: studentSession.rollNumber,
+                  canModerate: canModerateComments,
+                  lastSeenAt,
+                } : undefined}
               />
             </Suspense>
           )}

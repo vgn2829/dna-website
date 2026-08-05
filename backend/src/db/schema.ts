@@ -946,4 +946,74 @@ export async function initSchema(): Promise<void> {
   `);
 
   console.log('board_versions migration done');
+
+  // Comments (Commit 6) — one table for both thread roots and replies:
+  // parent_comment_id NULL means "this is a thread root", non-NULL means
+  // "this is a reply to that root". A single table (not comments +
+  // comment_replies) keeps read/list/broadcast logic uniform — every
+  // comment event (create/edit/delete/resolve/reopen) is the same shape
+  // regardless of depth, and a reply never needs its own resolve state
+  // (resolving is a thread-level operation, applied to the root only; see
+  // routes/comments.ts).
+  //
+  // anchor_type distinguishes a pin dropped on open canvas ('canvas', using
+  // anchor_x/anchor_y in page-space coordinates — tldraw's own coordinate
+  // system, so a pin stays correctly placed regardless of zoom) from a pin
+  // attached to a specific shape ('shape', using anchor_shape_id — a
+  // tldraw TLShapeId string, intentionally NOT a foreign key: shapes live
+  // in the tldraw document/snapshot, not in Postgres relational tables, so
+  // there is nothing here to reference; a comment on a since-deleted shape
+  // is handled client-side by falling back to its last-known anchor_x/
+  // anchor_y, which are always populated for both anchor types).
+  //
+  // Deliberately NOT stored in boards.canvas_data or as tldraw shape
+  // records: comments are product/collaboration metadata, not document
+  // content — they must never appear in a version-history snapshot/restore
+  // (see history/versionHistoryService.ts) and must never be selectable/
+  // draggable/deletable via tldraw's own shape tools. Keeping them in their
+  // own table, read over their own REST/WS channel, is what makes "comment
+  // actions never create board versions" true by construction rather than
+  // something routes/comments.ts has to remember to avoid.
+  //
+  // mentions is a JSON TEXT column (array of roll numbers), unused by this
+  // commit (notifications/mentions are explicitly out of scope) — reserved
+  // so a future mentions feature doesn't need another migration.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS board_comments (
+      id                TEXT PRIMARY KEY,
+      board_id          TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+      parent_comment_id TEXT REFERENCES board_comments(id) ON DELETE CASCADE,
+      author_roll       TEXT NOT NULL,
+      author_name       TEXT,
+      created_at        TEXT NOT NULL,
+      updated_at        TEXT NOT NULL,
+      resolved_at       TEXT,
+      resolved_by_roll  TEXT,
+      deleted_at        TEXT,
+      anchor_type       TEXT NOT NULL,
+      anchor_shape_id   TEXT,
+      anchor_x          DOUBLE PRECISION NOT NULL,
+      anchor_y          DOUBLE PRECISION NOT NULL,
+      content           TEXT NOT NULL,
+      mentions          TEXT
+    )
+  `);
+
+  // Every list read filters by board_id (and, for the default view, checks
+  // deleted_at/resolved_at) ordered by created_at — same rationale as
+  // board_versions' own index above.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS board_comments_board_id_created_at_idx
+    ON board_comments (board_id, created_at)
+  `);
+
+  // Thread reads (a root + all its replies) filter by parent_comment_id —
+  // without this index, opening a single thread with many replies scans
+  // every comment on the board.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS board_comments_parent_comment_id_idx
+    ON board_comments (parent_comment_id)
+  `);
+
+  console.log('board_comments migration done');
 }

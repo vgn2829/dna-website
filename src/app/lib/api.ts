@@ -156,6 +156,36 @@ export interface VersionPage {
   hasMore: boolean;
 }
 
+// Mirrors backend/src/realtime/comments/commentsStorage.ts's BoardComment
+// exactly (camelCase, same field set) — see that file's own comment on why
+// comments are a dedicated table/type, never tldraw shape data.
+export type CommentAnchorType = 'canvas' | 'shape';
+
+export interface BoardComment {
+  id: string;
+  boardId: string;
+  parentCommentId: string | null;
+  authorRoll: string;
+  authorName: string | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+  resolvedByRoll: string | null;
+  deletedAt: string | null;
+  anchorType: CommentAnchorType;
+  anchorShapeId: string | null;
+  anchorX: number;
+  anchorY: number;
+  content: string;
+}
+
+export type CommentEventType = 'create' | 'edit' | 'delete' | 'resolve' | 'reopen';
+
+export interface CommentEvent {
+  type: CommentEventType;
+  comment: BoardComment;
+}
+
 export interface AppSettings {
   public_meet_enabled: string;
   public_meet_passcode?: string;
@@ -552,6 +582,50 @@ export const api = {
       request<{ success: boolean; version: BoardVersion; hadLiveRoom: boolean }>(
         'POST', `/boards/${boardId}/versions/${versionId}/restore`, { roll }
       ),
+    // Comments (Commit 6). REST is the source of truth (initial load, and
+    // the only way to mutate — see backend/src/routes/comments.ts's own
+    // "do NOT trust the client" note: every write is server-validated
+    // here, never assumed from a WS message); getCommentsRealtimeUrl below
+    // is the live-delta channel, deliberately separate from
+    // getRealtimeUrl's tldraw document sync (see
+    // backend/src/realtime/comments/commentBroadcaster.ts for why).
+    getComments: (boardId: string, roll: string, opts?: { includeResolved?: boolean }) =>
+      request<{ comments: BoardComment[] }>(
+        'GET', `/boards/${boardId}/comments${opts?.includeResolved ? '?includeResolved=true' : ''}`, { roll }
+      ),
+    createComment: (boardId: string, roll: string, data: {
+      content: string;
+      parentCommentId?: string;
+      anchorType?: CommentAnchorType;
+      anchorShapeId?: string;
+      anchorX?: number;
+      anchorY?: number;
+    }) =>
+      request<BoardComment>('POST', `/boards/${boardId}/comments`, { body: data, roll }),
+    editComment: (boardId: string, roll: string, commentId: string, content: string) =>
+      request<BoardComment>('PUT', `/boards/${boardId}/comments/${commentId}`, { body: { content }, roll }),
+    deleteComment: (boardId: string, roll: string, commentId: string) =>
+      request<{ success: boolean }>('DELETE', `/boards/${boardId}/comments/${commentId}`, { roll }),
+    resolveComment: (boardId: string, roll: string, commentId: string) =>
+      request<BoardComment>('POST', `/boards/${boardId}/comments/${commentId}/resolve`, { roll }),
+    reopenComment: (boardId: string, roll: string, commentId: string) =>
+      request<BoardComment>('POST', `/boards/${boardId}/comments/${commentId}/reopen`, { roll }),
+    // WS URL for live comment events — same URL-building approach as
+    // getRealtimeUrl (token as a query param, ws(s) protocol swap), but a
+    // DIFFERENT path suffix (/comments) that the backend's
+    // connectionHandler.ts routes to CommentBroadcaster instead of
+    // RoomManager/TLSocketRoom. No sessionId is appended here (unlike
+    // getRealtimeUrl) — this channel has no per-session document state to
+    // resume; a reconnect just starts receiving live events again, with
+    // the REST GET above as the catch-up mechanism for whatever happened
+    // while disconnected.
+    getCommentsRealtimeUrl: (roomId: string): string => {
+      const token = getStudentToken();
+      const url = new URL(`${BASE}/realtime/boards/${roomId}/comments`, window.location.origin);
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      if (token) url.searchParams.set('token', token);
+      return url.toString();
+    },
   },
   liveSessions: {
     getActive: (roll?: string) =>

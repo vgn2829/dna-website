@@ -17,6 +17,8 @@ import {
 } from './tldrawCanvasShared';
 import { usePresenceUserInfo } from '../context/PresenceProvider';
 import { CollaboratorList } from '../components/CollaboratorList';
+import { CommentsOverlay } from '../components/CommentsOverlay';
+import type { CommentsProps } from './commentsProps';
 
 // ─────────────────────────────────────────────────────────────────────────
 // ARCHITECTURAL DECISIONS — read before modifying this file.
@@ -82,6 +84,8 @@ interface TldrawCanvasSyncProps {
   theme: 'dark' | 'light';
   pendingItems?: BoardItem[];
   readOnly?: boolean;
+  // Commit 6 — see commentsProps.ts.
+  comments?: CommentsProps;
 }
 
 type ConnectionState = 'loading' | 'connected' | 'reconnecting' | 'offline' | 'failed';
@@ -155,6 +159,7 @@ export function TldrawCanvasSync({
   theme,
   pendingItems,
   readOnly = false,
+  comments,
 }: TldrawCanvasSyncProps) {
   const boardIdRef = useRef(boardId);
   useEffect(() => { boardIdRef.current = boardId; }, [boardId]);
@@ -350,6 +355,16 @@ export function TldrawCanvasSync({
               exactly the same reason ClipboardOverride is mounted here
               rather than outside <Tldraw>. */}
           <CollaboratorList />
+          {comments && (
+            <CommentsOverlay
+              commentsApi={comments.commentsApi}
+              commentMode={comments.commentMode}
+              onExitCommentMode={comments.onExitCommentMode}
+              currentRoll={comments.currentRoll}
+              canModerate={comments.canModerate}
+              lastSeenAt={comments.lastSeenAt}
+            />
+          )}
         </Tldraw>
       )}
     </div>

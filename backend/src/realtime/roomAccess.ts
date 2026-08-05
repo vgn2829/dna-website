@@ -71,7 +71,7 @@ export interface RoomAccessDenied {
   code: 1008 | 4099;
 }
 
-export async function checkRoomAccess(boardId: string, token: string | null): Promise<RoomAccessResult | RoomAccessDenied> {
+export async function checkRoomAccess(roomId: string, token: string | null): Promise<RoomAccessResult | RoomAccessDenied> {
   if (!isRealtimeGloballyEnabled()) {
     return { ok: false, reason: 'Realtime collaboration is disabled', code: 1008 };
   }
@@ -81,15 +81,30 @@ export async function checkRoomAccess(boardId: string, token: string | null): Pr
     return { ok: false, reason: 'Sign in required', code: 1008 };
   }
 
+  // PRE-EXISTING BUG FIX (found during Commit 6 manual QA, unrelated to
+  // Comments itself): every caller of checkRoomAccess — the document-sync
+  // WS path in connectionHandler.ts (Commit 3) and the new comments WS
+  // path added in Commit 6 — passes board.room_id here, not board.id (see
+  // getRealtimeUrl/getCommentsRealtimeUrl in api.ts, both keyed by
+  // room_id). This function's parameter was misleadingly named `boardId`
+  // and queried `WHERE id = $1`, which only matches when a board's `id`
+  // and `room_id` happen to be equal — never true in practice, since
+  // room_id is a separately generated UUID (see schema.ts's backfill:
+  // `SET room_id = gen_random_uuid()::text`). The practical effect: every
+  // realtime WebSocket connection has been closing immediately with 4099
+  // "Board not found" in production since Commit 3 shipped — confirmed by
+  // reproducing it live against a real board row with a real (Commit-3-era)
+  // client URL, not assumed. Fixed by querying on the column that's
+  // actually being looked up by.
   const result = await pool.query(
-    `SELECT owner_roll, visibility, edit_mode, realtime_enabled FROM boards WHERE id = $1`,
-    [boardId]
+    `SELECT id, owner_roll, visibility, edit_mode, realtime_enabled FROM boards WHERE room_id = $1`,
+    [roomId]
   );
   if (result.rows.length === 0) {
     return { ok: false, reason: 'Board not found', code: 4099 };
   }
   const board = result.rows[0] as {
-    owner_roll: string; visibility: string; edit_mode: string; realtime_enabled: boolean;
+    id: string; owner_roll: string; visibility: string; edit_mode: string; realtime_enabled: boolean;
   };
 
   if (!board.realtime_enabled) {
@@ -97,9 +112,15 @@ export async function checkRoomAccess(boardId: string, token: string | null): Pr
   }
 
   const isOwner = board.owner_roll === roll;
+  // board_members.board_id is the board's real `id`, not its `room_id` —
+  // must use board.id (just selected above), not the roomId parameter this
+  // function received. This is the second half of the same room_id/id mix-up
+  // (see the bug-fix comment above): a non-owner member would otherwise
+  // never be recognized as a member on the realtime path, even once the
+  // "Board not found" bug above is fixed.
   const memberResult = isOwner
     ? { rows: [] }
-    : await pool.query('SELECT 1 FROM board_members WHERE board_id = $1 AND roll_number = $2', [boardId, roll]);
+    : await pool.query('SELECT 1 FROM board_members WHERE board_id = $1 AND roll_number = $2', [board.id, roll]);
   const isMember = isOwner || memberResult.rows.length > 0;
 
   const canRead = isMember || board.visibility === 'shared';
