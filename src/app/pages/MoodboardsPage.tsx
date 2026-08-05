@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { api, type Board } from '../lib/api';
+import { api, type Board, type Workspace } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
 
-const CACHE_KEY_MY = 'dna_boards_mine';
-const CACHE_KEY_SHARED = 'dna_boards_shared';
-const CACHE_KEY_ARCHIVED = 'dna_boards_archived';
+// Cache keys are workspace-qualified (workspace/organization layer):
+// `null` (the "All workspaces" default — see activeWorkspaceId below)
+// resolves to the same ':all' suffix every existing session already used
+// before workspaces existed, so a user who never touches the switcher
+// sees byte-identical caching behavior to before this feature shipped.
+const CACHE_KEY_MY = (workspaceId: string | null) => `dna_boards_mine:${workspaceId ?? 'all'}`;
+const CACHE_KEY_SHARED = (workspaceId: string | null) => `dna_boards_shared:${workspaceId ?? 'all'}`;
+const CACHE_KEY_ARCHIVED = (workspaceId: string | null) => `dna_boards_archived:${workspaceId ?? 'all'}`;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 function readCache<T>(key: string): T | null {
@@ -32,10 +37,17 @@ function writeCache<T>(key: string, data: T): void {
   }
 }
 
+// Clears every workspace-scoped board list cache entry, not just one
+// workspace's — a board mutation (create/rename/archive/delete/share)
+// can affect what ANY workspace's list should show next load (e.g. a
+// board moving tabs, or a new board appearing in "All workspaces" too),
+// so a full sweep is the only invalidation that's safe by construction.
 export function clearBoardsCache(): void {
-  sessionStorage.removeItem(CACHE_KEY_MY);
-  sessionStorage.removeItem(CACHE_KEY_SHARED);
-  sessionStorage.removeItem(CACHE_KEY_ARCHIVED);
+  const prefixes = ['dna_boards_mine:', 'dna_boards_shared:', 'dna_boards_archived:'];
+  for (let i = sessionStorage.length - 1; i >= 0; i--) {
+    const key = sessionStorage.key(i);
+    if (key && prefixes.some(p => key.startsWith(p))) sessionStorage.removeItem(key);
+  }
 }
 
 type Tab = 'mine' | 'shared' | 'archived';
@@ -249,6 +261,12 @@ export default function MoodboardsPage() {
   const navigate = useNavigate();
   const { studentSession, openRollModal } = useStudent();
   const [tab, setTab] = useState<Tab>('mine');
+  // null = "All workspaces" — the exact pre-existing unscoped behavior,
+  // and the default every session starts at, so a user who never opens
+  // the switcher sees no change at all. Set to a specific workspace id
+  // to narrow every list below to just that workspace.
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [myBoards, setMyBoards] = useState<Board[]>([]);
   const [sharedBoards, setSharedBoards] = useState<Board[]>([]);
   const [archivedBoards, setArchivedBoards] = useState<Board[]>([]);
@@ -281,62 +299,81 @@ export default function MoodboardsPage() {
   const [sort, setSort] = useState<SortKey>('edited');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Workspace list — fetched once per session (not workspace-scoped
+  // itself, obviously), independent of the board-list effects below. Also
+  // lazily auto-provisions the caller's personal workspace server-side
+  // (see routes/workspaces.ts's GET /), so this always resolves to at
+  // least one entry for a signed-in student.
   useEffect(() => {
-    const cached = readCache<Board[]>(CACHE_KEY_SHARED);
+    if (!studentSession?.rollNumber) { setWorkspaces([]); return; }
+    api.workspaces.list(studentSession.rollNumber)
+      .then(setWorkspaces)
+      .catch(() => {});
+  }, [studentSession?.rollNumber]);
+
+  useEffect(() => {
+    const cacheKey = CACHE_KEY_SHARED(activeWorkspaceId);
+    const cached = readCache<Board[]>(cacheKey);
     if (cached) {
       setSharedBoards(cached);
       setSharedLoading(false);
       // Still re-fetch in background to stay fresh
-      api.boards.getShared(studentSession?.rollNumber)
-        .then(data => { setSharedBoards(data); writeCache(CACHE_KEY_SHARED, data); })
+      api.boards.getShared(studentSession?.rollNumber, activeWorkspaceId ?? undefined)
+        .then(data => { setSharedBoards(data); writeCache(cacheKey, data); })
         .catch(() => {});
       return;
     }
     setSharedLoading(true);
-    api.boards.getShared(studentSession?.rollNumber)
-      .then(data => { setSharedBoards(data); writeCache(CACHE_KEY_SHARED, data); })
+    api.boards.getShared(studentSession?.rollNumber, activeWorkspaceId ?? undefined)
+      .then(data => { setSharedBoards(data); writeCache(cacheKey, data); })
       .catch(() => {})
       .finally(() => setSharedLoading(false));
-  }, [studentSession?.rollNumber]);
+  }, [studentSession?.rollNumber, activeWorkspaceId]);
 
   useEffect(() => {
     if (!studentSession?.rollNumber) return;
-    const cached = readCache<Board[]>(CACHE_KEY_MY);
+    const cacheKey = CACHE_KEY_MY(activeWorkspaceId);
+    const cached = readCache<Board[]>(cacheKey);
     if (cached) {
       setMyBoards(cached);
       setMyLoading(false);
       // Still re-fetch in background to stay fresh
-      api.boards.getMyBoards(studentSession.rollNumber)
-        .then(data => { setMyBoards(data); writeCache(CACHE_KEY_MY, data); })
+      api.boards.getMyBoards(studentSession.rollNumber, activeWorkspaceId ?? undefined)
+        .then(data => { setMyBoards(data); writeCache(cacheKey, data); })
         .catch(() => {});
       return;
     }
     setMyLoading(true);
-    api.boards.getMyBoards(studentSession.rollNumber)
-      .then(data => { setMyBoards(data); writeCache(CACHE_KEY_MY, data); })
+    api.boards.getMyBoards(studentSession.rollNumber, activeWorkspaceId ?? undefined)
+      .then(data => { setMyBoards(data); writeCache(cacheKey, data); })
       .catch(() => {})
       .finally(() => setMyLoading(false));
-  }, [studentSession?.rollNumber]);
+  }, [studentSession?.rollNumber, activeWorkspaceId]);
 
   // Archived boards are fetched lazily — only once the user actually opens
-  // that tab — since most sessions never look at it.
+  // that tab — since most sessions never look at it. archivedLoaded is
+  // reset whenever activeWorkspaceId changes (see the switcher's onClick
+  // below) so switching workspaces while already on the Archived tab
+  // triggers a fresh scoped fetch instead of reusing a different
+  // workspace's already-loaded list.
   useEffect(() => {
     if (tab !== 'archived' || !studentSession?.rollNumber || archivedLoaded) return;
-    const cached = readCache<Board[]>(CACHE_KEY_ARCHIVED);
+    const cacheKey = CACHE_KEY_ARCHIVED(activeWorkspaceId);
+    const cached = readCache<Board[]>(cacheKey);
     if (cached) {
       setArchivedBoards(cached);
       setArchivedLoaded(true);
-      api.boards.getArchived(studentSession.rollNumber)
-        .then(data => { setArchivedBoards(data); writeCache(CACHE_KEY_ARCHIVED, data); })
+      api.boards.getArchived(studentSession.rollNumber, activeWorkspaceId ?? undefined)
+        .then(data => { setArchivedBoards(data); writeCache(cacheKey, data); })
         .catch(() => {});
       return;
     }
     setArchivedLoading(true);
-    api.boards.getArchived(studentSession.rollNumber)
-      .then(data => { setArchivedBoards(data); writeCache(CACHE_KEY_ARCHIVED, data); setArchivedLoaded(true); })
+    api.boards.getArchived(studentSession.rollNumber, activeWorkspaceId ?? undefined)
+      .then(data => { setArchivedBoards(data); writeCache(cacheKey, data); setArchivedLoaded(true); })
       .catch(() => {})
       .finally(() => setArchivedLoading(false));
-  }, [tab, studentSession?.rollNumber, archivedLoaded]);
+  }, [tab, studentSession?.rollNumber, archivedLoaded, activeWorkspaceId]);
 
   // Keyboard shortcuts: "/" focuses search (unless already typing somewhere),
   // Escape clears search and closes any open card menu.
@@ -358,6 +395,15 @@ export default function MoodboardsPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [menuBoard, search]);
 
+  // Switching workspaces resets archivedLoaded so the Archived tab's
+  // lazy-load-once effect (see above) re-fetches for the new workspace
+  // instead of silently keeping whatever was already loaded for the
+  // previous one.
+  const handleWorkspaceSwitch = (workspaceId: string | null) => {
+    setActiveWorkspaceId(workspaceId);
+    setArchivedLoaded(false);
+  };
+
   const handleCreate = async () => {
     if (!studentSession?.rollNumber || !form.name.trim()) return;
     setCreating(true);
@@ -367,6 +413,10 @@ export default function MoodboardsPage() {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
         visibility: form.visibility,
+        // Lands in the active workspace filter if one is selected,
+        // otherwise falls back server-side to the caller's personal
+        // workspace (see api.ts's own comment on this being optional).
+        workspace_id: activeWorkspaceId ?? undefined,
       });
       setMyBoards(prev => [board, ...prev]);
       if (form.visibility === 'shared') setSharedBoards(prev => [board, ...prev]);
@@ -609,6 +659,46 @@ export default function MoodboardsPage() {
           )}
         </div>
       </motion.div>
+
+      {/* Workspace switcher — only shown once there's more than the
+          personal workspace to switch between, so a user who has never
+          created/joined a real workspace sees no change to this page at
+          all. "All" (activeWorkspaceId = null) is always first and is the
+          default on load, preserving the exact pre-existing unscoped
+          behavior for every list below. */}
+      {studentSession && workspaces.length > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+          <button
+            onClick={() => handleWorkspaceSwitch(null)}
+            style={{
+              padding: '6px 14px', borderRadius: 'var(--radius-pill)',
+              border: `1px solid ${activeWorkspaceId === null ? 'var(--color-brand)' : 'var(--color-border)'}`,
+              background: activeWorkspaceId === null ? 'var(--color-brand)' : 'none',
+              color: activeWorkspaceId === null ? '#fff' : 'var(--color-ink-muted)',
+              fontSize: 13, fontWeight: activeWorkspaceId === null ? 600 : 400,
+              fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+            }}
+          >
+            All Workspaces
+          </button>
+          {workspaces.map(ws => (
+            <button
+              key={ws.id}
+              onClick={() => handleWorkspaceSwitch(ws.id)}
+              style={{
+                padding: '6px 14px', borderRadius: 'var(--radius-pill)',
+                border: `1px solid ${activeWorkspaceId === ws.id ? 'var(--color-brand)' : 'var(--color-border)'}`,
+                background: activeWorkspaceId === ws.id ? 'var(--color-brand)' : 'none',
+                color: activeWorkspaceId === ws.id ? '#fff' : 'var(--color-ink-muted)',
+                fontSize: 13, fontWeight: activeWorkspaceId === ws.id ? 600 : 400,
+                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              {ws.is_personal ? 'Personal' : ws.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Tabs + search + sort */}
       <div className="moodboards-toolbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, borderBottom: '1px solid var(--color-border)', marginBottom: 32, flexWrap: 'wrap' }}>

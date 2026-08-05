@@ -126,11 +126,37 @@ export interface Board {
   is_favorite: boolean;
   thumbnail_url: string | null;
   realtime_enabled: boolean;
+  workspace_id: string;
 }
 
 export interface BoardDetail extends Board {
   items: BoardItem[];
   members: BoardMember[];
+}
+
+// Workspace/organization layer — mirrors backend/src/routes/workspaces.ts's
+// response shapes. `role` on Workspace is the CALLER's role in that
+// workspace (owner/admin/member), joined server-side per-request — it is
+// NOT a property of the workspace itself, so it changes per viewer.
+export interface Workspace {
+  id: string;
+  name: string;
+  is_personal: boolean;
+  owner_roll: string;
+  created_at: string;
+  role: 'owner' | 'admin' | 'member';
+  member_count: number;
+}
+
+export interface WorkspaceMember {
+  roll_number: string;
+  name: string | null;
+  role: 'owner' | 'admin' | 'member';
+  added_at: string;
+}
+
+export interface WorkspaceDetail extends Workspace {
+  members: WorkspaceMember[];
 }
 
 // Mirrors backend/src/realtime/history/versionStorage.ts's BoardVersion —
@@ -502,13 +528,22 @@ export const api = {
       request<StudentRosterEntry[]>('GET', '/students', { admin: true }),
   },
   boards: {
-    getMyBoards: (roll: string) =>
-      request<Board[]>('GET', '/boards', { roll }),
-    getArchived: (roll: string) =>
-      request<Board[]>('GET', '/boards/archived', { roll }),
-    getShared: (roll?: string) =>
-      request<Board[]>('GET', '/boards/shared', roll ? { roll } : {}),
-    create: (roll: string, data: { name: string; description?: string; visibility?: 'private' | 'shared' }) =>
+    // workspaceId is optional and purely additive (workspace/organization
+    // layer): omitted, these three list calls keep their exact pre-
+    // existing unscoped meaning ("every board I own or am a member of /
+    // my own archived boards / every shared board app-wide, across ALL
+    // workspaces"). Passed, they narrow to that one workspace — see
+    // backend/src/routes/boards.ts's own comment on why GET / and
+    // GET /archived stay unscoped-by-default while GET /shared's
+    // unscoped path is a deprecated fallback (Commit 9 removes it once
+    // every caller here always sends workspace_id for /shared).
+    getMyBoards: (roll: string, workspaceId?: string) =>
+      request<Board[]>('GET', `/boards${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, { roll }),
+    getArchived: (roll: string, workspaceId?: string) =>
+      request<Board[]>('GET', `/boards/archived${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, { roll }),
+    getShared: (roll?: string, workspaceId?: string) =>
+      request<Board[]>('GET', `/boards/shared${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, roll ? { roll } : {}),
+    create: (roll: string, data: { name: string; description?: string; visibility?: 'private' | 'shared'; workspace_id?: string }) =>
       request<Board>('POST', '/boards', { body: data, roll }),
     update: (id: string, roll: string, data: { name?: string; description?: string; visibility?: 'private' | 'shared'; edit_mode?: 'members_only' | 'anyone'; is_archived?: boolean }) =>
       request<Board>('PUT', `/boards/${id}`, { body: data, roll }),
@@ -644,6 +679,33 @@ export const api = {
       if (token) url.searchParams.set('token', token);
       return url.toString();
     },
+  },
+  // Workspace/organization layer — mirrors backend/src/routes/workspaces.ts.
+  // Every board belongs to exactly one workspace (see boards.workspace_id);
+  // this namespace manages the workspaces themselves and their membership,
+  // separate from board-level sharing (visibility/edit_mode/board members),
+  // which is untouched by any of this.
+  workspaces: {
+    list: (roll: string) =>
+      request<Workspace[]>('GET', '/workspaces', { roll }),
+    create: (roll: string, data: { name: string }) =>
+      request<Workspace>('POST', '/workspaces', { body: data, roll }),
+    get: (id: string, roll: string) =>
+      request<WorkspaceDetail>('GET', `/workspaces/${id}`, { roll }),
+    update: (id: string, roll: string, data: { name: string }) =>
+      request<Workspace>('PUT', `/workspaces/${id}`, { body: data, roll }),
+    delete: (id: string, roll: string) =>
+      request<{ success: boolean }>('DELETE', `/workspaces/${id}`, { roll }),
+    leave: (id: string, roll: string) =>
+      request<{ success: boolean }>('POST', `/workspaces/${id}/leave`, { roll }),
+    getMembers: (id: string, roll: string) =>
+      request<WorkspaceMember[]>('GET', `/workspaces/${id}/members`, { roll }),
+    addMember: (id: string, roll: string, memberRoll: string) =>
+      request<{ success: boolean; name: string | null }>('POST', `/workspaces/${id}/members`, { body: { roll_number: memberRoll }, roll }),
+    removeMember: (id: string, roll: string, memberRoll: string) =>
+      request<{ success: boolean }>('DELETE', `/workspaces/${id}/members/${memberRoll}`, { roll }),
+    setMemberRole: (id: string, roll: string, memberRoll: string, role: 'admin' | 'member') =>
+      request<{ success: boolean; role: string }>('PUT', `/workspaces/${id}/members/${memberRoll}/role`, { body: { role }, roll }),
   },
   liveSessions: {
     getActive: (roll?: string) =>
