@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit';
 import { getStorage } from '../storage';
 import { param } from '../routeParams';
 import { ensurePersonalWorkspace } from './workspaces';
+import { getBoardRole, roleCanWriteCanvas } from '../realtime/roomAccess';
 
 const router = Router();
 
@@ -41,21 +42,16 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-// Helper: check if roll is board member or owner
-async function canAccess(boardId: string, roll: string): Promise<boolean> {
-  const result = await pool.query(`
-    SELECT 1 FROM boards
-    WHERE id = $1 AND (
-      owner_roll = $2
-      OR visibility = 'shared'
-    )
-    UNION
-    SELECT 1 FROM board_members
-    WHERE board_id = $1 AND roll_number = $2
-  `, [boardId, roll]);
-  return result.rows.length > 0;
-}
-
+// isOwner stays a direct, standalone ownership check — deliberately NOT
+// consolidated onto getBoardRole/RoomRole below. True board ownership can
+// never be widened OR narrowed by workspace role (see roomAccess.ts's own
+// classifyBoardAccess comment: an explicit board_members row or ownership
+// always wins outright, workspace role is only ever a fallback ceiling on
+// SHARED boards with no board-level grant) — every owner-gated route below
+// (rename, delete, member management) must keep working identically
+// regardless of workspace membership, so this check has nothing to gain
+// from going through the shared classifier and every reason to stay simple
+// and obviously correct.
 async function isOwner(boardId: string, roll: string): Promise<boolean> {
   const result = await pool.query(
     'SELECT 1 FROM boards WHERE id = $1 AND owner_roll = $2',
@@ -64,46 +60,43 @@ async function isOwner(boardId: string, roll: string): Promise<boolean> {
   return result.rows.length > 0;
 }
 
+// CONSOLIDATION (workspace/organization layer, Commit 6/9) — canAccess,
+// isMember, and canEdit used to each hand-roll their own SQL, duplicating
+// (and silently diverging from) the exact same read/write access logic
+// realtime/roomAccess.ts's classifyBoardAccess/getBoardRole already
+// compute for the realtime WS path, comments, and version history. That
+// duplication is exactly what roomAccess.ts's own header comment already
+// flagged as the thing every OTHER permission consumer in this codebase
+// was supposed to avoid — boards.ts was the one file that never migrated
+// onto it. This consolidation is also the ONLY way these REST mutation
+// routes become workspace-ceiling-aware: getBoardRole already folds in
+// the workspace fallback (see roomAccess.ts), so replacing the hand-rolled
+// SQL here with a getBoardRole call picks that up for free, with no new
+// workspace-specific logic duplicated in this file.
+//
+// canAccess/isMember below are now the SAME check (any non-null role means
+// read access) — they were already semantically identical before this
+// consolidation (both queries were byte-for-byte the same UNION), kept as
+// two names only because call sites already read naturally either way.
+async function canAccess(boardId: string, roll: string): Promise<boolean> {
+  return (await getBoardRole(boardId, roll)) !== null;
+}
+
 async function isMember(boardId: string, roll: string): Promise<boolean> {
-  const result = await pool.query(`
-    SELECT 1 FROM boards
-    WHERE id = $1 AND owner_roll = $2
-    UNION
-    SELECT 1 FROM board_members
-    WHERE board_id = $1 AND roll_number = $2
-  `, [boardId, roll]);
-  return result.rows.length > 0;
+  return (await getBoardRole(boardId, roll)) !== null;
 }
 
 // Write access honours edit_mode: owner and members can always edit; when a board
 // is shared with edit_mode='anyone', any signed-in student may edit too.
-//
-// SECURITY FIX (found via Commit 7's mutation-path audit, same defect class
-// already fixed in realtime/roomAccess.ts's classifyBoardAccess and
-// routes/versions.ts): this used to never check is_archived, meaning a
-// member/owner could still save canvas content, upload canvas files,
-// duplicate, or add items on an archived board via plain REST — even
-// though the realtime WS canvas layer and the version-restore path both
-// correctly refuse writes to an archived board. Archiving is a deliberate
-// "stop changing this" action (see PUT /:id below); every write path
-// needs to honor it consistently, not just the realtime one. This function
-// is NOT used by PUT /:id itself (that uses isOwner, checked separately,
-// so archiving/unarchiving/renaming a board you own still works) — only
-// by the four content-mutation routes below (duplicate, canvas save,
-// canvas-files upload, items).
+// is_archived is enforced by roleCanWriteCanvas itself (its own doc comment
+// explains why isArchived is a required, non-optional parameter there) —
+// this function no longer needs its own separate archive check, since
+// getBoardRole already returns isArchived alongside role for exactly this
+// purpose.
 async function canEdit(boardId: string, roll: string): Promise<boolean> {
-  const board = await pool.query(
-    'SELECT owner_roll, visibility, edit_mode, is_archived FROM boards WHERE id = $1', [boardId]
-  );
-  if (board.rows.length === 0) return false;
-  const b = board.rows[0] as { owner_roll: string; visibility: string; edit_mode: string; is_archived: boolean };
-  if (b.is_archived) return false;
-  if (b.owner_roll === roll) return true;
-  if (b.edit_mode === 'anyone' && b.visibility === 'shared') return true;
-  const mem = await pool.query(
-    'SELECT 1 FROM board_members WHERE board_id = $1 AND roll_number = $2', [boardId, roll]
-  );
-  return mem.rows.length > 0;
+  const result = await getBoardRole(boardId, roll);
+  if (!result) return false;
+  return roleCanWriteCanvas(result.role, result.isArchived);
 }
 
 // GET /api/boards
@@ -278,6 +271,15 @@ router.post('/:id/duplicate', requireStudent, async (req: Request, res: Response
     );
     const ownerName = (studentResult.rows[0] as { name: string } | undefined)?.name ?? null;
 
+    // The copy always lands in the REQUESTER's own personal workspace, not
+    // the source board's workspace — same "deliberate choice made fresh,
+    // not inherited" philosophy already documented above for visibility/
+    // sharing. A duplicator may only have workspace-ceiling access to the
+    // source (no board_members row, no workspace-management rights there),
+    // so silently placing the copy in that same workspace would be a
+    // surprising side effect, not a neutral default.
+    const workspaceId = await ensurePersonalWorkspace(roll, ownerName);
+
     const id = uuidv4();
     const roomId = uuidv4();
     const now = new Date().toISOString();
@@ -286,12 +288,12 @@ router.post('/:id/duplicate', requireStudent, async (req: Request, res: Response
     const result = await pool.query(`
       INSERT INTO boards
         (id, name, description, owner_roll, owner_name,
-         visibility, room_id, created_at, updated_at, canvas_data)
-      VALUES ($1, $2, $3, $4, $5, 'private', $6, $7, $7, $8)
+         visibility, room_id, created_at, updated_at, canvas_data, workspace_id)
+      VALUES ($1, $2, $3, $4, $5, 'private', $6, $7, $7, $8, $9)
       RETURNING *
     `, [
       id, copyName, source.description,
-      roll, ownerName, roomId, now, source.canvas_data,
+      roll, ownerName, roomId, now, source.canvas_data, workspaceId,
     ]);
 
     res.status(201).json({ ...result.rows[0], item_count: 0, member_count: 0, is_favorite: false });
