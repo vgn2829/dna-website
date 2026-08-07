@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { pool, query } from '../db/client';
 import { requireAdmin } from '../middleware/adminAuth';
 import { requireStudent, optionalStudent } from '../middleware/studentAuth';
+import { getEventStatus, parseIstDate, validateEventTime } from '../lib/eventDate';
 
 export const eventsRouter = Router();
 
@@ -15,6 +16,7 @@ type EventRow = {
   location: string; content: string; capacity: number; registered_count: number;
   notified_at: string | null; starts_at: string | null;
 };
+
 
 function formatEvent(row: EventRow, isRegistered = false) {
   return {
@@ -42,8 +44,8 @@ eventsRouter.get('/', optionalStudent, async (req, res) => {
 
 const createSchema = z.object({
   title: z.string().min(1).max(200),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  time: z.string().min(1).max(50),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => Number.isFinite(parseIstDate(value)), 'Invalid calendar date'),
+  time: z.string().min(1).max(50).refine(validateEventTime, 'Invalid event time'),
   location: z.string().min(1).max(200),
   content: z.string().min(1).max(2000),
   capacity: z.number().int().min(1).max(10000),
@@ -70,8 +72,8 @@ eventsRouter.post('/', requireAdmin, async (req, res) => {
 
 const updateSchema = z.object({
   title:    z.string().min(1).max(200).optional(),
-  date:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  time:     z.string().min(1).max(50).optional(),
+  date:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => Number.isFinite(parseIstDate(value)), 'Invalid calendar date').optional(),
+  time:     z.string().min(1).max(50).refine(validateEventTime, 'Invalid event time').optional(),
   location: z.string().min(1).max(200).optional(),
   content:  z.string().min(1).max(2000).optional(),
   capacity: z.coerce.number().int().min(1).max(10000).optional(),
@@ -150,6 +152,11 @@ eventsRouter.post('/:id/rsvp', rsvpLimiter, requireStudent, async (req, res) => 
       await client.query('UPDATE events SET registered_count=GREATEST(0,registered_count-1) WHERE id=$1', [req.params.id]);
       isRegistered = false;
     } else {
+      if (getEventStatus({ date: evt.date, time: evt.time, startsAt: evt.starts_at }) === 'past') {
+        await client.query('ROLLBACK');
+        res.status(409).json({ error: 'This event is no longer accepting RSVPs' });
+        return;
+      }
       if (evt.registered_count >= evt.capacity) {
         await client.query('ROLLBACK');
         res.status(409).json({ error: 'Event is at capacity' });

@@ -3,23 +3,30 @@ import { motion } from 'motion/react';
 import { Calendar, MapPin, Clock, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAppData } from '../context/AppDataContext';
-import { getStatus, parseEventDate } from '../pages/EventsPage';
+import { formatEventDate, getEventStatus, parseEventStart, SECOND_MS } from '../lib/eventDate';
 
 export function EventSpotlight() {
   const navigate = useNavigate();
   const { events } = useAppData();
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), SECOND_MS);
+    return () => clearInterval(id);
+  }, []);
 
   const nextEvent = useMemo(() => {
     return events
-      .filter(e => getStatus(e.date) !== 'past')
-      .sort((a, b) => parseEventDate(a.date) - parseEventDate(b.date))[0] ?? null;
-  }, [events]);
+      .filter(e => getEventStatus(e, now) !== 'past')
+      .sort((a, b) => parseEventStart(a) - parseEventStart(b))[0] ?? null;
+  }, [events, now]);
 
   const [t, setT] = useState({ d: 0, h: 0, m: 0, s: 0 });
+  const nextStatus = nextEvent ? getEventStatus(nextEvent, now) : null;
 
   useEffect(() => {
     if (!nextEvent) return;
-    const target = parseEventDate(nextEvent.date);
+    const target = parseEventStart(nextEvent);
     const tick = () => {
       const dist = target - Date.now();
       if (dist > 0) setT({
@@ -28,6 +35,7 @@ export function EventSpotlight() {
         m: Math.floor((dist % 3600000)  / 60000),
         s: Math.floor((dist % 60000)    / 1000),
       });
+      else setT({ d: 0, h: 0, m: 0, s: 0 });
     };
     tick();
     const id = setInterval(tick, 1000);
@@ -72,7 +80,7 @@ export function EventSpotlight() {
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(4px)', padding: '4px 12px', borderRadius: 'var(--radius-pill)', marginBottom: 20 }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#3ecf5f', boxShadow: '0 0 6px #3ecf5f' }} />
                   <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 500, color: '#fff', letterSpacing: '-0.12px' }}>
-                    {getStatus(nextEvent.date) === 'live' ? 'Live Now' : 'Upcoming Event'}
+                    {nextStatus === 'live' ? 'Live Now' : 'Upcoming Event'}
                   </span>
                 </div>
 
@@ -82,7 +90,7 @@ export function EventSpotlight() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 32 }}>
                   {[
-                    [Calendar, new Date(parseEventDate(nextEvent.date)).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })],
+                    [Calendar, formatEventDate(nextEvent.date)],
                     [Clock,    nextEvent.time],
                     [MapPin,   nextEvent.location],
                   ].map(([Icon, text], i) => {
@@ -105,7 +113,7 @@ export function EventSpotlight() {
               </div>
 
               {/* Countdown */}
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignSelf: 'flex-end' }}>
+              {nextStatus === 'upcoming' && <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignSelf: 'flex-end' }}>
                 {[['d', 'Days'], ['h', 'Hours'], ['m', 'Mins'], ['s', 'Secs']].map(([key, label]) => (
                   <div key={key} style={{ background: 'rgba(255,255,255,0.10)', borderRadius: 'var(--radius-lg)', padding: '14px 18px', textAlign: 'center', minWidth: 72 }}>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 500, letterSpacing: '-1.4px', color: '#fff', lineHeight: 1 }}>
@@ -114,7 +122,7 @@ export function EventSpotlight() {
                     <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>{label}</div>
                   </div>
                 ))}
-              </div>
+              </div>}
             </div>
           ) : (
             <div style={{ position: 'relative', zIndex: 1, padding: '24px 4px' }}>

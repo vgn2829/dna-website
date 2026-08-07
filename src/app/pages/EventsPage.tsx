@@ -1,33 +1,26 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Clock, Users, Calendar, List, CheckCircle2 } from 'lucide-react';
+import { MapPin, Clock, Users, Calendar, List, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAppData } from '../context/AppDataContext';
 import { useStudent } from '../context/StudentContext';
 import { api, LiveSession } from '../lib/api';
 import { usePageMeta } from '../components/hooks/use-page-meta';
+import { DAY_MS, HOUR_MS, MINUTE_MS, SECOND_MS, formatEventDate, getEventStatus, parseEventStart } from '../lib/eventDate';
 
-// ISO dates (YYYY-MM-DD) are parsed as UTC midnight by spec; appending T12:00
-// forces local-time parsing so .getDate() returns the correct calendar day.
-// Human-readable strings from old localStorage data fall through unchanged.
-export function parseEventDate(dateStr: string): number {
-  return /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
-    ? new Date(dateStr + 'T12:00').getTime()
-    : new Date(dateStr).getTime();
-}
-
-function useCountdown(dateStr: string) {
-  const [diff, setDiff] = useState(() => Math.max(0, parseEventDate(dateStr) - Date.now()));
+function useCountdown(dateStr: string, timeStr: string, startsAt?: string | null) {
+  const event = { date: dateStr, time: timeStr, startsAt };
+  const [diff, setDiff] = useState(() => Math.max(0, parseEventStart(event) - Date.now()));
   useEffect(() => {
-    const target = parseEventDate(dateStr);
+    const target = parseEventStart(event);
     const tick = () => setDiff(Math.max(0, target - Date.now()));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [dateStr]);
-  const days = Math.floor(diff / 86_400_000);
-  const hrs  = Math.floor((diff % 86_400_000) / 3_600_000);
-  const mins = Math.floor((diff % 3_600_000) / 60_000);
-  const secs = Math.floor((diff % 60_000) / 1000);
+  }, [dateStr, timeStr, startsAt]);
+  const days = Math.floor(diff / DAY_MS);
+  const hrs  = Math.floor((diff % DAY_MS) / HOUR_MS);
+  const mins = Math.floor((diff % HOUR_MS) / MINUTE_MS);
+  const secs = Math.floor((diff % MINUTE_MS) / SECOND_MS);
   return { days, hrs, mins, secs, expired: diff === 0 };
 }
 
@@ -40,22 +33,15 @@ function CountUnit({ value, label }: { value: number; label: string }) {
   );
 }
 
-export function getStatus(dateStr: string): 'upcoming' | 'live' | 'past' {
-  const d = parseEventDate(dateStr);
-  const now = Date.now();
-  if (d < now - 7_200_000) return 'past';
-  if (d < now + 3_600_000) return 'live';
-  return 'upcoming';
-}
-
-function EventCard({ event, view, delay, onRSVP }: {
+function EventCard({ event, view, delay, onRSVP, rsvpPending }: {
   event: ReturnType<typeof useAppData>['events'][number];
   view: 'grid' | 'list';
   delay: number;
   onRSVP: () => void;
+  rsvpPending: boolean;
 }) {
-  const status = getStatus(event.date);
-  const countdown = useCountdown(event.date);
+  const status = getEventStatus(event);
+  const countdown = useCountdown(event.date, event.time, event.startsAt);
   const fillPct = Math.round((event.registeredCount / event.capacity) * 100);
 
   return (
@@ -65,7 +51,7 @@ function EventCard({ event, view, delay, onRSVP }: {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 16 }}
       transition={{ delay }}
-      className={`card flex gap-5 transition-all ${view === 'list' ? 'flex-row p-5' : 'flex-col p-5'} ${status === 'past' ? 'opacity-50' : ''}`}
+      className={`card flex gap-5 transition-all ${view === 'list' ? 'flex-col md:flex-row p-5' : 'flex-col p-5'} ${status === 'past' ? 'opacity-50' : ''}`}
     >
       {/* Date badge */}
       <div
@@ -76,10 +62,10 @@ function EventCard({ event, view, delay, onRSVP }: {
           className="type-headline leading-none"
           style={{ color: status === 'live' ? '#e5484d' : 'var(--color-ink)' }}
         >
-          {new Date(parseEventDate(event.date)).getDate().toString().padStart(2, '0')}
+          {formatEventDate(event.date).slice(0, 2)}
         </span>
         <span className="type-micro" style={{ color: status === 'live' ? '#e5484d' : 'var(--color-ink-muted)' }}>
-          {new Date(parseEventDate(event.date)).toLocaleString('default', { month: 'short' })}
+          {formatEventDate(event.date).slice(3, 5)}
         </span>
       </div>
 
@@ -104,6 +90,7 @@ function EventCard({ event, view, delay, onRSVP }: {
 
         {/* Meta */}
         <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <span className="type-micro flex items-center gap-1"><Calendar size={11} />{formatEventDate(event.date)}</span>
           <span className="type-micro flex items-center gap-1"><Clock size={11} />{event.time}</span>
           <span className="type-micro flex items-center gap-1"><MapPin size={11} />{event.location}</span>
         </div>
@@ -112,7 +99,7 @@ function EventCard({ event, view, delay, onRSVP }: {
         <div>
           <div className="flex justify-between type-micro mb-1.5">
             <span className="flex items-center gap-1 tabular-nums"><Users size={10} />{event.registeredCount}/{event.capacity}</span>
-            <span className="tabular-nums">{fillPct}% full</span>
+            <span className="tabular-nums">{event.registeredCount >= event.capacity ? 'Full' : `${event.capacity - event.registeredCount} seats left`}</span>
           </div>
           <div className="w-full h-0.5 rounded-full" style={{ background: 'var(--color-surface-2)' }}>
             <motion.div
@@ -139,19 +126,21 @@ function EventCard({ event, view, delay, onRSVP }: {
         )}
 
         {/* RSVP */}
-        {status !== 'past' && (
+        {(status !== 'past' || event.isRegistered) && (
           <button
             onClick={onRSVP}
-            disabled={event.registeredCount >= event.capacity && !event.isRegistered}
+            disabled={rsvpPending || (event.registeredCount >= event.capacity && !event.isRegistered)}
+            aria-busy={rsvpPending}
+            aria-label={event.isRegistered ? `Cancel RSVP for ${event.title}` : `RSVP for ${event.title}`}
             className="mt-auto"
           >
             {event.isRegistered ? (
               <span className="btn-secondary w-full flex items-center justify-center gap-2" style={{ color: '#3ecf5f', background: 'rgba(62,207,95,0.10)' }}>
-                <CheckCircle2 size={14} /> Reserved ✓
+                {rsvpPending ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} {rsvpPending ? 'Updating…' : 'Registered ✓'}
               </span>
             ) : (
               <span className="btn-primary w-full flex items-center justify-center gap-2">
-                RSVP a Spot
+                {rsvpPending && <Loader2 size={14} className="animate-spin" />} {rsvpPending ? 'Registering…' : event.registeredCount >= event.capacity ? 'Event full' : 'Register for this event'}
               </span>
             )}
           </button>
@@ -168,11 +157,17 @@ export function EventsPage() {
     path: '/events',
   });
 
-  const { events, rsvpEvent, loading, error } = useAppData();
+  const { events, rsvpEvent, rsvpPendingId, loading, error } = useAppData();
   const { studentSession, openRollModal } = useStudent();
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('all');
   const [liveSessions, setLiveSessions] = useState<LiveSession[]>([]);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), SECOND_MS);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     api.liveSessions.getActive(studentSession?.rollNumber)
@@ -182,7 +177,7 @@ export function EventsPage() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: '5rem' }}>
+      <div role="status" aria-live="polite" style={{ minHeight: '100vh', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: '5rem' }}>
         <div style={{ color: 'var(--color-ink-muted)', fontSize: 14 }}>Loading events…</div>
       </div>
     );
@@ -190,7 +185,7 @@ export function EventsPage() {
 
   if (error) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, paddingTop: '5rem' }}>
+      <div role="alert" style={{ minHeight: '100vh', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, paddingTop: '5rem' }}>
         <div style={{ color: 'var(--color-ink)', fontSize: 16, fontWeight: 600 }}>Could not load events</div>
         <div style={{ color: 'var(--color-ink-muted)', fontSize: 13 }}>Please check your connection and try again.</div>
       </div>
@@ -199,8 +194,13 @@ export function EventsPage() {
 
   const filtered = events.filter(e => {
     if (filter === 'all') return true;
-    const s = getStatus(e.date);
+    const s = getEventStatus(e, now);
     return filter === 'upcoming' ? s !== 'past' : s === 'past';
+  }).sort((a, b) => {
+    const aStatus = getEventStatus(a, now);
+    const bStatus = getEventStatus(b, now);
+    if (filter === 'all' && aStatus !== bStatus) return aStatus === 'past' ? 1 : -1;
+    return parseEventStart(a) - parseEventStart(b);
   });
 
   const handleRSVP = (id: string) => {
@@ -220,7 +220,7 @@ export function EventsPage() {
               '@context': 'https://schema.org',
               '@type': 'Event',
               name: evt.title,
-              startDate: evt.date,
+              startDate: evt.startsAt ?? evt.date,
               location: {
                 '@type': 'Place',
                 name: evt.location,
@@ -245,6 +245,9 @@ export function EventsPage() {
             Events &amp;<br />
             <span style={{ color: 'var(--color-ink-muted)' }}>Workshops</span>
           </h1>
+          <p className="type-body mt-4 max-w-xl" style={{ color: 'var(--color-ink-muted)' }}>
+            Design, animation, and creative workshops organized by the Design and Animation Club, IIT Kanpur.
+          </p>
         </motion.div>
 
         {/* Live & Upcoming Sessions */}
@@ -263,7 +266,7 @@ export function EventsPage() {
                   border: s.status === 'live' ? '1px solid var(--color-brand)' : '1px solid var(--color-border)',
                   borderRadius: 'var(--radius-lg)', padding: '16px 20px',
                   background: s.status === 'live' ? 'rgba(233,30,140,0.06)' : 'var(--color-surface)',
-                  display: 'flex', justifyContent: 'space-between',
+                  display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap',
                   alignItems: 'center', gap: 16,
                 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -327,6 +330,7 @@ export function EventsPage() {
           <div className="flex gap-2">
             {(['all', 'upcoming', 'past'] as const).map(f => (
               <button key={f} onClick={() => setFilter(f)}
+                aria-pressed={filter === f}
                 className="type-body-sm px-4 py-2 rounded-full capitalize transition-all"
                 style={filter === f
                   ? { background: 'var(--color-inverse-canvas)', color: 'var(--color-canvas)', borderRadius: 'var(--radius-pill)' }
@@ -336,11 +340,11 @@ export function EventsPage() {
             ))}
           </div>
           <div className="ml-auto flex gap-2">
-            <button onClick={() => setView('grid')} className="btn-icon"
+            <button onClick={() => setView('grid')} className="btn-icon" aria-label="Grid view" aria-pressed={view === 'grid'}
               style={{ background: view === 'grid' ? 'var(--color-surface-2)' : 'var(--color-surface-1)' }}>
               <Calendar size={15} />
             </button>
-            <button onClick={() => setView('list')} className="btn-icon"
+            <button onClick={() => setView('list')} className="btn-icon" aria-label="List view" aria-pressed={view === 'list'}
               style={{ background: view === 'list' ? 'var(--color-surface-2)' : 'var(--color-surface-1)' }}>
               <List size={15} />
             </button>
@@ -358,14 +362,14 @@ export function EventsPage() {
         <AnimatePresence mode="popLayout">
           <motion.div layout className={view === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-4'}>
             {filtered.map((evt, i) => (
-              <EventCard key={evt.id} event={evt} view={view} delay={i * 0.06} onRSVP={() => handleRSVP(evt.id)} />
+              <EventCard key={evt.id} event={evt} view={view} delay={i * 0.06} rsvpPending={rsvpPendingId === evt.id} onRSVP={() => handleRSVP(evt.id)} />
             ))}
           </motion.div>
         </AnimatePresence>
 
         {filtered.length === 0 && (
           <p className="text-center py-24 type-body" style={{ color: 'var(--color-ink-muted)' }}>
-            No events in this category.
+            {filter === 'past' ? 'No past events yet.' : filter === 'upcoming' ? 'No upcoming events right now. Check back soon.' : 'No events are scheduled yet. Check back soon.'}
           </p>
         )}
       </div>

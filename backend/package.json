@@ -10,7 +10,8 @@
     "seed": "tsx src/db/seed.ts",
     "backfill:thumbs": "tsx scripts/backfill-thumbnails.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:unit": "vitest run --config vitest.unit.config.mts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

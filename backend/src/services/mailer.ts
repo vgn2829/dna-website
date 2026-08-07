@@ -469,7 +469,7 @@ export async function buildEventEmail(event: {
 
   const vars: Record<string, string> = {
     '{{title}}':       event.title ?? '',
-    '{{date}}':        event.date ?? '',
+    '{{date}}':        formatEventDate(event.date),
     '{{venue}}':       event.venue ?? '',
     '{{description}}': event.description ?? '',
   };
@@ -478,6 +478,11 @@ export async function buildEventEmail(event: {
     subject: resolve(subject, vars),
     html: renderTemplateHtml('new_event', resolve(body, vars, true)),
   };
+}
+
+function formatEventDate(date: string | undefined): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date ?? '');
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : date ?? '';
 }
 
 export async function buildArtworkEmail(artwork: {
@@ -601,7 +606,7 @@ export async function sendEventReminders(due: DueReminder[]): Promise<{ sent: Du
     const vars: Record<string, string> = {
       '{{name}}': r.name ?? 'there',
       '{{title}}': r.title,
-      '{{date}}': r.date,
+      '{{date}}': formatEventDate(r.date),
       '{{time}}': r.time,
       '{{venue}}': r.venue,
     };

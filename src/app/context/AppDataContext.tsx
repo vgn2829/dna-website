@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import { useStudent } from './StudentContext';
+import { toast } from 'sonner';
 
 function onAdminErr(err: unknown): void {
   if (err instanceof Error && err.message === 'SESSION_EXPIRED') {
@@ -81,6 +82,7 @@ interface AppDataContextValue {
   notifyArtwork:  (id: string) => Promise<NotifyResult>;
   // Events
   rsvpEvent:   (id: string) => void;
+  rsvpPendingId: string | null;
   addEvent:    (event: Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered' | 'notifiedAt'>) => void;
   updateEvent: (id: string, data: Partial<Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered' | 'notifiedAt'>>) => Promise<void>;
   deleteEvent: (id: string) => void;
@@ -109,6 +111,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [domains,  setDomains]  = useState<Record<string, Domain>>({});
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [events,   setEvents]   = useState<ClubEvent[]>([]);
+  const [rsvpPendingId, setRsvpPendingId] = useState<string | null>(null);
   const [team,     setTeam]     = useState<TeamMember[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState<string | null>(null);
@@ -185,19 +188,31 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, [artworks]);
 
   const rsvpEvent = useCallback((id: string) => {
-    if (!roll) return;
+    if (!roll || rsvpPendingId) return;
+    setRsvpPendingId(id);
     setEvents(prev => prev.map(e => {
       if (e.id !== id) return e;
       if (!e.isRegistered && e.registeredCount >= e.capacity) return e;
       return { ...e, isRegistered: !e.isRegistered, registeredCount: e.isRegistered ? Math.max(0, e.registeredCount - 1) : e.registeredCount + 1 };
     }));
     api.events.rsvp(id, roll)
-      .then(({ registeredCount, isRegistered }) => setEvents(prev => prev.map(e => e.id !== id ? e : { ...e, registeredCount, isRegistered })))
-      .catch(() => setEvents(prev => prev.map(e => {
-        if (e.id !== id) return e;
-        return { ...e, isRegistered: !e.isRegistered, registeredCount: e.isRegistered ? e.registeredCount + 1 : Math.max(0, e.registeredCount - 1) };
-      })));
-  }, [roll]);
+      .then(({ registeredCount, isRegistered }) => {
+        setEvents(prev => prev.map(e => e.id !== id ? e : { ...e, registeredCount, isRegistered }));
+        toast.success(isRegistered ? 'You are registered for this event.' : 'Your RSVP has been cancelled.');
+      })
+      .catch((err: unknown) => {
+        setEvents(prev => prev.map(e => {
+          if (e.id !== id) return e;
+          return { ...e, isRegistered: !e.isRegistered, registeredCount: e.isRegistered ? e.registeredCount + 1 : Math.max(0, e.registeredCount - 1) };
+        }));
+        const message = err instanceof Error ? err.message.toLowerCase() : '';
+        if (message.includes('no longer accepting')) toast.error('This event is no longer accepting registrations.');
+        else if (message.includes('capacity')) toast.error('This event is full. Please try another event.');
+        else if (message === 'session_expired') toast.error('Your session expired. Please verify your roll number again.');
+        else toast.error('We could not update your registration. Please try again.');
+      })
+      .finally(() => setRsvpPendingId(null));
+  }, [roll, rsvpPendingId]);
 
   const addEvent = useCallback((event: Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered' | 'notifiedAt'>) => {
     // Creation no longer auto-notifies students — the admin sends explicitly via
@@ -326,7 +341,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     <AppDataContext.Provider value={{
       domains, artworks, events, team, loading, error,
       likeArtwork, addComment, uploadArtwork, updateArtwork, deleteArtwork, toggleFeatured, deleteComment, notifyArtwork,
-      rsvpEvent, addEvent, updateEvent, deleteEvent, notifyEvent,
+      rsvpEvent, rsvpPendingId, addEvent, updateEvent, deleteEvent, notifyEvent,
       addDomain, updateDomain, deleteDomain, addVideo, updateVideo, deleteVideo, updateVideoSequence,
       addTeamMember, updateTeamMember, deleteTeamMember, reorderTeamSection,
     }}>
