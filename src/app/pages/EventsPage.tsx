@@ -65,7 +65,7 @@ function EventCard({ event, view, delay, onRSVP, rsvpPending }: {
           {formatEventDate(event.date).slice(0, 2)}
         </span>
         <span className="type-micro" style={{ color: status === 'live' ? '#e5484d' : 'var(--color-ink-muted)' }}>
-          {formatEventDate(event.date).slice(3, 5)}
+          {new Date(event.date + 'T12:00').toLocaleString('en-IN', { month: 'short' })}
         </span>
       </div>
 
