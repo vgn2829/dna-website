@@ -6,6 +6,7 @@ import { api, setAdminToken, clearAdminToken, type SessionJoins, type Coordinato
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
 import imageCompression from 'browser-image-compression';
+import { formatEventDate, parseAdminDate, validateEventTime } from '../lib/eventDate';
 
 async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith('image/')) return file;
@@ -2059,23 +2060,31 @@ function EventsTab() {
   const [eeLoading, setEeLoading] = useState(false);
   const [eeError, setEeError] = useState('');
 
-  // datetime-local inputs give/take local time with no timezone info; the
-  // backend stores TIMESTAMPTZ, so round-trip through the Date object's ISO
-  // string (UTC) rather than passing the raw local-time string through.
+  // datetime-local inputs have no timezone info. Event times belong to the
+  // club's timezone, so explicitly round-trip them as Asia/Kolkata values.
   const localToIso = (local: string): string | undefined =>
-    local ? new Date(local).toISOString() : undefined;
+    local ? new Date(`${local}:00+05:30`).toISOString() : undefined;
   const isoToLocal = (iso: string | null): string => {
     if (!iso) return '';
     const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(d).reduce<Record<string, string>>((acc, part) => {
+      acc[part.type] = part.value;
+      return acc;
+    }, {});
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
   };
 
   const handleAdd = (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (addingEvent) return;
+    const date = parseAdminDate(eDate);
+    if (!date) { setESuccess('Enter the date as DD/MM/YYYY'); return; }
+    if (!validateEventTime(eTime)) { setESuccess('Enter a valid event time or time range'); return; }
     setAddingEvent(true);
-    addEvent({ title: eTitle, date: eDate, time: eTime, location: eLocation, content: eContent, capacity: Number(eCapacity) || 100, startsAt: localToIso(eStartsAt) ?? null });
+    addEvent({ title: eTitle, date, time: eTime, location: eLocation, content: eContent, capacity: Number(eCapacity) || 100, startsAt: localToIso(eStartsAt) ?? null });
     setETitle(''); setEDate(''); setETime(''); setELocation(''); setEContent(''); setEStartsAt('');
     setESuccess('Event created · use Notify Students to email members');
     setTimeout(() => { setAddingEvent(false); setESuccess(''); }, 4000);
@@ -2083,7 +2092,7 @@ function EventsTab() {
 
   const openEditEvent = (ev: ClubEvent) => {
     setEditEvent(ev);
-    setEeTitle(ev.title); setEeDate(ev.date); setEeTime(ev.time);
+    setEeTitle(ev.title); setEeDate(formatEventDate(ev.date)); setEeTime(ev.time);
     setEeLocation(ev.location); setEeContent(ev.content); setEeCapacity(String(ev.capacity));
     setEeStartsAt(isoToLocal(ev.startsAt));
     setEeError('');
@@ -2092,9 +2101,12 @@ function EventsTab() {
   const handleEditEvent = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!editEvent) return;
+    const date = parseAdminDate(eeDate);
+    if (!date) { setEeError('Enter the date as DD/MM/YYYY'); return; }
+    if (!validateEventTime(eeTime)) { setEeError('Enter a valid event time or time range'); return; }
     setEeLoading(true); setEeError('');
     try {
-      await updateEvent(editEvent.id, { title: eeTitle, date: eeDate, time: eeTime, location: eeLocation, content: eeContent, capacity: Number(eeCapacity) || editEvent.capacity, startsAt: localToIso(eeStartsAt) ?? null });
+      await updateEvent(editEvent.id, { title: eeTitle, date, time: eeTime, location: eeLocation, content: eeContent, capacity: Number(eeCapacity) || editEvent.capacity, startsAt: localToIso(eeStartsAt) ?? null });
       setEditEvent(null);
     } catch (err) { setEeError(String(err)); } finally { setEeLoading(false); }
   };
@@ -2106,7 +2118,7 @@ function EventsTab() {
         <form onSubmit={handleAdd} className="space-y-3">
           <div><label className="type-micro block mb-1">Title *</label><input required value={eTitle} onChange={e => setETitle(e.target.value)} className="input-base" maxLength={200} /></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="type-micro block mb-1">Date</label><input type="date" required value={eDate} onChange={e => setEDate(e.target.value)} className="input-base" /></div>
+            <div><label className="type-micro block mb-1">Date (DD/MM/YYYY)</label><input required value={eDate} onChange={e => setEDate(e.target.value)} placeholder="DD/MM/YYYY" pattern="\\d{2}/\\d{2}/\\d{4}" className="input-base" /></div>
             <div><label className="type-micro block mb-1">Time</label><input required value={eTime} onChange={e => setETime(e.target.value)} placeholder="6–8 PM" className="input-base" /></div>
           </div>
           <div><label className="type-micro block mb-1">Location *</label><input required value={eLocation} onChange={e => setELocation(e.target.value)} className="input-base" maxLength={200} /></div>
@@ -2131,7 +2143,7 @@ function EventsTab() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="type-body-sm truncate">{ev.title}</p>
-              <p className="type-micro">{ev.date} · {ev.registeredCount}/{ev.capacity}</p>
+              <p className="type-micro">{formatEventDate(ev.date)} · {ev.registeredCount}/{ev.capacity}</p>
             </div>
             <NotifiedBadge notifiedAt={ev.notifiedAt} />
             <AdminActionButton
@@ -2182,7 +2194,7 @@ function EventsTab() {
             <form onSubmit={handleEditEvent} className="space-y-3">
               <div><label className="type-micro block mb-1">Title *</label><input required value={eeTitle} onChange={e => setEeTitle(e.target.value)} className="input-base" maxLength={200} /></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="type-micro block mb-1">Date</label><input type="date" required value={eeDate} onChange={e => setEeDate(e.target.value)} className="input-base" /></div>
+                <div><label className="type-micro block mb-1">Date (DD/MM/YYYY)</label><input required value={eeDate} onChange={e => setEeDate(e.target.value)} placeholder="DD/MM/YYYY" pattern="\\d{2}/\\d{2}/\\d{4}" className="input-base" /></div>
                 <div><label className="type-micro block mb-1">Time</label><input required value={eeTime} onChange={e => setEeTime(e.target.value)} className="input-base" /></div>
               </div>
               <div><label className="type-micro block mb-1">Location *</label><input required value={eeLocation} onChange={e => setEeLocation(e.target.value)} className="input-base" maxLength={200} /></div>

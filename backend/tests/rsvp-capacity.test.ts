@@ -132,6 +132,45 @@ describe('Event RSVP capacity handling', () => {
     expect(res.status).toBe(404);
   });
 
+  it('rejects a new RSVP after the two-hour post-start window', async () => {
+    const eventId = `evt-past-${Math.random().toString(36).slice(2, 8)}`;
+    await query(
+      `INSERT INTO events (id,title,date,time,location,content,capacity,registered_count,starts_at)
+       VALUES ($1,'Past Event','2026-08-07','6 PM','LHC','desc',5,0,'2026-08-07T18:00:00+05:30')`,
+      [eventId]
+    );
+    await registerStudent('23PAST01');
+
+    const res = await request(app)
+      .post(`/api/events/${eventId}/rsvp`)
+      .set('Authorization', `Bearer ${tokenFor('23PAST01')}`)
+      .send({});
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/no longer accepting/i);
+  });
+
+  it('preserves registrations when an admin edits event details', async () => {
+    const eventId = await createEvent(3);
+    await registerStudent('23EDIT01');
+    const studentAuth = { Authorization: `Bearer ${tokenFor('23EDIT01')}` };
+    const rsvp = await request(app).post(`/api/events/${eventId}/rsvp`).set(studentAuth).send({});
+    expect(rsvp.body).toMatchObject({ registeredCount: 1, isRegistered: true });
+
+    const adminLogin = await request(app)
+      .post('/api/auth/admin/login')
+      .send({ password: process.env.ADMIN_PASSWORD });
+    const res = await request(app)
+      .put(`/api/events/${eventId}`)
+      .set('Authorization', `Bearer ${adminLogin.body.token}`)
+      .send({ date: '2026-12-02', time: '6:30 PM', startsAt: '2026-12-02T18:30:00+05:30' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.registeredCount).toBe(1);
+    const rows = await query<{ registered_count: number }>('SELECT registered_count FROM events WHERE id=$1', [eventId]);
+    expect(rows[0].registered_count).toBe(1);
+  });
+
   it("admin cannot lower an event's capacity below its current registration count", async () => {
     const eventId = await createEvent(2);
     await registerStudent('23CAP10');
