@@ -6,7 +6,7 @@ import { api, setAdminToken, clearAdminToken, type SessionJoins, type Coordinato
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
 import imageCompression from 'browser-image-compression';
-import { formatEventDate, parseAdminDate, validateEventTime } from '../lib/eventDate';
+import { formatEventDate, validateEventTime } from '../lib/eventDate';
 
 async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith('image/')) return file;
@@ -2080,8 +2080,8 @@ function EventsTab() {
   const handleAdd = (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (addingEvent) return;
-    const date = parseAdminDate(eDate);
-    if (!date) { setESuccess('Enter the date as DD/MM/YYYY'); return; }
+    const date = eDate || null;
+    if (!date) { setESuccess('Select a date'); return; }
     if (!validateEventTime(eTime)) { setESuccess('Enter a valid event time or time range'); return; }
     setAddingEvent(true);
     addEvent({ title: eTitle, date, time: eTime, location: eLocation, content: eContent, capacity: Number(eCapacity) || 100, startsAt: localToIso(eStartsAt) ?? null });
@@ -2092,7 +2092,7 @@ function EventsTab() {
 
   const openEditEvent = (ev: ClubEvent) => {
     setEditEvent(ev);
-    setEeTitle(ev.title); setEeDate(formatEventDate(ev.date)); setEeTime(ev.time);
+    setEeTitle(ev.title); setEeDate(ev.date); setEeTime(ev.time);
     setEeLocation(ev.location); setEeContent(ev.content); setEeCapacity(String(ev.capacity));
     setEeStartsAt(isoToLocal(ev.startsAt));
     setEeError('');
@@ -2101,8 +2101,8 @@ function EventsTab() {
   const handleEditEvent = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!editEvent) return;
-    const date = parseAdminDate(eeDate);
-    if (!date) { setEeError('Enter the date as DD/MM/YYYY'); return; }
+    const date = eeDate || null;
+    if (!date) { setEeError('Select a date'); return; }
     if (!validateEventTime(eeTime)) { setEeError('Enter a valid event time or time range'); return; }
     setEeLoading(true); setEeError('');
     try {
@@ -2118,7 +2118,7 @@ function EventsTab() {
         <form onSubmit={handleAdd} className="space-y-3">
           <div><label className="type-micro block mb-1">Title *</label><input required value={eTitle} onChange={e => setETitle(e.target.value)} className="input-base" maxLength={200} /></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="type-micro block mb-1">Date (DD/MM/YYYY)</label><input required value={eDate} onChange={e => setEDate(e.target.value)} placeholder="DD/MM/YYYY" pattern="\\d{2}/\\d{2}/\\d{4}" className="input-base" /></div>
+            <div><label className="type-micro block mb-1">Date</label><input type="date" required value={eDate} onChange={e => setEDate(e.target.value)} className="input-base" /></div>
             <div><label className="type-micro block mb-1">Time</label><input required value={eTime} onChange={e => setETime(e.target.value)} placeholder="6–8 PM" className="input-base" /></div>
           </div>
           <div><label className="type-micro block mb-1">Location *</label><input required value={eLocation} onChange={e => setELocation(e.target.value)} className="input-base" maxLength={200} /></div>
@@ -2194,7 +2194,7 @@ function EventsTab() {
             <form onSubmit={handleEditEvent} className="space-y-3">
               <div><label className="type-micro block mb-1">Title *</label><input required value={eeTitle} onChange={e => setEeTitle(e.target.value)} className="input-base" maxLength={200} /></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="type-micro block mb-1">Date (DD/MM/YYYY)</label><input required value={eeDate} onChange={e => setEeDate(e.target.value)} placeholder="DD/MM/YYYY" pattern="\\d{2}/\\d{2}/\\d{4}" className="input-base" /></div>
+                <div><label className="type-micro block mb-1">Date</label><input type="date" required value={eeDate} onChange={e => setEeDate(e.target.value)} className="input-base" /></div>
                 <div><label className="type-micro block mb-1">Time</label><input required value={eeTime} onChange={e => setEeTime(e.target.value)} className="input-base" /></div>
               </div>
               <div><label className="type-micro block mb-1">Location *</label><input required value={eeLocation} onChange={e => setEeLocation(e.target.value)} className="input-base" maxLength={200} /></div>
