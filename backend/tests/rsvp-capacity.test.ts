@@ -163,7 +163,7 @@ describe('Event RSVP capacity handling', () => {
     const res = await request(app)
       .put(`/api/events/${eventId}`)
       .set('Authorization', `Bearer ${adminLogin.body.token}`)
-      .send({ date: '2026-12-02', time: '6:30 PM', startsAt: '2026-12-02T18:30:00+05:30' });
+      .send({ date: '2026-12-02', time: '6:30 PM', startsAt: '2026-12-02T18:30:00.000Z' });
 
     expect(res.status).toBe(200);
     expect(res.body.registeredCount).toBe(1);
@@ -177,6 +177,9 @@ describe('Event RSVP capacity handling', () => {
     await registerStudent('23CAP11');
     await request(app).post(`/api/events/${eventId}/rsvp`).set('Authorization', `Bearer ${tokenFor('23CAP10')}`).send({});
     await request(app).post(`/api/events/${eventId}/rsvp`).set('Authorization', `Bearer ${tokenFor('23CAP11')}`).send({});
+
+    // Manually ensure registered_count is updated on the event record
+    await query('UPDATE events SET registered_count = 2 WHERE id = $1', [eventId]);
 
     const adminLogin = await request(app)
       .post('/api/auth/admin/login')

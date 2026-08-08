@@ -225,8 +225,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   // Sends the student notification for an already-created event and updates the
   // record's notifiedAt from the server response. Returns the new timestamp plus
   // how many recipients got mail now vs. were queued (quota-gated free tier).
-  const notifyEvent = useCallback(async (id: string, audience: 'all' | 'registered' = 'all'): Promise<NotifyResult> => {
-    const { notifiedAt, sentNow, queued } = await api.notify.event(id, audience);
+  const notifyEvent = useCallback(async (
+    id: string,
+    options?: { audienceType?: 'all' | 'registered' | 'active'; batch?: string | null; limit?: number; excludeEventIds?: string[]; excludeCampaignIds?: string[] }
+  ): Promise<NotifyResult> => {
+    const { notifiedAt, sentNow, queued } = await api.notify.event(id, options);
     setEvents(prev => prev.map(e => e.id !== id ? e : { ...e, notifiedAt }));
     return { notifiedAt, sentNow, queued };
   }, []);

@@ -743,6 +743,54 @@ export async function initSchema(): Promise<void> {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS email_campaigns (
+      id                    TEXT PRIMARY KEY,
+      event_id              TEXT REFERENCES events(id) ON DELETE SET NULL,
+      artwork_id            TEXT REFERENCES artworks(id) ON DELETE SET NULL,
+      title                 TEXT NOT NULL,
+      subject               TEXT NOT NULL,
+      audience_type         TEXT NOT NULL DEFAULT 'all',
+      target_batch          TEXT,
+      requested_limit       INT NOT NULL DEFAULT 50,
+      excluded_campaign_ids TEXT[] DEFAULT '{}',
+      excluded_event_ids    TEXT[] DEFAULT '{}',
+      total_eligible        INT NOT NULL DEFAULT 0,
+      sent_count            INT NOT NULL DEFAULT 0,
+      queued_count          INT NOT NULL DEFAULT 0,
+      status                TEXT NOT NULL DEFAULT 'draft',
+      created_by_admin      TEXT NOT NULL DEFAULT 'admin',
+      created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS email_recipients (
+      id                  BIGSERIAL PRIMARY KEY,
+      campaign_id         TEXT NOT NULL REFERENCES email_campaigns(id) ON DELETE CASCADE,
+      event_id            TEXT REFERENCES events(id) ON DELETE SET NULL,
+      roll_number         TEXT NOT NULL REFERENCES student_sessions(roll_number) ON DELETE CASCADE,
+      email               TEXT NOT NULL,
+      activity_score      INT NOT NULL DEFAULT 0,
+      score_breakdown     JSONB,
+      status              TEXT NOT NULL DEFAULT 'pending',
+      provider_message_id TEXT,
+      error_message       TEXT,
+      queued_at           TIMESTAMPTZ,
+      sent_at             TIMESTAMPTZ,
+      delivered_at        TIMESTAMPTZ,
+      failed_at           TIMESTAMPTZ,
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_email_recipients_event_roll ON email_recipients(event_id, roll_number, status);
+    CREATE INDEX IF NOT EXISTS idx_email_recipients_campaign ON email_recipients(campaign_id, status);
+    CREATE INDEX IF NOT EXISTS idx_email_recipients_roll ON email_recipients(roll_number);
+    CREATE INDEX IF NOT EXISTS idx_student_sessions_batch ON student_sessions((SUBSTRING(roll_number FROM 1 FOR 2)));
+    CREATE INDEX IF NOT EXISTS idx_student_sessions_last_login ON student_sessions(last_login DESC NULLS LAST);
+
+    ALTER TABLE student_watched_videos ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+    ALTER TABLE student_completed_quizzes ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+  `);
+
   // Broadcast sends (event/artwork notify, announcements, event reminders)
   // that can't fully fit in today's quota-gated budget are queued here instead
   // of failing. `remaining` shrinks as recipients are drained on each tick;

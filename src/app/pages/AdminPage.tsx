@@ -206,46 +206,94 @@ function NotifiedBadge({ notifiedAt }: { notifiedAt: string | null }) {
 type NotifyPreview = { subject: string; html: string; recipientCount: number };
 
 // Confirm-before-send dialog for the manual "Notify Students" action. Loads the
-// exact email + recipient count (so the admin sees what goes out and to how many),
-// warns when re-sending an already-notified record, then triggers the send.
+// exact email + recipient count, supports Active Users targeting, batch filter,
+// limit, exclusion rules, quota breakdown, and detailed recipient ranking preview.
 function NotifyDialog({
   kind, item, onClose, fetchPreview, onSend,
 }: {
   kind: 'event' | 'artwork';
   item: { id: string; title: string; notifiedAt: string | null };
   onClose: () => void;
-  fetchPreview: (id: string, audience: 'all' | 'registered') => Promise<NotifyPreview>;
-  onSend: (id: string, audience: 'all' | 'registered') => Promise<{ notifiedAt: string; sentNow: number; queued: number }>;
+  fetchPreview: (id: string, audience: 'all' | 'registered' | 'active') => Promise<NotifyPreview>;
+  onSend: (id: string, options?: { audienceType?: 'all' | 'registered' | 'active'; batch?: string | null; limit?: number; excludeEventIds?: string[]; excludeCampaignIds?: string[] }) => Promise<{ notifiedAt: string; sentNow: number; queued: number }>;
 }) {
-  // Registered-only only makes sense for events (artwork has no RSVP concept);
-  // the picker itself is hidden for kind === 'artwork', so this stays 'all' there.
-  const [audience, setAudience] = useState<'all' | 'registered'>('all');
-  const [preview, setPreview] = useState<NotifyPreview | null>(null);
+  const [audience, setAudience] = useState<'all' | 'registered' | 'active'>(kind === 'event' ? 'active' : 'all');
+  const [selectedBatch, setSelectedBatch] = useState<string>('ALL');
+  const [limit, setLimit] = useState<number>(50);
+  const [selectedExcludeEvent, setSelectedExcludeEvent] = useState<string>('NONE');
+
+  const [availableBatches, setAvailableBatches] = useState<string[]>([]);
+  const [pastCampaigns, setPastCampaigns] = useState<Array<{ id: string; eventId: string | null; eventTitle: string | null; title: string; sentCount: number; createdAt: string }>>([]);
+
+  const [emailPreview, setEmailPreview] = useState<NotifyPreview | null>(null);
+  const [detailedPreview, setDetailedPreview] = useState<any | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState<string | null>(null);
   const [result, setResult] = useState<{ sentNow: number; queued: number } | null>(null);
-  const alreadySent = item.notifiedAt !== null;
-  const count = preview?.recipientCount;
+  const [viewTab, setViewTab] = useState<'recipients' | 'email'>('recipients');
+  const [expandedScore, setExpandedScore] = useState<string | null>(null);
 
+  const alreadySent = item.notifiedAt !== null;
+
+  // Load available batches & past campaigns on mount
   useEffect(() => {
     let cancelled = false;
-    setPreview(null);
-    fetchPreview(item.id, audience)
-      .then(p => { if (!cancelled) setPreview(p); })
-      .catch(e => { if (!cancelled) setLoadErr(e instanceof Error ? e.message : 'Failed to load preview'); });
+    Promise.all([api.notify.getBatches(), api.notify.getPastCampaigns()])
+      .then(([bRes, cRes]) => {
+        if (!cancelled) {
+          setAvailableBatches(bRes.batches || []);
+          setPastCampaigns(cRes.campaigns || []);
+        }
+      })
+      .catch(() => {});
     return () => { cancelled = true; };
-  }, [item.id, audience, fetchPreview]);
+  }, []);
+
+  // Fetch preview when options change
+  useEffect(() => {
+    let cancelled = false;
+    setDetailedPreview(null);
+    setLoadErr(null);
+
+    const excludeEvents = selectedExcludeEvent !== 'NONE' ? [selectedExcludeEvent] : [];
+
+    Promise.all([
+      fetchPreview(item.id, audience),
+      api.notify.preview({
+        eventId: item.id,
+        audienceType: audience,
+        batch: selectedBatch === 'ALL' ? null : selectedBatch,
+        limit,
+        excludeEventIds: excludeEvents,
+      }),
+    ])
+      .then(([ep, dp]) => {
+        if (!cancelled) {
+          setEmailPreview(ep);
+          setDetailedPreview(dp);
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) setLoadErr(e instanceof Error ? e.message : 'Failed to load preview');
+      });
+
+    return () => { cancelled = true; };
+  }, [item.id, audience, selectedBatch, limit, selectedExcludeEvent, fetchPreview]);
 
   const handleSend = async () => {
     setSending(true);
     setSendErr(null);
     try {
-      const { sentNow, queued } = await onSend(item.id, audience);
-      setResult({ sentNow, queued });
-      // Only auto-close on a clean full send; a partial send needs the admin to
-      // actually read the queued-count message before dismissing it.
-      if (queued === 0) onClose();
+      const excludeEvents = selectedExcludeEvent !== 'NONE' ? [selectedExcludeEvent] : [];
+      const res = await onSend(item.id, {
+        audienceType: audience,
+        batch: selectedBatch === 'ALL' ? null : selectedBatch,
+        limit,
+        excludeEventIds: excludeEvents,
+      });
+      setResult({ sentNow: res.sentNow, queued: res.queued });
+      if (res.queued === 0) onClose();
     } catch (e) {
       setSendErr(e instanceof Error ? e.message : 'Failed to send notification');
     } finally {
@@ -253,18 +301,21 @@ function NotifyDialog({
     }
   };
 
+  const count = detailedPreview?.candidates?.length ?? emailPreview?.recipientCount ?? 0;
+  const totalEligible = detailedPreview?.totalEligible ?? count;
+  const quota = detailedPreview?.quotaStatus;
   const noStudents = count === 0;
   const sendLabel = alreadySent ? 'Re-send' : 'Send';
-  const canSend = preview !== null && !noStudents && !sending;
+  const canSend = detailedPreview !== null && !noStudents && !sending;
 
   return (
     <Modal title={`Notify students — ${item.title}`} onClose={onClose}>
-      <div className="space-y-3">
+      <div className="space-y-4" style={{ maxWidth: 640 }}>
         {result && result.queued > 0 && (
           <div className="flex items-start gap-2 p-3" style={{ borderRadius: 'var(--radius-lg)', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.35)' }}>
             <TriangleAlert size={15} style={{ color: '#3b82f6', flexShrink: 0, marginTop: 1 }} />
             <p className="type-micro" style={{ color: 'var(--color-ink)', margin: 0 }}>
-              Sent to <strong>{result.sentNow}</strong> student{result.sentNow === 1 ? '' : 's'} now. <strong>{result.queued}</strong> more {result.queued === 1 ? 'is' : 'are'} queued — today's free-tier send limit was reached, so the rest will go out automatically over the next day or two.
+              Sent to <strong>{result.sentNow}</strong> student{result.sentNow === 1 ? '' : 's'} now. <strong>{result.queued}</strong> more {result.queued === 1 ? 'is' : 'are'} queued — today's send limit was reached, so the rest will go out automatically over the next day or two.
             </p>
           </div>
         )}
@@ -273,71 +324,219 @@ function NotifyDialog({
           <div className="flex items-start gap-2 p-3" style={{ borderRadius: 'var(--radius-lg)', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.35)' }}>
             <TriangleAlert size={15} style={{ color: '#d97706', flexShrink: 0, marginTop: 1 }} />
             <p className="type-micro" style={{ color: 'var(--color-ink)', margin: 0 }}>
-              Already sent on <strong>{new Date(item.notifiedAt!).toLocaleString('en-IN')}</strong>. Sending again will email {audience === 'registered' ? 'everyone registered for this event' : 'every student on file'} a second time.
+              Already notified on <strong>{new Date(item.notifiedAt!).toLocaleString('en-IN')}</strong>. Re-sending will target eligible students matching the selected filter criteria.
             </p>
           </div>
         )}
 
         {kind === 'event' && !result && (
-          <div>
-            <p className="type-micro" style={{ marginBottom: 6, color: 'var(--color-ink-muted)' }}>Send to</p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setAudience('all')}
-                className={audience === 'all' ? 'btn-primary' : 'btn-secondary'}
-                style={{ fontSize: 12, padding: '6px 14px' }}
+          <div className="space-y-3 p-3 card" style={{ background: 'var(--color-surface-soft)' }}>
+            <div>
+              <p className="type-micro font-medium" style={{ marginBottom: 6, color: 'var(--color-ink-muted)' }}>Target Audience</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAudience('active')}
+                  className={audience === 'active' ? 'btn-primary' : 'btn-secondary'}
+                  style={{ fontSize: 12, padding: '5px 12px' }}
+                >
+                  Active Users
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAudience('registered')}
+                  className={audience === 'registered' ? 'btn-primary' : 'btn-secondary'}
+                  style={{ fontSize: 12, padding: '5px 12px' }}
+                >
+                  Registered Only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAudience('all')}
+                  className={audience === 'all' ? 'btn-primary' : 'btn-secondary'}
+                  style={{ fontSize: 12, padding: '5px 12px' }}
+                >
+                  All Students
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2" style={{ borderTop: '1px dashed var(--color-hairline)' }}>
+              <div>
+                <label className="type-micro block mb-1" style={{ color: 'var(--color-ink-muted)' }}>Batch / Year</label>
+                <select
+                  value={selectedBatch}
+                  onChange={(e) => setSelectedBatch(e.target.value)}
+                  className="input-text text-xs w-full py-1 px-2"
+                >
+                  <option value="ALL">All Batches</option>
+                  {availableBatches.map((b) => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="type-micro block mb-1" style={{ color: 'var(--color-ink-muted)' }}>Recipient Limit</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={limit}
+                  onChange={(e) => setLimit(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className="input-text text-xs w-full py-1 px-2"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="type-micro block mb-1" style={{ color: 'var(--color-ink-muted)' }}>Exclude Users Contacted In Previous Event</label>
+              <select
+                value={selectedExcludeEvent}
+                onChange={(e) => setSelectedExcludeEvent(e.target.value)}
+                className="input-text text-xs w-full py-1 px-2"
               >
-                All students
-              </button>
-              <button
-                type="button"
-                onClick={() => setAudience('registered')}
-                className={audience === 'registered' ? 'btn-primary' : 'btn-secondary'}
-                style={{ fontSize: 12, padding: '6px 14px' }}
-              >
-                Registered for this event only
-              </button>
+                <option value="NONE">None — No exclusion rule</option>
+                {pastCampaigns
+                  .filter((c) => c.eventId && c.eventId !== item.id)
+                  .map((c) => (
+                    <option key={c.id} value={c.eventId!}>
+                      {c.eventTitle || c.title} ({c.sentCount} recipients)
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
+        )}
+
+        {quota && (
+          <div className="p-3 card flex items-center justify-between gap-4 text-xs" style={{ background: 'var(--color-surface-soft)' }}>
+            <div>
+              <span className="type-micro block" style={{ color: 'var(--color-ink-muted)' }}>Today's Email Usage</span>
+              <span className="font-semibold">{quota.sentToday} / {quota.dailyQuota} emails sent</span>
+            </div>
+            <div>
+              <span className="type-micro block" style={{ color: 'var(--color-ink-muted)' }}>Broadcast Budget</span>
+              <span className="font-semibold" style={{ color: quota.broadcastBudget < count ? '#d97706' : '#16a34a' }}>
+                {quota.broadcastBudget} available today
+              </span>
+            </div>
+            <div>
+              <span className="type-micro block" style={{ color: 'var(--color-ink-muted)' }}>Target Selected</span>
+              <span className="font-semibold">{count} of {totalEligible} eligible</span>
             </div>
           </div>
         )}
 
         {loadErr ? (
           <p className="type-body-sm" style={{ color: '#e5484d' }}>{loadErr}</p>
-        ) : !preview ? (
-          <div className="flex items-center gap-2 type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>
-            <Loader2 size={14} className="animate-spin" /> Loading preview…
+        ) : !detailedPreview ? (
+          <div className="flex items-center gap-2 type-body-sm py-4" style={{ color: 'var(--color-ink-muted)' }}>
+            <Loader2 size={14} className="animate-spin" /> Calculating recipient ranking & activity scores…
           </div>
         ) : (
-          <>
-            <p className="type-body-sm" style={{ margin: 0 }}>
-              {noStudents
-                ? audience === 'registered'
-                  ? 'No one has registered for this event yet — there is no one to notify.'
-                  : 'No students have an email on file — there is no one to notify yet.'
-                : audience === 'registered'
-                  ? <>This will email the <strong>{count}</strong> student{count === 1 ? '' : 's'} registered for this event.</>
-                  : <>This will email all <strong>{count}</strong> student{count === 1 ? '' : 's'} on file — not just those registered for this event.</>}
-            </p>
-            <div>
-              <p className="type-micro" style={{ marginBottom: 4, color: 'var(--color-ink-muted)' }}>Subject</p>
-              <p className="type-body-sm" style={{ margin: 0 }}>{preview.subject}</p>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setViewTab('recipients')}
+                  className={`type-micro px-3 py-1 rounded-full ${viewTab === 'recipients' ? 'bg-primary text-white font-medium' : 'text-muted hover:text-ink'}`}
+                  style={{ background: viewTab === 'recipients' ? 'var(--color-primary)' : 'transparent', color: viewTab === 'recipients' ? '#fff' : 'var(--color-ink-muted)' }}
+                >
+                  Recipients List ({count})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewTab('email')}
+                  className={`type-micro px-3 py-1 rounded-full ${viewTab === 'email' ? 'bg-primary text-white font-medium' : 'text-muted hover:text-ink'}`}
+                  style={{ background: viewTab === 'email' ? 'var(--color-primary)' : 'transparent', color: viewTab === 'email' ? '#fff' : 'var(--color-ink-muted)' }}
+                >
+                  Email HTML Preview
+                </button>
+              </div>
+
+              <span className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>
+                Showing top {count} ranked users
+              </span>
             </div>
-            <div>
-              <p className="type-micro" style={{ marginBottom: 4, color: 'var(--color-ink-muted)' }}>Preview</p>
-              <iframe
-                title="Email preview"
-                srcDoc={preview.html}
-                sandbox=""
-                style={{ width: '100%', height: 280, border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-lg)', background: '#fff' }}
-              />
-            </div>
-          </>
+
+            {viewTab === 'recipients' ? (
+              <div className="card overflow-hidden" style={{ maxHeight: 260, overflowY: 'auto' }}>
+                {detailedPreview.candidates.length === 0 ? (
+                  <p className="type-body-sm p-4 text-center" style={{ color: 'var(--color-ink-muted)' }}>
+                    No eligible students found matching the selected filters.
+                  </p>
+                ) : (
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b" style={{ borderColor: 'var(--color-hairline)', background: 'var(--color-surface-soft)' }}>
+                        <th className="p-2 w-8">#</th>
+                        <th className="p-2">Name & Roll</th>
+                        <th className="p-2">Batch</th>
+                        <th className="p-2">Activity Score</th>
+                        <th className="p-2">Last Active</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailedPreview.candidates.map((c: any, idx: number) => (
+                        <tr key={c.rollNumber} className="border-b" style={{ borderColor: 'var(--color-hairline-soft)' }}>
+                          <td className="p-2 font-mono" style={{ color: 'var(--color-ink-muted)' }}>{idx + 1}</td>
+                          <td className="p-2">
+                            <div className="font-medium">{c.name || 'Unnamed Student'}</div>
+                            <div className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>{c.rollNumber} · {c.email}</div>
+                          </td>
+                          <td className="p-2">
+                            <span className="px-1.5 py-0.5 rounded font-mono text-micro" style={{ background: 'var(--color-surface-soft)', border: '1px solid var(--color-hairline)' }}>
+                              {c.batch}
+                            </span>
+                          </td>
+                          <td className="p-2">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedScore(expandedScore === c.rollNumber ? null : c.rollNumber)}
+                              className="font-bold text-xs hover:underline cursor-pointer flex items-center gap-1"
+                              style={{ color: 'var(--color-primary)' }}
+                            >
+                              {c.activityScore} pts
+                            </button>
+                            {expandedScore === c.rollNumber && (
+                              <div className="type-micro mt-1 p-1.5 rounded" style={{ background: 'var(--color-surface-soft)', border: '1px solid var(--color-hairline)' }}>
+                                Recency: {c.breakdown.recencyScore} | Logins: {c.breakdown.loginScore} | RSVPs: {c.breakdown.rsvpScore} | Sessions: {c.breakdown.sessionScore} | Learning: {c.breakdown.learningScore}
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-2 type-micro" style={{ color: 'var(--color-ink-muted)' }}>
+                            {c.breakdown.daysSinceLastLogin === 0 ? 'Today' : c.breakdown.daysSinceLastLogin !== null ? `${c.breakdown.daysSinceLastLogin}d ago` : 'Never'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div>
+                  <p className="type-micro mb-1" style={{ color: 'var(--color-ink-muted)' }}>Subject</p>
+                  <p className="type-body-sm font-medium" style={{ margin: 0 }}>{emailPreview?.subject}</p>
+                </div>
+                <div>
+                  <iframe
+                    title="Email preview"
+                    srcDoc={emailPreview?.html}
+                    sandbox=""
+                    style={{ width: '100%', height: 220, border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-lg)', background: '#fff' }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {sendErr && <p className="type-micro" style={{ color: '#e5484d' }}>{sendErr}</p>}
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 pt-2 border-t" style={{ borderColor: 'var(--color-hairline)' }}>
           {!result && (
             <button
               type="button"
@@ -347,7 +546,7 @@ function NotifyDialog({
               style={{ opacity: canSend ? 1 : 0.5, cursor: canSend ? 'pointer' : 'not-allowed' }}
             >
               {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-              {noStudents ? 'No recipients' : count !== undefined ? `${sendLabel} to ${count} student${count === 1 ? '' : 's'}` : sendLabel}
+              {noStudents ? 'No recipients' : count > 0 ? `${sendLabel} to ${count} user${count === 1 ? '' : 's'}` : sendLabel}
             </button>
           )}
           <button type="button" onClick={onClose} className="btn-secondary" disabled={sending}>{result ? 'Close' : 'Cancel'}</button>

@@ -34,6 +34,12 @@ export default defineConfig({
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
 
+  build: {
+    rollupOptions: {
+      external: ['@tldraw/sync'],
+    },
+  },
+
   optimizeDeps: {
     include: ['tldraw'],
     // ORT ships its own WASM loader; let it be served as emitted assets rather
