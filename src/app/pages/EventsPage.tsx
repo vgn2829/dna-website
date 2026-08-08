@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Clock, Users, Calendar, List, CheckCircle2, Loader2 } from 'lucide-react';
+import { MapPin, Clock, Calendar, List, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAppData } from '../context/AppDataContext';
 import { useStudent } from '../context/StudentContext';
 import { api, LiveSession } from '../lib/api';
@@ -42,7 +42,7 @@ function EventCard({ event, view, delay, onRSVP, rsvpPending }: {
 }) {
   const status = getEventStatus(event);
   const countdown = useCountdown(event.date, event.time, event.startsAt);
-  const fillPct = Math.round((event.registeredCount / event.capacity) * 100);
+
 
   return (
     <motion.div
@@ -95,22 +95,7 @@ function EventCard({ event, view, delay, onRSVP, rsvpPending }: {
           <span className="type-micro flex items-center gap-1"><MapPin size={11} />{event.location}</span>
         </div>
 
-        {/* Capacity bar */}
-        <div>
-          <div className="flex justify-between type-micro mb-1.5">
-            <span className="flex items-center gap-1 tabular-nums"><Users size={10} />{event.registeredCount}/{event.capacity}</span>
-            <span className="tabular-nums">{event.registeredCount >= event.capacity ? 'Full' : `${event.capacity - event.registeredCount} seats left`}</span>
-          </div>
-          <div className="w-full h-0.5 rounded-full" style={{ background: 'var(--color-surface-2)' }}>
-            <motion.div
-              className="h-full w-full rounded-full"
-              initial={{ scaleX: 0 }}
-              animate={{ scaleX: fillPct / 100 }}
-              transition={{ duration: 1, delay: 0.2 }}
-              style={{ background: fillPct > 80 ? '#e5484d' : 'var(--color-ink)', transformOrigin: 'left' }}
-            />
-          </div>
-        </div>
+
 
         {/* Countdown */}
         {status === 'upcoming' && !countdown.expired && view === 'grid' && (
