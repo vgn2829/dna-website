@@ -45,6 +45,8 @@ afterAll(async () => {
 // (which would be slow to re-run for every test file given fileParallelism
 // is disabled and initSchema is idempotent but not free).
 const TABLES_TO_CLEAN = [
+  'email_recipients',
+  'email_campaigns',
   'student_otps',
   'student_email_change_otps',
   'student_watched_videos',

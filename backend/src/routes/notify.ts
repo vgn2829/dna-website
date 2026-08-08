@@ -51,59 +51,191 @@ router.get('/test-email', requireAdmin, async (req, res) => {
 type EventRow = { id: string; title: string; date: string; location: string; content: string; notified_at: string | null };
 type ArtworkRow = { id: string; title: string; artist: string; domain: string; notified_at: string | null };
 
-// Accepts ?audience=all|registered, defaulting to 'all' for anything else
-// (missing, malformed, or an old client that doesn't send it yet) so this
-// stays backwards-compatible with the existing "notify everyone" behavior.
-function parseEventAudience(value: unknown): EventNotifyAudience {
-  return value === 'registered' ? 'registered' : 'all';
+import { getAvailableBatches } from '../services/activityService';
+import { getCampaignPreview, createAndExecuteCampaign, handleResendWebhook, getPastCampaigns } from '../services/campaignService';
+import { broadcastBudgetRemaining } from '../services/mailer';
+
+// Accepts ?audience=all|registered|active, defaulting to 'all' for anything else
+function parseEventAudience(value: unknown): EventNotifyAudience | 'active' {
+  if (value === 'registered') return 'registered';
+  if (value === 'active') return 'active';
+  return 'all';
 }
 
-// Preview the actual email a given event would send, plus the recipient count,
-// so the admin confirm dialog shows exactly what goes out and to how many.
+const previewQuerySchema = z.object({
+  eventId: z.string().optional(),
+  audienceType: z.enum(['all', 'registered', 'active']).default('all'),
+  batch: z.string().nullable().optional(),
+  limit: z.number().int().min(1).max(500).default(50),
+  excludeEventIds: z.array(z.string()).optional().default([]),
+  excludeCampaignIds: z.array(z.string()).optional().default([]),
+});
+
+const sendCampaignSchema = z.object({
+  audienceType: z.enum(['all', 'registered', 'active']).default('all'),
+  batch: z.string().nullable().optional(),
+  limit: z.number().int().min(1).max(500).default(50),
+  excludeEventIds: z.array(z.string()).optional().default([]),
+  excludeCampaignIds: z.array(z.string()).optional().default([]),
+});
+
+// GET /api/notify/batches — available student admission batches (e.g. Y26, Y25)
+router.get('/batches', requireAdmin, async (_req, res) => {
+  try {
+    const batches = await getAvailableBatches();
+    res.json({ batches });
+  } catch (err) {
+    console.error('Get batches error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/notify/usage — current daily email usage and budget remaining
+router.get('/usage', requireAdmin, async (_req, res) => {
+  try {
+    const usageRows = await pool.query<{ sent_count: number }>(
+      'SELECT sent_count FROM mail_usage WHERE day = CURRENT_DATE'
+    );
+    const sentToday = usageRows.rows[0]?.sent_count ?? 0;
+    const broadcastBudget = await broadcastBudgetRemaining();
+    res.json({
+      dailyLimit: 100,
+      sentToday,
+      remainingToday: Math.max(0, 100 - sentToday),
+      broadcastBudget,
+    });
+  } catch (err) {
+    console.error('Get mail usage error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/notify/past-campaigns — list of past campaign dispatches for exclusion selectors
+router.get('/past-campaigns', requireAdmin, async (_req, res) => {
+  try {
+    const campaigns = await getPastCampaigns();
+    res.json({ campaigns });
+  } catch (err) {
+    console.error('Get past campaigns error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/notify/preview — read-only target recipient ranking preview & quota impact check
+router.post('/preview', requireAdmin, async (req, res) => {
+  try {
+    const parsed = previewQuerySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid preview parameters' });
+      return;
+    }
+
+    const preview = await getCampaignPreview({
+      eventId: parsed.data.eventId,
+      audienceType: parsed.data.audienceType,
+      batch: parsed.data.batch,
+      limit: parsed.data.limit,
+      excludeEventIds: parsed.data.excludeEventIds,
+      excludeCampaignIds: parsed.data.excludeCampaignIds,
+    });
+
+    res.json(preview);
+  } catch (err) {
+    console.error('Campaign preview error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Preview the actual email a given event would send, plus recipient count & ranking
 router.get('/event/:id/preview', requireAdmin, async (req, res) => {
   try {
     const rows = await pool.query<EventRow>('SELECT * FROM events WHERE id=$1', [req.params.id]);
     if (rows.rows.length === 0) { res.status(404).json({ error: 'Event not found' }); return; }
     const e = rows.rows[0];
-    const audience = parseEventAudience(req.query.audience);
+
+    const audienceParam = parseEventAudience(req.query.audience);
+    const batchParam = req.query.batch ? String(req.query.batch) : null;
+    const limitParam = req.query.limit ? parseInt(String(req.query.limit), 10) : 50;
+
     const { subject, html } = await buildEventEmail({ title: e.title, date: e.date, venue: e.location, description: e.content });
-    res.json({ subject, html, recipientCount: await getEventAudienceEmailCount(e.id, audience) });
+    const preview = await getCampaignPreview({
+      eventId: e.id,
+      audienceType: audienceParam,
+      batch: batchParam,
+      limit: limitParam,
+    });
+
+    res.json({
+      subject,
+      html,
+      recipientCount: preview.candidates.length,
+      totalEligible: preview.totalEligible,
+      preview,
+    });
   } catch (err) {
     console.error('Notify event preview error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Send the event notification to the chosen audience (all students, or only
-// those who RSVP'd) and stamp notified_at, which drives the Sent/Not-Sent
-// badge. Re-sending is allowed (admin-confirmed); notified_at is refreshed
-// to the latest send regardless of which audience was chosen.
+// Send event notification with rich target criteria, server-side ranking & quota locking
 router.post('/event/:id', requireAdmin, async (req, res) => {
   try {
     const rows = await pool.query<EventRow>('SELECT * FROM events WHERE id=$1', [req.params.id]);
     if (rows.rows.length === 0) { res.status(404).json({ error: 'Event not found' }); return; }
     const e = rows.rows[0];
-    const audience = parseEventAudience(req.query.audience);
-    const { sentNow, queued } = await sendEventNotification(
-      { id: e.id, title: e.title, date: e.date, venue: e.location, description: e.content },
-      audience
+
+    // Read payload from body (or fallback to query params for legacy backwards-compatibility)
+    const bodyParsed = sendCampaignSchema.safeParse(req.body);
+    const audienceType = bodyParsed.success ? bodyParsed.data.audienceType : parseEventAudience(req.query.audience);
+    const batch = bodyParsed.success ? bodyParsed.data.batch : (req.query.batch ? String(req.query.batch) : null);
+    const limit = bodyParsed.success ? bodyParsed.data.limit : 50;
+    const excludeEventIds = bodyParsed.success ? bodyParsed.data.excludeEventIds : [];
+    const excludeCampaignIds = bodyParsed.success ? bodyParsed.data.excludeCampaignIds : [];
+
+    const { subject, html } = await buildEventEmail({ title: e.title, date: e.date, venue: e.location, description: e.content });
+
+    const result = await createAndExecuteCampaign(
+      {
+        eventId: e.id,
+        audienceType,
+        batch,
+        limit,
+        excludeEventIds,
+        excludeCampaignIds,
+      },
+      {
+        title: `Event Notification: ${e.title}`,
+        subject,
+        html,
+      }
     );
-    if (sentNow === 0 && queued === 0) {
-      // Nothing sent and nothing queued — most likely no student has an email
-      // on file (or RESEND_API_KEY is unset). Don't stamp notified_at, since
-      // that would mark the event "Sent" when the admin action had no effect.
-      res.json({ success: true, notifiedAt: e.notified_at, sentNow, queued });
-      return;
-    }
-    // notified_at marks the notify action as taken even if some recipients were
-    // queued for later (quota-gated) — the badge means "admin sent this", the
-    // queued count tells them delivery is still catching up.
+
     const upd = await pool.query<{ notified_at: string }>(
-      'UPDATE events SET notified_at=NOW() WHERE id=$1 RETURNING notified_at', [req.params.id]
+      'SELECT notified_at FROM events WHERE id = $1', [e.id]
     );
-    res.json({ success: true, notifiedAt: upd.rows[0].notified_at, sentNow, queued });
+
+    res.json({
+      success: true,
+      notifiedAt: upd.rows[0]?.notified_at || new Date().toISOString(),
+      sentNow: result.sentNow,
+      queued: result.queued,
+      totalEligible: result.totalEligible,
+      campaignId: result.campaignId,
+    });
   } catch (err) {
     console.error('Notify event error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Public webhook route for Resend delivery updates (delivered, bounced, failed, suppressed)
+router.post('/webhooks/resend', async (req, res) => {
+  try {
+    const handled = await handleResendWebhook(req.body);
+    res.json({ received: true, handled });
+  } catch (err) {
+    console.error('Resend webhook error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

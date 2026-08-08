@@ -299,12 +299,70 @@ export const api = {
     // (see mailer.ts sendBroadcast / drainMailQueue).
     // audience: 'all' (default, every student) or 'registered' (only students
     // who RSVP'd to this event). Artwork has no RSVP concept, so it's always 'all'.
-    event: (id: string, audience: 'all' | 'registered' = 'all') =>
-      request<{ success: boolean; notifiedAt: string; sentNow: number; queued: number }>('POST', `/notify/event/${id}?audience=${audience}`, { admin: true }),
+    event: (
+      id: string,
+      data?: {
+        audienceType?: 'all' | 'registered' | 'active';
+        batch?: string | null;
+        limit?: number;
+        excludeEventIds?: string[];
+        excludeCampaignIds?: string[];
+      }
+    ) =>
+      request<{ success: boolean; notifiedAt: string; sentNow: number; queued: number; totalEligible: number; campaignId: string }>(
+        'POST',
+        `/notify/event/${id}`,
+        { body: data, admin: true }
+      ),
     artwork: (id: string) =>
       request<{ success: boolean; notifiedAt: string; sentNow: number; queued: number }>('POST', `/notify/artwork/${id}`, { admin: true }),
+    getBatches: () =>
+      request<{ batches: string[] }>('GET', '/notify/batches', { admin: true }),
+    getUsage: () =>
+      request<{ dailyLimit: number; sentToday: number; remainingToday: number; broadcastBudget: number }>('GET', '/notify/usage', { admin: true }),
+    getPastCampaigns: () =>
+      request<{ campaigns: Array<{ id: string; eventId: string | null; eventTitle: string | null; title: string; sentCount: number; createdAt: string }> }>('GET', '/notify/past-campaigns', { admin: true }),
+    preview: (data: {
+      eventId?: string;
+      audienceType: 'all' | 'registered' | 'active';
+      batch?: string | null;
+      limit?: number;
+      excludeEventIds?: string[];
+      excludeCampaignIds?: string[];
+    }) =>
+      request<{
+        totalEligible: number;
+        requestedLimit: number;
+        candidates: Array<{
+          rollNumber: string;
+          name: string | null;
+          email: string;
+          batch: string;
+          activityScore: number;
+          breakdown: {
+            recencyScore: number;
+            loginScore: number;
+            rsvpScore: number;
+            sessionScore: number;
+            learningScore: number;
+            daysSinceLastLogin: number | null;
+          };
+          lastLogin: string | null;
+          registeredAt: string;
+        }>;
+        quotaStatus: {
+          dailyQuota: number;
+          sentToday: number;
+          remainingToday: number;
+          otpReserve: number;
+          broadcastBudget: number;
+          willExceed: boolean;
+          sentNowCount: number;
+          queuedCount: number;
+        };
+      }>('POST', '/notify/preview', { body: data, admin: true }),
     // Preview the exact email + recipient count for the admin confirm dialog.
-    previewEvent: (id: string, audience: 'all' | 'registered' = 'all') =>
+    previewEvent: (id: string, audience: 'all' | 'registered' | 'active' = 'all') =>
       request<{ subject: string; html: string; recipientCount: number }>('GET', `/notify/event/${id}/preview?audience=${audience}`, { admin: true }),
     previewArtwork: (id: string) =>
       request<{ subject: string; html: string; recipientCount: number }>('GET', `/notify/artwork/${id}/preview`, { admin: true }),
