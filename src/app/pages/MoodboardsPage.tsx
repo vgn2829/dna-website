@@ -576,6 +576,19 @@ export default function MoodboardsPage() {
   const activeWorkspace = activeWorkspaceId ? workspaces.find(w => w.id === activeWorkspaceId) ?? null : null;
   const activeWorkspaceLabel = activeWorkspace ? (activeWorkspace.is_personal ? 'Personal' : activeWorkspace.name) : null;
 
+  // The Assets button needs a concrete workspace even in "All Workspaces"
+  // view (activeWorkspaceId === null) — assets are always workspace-scoped,
+  // there's no cross-workspace asset list. Falls back to the first
+  // workspace in the list (in practice always the caller's personal one,
+  // auto-provisioned server-side — see ensurePersonalWorkspace) rather than
+  // hiding the button entirely, which is what it did before: a user with
+  // only their personal workspace (workspaces.length === 1, so the
+  // workspace-switcher pills above never render either) had NO way to ever
+  // set activeWorkspaceId away from null, making Assets permanently
+  // unreachable — the exact "Asset Library cannot be found in the UI" bug.
+  const assetsWorkspaceId = activeWorkspaceId ?? workspaces[0]?.id ?? null;
+  const assetsWorkspaceName = workspaces[0] ? (workspaces[0].is_personal ? 'Personal' : workspaces[0].name) : null;
+
   const filteredSortedBoards = useMemo(() => {
     const q = search.trim().toLowerCase();
     const filtered = q
@@ -689,7 +702,7 @@ export default function MoodboardsPage() {
             </svg>
             Manage Workspaces
           </button>
-          {activeWorkspaceId && (
+          {assetsWorkspaceId && (
             <button
               onClick={() => setShowAssetLibrary(true)}
               style={{
@@ -705,10 +718,10 @@ export default function MoodboardsPage() {
         </div>
       )}
 
-      {showAssetLibrary && activeWorkspaceId && studentSession?.rollNumber && (
+      {showAssetLibrary && assetsWorkspaceId && studentSession?.rollNumber && (
         <AssetLibrary
-          workspaceId={activeWorkspaceId}
-          workspaceName={activeWorkspaceLabel ?? 'Workspace'}
+          workspaceId={assetsWorkspaceId}
+          workspaceName={activeWorkspaceLabel ?? assetsWorkspaceName ?? 'Workspace'}
           roll={studentSession.rollNumber}
           onClose={() => setShowAssetLibrary(false)}
         />
