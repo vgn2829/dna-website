@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { api, type WorkspaceDetail } from '../lib/api';
 import { rollToColor } from '../lib/utils';
+import { useModalA11y } from './hooks/useModalA11y';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Workspace Settings — rename, delete, leave, and full member management
@@ -58,6 +59,8 @@ export function WorkspaceSettingsModal({
   const [busyRoll, setBusyRoll] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
+
+  const dialogRef = useModalA11y(true, onClose);
 
   useEffect(() => {
     let cancelled = false;
@@ -195,6 +198,11 @@ export function WorkspaceSettingsModal({
         onClick={onClose}
       >
         <motion.div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Workspace settings"
+          tabIndex={-1}
           initial={{ opacity: 0, y: 24, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 16 }}
@@ -207,6 +215,7 @@ export function WorkspaceSettingsModal({
             borderRadius: 'var(--radius-xl)', padding: '28px 24px',
             display: 'flex', flexDirection: 'column', gap: 20,
             maxHeight: '85vh', overflowY: 'auto',
+            outline: 'none',
           }}
         >
           {loading ? (
@@ -250,6 +259,7 @@ export function WorkspaceSettingsModal({
                   <input
                     className="input-base"
                     autoFocus
+                    aria-label="Workspace name"
                     value={nameDraft}
                     onChange={e => setNameDraft(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setEditingName(false); }}
@@ -258,21 +268,30 @@ export function WorkspaceSettingsModal({
                     disabled={renaming}
                     style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-display)', flex: 1, marginRight: 12 }}
                   />
-                ) : (
-                  <h3
-                    onClick={() => { if (canManage) { setNameDraft(workspace.name); setEditingName(true); } }}
+                ) : canManage ? (
+                  <button
+                    onClick={() => { setNameDraft(workspace.name); setEditingName(true); }}
+                    aria-label={`${workspace.name}, click to rename`}
+                    title="Click to rename"
                     style={{
-                      margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)',
+                      margin: 0, padding: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)',
                       fontFamily: 'var(--font-display)', letterSpacing: '-0.3px',
-                      cursor: canManage ? 'text' : 'default',
+                      background: 'none', border: 'none', cursor: 'text', textAlign: 'left',
                     }}
-                    title={canManage ? 'Click to rename' : undefined}
                   >
+                    {workspace.name}
+                  </button>
+                ) : (
+                  <h3 style={{
+                    margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)',
+                    fontFamily: 'var(--font-display)', letterSpacing: '-0.3px',
+                  }}>
                     {workspace.name}
                   </h3>
                 )}
                 <button
                   onClick={onClose}
+                  aria-label="Close workspace settings"
                   style={{
                     width: 32, height: 32, borderRadius: 'var(--radius-full)', flexShrink: 0,
                     border: '1px solid var(--color-hairline)', background: 'none',
@@ -318,6 +337,7 @@ export function WorkspaceSettingsModal({
                             <button
                               onClick={() => handleRoleChange(m.roll_number, m.role === 'admin' ? 'member' : 'admin')}
                               disabled={busy}
+                              aria-label={m.role === 'admin' ? `Demote ${m.name ?? m.roll_number} to Member` : `Promote ${m.name ?? m.roll_number} to Admin`}
                               style={{
                                 fontSize: 11, color: 'var(--color-ink-muted)', background: 'none',
                                 border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-sm)',
@@ -332,6 +352,7 @@ export function WorkspaceSettingsModal({
                             <button
                               onClick={() => setConfirmAction({ removeRoll: m.roll_number })}
                               disabled={busy}
+                              aria-label={`Remove ${m.name ?? m.roll_number} from workspace`}
                               style={{
                                 fontSize: 12, color: 'var(--color-error)', background: 'none', border: 'none',
                                 fontFamily: 'var(--font-body)', cursor: busy ? 'not-allowed' : 'pointer', padding: '4px 8px',
@@ -350,7 +371,7 @@ export function WorkspaceSettingsModal({
 
               {canManage && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <label style={{
+                  <label htmlFor="workspace-invite-roll" style={{
                     fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)',
                     letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)',
                   }}>
@@ -358,6 +379,7 @@ export function WorkspaceSettingsModal({
                   </label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <input
+                      id="workspace-invite-roll"
                       className="input-base"
                       type="text"
                       placeholder="e.g. 250004"
@@ -438,6 +460,9 @@ export function WorkspaceSettingsModal({
           onClick={() => { if (!confirmBusy) setConfirmAction(null); }}
         >
           <motion.div
+            role="alertdialog"
+            aria-modal="true"
+            aria-label={confirmAction === 'delete' ? `Delete workspace "${workspace.name}"?` : confirmAction === 'leave' ? `Leave workspace "${workspace.name}"?` : 'Remove member confirmation'}
             initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
             onClick={e => e.stopPropagation()}
             style={{

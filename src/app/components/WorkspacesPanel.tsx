@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { api, type Workspace } from '../lib/api';
 import { rollToColor } from '../lib/utils';
+import { useModalA11y } from './hooks/useModalA11y';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Entry point for workspace management (Sharing & Invite Flow phase).
@@ -50,6 +51,8 @@ export function WorkspacesPanel({
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
 
+  const dialogRef = useModalA11y(open, onClose);
+
   const handleCreate = async () => {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -80,6 +83,11 @@ export function WorkspacesPanel({
           onClick={onClose}
         >
           <motion.div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Workspaces"
+            tabIndex={-1}
             initial={{ opacity: 0, y: 24, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16 }}
@@ -92,6 +100,7 @@ export function WorkspacesPanel({
               borderRadius: 'var(--radius-xl)', padding: '28px 24px',
               display: 'flex', flexDirection: 'column', gap: 20,
               maxHeight: '85vh', overflowY: 'auto',
+              outline: 'none',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -103,6 +112,7 @@ export function WorkspacesPanel({
               </h3>
               <button
                 onClick={onClose}
+                aria-label="Close workspaces panel"
                 style={{
                   width: 32, height: 32, borderRadius: 'var(--radius-full)',
                   border: '1px solid var(--color-hairline)', background: 'none',
@@ -130,6 +140,7 @@ export function WorkspacesPanel({
                   className="input-base"
                   type="text"
                   placeholder="e.g. Design Team"
+                  aria-label="New workspace name"
                   value={name}
                   onChange={e => setName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setShowCreate(false); }}
@@ -239,6 +250,7 @@ export function WorkspacesPanel({
                       {!isActive && (
                         <button
                           onClick={() => onSwitch(ws.id)}
+                          aria-label={`Switch to ${ws.is_personal ? 'Personal' : ws.name}`}
                           style={{
                             padding: '7px 12px', background: 'none', color: 'var(--color-ink)',
                             border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-sm)',
@@ -251,6 +263,7 @@ export function WorkspacesPanel({
                       {!ws.is_personal && (
                         <button
                           onClick={() => onOpenSettings(ws.id)}
+                          aria-label={`Settings for ${ws.name}`}
                           style={{
                             padding: '7px 12px', background: 'none', color: 'var(--color-ink-muted)',
                             border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-sm)',
