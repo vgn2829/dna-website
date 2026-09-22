@@ -51,9 +51,12 @@ export function attachRealtimeServer(httpServer: HttpServer, onUpgrade: Realtime
       return;
     }
 
+    console.log(`Realtime DIAG: upgrade request received for ${url}`);
     wss.handleUpgrade(req, socket, head, (ws) => {
+      console.log(`Realtime DIAG: handleUpgrade callback fired for ${url}`);
       const roomPath = url.slice(REALTIME_PATH_PREFIX.length);
       onUpgrade(req, ws, roomPath);
+      console.log(`Realtime DIAG: onUpgrade returned synchronously for ${url}`);
     });
   });
 
