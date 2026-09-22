@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { requireStudent } from '../middleware/studentAuth';
 import { param } from '../routeParams';
+import { notifyWorkspaceAdded, notifyWorkspaceRoleChanged } from '../services/notificationService';
 
 const router = Router();
 
@@ -380,11 +381,27 @@ router.post('/:id/members', requireStudent, async (req: Request, res: Response) 
     const memberName = (studentResult.rows[0] as { name: string } | undefined)?.name ?? null;
     const now = new Date().toISOString();
 
-    await pool.query(`
+    // RETURNING empty means ON CONFLICT DO NOTHING skipped the insert
+    // (already a member) — only notify on a genuine new addition, same
+    // guard boards.ts's own member-add route uses.
+    const inserted = await pool.query(`
       INSERT INTO workspace_members (workspace_id, roll_number, role, name, added_at)
       VALUES ($1, $2, 'member', $3, $4)
       ON CONFLICT DO NOTHING
+      RETURNING workspace_id
     `, [id, roll_number, memberName, now]);
+
+    if (inserted.rows.length > 0) {
+      const actorResult = await pool.query('SELECT name FROM student_sessions WHERE roll_number = $1', [roll]);
+      const actorName = (actorResult.rows[0] as { name: string } | undefined)?.name ?? null;
+      await notifyWorkspaceAdded({
+        recipientRoll: roll_number,
+        actorRoll: roll,
+        actorName,
+        workspaceId: id,
+        workspaceName: workspace.name,
+      });
+    }
 
     res.json({ success: true, name: memberName });
   } catch (err) {
@@ -469,6 +486,22 @@ router.put('/:id/members/:roll/role', requireStudent, async (req: Request, res: 
       'UPDATE workspace_members SET role = $1 WHERE workspace_id = $2 AND roll_number = $3',
       [parsed.role, id, targetRoll]
     );
+
+    // Only notify on an actual change — the route's zod schema (and this
+    // check) already require a valid admin/member role, but the request
+    // could redundantly re-set the role the target already has.
+    if (target.role !== parsed.role) {
+      const actorResult = await pool.query('SELECT name FROM student_sessions WHERE roll_number = $1', [roll]);
+      const actorName = (actorResult.rows[0] as { name: string } | undefined)?.name ?? null;
+      await notifyWorkspaceRoleChanged({
+        recipientRoll: targetRoll,
+        actorRoll: roll,
+        actorName,
+        workspaceId: id,
+        workspaceName: workspace.name,
+      });
+    }
+
     res.json({ success: true, role: parsed.role });
   } catch (err) {
     if (err instanceof z.ZodError) {

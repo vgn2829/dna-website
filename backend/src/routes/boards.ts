@@ -10,6 +10,7 @@ import { getStorage } from '../storage';
 import { param } from '../routeParams';
 import { ensurePersonalWorkspace } from './workspaces';
 import { getBoardRole, roleCanWriteCanvas } from '../realtime/roomAccess';
+import { notifyBoardShared } from '../services/notificationService';
 
 const router = Router();
 
@@ -711,8 +712,9 @@ router.delete('/:id', requireStudent, async (req: Request, res: Response) => {
 router.post('/:id/members', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
+    const boardId = param(req.params.id);
 
-    const owner = await isOwner(param(req.params.id), roll);
+    const owner = await isOwner(boardId, roll);
     if (!owner) {
       return res.status(403).json({ error: 'Only owner can add members' });
     }
@@ -736,11 +738,29 @@ router.post('/:id/members', requireStudent, async (req: Request, res: Response) 
     const memberName = (studentResult.rows[0] as { name: string } | undefined)?.name ?? null;
     const now = new Date().toISOString();
 
-    await pool.query(`
+    // RETURNING is empty when ON CONFLICT DO NOTHING actually skipped the
+    // insert (already a member) — only notify on a genuine new addition,
+    // never on a redundant re-add.
+    const inserted = await pool.query(`
       INSERT INTO board_members (board_id, roll_number, name, added_at)
       VALUES ($1, $2, $3, $4)
       ON CONFLICT DO NOTHING
-    `, [req.params.id, roll_number, memberName, now]);
+      RETURNING board_id
+    `, [boardId, roll_number, memberName, now]);
+
+    if (inserted.rows.length > 0) {
+      const boardResult = await pool.query('SELECT name FROM boards WHERE id = $1', [boardId]);
+      const boardName = (boardResult.rows[0] as { name: string } | undefined)?.name ?? 'a board';
+      const actorResult = await pool.query('SELECT name FROM student_sessions WHERE roll_number = $1', [roll]);
+      const actorName = (actorResult.rows[0] as { name: string } | undefined)?.name ?? null;
+      await notifyBoardShared({
+        recipientRoll: roll_number,
+        actorRoll: roll,
+        actorName,
+        boardId,
+        boardName,
+      });
+    }
 
     res.json({ success: true, name: memberName });
   } catch (err) {

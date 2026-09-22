@@ -7,6 +7,7 @@ import * as commentsStorage from '../realtime/comments/commentsStorage';
 import type { CommentBroadcaster } from '../realtime/comments/commentBroadcaster';
 import type { BoardComment } from '../realtime/comments/commentsStorage';
 import { getBoardRole, roleCanWriteCanvas, roleCanComment } from '../realtime/roomAccess';
+import { notifyCommentCreated, notifyCommentReplied } from '../services/notificationService';
 
 // ─────────────────────────────────────────────────────────────────────────
 // COMMENTS REST ENDPOINTS — a dedicated router, same reasoning as
@@ -125,6 +126,10 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
       const body = parsed.data;
 
       let anchor: { anchorType: 'canvas' | 'shape'; anchorShapeId?: string; anchorX: number; anchorY: number };
+      // Hoisted out of the if-branch below so the notification block
+      // further down (which needs the root's author for a reply) doesn't
+      // have to re-fetch it.
+      let threadRoot: BoardComment | null = null;
       if (body.parentCommentId) {
         // Reply — inherit anchor from the root so every reply renders at
         // the same pin as its thread, regardless of what (if anything) the
@@ -133,6 +138,7 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
         if (!root || root.deletedAt || root.parentCommentId) {
           return res.status(404).json({ error: 'Thread not found' });
         }
+        threadRoot = root;
         anchor = {
           anchorType: root.anchorType,
           anchorShapeId: root.anchorShapeId ?? undefined,
@@ -168,6 +174,42 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
       });
 
       await broadcastIfConnected(boardId, { type: 'create', comment });
+
+      // Best-effort — a notification failure must never fail the comment
+      // creation itself (the comment already exists at this point; the
+      // client got a 201 for a real, persisted comment). Exactly one of
+      // the two branches below runs per request: a reply notifies the
+      // THREAD ROOT's author (not necessarily the board owner — see
+      // notifyCommentReplied's own doc comment), a new thread notifies the
+      // board owner. Both service functions already no-op on
+      // self-notification, so no separate "don't notify yourself" check
+      // is needed here.
+      (async () => {
+        const boardResult = await pool.query('SELECT owner_roll, name FROM boards WHERE id = $1', [boardId]);
+        const board = boardResult.rows[0] as { owner_roll: string; name: string } | undefined;
+        if (!board) return;
+
+        if (threadRoot) {
+          await notifyCommentReplied({
+            recipientRoll: threadRoot.authorRoll,
+            actorRoll: roll,
+            actorName: authorName,
+            boardId,
+            boardName: board.name,
+            commentId: comment.id,
+          });
+        } else {
+          await notifyCommentCreated({
+            recipientRoll: board.owner_roll,
+            actorRoll: roll,
+            actorName: authorName,
+            boardId,
+            boardName: board.name,
+            commentId: comment.id,
+          });
+        }
+      })().catch(err => console.error('Comment notification failed (non-fatal):', err));
+
       res.status(201).json(comment);
     } catch (err) {
       console.error('Create comment error:', err);
