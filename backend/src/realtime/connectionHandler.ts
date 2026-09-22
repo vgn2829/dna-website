@@ -109,10 +109,7 @@ export function createConnectionHandler(
     // would otherwise be a process-crashing unhandled rejection, not just a
     // failed connection. One bad connection attempt must never take down
     // every other room's live sessions.
-    console.log(`Realtime DIAG: createConnectionHandler invoking handleConnection for ${roomPath}`);
-    handleConnection(req, ws, roomPath, roomManager, commentBroadcaster).then(() => {
-      console.log(`Realtime DIAG: handleConnection resolved for ${roomPath}`);
-    }).catch(err => {
+    handleConnection(req, ws, roomPath, roomManager, commentBroadcaster).catch(err => {
       console.error('Realtime: unhandled error during connection setup:', err);
       try {
         ws.close(1011, 'Internal error');
@@ -130,11 +127,9 @@ async function handleConnection(
   roomManager: RoomManager<StudentSessionMeta>,
   commentBroadcaster: CommentBroadcaster
 ): Promise<void> {
-  console.log(`Realtime DIAG: handleConnection entered for ${roomPath}`);
   const [pathOnly, query] = roomPath.split('?');
   const params = new URLSearchParams(query ?? '');
   const token = params.get('token');
-  console.log(`Realtime DIAG: parsed pathOnly=${pathOnly} hasToken=${!!token}`);
 
   // Comments path checked FIRST — its regex is a strict superset suffix of
   // BOARD_ROOM_PATH_RE's shape (same UUID, plus /comments), so it must be
@@ -186,17 +181,12 @@ async function handleConnection(
     return;
   }
 
-  console.log(`Realtime DIAG: about to call checkRoomAccess for roomId=${roomId}`);
   const access = await checkRoomAccess(roomId, token);
-  console.log(`Realtime DIAG: checkRoomAccess returned ok=${access.ok}`);
   if (!access.ok) {
-    console.log(`Realtime DIAG: calling ws.close(${access.code}, ${access.reason})`);
     ws.close(access.code, access.reason);
-    console.log(`Realtime DIAG: ws.close() call returned, readyState=${ws.readyState}`);
     return;
   }
 
-  console.log(`Realtime DIAG: access granted, role=${access.role}, calling roomManager.join`);
   await roomManager.join(
     roomId, sessionId, ws,
     { roll: access.roll, role: access.role },
