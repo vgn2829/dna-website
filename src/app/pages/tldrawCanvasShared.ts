@@ -328,3 +328,49 @@ export async function injectPendingBoardItems(editor: Editor, items: BoardItem[]
   editor.createAssets(assets);
   editor.createShapes(shapePartials);
 }
+
+// Asset Manager (Phase B) board-insertion — the single-item analog of
+// injectPendingBoardItems above (that function is a batch, grid-placement,
+// on-load mechanism for an unrelated pre-existing feature; this is a
+// one-off, user-triggered "place this asset at the viewport center right
+// now" action). Deliberately reuses the SAME tldraw asset APIs
+// (AssetRecordType.create + editor.createAssets + editor.createShapes) —
+// no parallel canvas object model. Uses a random id (not asset.id) for
+// the shape/asset pair, so inserting the same library asset onto a board
+// twice creates two independent shape instances, not a dedup no-op —
+// that's the correct behavior for a reusable library (Figma/Canva both
+// let you drop the same asset multiple times).
+export async function insertImageAsset(
+  editor: Editor,
+  url: string,
+  name: string,
+  knownWidth: number | null,
+  knownHeight: number | null
+): Promise<void> {
+  const { w, h } = knownWidth && knownHeight
+    ? { w: knownWidth, h: knownHeight }
+    : await loadImageSize(url);
+
+  const scale = Math.min(1, 400 / Math.max(w, h));
+  const dw = Math.round(w * scale);
+  const dh = Math.round(h * scale);
+
+  const viewport = editor.getViewportPageBounds();
+  const x = viewport.x + viewport.w / 2 - dw / 2;
+  const y = viewport.y + viewport.h / 2 - dh / 2;
+
+  const uid = randomFileId();
+  const assetId = AssetRecordType.createId(uid);
+  const shapeId = createShapeId(uid);
+
+  editor.createAssets([
+    AssetRecordType.create({
+      id: assetId,
+      type: 'image',
+      props: { w, h, name, src: url, mimeType: null, isAnimated: false },
+    }),
+  ]);
+  editor.createShapes([
+    { id: shapeId, type: 'image', x, y, props: { w: dw, h: dh, assetId, url: '' } },
+  ]);
+}

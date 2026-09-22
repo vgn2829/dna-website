@@ -9,6 +9,9 @@ import { rollToColor } from '../lib/utils';
 import { PresenceProvider } from '../context/PresenceProvider';
 import { useBoardComments } from '../components/hooks/useBoardComments';
 import { ShareBoardDialog } from '../components/ShareBoardDialog';
+import { AssetLibrary } from '../components/AssetLibrary';
+import type { Editor } from 'tldraw';
+import type { Asset } from '../lib/api';
 
 const TldrawCanvas = lazy(() =>
   import('./TldrawCanvas').then(m => ({ default: m.TldrawCanvas }))
@@ -88,6 +91,14 @@ export default function BoardPage() {
   }, []);
 
   const [showShare, setShowShare] = useState(false);
+  const [showAssetLibrary, setShowAssetLibrary] = useState(false);
+  // Asset Manager (Phase B) board integration — see TldrawCanvas.tsx's
+  // onEditorReady prop comment for why this ref has to leave the canvas
+  // component at all: inserting a library asset onto the canvas needs the
+  // real tldraw Editor instance, which only the mounted canvas component
+  // holds. A ref (not state) because it never needs to trigger a re-render
+  // — only handleInsertAsset below ever reads it, on click.
+  const editorRef = useRef<Editor | null>(null);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -260,6 +271,34 @@ export default function BoardPage() {
     }
   };
 
+  // Asset Manager (Phase B) — places the chosen library asset onto the
+  // canvas at the viewport center via the SAME tldraw asset APIs the
+  // existing gallery-injection path already uses (see
+  // tldrawCanvasShared.ts's insertImageAsset for why this is a one-off
+  // single-item placement, not a reuse of the batch grid-placement
+  // function that exists for a different, pre-existing feature). Silently
+  // no-ops if the editor isn't mounted yet — the Assets button is only
+  // reachable once the canvas has rendered, so this should never actually
+  // happen, but a mid-navigation race is cheap to guard against.
+  const handleInsertAsset = async (asset: Asset) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    try {
+      // Dynamically imported — tldrawCanvasShared.ts pulls in the (heavy)
+      // tldraw package at module scope, and BoardPage.tsx itself is NOT
+      // lazy-loaded (unlike TldrawCanvas/TldrawCanvasSync, both already
+      // lazy() below), so a static import here would leak tldraw's bundle
+      // weight into every page load, not just boards that actually insert
+      // an asset.
+      const { insertImageAsset } = await import('./tldrawCanvasShared');
+      await insertImageAsset(editor, asset.url, asset.filename, asset.width, asset.height);
+      setShowAssetLibrary(false);
+      toast.success('Asset added to board');
+    } catch {
+      toast.error('Failed to add asset to board');
+    }
+  };
+
   if (loading) return (
     <div style={{
       position: 'fixed', inset: 0,
@@ -428,6 +467,19 @@ export default function BoardPage() {
             </button>
 
             <button
+              onClick={() => setShowAssetLibrary(true)}
+              title="Asset Library"
+              style={{
+                padding: '5px 12px', background: 'none',
+                border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
+                color: textMuted, fontSize: 12,
+                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              Assets
+            </button>
+
+            <button
               onClick={() => setShowVersionHistory(true)}
               title="Version History"
               style={{
@@ -557,6 +609,7 @@ export default function BoardPage() {
                     roll={studentSession.rollNumber}
                     theme={theme}
                     pendingItems={board.items}
+                    onEditorReady={editor => { editorRef.current = editor; }}
                     comments={{
                       commentsApi,
                       commentMode,
@@ -604,6 +657,7 @@ export default function BoardPage() {
                 pendingItems={board.items}
                 onSave={handleSave}
                 readOnly={!isMember && board.edit_mode === 'members_only'}
+                onEditorReady={editor => { editorRef.current = editor; }}
                 comments={studentSession?.rollNumber ? {
                   commentsApi,
                   commentMode,
@@ -632,6 +686,16 @@ export default function BoardPage() {
             // this page's.
             if (patch.member_count !== undefined) loadBoard();
           }}
+        />
+      )}
+
+      {showAssetLibrary && board && studentSession?.rollNumber && (
+        <AssetLibrary
+          workspaceId={board.workspace_id}
+          workspaceName="Board's Workspace"
+          roll={studentSession.rollNumber}
+          onClose={() => setShowAssetLibrary(false)}
+          onSelect={handleInsertAsset}
         />
       )}
 

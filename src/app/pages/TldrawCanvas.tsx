@@ -36,6 +36,13 @@ interface TldrawCanvasProps {
   // object rather than five separate ones threaded through both canvas
   // components.
   comments?: CommentsProps;
+  // Asset Manager (Phase B) — hands the mounted Editor instance up to
+  // BoardPage.tsx, the same way editorRef.current is already captured
+  // internally below, just also exposed to the parent. BoardPage uses this
+  // (via tldrawCanvasShared.ts's insertImageAsset) to place a library
+  // asset onto the canvas when the user picks one from the Asset Library —
+  // the ONLY reason this ref needs to leave this component at all.
+  onEditorReady?: (editor: Editor) => void;
 }
 
 export function TldrawCanvas({
@@ -46,6 +53,7 @@ export function TldrawCanvas({
   onSave,
   readOnly = false,
   comments,
+  onEditorReady,
 }: TldrawCanvasProps) {
   const editorRef = useRef<Editor | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -148,6 +156,7 @@ export function TldrawCanvas({
         acceptedVideoMimeTypes={[]}
         onMount={(editor: Editor) => {
           editorRef.current = editor;
+          onEditorReady?.(editor);
 
           editor.user.updateUserPreferences({ colorScheme: theme });
 

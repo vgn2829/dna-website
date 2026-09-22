@@ -86,6 +86,9 @@ interface TldrawCanvasSyncProps {
   pendingItems?: BoardItem[];
   // Commit 6 — see commentsProps.ts.
   comments?: CommentsProps;
+  // Asset Manager (Phase B) — see TldrawCanvas.tsx's matching prop for the
+  // full rationale; identical purpose here for the realtime canvas path.
+  onEditorReady?: (editor: Editor) => void;
 }
 
 type ConnectionState = 'loading' | 'connected' | 'reconnecting' | 'offline' | 'failed';
@@ -202,6 +205,7 @@ export function TldrawCanvasSync({
   theme,
   pendingItems,
   comments,
+  onEditorReady,
 }: TldrawCanvasSyncProps) {
   const boardIdRef = useRef(boardId);
   useEffect(() => { boardIdRef.current = boardId; }, [boardId]);
@@ -360,6 +364,7 @@ export function TldrawCanvasSync({
   const injectedRef = useRef(false);
   const handleMount = (editor: Editor) => {
     editorRef.current = editor;
+    onEditorReady?.(editor);
     editor.user.updateUserPreferences({ colorScheme: theme });
 
     // Runs once per successful connection, mirroring TldrawCanvas.tsx's own
