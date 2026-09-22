@@ -7,6 +7,7 @@ import { useStudent } from '../context/StudentContext';
 import { WorkspacesPanel } from '../components/WorkspacesPanel';
 import { WorkspaceSettingsModal } from '../components/WorkspaceSettingsModal';
 import { ShareBoardDialog } from '../components/ShareBoardDialog';
+import { AssetLibrary } from '../components/AssetLibrary';
 import { useModalA11y } from '../components/hooks/useModalA11y';
 
 // Cache keys are workspace-qualified (workspace/organization layer):
@@ -284,6 +285,7 @@ export default function MoodboardsPage() {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [showWorkspacesPanel, setShowWorkspacesPanel] = useState(false);
+  const [showAssetLibrary, setShowAssetLibrary] = useState(false);
   const [settingsWorkspaceId, setSettingsWorkspaceId] = useState<string | null>(null);
   const [myBoards, setMyBoards] = useState<Board[]>([]);
   const [sharedBoards, setSharedBoards] = useState<Board[]>([]);
@@ -687,7 +689,29 @@ export default function MoodboardsPage() {
             </svg>
             Manage Workspaces
           </button>
+          {activeWorkspaceId && (
+            <button
+              onClick={() => setShowAssetLibrary(true)}
+              style={{
+                padding: '6px 14px', borderRadius: 'var(--radius-pill)',
+                border: '1px solid var(--color-border)', background: 'none',
+                color: 'var(--color-ink-muted)', fontSize: 13,
+                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              Assets
+            </button>
+          )}
         </div>
+      )}
+
+      {showAssetLibrary && activeWorkspaceId && studentSession?.rollNumber && (
+        <AssetLibrary
+          workspaceId={activeWorkspaceId}
+          workspaceName={activeWorkspaceLabel ?? 'Workspace'}
+          roll={studentSession.rollNumber}
+          onClose={() => setShowAssetLibrary(false)}
+        />
       )}
 
       <WorkspacesPanel

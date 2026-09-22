@@ -160,6 +160,24 @@ export interface WorkspaceDetail extends Workspace {
   members: WorkspaceMember[];
 }
 
+// Mirrors backend/src/routes/assets.ts's toPublicAsset() — note there is
+// no storage_key here (an internal StorageProvider path, never sent to
+// the frontend); `url` is the derived public URL the backend already
+// resolved via getStorage().getPublicUrl().
+export interface Asset {
+  id: string;
+  workspace_id: string;
+  owner_roll: string;
+  owner_name: string | null;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  width: number | null;
+  height: number | null;
+  created_at: string;
+  url: string;
+}
+
 // Mirrors backend/src/realtime/history/versionStorage.ts's BoardVersion —
 // deliberately metadata only, no snapshot content (see that file's own
 // comment on why: the timeline list must stay cheap regardless of history
@@ -707,6 +725,28 @@ export const api = {
       request<{ success: boolean }>('DELETE', `/workspaces/${id}/members/${memberRoll}`, { roll }),
     setMemberRole: (id: string, roll: string, memberRoll: string, role: 'admin' | 'member') =>
       request<{ success: boolean; role: string }>('PUT', `/workspaces/${id}/members/${memberRoll}/role`, { body: { role }, roll }),
+  },
+  // Asset Manager (Phase B) — mirrors backend/src/routes/assets.ts. A
+  // persistent, workspace-scoped file library, distinct from
+  // boards.uploadCanvasFile (which stores objects the same way but keeps
+  // no reusable/listable record — see that route's own comment).
+  assets: {
+    upload: (workspaceId: string, file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('workspace_id', workspaceId);
+      formData.append('filename', file.name);
+      return studentUploadRequest<Asset>('/assets', formData);
+    },
+    list: (roll: string, workspaceId: string, cursor?: string) =>
+      request<{ assets: Asset[]; nextCursor: string | null }>(
+        'GET', `/assets?workspace_id=${encodeURIComponent(workspaceId)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+        { roll }
+      ),
+    get: (roll: string, id: string) =>
+      request<Asset>('GET', `/assets/${id}`, { roll }),
+    delete: (roll: string, id: string) =>
+      request<{ success: boolean; storageWarning?: string }>('DELETE', `/assets/${id}`, { roll }),
   },
   liveSessions: {
     getActive: (roll?: string) =>
