@@ -618,6 +618,66 @@ export async function initSchema(): Promise<void> {
   console.log('boards.canvas_data migration done');
 
   await pool.query(`
+    ALTER TABLE boards
+    ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT false
+  `);
+
+  await pool.query(`
+    ALTER TABLE boards
+    ADD COLUMN IF NOT EXISTS updated_at TEXT
+  `);
+
+  await pool.query(`
+    UPDATE boards
+    SET updated_at = created_at
+    WHERE updated_at IS NULL
+  `);
+
+  await pool.query(`
+    ALTER TABLE boards
+    ALTER COLUMN updated_at SET NOT NULL
+  `);
+
+  // Not read/written anywhere yet — reserved so the thumbnails phase doesn't
+  // need another migration. See board list/detail responses: this always
+  // comes back null today, and clients already treat a missing thumbnail as
+  // "show the placeholder".
+  await pool.query(`
+    ALTER TABLE boards
+    ADD COLUMN IF NOT EXISTS thumbnail_url TEXT DEFAULT NULL
+  `);
+
+  console.log('boards.is_archived / updated_at / thumbnail_url migration done');
+
+  // Per-board opt-in for the realtime collaboration rollout (see realtime/).
+  // Defaults false for both existing and newly created boards — a board only
+  // gets the @tldraw/sync path if explicitly flipped, independent of the
+  // REALTIME_ENABLED global kill switch (both must be true for a given
+  // board to use realtime). Rollback never needs a migration: unset the env
+  // var, or flip this back to false, and the board falls back to the
+  // existing manual save/load path unchanged.
+  await pool.query(`
+    ALTER TABLE boards
+    ADD COLUMN IF NOT EXISTS realtime_enabled BOOLEAN NOT NULL DEFAULT false
+  `);
+
+  console.log('boards.realtime_enabled migration done');
+
+  // Per-user, not per-board: two students can independently star the same
+  // shared board, so this can't be a column on boards.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS board_favorites (
+      board_id    TEXT NOT NULL REFERENCES boards(id)
+                  ON DELETE CASCADE,
+      roll_number TEXT NOT NULL,
+      created_at  TEXT NOT NULL,
+      PRIMARY KEY (board_id, roll_number)
+    )
+  `);
+
+  console.log('board_favorites migration done');
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS board_members (
       board_id    TEXT NOT NULL REFERENCES boards(id)
                   ON DELETE CASCADE,
@@ -845,4 +905,369 @@ export async function initSchema(): Promise<void> {
     VALUES ('event_reminder', 'Event Reminder', 'Reminder: {{title}} starts soon — DnA Club IITK', $1, $2)
     ON CONFLICT (id) DO NOTHING
   `, [reminderBody, new Date().toISOString()]);
+
+  // Version history (Commit 5) — deliberately a separate table, not an
+  // extension of boards.canvas_data. canvas_data holds exactly one thing
+  // (the room's current live/persisted state); board_versions holds a
+  // timeline of past states, unbounded in count, each a full standalone
+  // snapshot. Mixing the two would mean every version read/write touches
+  // the same row every live client's autosave also writes to, and would
+  // cap "how much history" at "however big one TEXT column comfortably
+  // gets" — see realtime/history/ for the service layer that owns writing
+  // to this table; RoomManager and roomPersistence.ts never reference it.
+  //
+  // metadata is a JSON TEXT column reserved for future extensibility (e.g.
+  // shape/document counts computed at checkpoint time, so a future compare/
+  // diff view wouldn't need to re-parse every snapshot to show a summary) —
+  // unused by this commit, present so a later feature doesn't need another
+  // migration for it.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS board_versions (
+      id                      TEXT PRIMARY KEY,
+      board_id                TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+      snapshot                TEXT NOT NULL,
+      created_by_roll         TEXT,
+      created_by_name         TEXT,
+      created_at              TEXT NOT NULL,
+      trigger                 TEXT NOT NULL,
+      description             TEXT,
+      restored_from_version_id TEXT REFERENCES board_versions(id) ON DELETE SET NULL,
+      metadata                TEXT
+    )
+  `);
+
+  // Every timeline/pagination read in VersionTimeline filters by board_id
+  // and orders by created_at — without this index that's a sequential scan
+  // per board on every "open version history" click, which gets worse as
+  // history accumulates for exactly the boards most likely to be inspected.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS board_versions_board_id_created_at_idx
+    ON board_versions (board_id, created_at DESC)
+  `);
+
+  console.log('board_versions migration done');
+
+  // Comments (Commit 6) — one table for both thread roots and replies:
+  // parent_comment_id NULL means "this is a thread root", non-NULL means
+  // "this is a reply to that root". A single table (not comments +
+  // comment_replies) keeps read/list/broadcast logic uniform — every
+  // comment event (create/edit/delete/resolve/reopen) is the same shape
+  // regardless of depth, and a reply never needs its own resolve state
+  // (resolving is a thread-level operation, applied to the root only; see
+  // routes/comments.ts).
+  //
+  // anchor_type distinguishes a pin dropped on open canvas ('canvas', using
+  // anchor_x/anchor_y in page-space coordinates — tldraw's own coordinate
+  // system, so a pin stays correctly placed regardless of zoom) from a pin
+  // attached to a specific shape ('shape', using anchor_shape_id — a
+  // tldraw TLShapeId string, intentionally NOT a foreign key: shapes live
+  // in the tldraw document/snapshot, not in Postgres relational tables, so
+  // there is nothing here to reference; a comment on a since-deleted shape
+  // is handled client-side by falling back to its last-known anchor_x/
+  // anchor_y, which are always populated for both anchor types).
+  //
+  // Deliberately NOT stored in boards.canvas_data or as tldraw shape
+  // records: comments are product/collaboration metadata, not document
+  // content — they must never appear in a version-history snapshot/restore
+  // (see history/versionHistoryService.ts) and must never be selectable/
+  // draggable/deletable via tldraw's own shape tools. Keeping them in their
+  // own table, read over their own REST/WS channel, is what makes "comment
+  // actions never create board versions" true by construction rather than
+  // something routes/comments.ts has to remember to avoid.
+  //
+  // mentions is a JSON TEXT column (array of roll numbers), unused by this
+  // commit (notifications/mentions are explicitly out of scope) — reserved
+  // so a future mentions feature doesn't need another migration.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS board_comments (
+      id                TEXT PRIMARY KEY,
+      board_id          TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+      parent_comment_id TEXT REFERENCES board_comments(id) ON DELETE CASCADE,
+      author_roll       TEXT NOT NULL,
+      author_name       TEXT,
+      created_at        TEXT NOT NULL,
+      updated_at        TEXT NOT NULL,
+      resolved_at       TEXT,
+      resolved_by_roll  TEXT,
+      deleted_at        TEXT,
+      anchor_type       TEXT NOT NULL,
+      anchor_shape_id   TEXT,
+      anchor_x          DOUBLE PRECISION NOT NULL,
+      anchor_y          DOUBLE PRECISION NOT NULL,
+      content           TEXT NOT NULL,
+      mentions          TEXT
+    )
+  `);
+
+  // Every list read filters by board_id (and, for the default view, checks
+  // deleted_at/resolved_at) ordered by created_at — same rationale as
+  // board_versions' own index above.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS board_comments_board_id_created_at_idx
+    ON board_comments (board_id, created_at)
+  `);
+
+  // Thread reads (a root + all its replies) filter by parent_comment_id —
+  // without this index, opening a single thread with many replies scans
+  // every comment on the board.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS board_comments_parent_comment_id_idx
+    ON board_comments (parent_comment_id)
+  `);
+
+  console.log('board_comments migration done');
+
+  // Workspaces (Commit 1 of the workspace/organization layer) — the
+  // grouping unit every board now belongs to. Boards themselves stay a
+  // flat table (no owner_roll/visibility/edit_mode changes here); this
+  // only adds the membership layer above them. Deliberately NOT built on
+  // audience_groups/audience_group_members (see those tables, further
+  // above in this file) — those back event/meet scheduling only
+  // (routes/liveSessions.ts, routes/coordinators.ts), zero references
+  // from boards/realtime/comments/versions code, and entangling them
+  // would couple two unrelated features for no benefit.
+  //
+  // is_personal marks the one-per-user workspace every student gets
+  // automatically (lazily provisioned — see ensurePersonalWorkspace in
+  // routes/workspaces.ts — or backfilled below for pre-existing boards):
+  // it never appears in a "create workspace" flow, can't be renamed,
+  // deleted, or left, and every route in routes/workspaces.ts that
+  // mutates a workspace 400s if targeting one. This is an app-layer
+  // invariant (no DB trigger enforcing it), matching how single board
+  // ownership is already enforced by convention rather than a constraint
+  // elsewhere in this file.
+  //
+  // owner_roll is a raw string, no FK — same convention as
+  // boards.owner_roll (see that column's own history in this file): it
+  // records who created the workspace, it is NOT the source of truth for
+  // permissions after creation (workspace_members is), same relationship
+  // boards.owner_roll has to board_members.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS workspaces (
+      id           TEXT PRIMARY KEY,
+      name         TEXT NOT NULL,
+      is_personal  BOOLEAN NOT NULL DEFAULT false,
+      owner_roll   TEXT NOT NULL,
+      created_at   TEXT NOT NULL
+    )
+  `);
+
+  // Role tiers: owner / admin / member — three, not RoomRole's four,
+  // because a workspace role is only ever consulted by
+  // realtime/roomAccess.ts as a CEILING that feeds into
+  // classifyBoardAccess (see that function), never as a final per-board
+  // role by itself. owner and admin and member all ceiling at 'editor' —
+  // this table's role column is a workspace-MANAGEMENT-permission axis
+  // (who can rename the workspace, add/remove members, change roles),
+  // completely orthogonal to board access, which is why it doesn't need
+  // to mirror RoomRole's tiering at all. Exactly one 'owner' per
+  // workspace is enforced at the application layer (routes/workspaces.ts),
+  // not a partial unique index — same reasoning as boards.owner_roll
+  // needing no uniqueness constraint (1:1 by construction, checked in
+  // code, not the DB).
+  //
+  // role is plain TEXT, validated by zod at the route layer — this file
+  // never uses Postgres CHECK/enum types for this kind of field
+  // (visibility, edit_mode follow the same pattern above); no reason to
+  // introduce a new convention here.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS workspace_members (
+      workspace_id  TEXT NOT NULL REFERENCES workspaces(id)
+                    ON DELETE CASCADE,
+      roll_number   TEXT NOT NULL,
+      role          TEXT NOT NULL DEFAULT 'member',
+      name          TEXT,
+      added_at      TEXT NOT NULL,
+      PRIMARY KEY (workspace_id, roll_number)
+    )
+  `);
+
+  console.log('workspaces / workspace_members migration done');
+
+  // boards.workspace_id — added nullable first (existing rows have no
+  // workspace yet, backfilled immediately below), same nullable ->
+  // backfill -> NOT NULL rollout already used in this file for room_id
+  // (above) and updated_at (above). ON DELETE RESTRICT (the default, no
+  // ON DELETE clause needed beyond the bare REFERENCES) is deliberate:
+  // a workspace can't be deleted while boards still point at it —
+  // routes/workspaces.ts's DELETE handler pre-checks and returns a clean
+  // 409 rather than ever hitting this constraint in normal operation, but
+  // the constraint itself is what makes "a board can never end up
+  // orphaned by a workspace delete" true even if that pre-check is ever
+  // bypassed or races.
+  await pool.query(`
+    ALTER TABLE boards
+    ADD COLUMN IF NOT EXISTS workspace_id TEXT REFERENCES workspaces(id)
+  `);
+
+  // Backfill: one personal workspace per distinct existing owner_roll.
+  // Grouped by owner_roll ALONE, not (owner_roll, owner_name) — nothing
+  // enforces owner_name is consistent across a given owner_roll's boards
+  // (it's a denormalized display string, populated per-board at creation
+  // time), so grouping by both could split one real owner into multiple
+  // backfilled personal workspaces if their stored name ever varied.
+  // WHERE workspace_id IS NULL makes this idempotent across repeated
+  // boots (this file has no migration-version table — every migration
+  // here is designed to be a safe no-op on a second run).
+  await pool.query(`
+    INSERT INTO workspaces (id, name, is_personal, owner_roll, created_at)
+    SELECT
+      gen_random_uuid()::text,
+      COALESCE(MIN(owner_name), owner_roll) || '''s Workspace',
+      true,
+      owner_roll,
+      MIN(created_at)
+    FROM boards
+    WHERE workspace_id IS NULL
+    GROUP BY owner_roll
+  `);
+
+  // Seed workspace_members with each backfilled personal workspace's
+  // owner as role='owner' — without this, a pre-existing board's owner
+  // would pass classifyBoardAccess via the isOwner branch (unaffected by
+  // workspace role either way) but would not show up as a member of
+  // their own personal workspace in routes/workspaces.ts's listing
+  // endpoints.
+  await pool.query(`
+    INSERT INTO workspace_members (workspace_id, roll_number, role, name, added_at)
+    SELECT w.id, w.owner_roll, 'owner', bn.owner_name, w.created_at
+    FROM workspaces w
+    LEFT JOIN LATERAL (
+      SELECT owner_name FROM boards
+      WHERE owner_roll = w.owner_roll AND owner_name IS NOT NULL
+      LIMIT 1
+    ) bn ON true
+    WHERE w.is_personal
+    ON CONFLICT (workspace_id, roll_number) DO NOTHING
+  `);
+
+  await pool.query(`
+    UPDATE boards b
+    SET workspace_id = w.id
+    FROM workspaces w
+    WHERE b.workspace_id IS NULL AND w.owner_roll = b.owner_roll AND w.is_personal
+  `);
+
+  await pool.query(`
+    ALTER TABLE boards
+    ALTER COLUMN workspace_id SET NOT NULL
+  `);
+
+  // Every scoped board list/lookup (routes/workspaces.ts, boards.ts's
+  // workspace-filtered list routes, roomAccess.ts's workspace-ceiling
+  // check) filters or joins on this column — without the index those
+  // degrade to a sequential scan as boards grows. No separate index is
+  // needed on workspace_members: its PRIMARY KEY (workspace_id,
+  // roll_number) already covers the workspace-ceiling lookup's access
+  // pattern (workspace_id leading).
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_boards_workspace_id
+    ON boards (workspace_id)
+  `);
+
+  console.log('boards.workspace_id backfill migration done');
+
+  // Asset Manager (Phase B) — a persistent, reusable file library, scoped
+  // to a workspace, distinct from boards.ts's canvas-files upload (which
+  // stores objects via the same StorageProvider but keeps no DB row of its
+  // own — those are referenced only from a board's own canvas_data/tldraw
+  // document JSON, never listed or reused across boards). An asset row
+  // here is the thing a user can browse, preview, and re-insert onto ANY
+  // board they can write to; canvas-files stays exactly as it is.
+  //
+  // workspace_id NOT NULL + ON DELETE CASCADE from day one (unlike
+  // boards.workspace_id's nullable->backfill->NOT NULL rollout above) —
+  // there is no pre-existing data to backfill here, this is a brand new
+  // table, so it can start at the end state directly. Deleting a
+  // workspace deletes its assets outright (no "move assets out first"
+  // pre-check the way routes/workspaces.ts's DELETE has for boards,
+  // since an orphaned asset with no workspace has no home in this
+  // product's model — assets don't have a personal/global fallback the
+  // way a board does).
+  //
+  // owner_roll/owner_name follow the same denormalized-pair convention as
+  // boards.owner_roll/owner_name above (raw string, no FK) — owner_roll is
+  // who uploaded it (delete permission), not re-derived from a join.
+  //
+  // storage_key is the StorageProvider path (e.g.
+  // "assets/<workspace_id>/<uuid>.<ext>"), NOT a public URL — the public
+  // URL is derived on read via getStorage().getPublicUrl(storage_key), so
+  // switching storage providers (local disk <-> Supabase Storage) never
+  // requires touching stored rows.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS assets (
+      id            TEXT PRIMARY KEY,
+      workspace_id  TEXT NOT NULL REFERENCES workspaces(id)
+                    ON DELETE CASCADE,
+      owner_roll    TEXT NOT NULL,
+      owner_name    TEXT,
+      filename      TEXT NOT NULL,
+      storage_key   TEXT NOT NULL,
+      mime_type     TEXT NOT NULL,
+      size_bytes    INTEGER NOT NULL,
+      width         INTEGER,
+      height        INTEGER,
+      created_at    TEXT NOT NULL
+    )
+  `);
+
+  // Every list query filters on workspace_id (workspace-scoped library, see
+  // routes/assets.ts) — without this index that degrades to a sequential
+  // scan as the table grows, same reasoning as idx_boards_workspace_id above.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_assets_workspace_id
+    ON assets (workspace_id)
+  `);
+
+  console.log('assets migration done');
+
+  // Notifications (Phase C) — deliberately minimal: no read receipts
+  // beyond a single read_at, no preferences, no digesting, no delivery
+  // channels. recipient_roll is the only required identity column;
+  // actor_roll/board_id/workspace_id/comment_id are all nullable because
+  // no single notification type needs all four (a workspace-role-change
+  // notification has no board_id or comment_id, a board-share notification
+  // has no comment_id, etc.) — see routes/notifications.ts's own comment
+  // on the exact type -> populated-columns mapping.
+  //
+  // type is plain TEXT (zod-validated at the route layer), matching every
+  // other enum-shaped column in this file (boards.visibility,
+  // workspace_members.role, etc.) — no new convention introduced here.
+  //
+  // No FK to boards/workspaces/board_comments (ON DELETE CASCADE would be
+  // natural, but board_comments/boards can already be hard-deleted — see
+  // boards.ts's DELETE /:id — and a notification instructively surviving
+  // as "comment on a since-deleted board" is more useful than silently
+  // vanishing; the frontend already has to handle a stale/missing target
+  // gracefully for other reasons, e.g. a board deleted after being
+  // favorited). recipient_roll/actor_roll follow the same raw-string,
+  // no-FK convention boards.owner_roll already uses throughout this file.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id             TEXT PRIMARY KEY,
+      recipient_roll TEXT NOT NULL,
+      actor_roll     TEXT,
+      actor_name     TEXT,
+      type           TEXT NOT NULL,
+      board_id       TEXT,
+      board_name     TEXT,
+      workspace_id   TEXT,
+      workspace_name TEXT,
+      comment_id     TEXT,
+      read_at        TEXT,
+      created_at     TEXT NOT NULL
+    )
+  `);
+
+  // The notification list/unread-count read is ALWAYS scoped to one
+  // recipient, ordered newest-first — this composite index covers both
+  // "list mine" and "count my unread" (the latter via a read_at IS NULL
+  // filter, which doesn't need its own index: recipient_roll leading is
+  // what matters, Postgres can filter read_at cheaply from there).
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_notifications_recipient_created
+    ON notifications (recipient_roll, created_at DESC)
+  `);
+
+  console.log('notifications migration done');
 }

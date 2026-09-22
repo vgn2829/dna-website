@@ -41,3 +41,11 @@ export function displayUrl(url: string): string {
   const [, base, rest] = match
   return `${base}/render/image/public/${rest}?width=1600&quality=85&resize=contain`
 }
+
+// Deterministic per-student avatar color, hashed from the last 3 digits of
+// their roll number — same formula BoardPage.tsx's member/owner avatars
+// already use (extracted here so board presence cursors and the
+// collaborator list match those avatars exactly, rather than drifting).
+export function rollToColor(roll: string): string {
+  return `hsl(${parseInt(roll.slice(-3)) % 360}, 60%, 45%)`
+}

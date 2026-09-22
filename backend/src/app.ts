@@ -12,11 +12,46 @@ import { teamRouter }    from './routes/team';
 import notifyRouter      from './routes/notify';
 import liveSessionsRouter from './routes/liveSessions';
 import boardsRouter from './routes/boards';
+import workspacesRouter from './routes/workspaces';
+import assetsRouter from './routes/assets';
+import notificationsRouter from './routes/notifications';
 import settingsRouter from './routes/settings';
 import coordinatorsRouter from './routes/coordinators';
 import internalRouter from './routes/internal';
+import realtimeStatusRouter from './routes/realtime';
+import { createVersionsRouter } from './routes/versions';
+import { createCommentsRouter } from './routes/comments';
+import type { VersionHistoryService } from './realtime/history/versionHistoryService';
+import type { RestoreService } from './realtime/history/restoreService';
+import type { CommentBroadcaster } from './realtime/comments/commentBroadcaster';
 
-export function createApp() {
+// Generic over SessionMeta so this accepts whatever concrete
+// RoomManager<SessionMeta>-backed services server.ts actually constructed
+// (RoomManager<StudentSessionMeta> today) — see versionHistoryService.ts's
+// own comment on why VersionHistoryService/RestoreService are generic for
+// the same reason. createVersionsRouter itself never reads SessionMeta
+// (its handlers only call checkpointExplicit/restore, neither of which
+// exposes it), so this generic exists purely to make assignment from
+// server.ts's real instances sound, not because routes/versions.ts cares.
+//
+// commentBroadcaster (Commit 6) is NOT generic over SessionMeta — it has
+// no dependency on RoomManager/TLSocketRoom at all (see its own header
+// comment), so it's a concrete, non-generic type here.
+export interface RealtimeAppServices<SessionMeta = unknown> {
+  versionHistoryService: VersionHistoryService<SessionMeta>;
+  restoreService: RestoreService<SessionMeta>;
+  commentBroadcaster: CommentBroadcaster;
+}
+
+// Optional — only server.ts's real boot path constructs and passes this
+// (it needs a live RoomManager, which needs a real Postgres connection and
+// the WS transport wired up). Every test call site (tests/setup.ts,
+// otp-auth.test.ts, rsvp-capacity.test.ts) calls createApp() with no
+// arguments and gets an app with no version-history routes mounted at
+// all — correct, since there is no RoomManager behind them to test against
+// in that context (see routes/versions.ts's own comment on where THAT
+// logic's tests live instead).
+export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<SessionMeta>) {
   const app = express();
   app.set('trust proxy', 1);
 
@@ -95,16 +130,34 @@ export function createApp() {
   app.use('/api/notify',        notifyRouter);
   app.use('/api/live-sessions', liveSessionsRouter);
   app.use('/api/boards',        boardsRouter);
+  app.use('/api/workspaces',    workspacesRouter);
+  app.use('/api/assets',        assetsRouter);
+  app.use('/api/notifications', notificationsRouter);
+  if (realtime) {
+    app.use('/api/boards', createVersionsRouter(realtime));
+    app.use('/api/boards', createCommentsRouter(realtime.commentBroadcaster));
+  }
   app.use('/api/settings',      settingsRouter);
   app.use('/api/coordinators',  coordinatorsRouter);
   app.use('/api/internal',      internalRouter);
+  // Shares the /api/realtime prefix with the WS upgrade path
+  // (REALTIME_PATH_PREFIX in realtime/server.ts) without colliding: WS
+  // upgrades are intercepted via a raw http.Server 'upgrade' listener
+  // (see server.ts), which never reaches Express routing at all — only
+  // normal GET/POST/etc. requests (like this one) go through here.
+  app.use('/api/realtime',      realtimeStatusRouter);
 
   app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 
   app.use((err: Error & { status?: number; type?: string; code?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const status = err.status ?? 500;
     if (err.code === 'LIMIT_FILE_SIZE') {
-      res.status(400).json({ error: 'File exceeds 50 MB limit' });
+      // Generic message, not a hardcoded number — this one handler serves
+      // every multer instance in the app, and they don't share a single
+      // limit (artworks.ts: 50MB, boards.ts canvas-files: 10MB, assets.ts:
+      // 15MB, team.ts: 10MB). A specific number here would be wrong for
+      // three of the four routes that can trigger this branch.
+      res.status(400).json({ error: 'File exceeds the size limit for this upload' });
     } else if (err.code?.startsWith('LIMIT_')) {
       res.status(400).json({ error: `Upload error: ${err.message}` });
     } else if (err.type === 'entity.parse.failed') {

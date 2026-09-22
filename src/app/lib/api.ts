@@ -121,12 +121,156 @@ export interface Board {
   item_count: number;
   member_count: number;
   created_at: string;
+  updated_at: string;
+  is_archived: boolean;
+  is_favorite: boolean;
+  thumbnail_url: string | null;
+  realtime_enabled: boolean;
+  workspace_id: string;
 }
 
 export interface BoardDetail extends Board {
   items: BoardItem[];
   members: BoardMember[];
 }
+
+// Workspace/organization layer — mirrors backend/src/routes/workspaces.ts's
+// response shapes. `role` on Workspace is the CALLER's role in that
+// workspace (owner/admin/member), joined server-side per-request — it is
+// NOT a property of the workspace itself, so it changes per viewer.
+export interface Workspace {
+  id: string;
+  name: string;
+  is_personal: boolean;
+  owner_roll: string;
+  created_at: string;
+  role: 'owner' | 'admin' | 'member';
+  member_count: number;
+  board_count: number;
+}
+
+export interface WorkspaceMember {
+  roll_number: string;
+  name: string | null;
+  role: 'owner' | 'admin' | 'member';
+  added_at: string;
+}
+
+export interface WorkspaceDetail extends Workspace {
+  members: WorkspaceMember[];
+}
+
+// Mirrors backend/src/routes/assets.ts's toPublicAsset() — note there is
+// no storage_key here (an internal StorageProvider path, never sent to
+// the frontend); `url` is the derived public URL the backend already
+// resolved via getStorage().getPublicUrl().
+export interface Asset {
+  id: string;
+  workspace_id: string;
+  owner_roll: string;
+  owner_name: string | null;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  width: number | null;
+  height: number | null;
+  created_at: string;
+  url: string;
+}
+
+// Mirrors backend/src/routes/notifications.ts's toPublicNotification().
+// boardId/workspaceId/commentId are whichever subset the event type
+// actually populates (see notificationService.ts's own comment on the
+// type -> populated-columns mapping) — the frontend navigates using
+// whichever of these is present, never assumes all three.
+export type NotificationType =
+  | 'board_shared' | 'workspace_added' | 'workspace_role_changed'
+  | 'comment_created' | 'comment_replied';
+
+export interface Notification {
+  id: string;
+  actorRoll: string | null;
+  actorName: string | null;
+  type: NotificationType;
+  boardId: string | null;
+  boardName: string | null;
+  workspaceId: string | null;
+  workspaceName: string | null;
+  commentId: string | null;
+  read: boolean;
+  createdAt: string;
+}
+
+// Mirrors backend/src/realtime/history/versionStorage.ts's BoardVersion —
+// deliberately metadata only, no snapshot content (see that file's own
+// comment on why: the timeline list must stay cheap regardless of history
+// length or board size — never download all snapshots on board open).
+export type VersionTrigger =
+  | 'explicit' | 'inactivity' | 'major_change' | 'restore' | 'rename' | 'archive';
+
+export interface BoardVersion {
+  id: string;
+  boardId: string;
+  createdByRoll: string | null;
+  createdByName: string | null;
+  createdAt: string;
+  trigger: VersionTrigger;
+  description: string | null;
+  restoredFromVersionId: string | null;
+}
+
+export interface VersionPage {
+  versions: BoardVersion[];
+  hasMore: boolean;
+}
+
+// Mirrors backend/src/realtime/comments/commentsStorage.ts's BoardComment
+// exactly (camelCase, same field set) — see that file's own comment on why
+// comments are a dedicated table/type, never tldraw shape data.
+export type CommentAnchorType = 'canvas' | 'shape';
+
+export interface BoardComment {
+  id: string;
+  boardId: string;
+  parentCommentId: string | null;
+  authorRoll: string;
+  authorName: string | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+  resolvedByRoll: string | null;
+  deletedAt: string | null;
+  anchorType: CommentAnchorType;
+  anchorShapeId: string | null;
+  anchorX: number;
+  anchorY: number;
+  content: string;
+}
+
+export type CommentEventType = 'create' | 'edit' | 'delete' | 'resolve' | 'reopen';
+
+export interface CommentEvent {
+  type: CommentEventType;
+  comment: BoardComment;
+}
+
+// Mirrors backend/src/realtime/roomAccess.ts's RoomAccessDenialReason and
+// RoomRole exactly (Commit 7) — the frontend's copy of the SAME enum
+// values the server computes, never re-derived client-side. See
+// TldrawCanvasSync.tsx for how each denial reason maps to a distinct
+// user-facing message.
+export type RoomAccessDenialReason =
+  | 'realtime_disabled'
+  | 'session_expired'
+  | 'board_not_found'
+  | 'board_archived'
+  | 'permission_denied';
+
+export type RoomRole = 'owner' | 'editor' | 'commenter' | 'viewer';
+
+export type RealtimeAccessCheck =
+  | { ok: true; role: RoomRole; canWriteCanvas: boolean; canComment: boolean }
+  | { ok: false; reason: RoomAccessDenialReason };
 
 export interface AppSettings {
   public_meet_enabled: string;
@@ -426,18 +570,35 @@ export const api = {
       request<StudentRosterEntry[]>('GET', '/students', { admin: true }),
   },
   boards: {
-    getMyBoards: (roll: string) =>
-      request<Board[]>('GET', '/boards', { roll }),
-    getShared: () =>
-      request<Board[]>('GET', '/boards/shared'),
-    create: (roll: string, data: { name: string; description?: string; visibility?: 'private' | 'shared' }) =>
+    // workspaceId is optional and purely additive (workspace/organization
+    // layer): omitted, these three list calls keep their exact pre-
+    // existing unscoped meaning ("every board I own or am a member of /
+    // my own archived boards / every shared board app-wide, across ALL
+    // workspaces"). Passed, they narrow to that one workspace — see
+    // backend/src/routes/boards.ts's own comment on why GET / and
+    // GET /archived stay unscoped-by-default while GET /shared's
+    // unscoped path is a deprecated fallback (Commit 9 removes it once
+    // every caller here always sends workspace_id for /shared).
+    getMyBoards: (roll: string, workspaceId?: string) =>
+      request<Board[]>('GET', `/boards${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, { roll }),
+    getArchived: (roll: string, workspaceId?: string) =>
+      request<Board[]>('GET', `/boards/archived${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, { roll }),
+    getShared: (roll?: string, workspaceId?: string) =>
+      request<Board[]>('GET', `/boards/shared${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, roll ? { roll } : {}),
+    create: (roll: string, data: { name: string; description?: string; visibility?: 'private' | 'shared'; workspace_id?: string }) =>
       request<Board>('POST', '/boards', { body: data, roll }),
-    update: (id: string, roll: string, data: { name?: string; description?: string; visibility?: 'private' | 'shared'; edit_mode?: 'members_only' | 'anyone' }) =>
+    update: (id: string, roll: string, data: { name?: string; description?: string; visibility?: 'private' | 'shared'; edit_mode?: 'members_only' | 'anyone'; is_archived?: boolean }) =>
       request<Board>('PUT', `/boards/${id}`, { body: data, roll }),
     getBoard: (id: string, roll?: string) =>
       request<BoardDetail>('GET', `/boards/${id}`, { roll }),
     delete: (id: string, roll: string) =>
       request<{ success: boolean }>('DELETE', `/boards/${id}`, { roll }),
+    duplicate: (id: string, roll: string) =>
+      request<Board>('POST', `/boards/${id}/duplicate`, { roll }),
+    favorite: (id: string, roll: string) =>
+      request<{ success: boolean; is_favorite: boolean }>('POST', `/boards/${id}/favorite`, { roll }),
+    unfavorite: (id: string, roll: string) =>
+      request<{ success: boolean; is_favorite: boolean }>('DELETE', `/boards/${id}/favorite`, { roll }),
     // Board items API — kept for potential future use
     // Currently the canvas uses Excalidraw for content
     getItems: (id: string, roll?: string) =>
@@ -474,6 +635,158 @@ export const api = {
         `/boards/${boardId}/canvas-files`, formData
       );
     },
+    // Builds the @tldraw/sync connection URL for a realtime-enabled board's
+    // room. This is the ONLY thing the frontend knows about realtime
+    // persistence — everything past this URL (Postgres, canvas_data,
+    // snapshot load/save timing, room lifecycle/cleanup) is entirely a
+    // backend concern (see backend/src/realtime/). `roomId` is board.room_id,
+    // not board.id — the backend keys rooms by room_id specifically so a
+    // board's primary key is never exposed over the realtime protocol.
+    // sessionId/storeId are NOT appended here: @tldraw/sync's own useSync
+    // hook appends those itself (tab-scoped via tldraw's TAB_ID), and
+    // minting our own would break its reconnect-resumes-the-same-session
+    // behavior — see backend/src/realtime/connectionHandler.ts's matching
+    // comment on the server side of this same contract.
+    getRealtimeUrl: (roomId: string): string => {
+      const token = getStudentToken();
+      // BASE may be a bare path ("/api", when VITE_API_BASE_URL is unset —
+      // REST calls resolve that fine via fetch()'s implicit same-origin
+      // base, but `new URL()` needs an explicit one) or a full origin
+      // ("https://api.example.com/api"). window.location.origin covers
+      // both: it's a no-op base when BASE is already absolute.
+      const url = new URL(`${BASE}/realtime/boards/${roomId}`, window.location.origin);
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      if (token) url.searchParams.set('token', token);
+      return url.toString();
+    },
+    // Version history (Commit 5) — lazily called only when the Version
+    // History panel is actually opened (see VersionHistoryPanel.tsx), never
+    // on board load, per the "never download all snapshots on board open"
+    // requirement — this endpoint doesn't return snapshot content at all,
+    // only metadata, so it's cheap even so.
+    getVersions: (boardId: string, roll: string, opts?: { limit?: number; before?: string }) => {
+      const params = new URLSearchParams();
+      if (opts?.limit) params.set('limit', String(opts.limit));
+      if (opts?.before) params.set('before', opts.before);
+      const qs = params.toString();
+      return request<VersionPage>('GET', `/boards/${boardId}/versions${qs ? `?${qs}` : ''}`, { roll });
+    },
+    createVersion: (boardId: string, roll: string, description?: string) =>
+      request<BoardVersion>('POST', `/boards/${boardId}/versions`, { body: { description }, roll }),
+    restoreVersion: (boardId: string, roll: string, versionId: string) =>
+      request<{ success: boolean; version: BoardVersion; hadLiveRoom: boolean }>(
+        'POST', `/boards/${boardId}/versions/${versionId}/restore`, { roll }
+      ),
+    // Comments (Commit 6). REST is the source of truth (initial load, and
+    // the only way to mutate — see backend/src/routes/comments.ts's own
+    // "do NOT trust the client" note: every write is server-validated
+    // here, never assumed from a WS message); getCommentsRealtimeUrl below
+    // is the live-delta channel, deliberately separate from
+    // getRealtimeUrl's tldraw document sync (see
+    // backend/src/realtime/comments/commentBroadcaster.ts for why).
+    getComments: (boardId: string, roll: string, opts?: { includeResolved?: boolean }) =>
+      request<{ comments: BoardComment[] }>(
+        'GET', `/boards/${boardId}/comments${opts?.includeResolved ? '?includeResolved=true' : ''}`, { roll }
+      ),
+    createComment: (boardId: string, roll: string, data: {
+      content: string;
+      parentCommentId?: string;
+      anchorType?: CommentAnchorType;
+      anchorShapeId?: string;
+      anchorX?: number;
+      anchorY?: number;
+    }) =>
+      request<BoardComment>('POST', `/boards/${boardId}/comments`, { body: data, roll }),
+    editComment: (boardId: string, roll: string, commentId: string, content: string) =>
+      request<BoardComment>('PUT', `/boards/${boardId}/comments/${commentId}`, { body: { content }, roll }),
+    deleteComment: (boardId: string, roll: string, commentId: string) =>
+      request<{ success: boolean }>('DELETE', `/boards/${boardId}/comments/${commentId}`, { roll }),
+    resolveComment: (boardId: string, roll: string, commentId: string) =>
+      request<BoardComment>('POST', `/boards/${boardId}/comments/${commentId}/resolve`, { roll }),
+    reopenComment: (boardId: string, roll: string, commentId: string) =>
+      request<BoardComment>('POST', `/boards/${boardId}/comments/${commentId}/reopen`, { roll }),
+    // WS URL for live comment events — same URL-building approach as
+    // getRealtimeUrl (token as a query param, ws(s) protocol swap), but a
+    // DIFFERENT path suffix (/comments) that the backend's
+    // connectionHandler.ts routes to CommentBroadcaster instead of
+    // RoomManager/TLSocketRoom. No sessionId is appended here (unlike
+    // getRealtimeUrl) — this channel has no per-session document state to
+    // resume; a reconnect just starts receiving live events again, with
+    // the REST GET above as the catch-up mechanism for whatever happened
+    // while disconnected.
+    getCommentsRealtimeUrl: (roomId: string): string => {
+      const token = getStudentToken();
+      const url = new URL(`${BASE}/realtime/boards/${roomId}/comments`, window.location.origin);
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      if (token) url.searchParams.set('token', token);
+      return url.toString();
+    },
+  },
+  // Workspace/organization layer — mirrors backend/src/routes/workspaces.ts.
+  // Every board belongs to exactly one workspace (see boards.workspace_id);
+  // this namespace manages the workspaces themselves and their membership,
+  // separate from board-level sharing (visibility/edit_mode/board members),
+  // which is untouched by any of this.
+  workspaces: {
+    list: (roll: string) =>
+      request<Workspace[]>('GET', '/workspaces', { roll }),
+    create: (roll: string, data: { name: string }) =>
+      request<Workspace>('POST', '/workspaces', { body: data, roll }),
+    get: (id: string, roll: string) =>
+      request<WorkspaceDetail>('GET', `/workspaces/${id}`, { roll }),
+    update: (id: string, roll: string, data: { name: string }) =>
+      request<Workspace>('PUT', `/workspaces/${id}`, { body: data, roll }),
+    delete: (id: string, roll: string) =>
+      request<{ success: boolean }>('DELETE', `/workspaces/${id}`, { roll }),
+    leave: (id: string, roll: string) =>
+      request<{ success: boolean }>('POST', `/workspaces/${id}/leave`, { roll }),
+    getMembers: (id: string, roll: string) =>
+      request<WorkspaceMember[]>('GET', `/workspaces/${id}/members`, { roll }),
+    addMember: (id: string, roll: string, memberRoll: string) =>
+      request<{ success: boolean; name: string | null }>('POST', `/workspaces/${id}/members`, { body: { roll_number: memberRoll }, roll }),
+    removeMember: (id: string, roll: string, memberRoll: string) =>
+      request<{ success: boolean }>('DELETE', `/workspaces/${id}/members/${memberRoll}`, { roll }),
+    setMemberRole: (id: string, roll: string, memberRoll: string, role: 'admin' | 'member') =>
+      request<{ success: boolean; role: string }>('PUT', `/workspaces/${id}/members/${memberRoll}/role`, { body: { role }, roll }),
+  },
+  // Asset Manager (Phase B) — mirrors backend/src/routes/assets.ts. A
+  // persistent, workspace-scoped file library, distinct from
+  // boards.uploadCanvasFile (which stores objects the same way but keeps
+  // no reusable/listable record — see that route's own comment).
+  assets: {
+    upload: (workspaceId: string, file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('workspace_id', workspaceId);
+      formData.append('filename', file.name);
+      return studentUploadRequest<Asset>('/assets', formData);
+    },
+    list: (roll: string, workspaceId: string, cursor?: string) =>
+      request<{ assets: Asset[]; nextCursor: string | null }>(
+        'GET', `/assets?workspace_id=${encodeURIComponent(workspaceId)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+        { roll }
+      ),
+    get: (roll: string, id: string) =>
+      request<Asset>('GET', `/assets/${id}`, { roll }),
+    delete: (roll: string, id: string) =>
+      request<{ success: boolean; storageWarning?: string }>('DELETE', `/assets/${id}`, { roll }),
+  },
+  // Basic Notifications (Phase C) — mirrors backend/src/routes/notifications.ts.
+  // No realtime channel: the panel refetches on open (see NotificationBell.tsx).
+  notifications: {
+    list: (roll: string, opts?: { unreadOnly?: boolean; cursor?: string }) => {
+      const params = new URLSearchParams();
+      if (opts?.unreadOnly) params.set('unread_only', 'true');
+      if (opts?.cursor) params.set('cursor', opts.cursor);
+      const qs = params.toString();
+      return request<{ notifications: Notification[]; unreadCount: number; nextCursor: string | null }>(
+        'GET', `/notifications${qs ? `?${qs}` : ''}`, { roll }
+      );
+    },
+    markRead: (roll: string, id: string) =>
+      request<Notification>('POST', `/notifications/${id}/read`, { roll }),
+    markAllRead: (roll: string) =>
+      request<{ success: boolean; markedCount: number }>('POST', '/notifications/read-all', { roll }),
   },
   liveSessions: {
     getActive: (roll?: string) =>
@@ -563,5 +876,24 @@ export const api = {
         'POST', '/settings/verify-passcode',
         { body: { passcode } }
       ),
+  },
+  realtime: {
+    // The global REALTIME_ENABLED kill switch's value, and nothing else —
+    // see backend/src/routes/realtime.ts's own doc comment on why this is
+    // unauthenticated and deliberately minimal. BoardPage combines this
+    // with board.realtime_enabled to decide which canvas component to render.
+    getStatus: () =>
+      request<{ enabled: boolean }>('GET', '/realtime/status'),
+    // Commit 7 — the REST pre-check TldrawCanvasSync.tsx calls BEFORE
+    // opening the document-sync WebSocket, so a rejection reason
+    // (permission_denied / session_expired / board_archived /
+    // board_not_found / realtime_disabled) is known up front rather than
+    // inferred from a WS close code — see backend/src/routes/realtime.ts's
+    // own comment on why a close code alone isn't reliable here (any code
+    // other than tldraw's own 4099 NOT_FOUND is treated as a transient
+    // "offline" state by @tldraw/sync's ReconnectManager, which then
+    // retries forever against a condition that will never change).
+    getAccess: (roomId: string, roll: string) =>
+      request<RealtimeAccessCheck>('GET', `/realtime/boards/${roomId}/access`, { roll }),
   },
 };

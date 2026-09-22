@@ -41,10 +41,11 @@ export function signBypassStudentToken(roll: string): string {
   );
 }
 
-function extractRoll(req: Request): string | null {
-  const auth = req.headers.authorization;
-  if (!auth?.startsWith('Bearer ')) return null;
-  const token = auth.slice(7);
+// Exported (not just used via extractRoll below) so non-Express contexts —
+// currently the realtime WS upgrade handler, which has no req/res and no
+// Express middleware chain to run requireStudent through — can verify the
+// same token the same way, rather than reimplementing JWT verification.
+export function verifyStudentToken(token: string): string | null {
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ['HS256'] }) as Partial<StudentClaims>;
     if (payload.typ !== 'student' || typeof payload.roll !== 'string') return null;
@@ -52,6 +53,12 @@ function extractRoll(req: Request): string | null {
   } catch {
     return null;
   }
+}
+
+function extractRoll(req: Request): string | null {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith('Bearer ')) return null;
+  return verifyStudentToken(auth.slice(7));
 }
 
 /** Requires a valid student token; sets req.studentRoll or responds 401. */

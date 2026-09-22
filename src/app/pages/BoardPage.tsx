@@ -1,12 +1,36 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
+import { toast } from 'sonner';
 import { useStudent } from '../context/StudentContext';
 import { api, type BoardDetail } from '../lib/api';
 import { clearBoardsCache } from './MoodboardsPage';
+import { rollToColor } from '../lib/utils';
+import { PresenceProvider } from '../context/PresenceProvider';
+import { useBoardComments } from '../components/hooks/useBoardComments';
+import { ShareBoardDialog } from '../components/ShareBoardDialog';
+import { AssetLibrary } from '../components/AssetLibrary';
+import type { Editor } from 'tldraw';
+import type { Asset } from '../lib/api';
 
 const TldrawCanvas = lazy(() =>
   import('./TldrawCanvas').then(m => ({ default: m.TldrawCanvas }))
+);
+// Realtime rollout (Commit 3): parallel component, not a replacement — see
+// TldrawCanvasSync.tsx's own architectural-decisions header comment.
+// Lazy-loaded the same way TldrawCanvas already is, so a board that never
+// uses realtime never pays for @tldraw/sync's bundle weight.
+const TldrawCanvasSync = lazy(() =>
+  import('./TldrawCanvasSync').then(m => ({ default: m.TldrawCanvasSync }))
+);
+// Version history (Commit 5) — lazy-loaded so its bundle weight (and the
+// GET /versions request it triggers on mount) is paid only when a user
+// actually opens the panel, per the "lazy-load version history, never
+// download all snapshots on board open" requirement. Applies to every
+// board (realtime-enabled or not) — see VersionHistoryPanel.tsx's own
+// header comment on why this is orthogonal to which canvas component renders.
+const VersionHistoryPanel = lazy(() =>
+  import('../components/VersionHistoryPanel').then(m => ({ default: m.VersionHistoryPanel }))
 );
 
 function getSiteTheme(): 'dark' | 'light' {
@@ -51,25 +75,87 @@ export default function BoardPage() {
   useEffect(() => { rollRef.current = studentSession?.rollNumber; }, [studentSession?.rollNumber]);
   const canvasLoadedRef = useRef(false);
 
-  const [showShare, setShowShare] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [updatingVisibility, setUpdatingVisibility] = useState(false);
-  const [updatingEditMode, setUpdatingEditMode] = useState(false);
+  // The global REALTIME_ENABLED kill switch's value — see api.ts's
+  // realtime.getStatus() doc comment on why this needs its own fetch
+  // (deliberately not exposed via /settings/public, so it can't be
+  // toggled at runtime by a DB write, only by a backend redeploy). Starts
+  // false (fail closed: an unknown/unfetched flag must never cause a
+  // realtime-enabled board to attempt a connection it can't complete) and
+  // is combined with board.realtime_enabled below to decide which canvas
+  // component to render.
+  const [realtimeGloballyEnabled, setRealtimeGloballyEnabled] = useState(false);
+  useEffect(() => {
+    api.realtime.getStatus()
+      .then(res => setRealtimeGloballyEnabled(res.enabled))
+      .catch(() => setRealtimeGloballyEnabled(false));
+  }, []);
 
-  const [showMembers, setShowMembers] = useState(false);
-  const [memberRoll, setMemberRoll] = useState('');
-  const [addingMember, setAddingMember] = useState(false);
-  const [memberError, setMemberError] = useState('');
+  const [showShare, setShowShare] = useState(false);
+  const [showAssetLibrary, setShowAssetLibrary] = useState(false);
+  // Asset Manager (Phase B) board integration — see TldrawCanvas.tsx's
+  // onEditorReady prop comment for why this ref has to leave the canvas
+  // component at all: inserting a library asset onto the canvas needs the
+  // real tldraw Editor instance, which only the mounted canvas component
+  // holds. A ref (not state) because it never needs to trigger a re-render
+  // — only handleInsertAsset below ever reads it, on click.
+  const editorRef = useRef<Editor | null>(null);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  // Shown briefly after a restore on a board with connected collaborators —
+  // see restoreVersion's hadLiveRoom in api.ts and rooms.ts's own comment on
+  // why a restore causes one clean, deliberate reconnect cycle for everyone
+  // currently connected (not a "storm" — this hint exists so that expected
+  // reconnect doesn't read as an error to whoever's watching it happen).
+  const [showReconnectHint, setShowReconnectHint] = useState(false);
 
   const isOwner = board?.owner_roll === studentSession?.rollNumber;
   const isMember = board
     ? (isOwner || board.members.some(m => m.roll_number === studentSession?.rollNumber))
     : false;
 
-  const shareUrl = `${window.location.origin}/moodboards/${board?.id}`;
+  // The one decision point for realtime vs. manual persistence — everything
+  // else about which component to render flows from this single boolean.
+  // All three must hold: the per-board opt-in (board.realtime_enabled,
+  // defaults false, flipped per-board for the pilot rollout), the global
+  // kill switch (realtimeGloballyEnabled, fetched above), and a non-null
+  // room_id (should always be set — backfilled since the column was added —
+  // but a defensive fallback to the manual path beats a crash if it's ever
+  // missing). Any of these being false/missing/not-yet-loaded falls back to
+  // the existing manual TldrawCanvas — this is the rollback path, not an
+  // error state, so there is no loading gate on realtimeGloballyEnabled
+  // itself: a board briefly renders via TldrawCanvas while that fetch is in
+  // flight, which is always safe/correct behavior, never just a fallback
+  // for a slow network.
+  const useRealtimeSync = Boolean(board?.realtime_enabled) && realtimeGloballyEnabled && Boolean(board?.room_id);
+
+  // Comments (Commit 6) — see components/hooks/useBoardComments.ts's own
+  // header comment for why this is owned here (BoardPage) rather than
+  // inside either canvas component: comment state must not depend on
+  // which of TldrawCanvas/TldrawCanvasSync is currently mounted, and both
+  // need the SAME instance passed down via the `comments` prop (see
+  // pages/commentsProps.ts). `live` mirrors useRealtimeSync exactly —
+  // comments still fully work via REST on a manual-save board, just
+  // without the WS live-push layer (see the hook's own comment on this
+  // tradeoff, same one the manual canvas path already accepts for
+  // document content itself).
+  const [commentMode, setCommentMode] = useState(false);
+  // "Unread" is a purely local, this-session concept — no read-receipt
+  // state is persisted server-side (out of scope: no notifications system
+  // per the spec). Reset to "now" whenever comment mode opens, so a pin
+  // is marked unread only if its thread got new activity since the LAST
+  // time this student actually looked, not since some absolute epoch.
+  const [lastSeenAt, setLastSeenAt] = useState(() => Date.now());
+  const commentsApi = useBoardComments({
+    boardId: board?.id ?? '',
+    roll: studentSession?.rollNumber,
+    live: useRealtimeSync,
+    roomId: board?.room_id ?? null,
+  });
+
+  const canModerateComments = isMember;
 
   useEffect(() => {
     const observer = new MutationObserver(() => setTheme(getSiteTheme()));
@@ -172,86 +258,6 @@ export default function BoardPage() {
     setSaveStatus('idle');
   }, []);
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      const el = document.createElement('textarea');
-      el.value = shareUrl;
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand('copy');
-      document.body.removeChild(el);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  const handleVisibilityToggle = async () => {
-    if (!board || !studentSession?.rollNumber) return;
-    setUpdatingVisibility(true);
-    const newVisibility = board.visibility === 'private' ? 'shared' : 'private';
-    try {
-      const updated = await api.boards.update(board.id, studentSession.rollNumber, { visibility: newVisibility });
-      setBoard(prev => prev ? { ...prev, visibility: updated.visibility } : prev);
-    } catch {
-      console.error('Failed to update visibility');
-    } finally {
-      setUpdatingVisibility(false);
-    }
-  };
-
-  const handleEditModeToggle = async () => {
-    if (!board || !studentSession?.rollNumber) return;
-    setUpdatingEditMode(true);
-    const newMode = board.edit_mode === 'members_only' ? 'anyone' : 'members_only';
-    try {
-      const updated = await api.boards.update(board.id, studentSession.rollNumber, { edit_mode: newMode });
-      setBoard(prev => prev ? { ...prev, edit_mode: updated.edit_mode } : prev);
-    } catch {
-      console.error('Failed to update edit mode');
-    } finally {
-      setUpdatingEditMode(false);
-    }
-  };
-
-  const handleAddMember = async () => {
-    if (!id || !studentSession?.rollNumber || !memberRoll.trim()) return;
-    setAddingMember(true);
-    setMemberError('');
-    try {
-      const res = await api.boards.addMember(id, studentSession.rollNumber, memberRoll.trim());
-      setBoard(prev => prev ? {
-        ...prev,
-        members: [...prev.members, {
-          roll_number: memberRoll.trim(),
-          name: res.name,
-          added_at: new Date().toISOString(),
-        }],
-      } : prev);
-      setMemberRoll('');
-    } catch {
-      setMemberError('Student not found — must register first');
-    } finally {
-      setAddingMember(false);
-    }
-  };
-
-  const handleRemoveMember = async (roll: string) => {
-    if (!id || !studentSession?.rollNumber) return;
-    try {
-      await api.boards.removeMember(id, studentSession.rollNumber, roll);
-      setBoard(prev => prev ? {
-        ...prev,
-        members: prev.members.filter(m => m.roll_number !== roll),
-      } : prev);
-    } catch {
-      console.error('Failed to remove member');
-    }
-  };
-
   const handleDeleteBoard = async () => {
     if (!id || !studentSession?.rollNumber) return;
     setDeleting(true);
@@ -262,6 +268,34 @@ export default function BoardPage() {
     } catch {
       setError('Failed to delete board');
       setDeleting(false);
+    }
+  };
+
+  // Asset Manager (Phase B) — places the chosen library asset onto the
+  // canvas at the viewport center via the SAME tldraw asset APIs the
+  // existing gallery-injection path already uses (see
+  // tldrawCanvasShared.ts's insertImageAsset for why this is a one-off
+  // single-item placement, not a reuse of the batch grid-placement
+  // function that exists for a different, pre-existing feature). Silently
+  // no-ops if the editor isn't mounted yet — the Assets button is only
+  // reachable once the canvas has rendered, so this should never actually
+  // happen, but a mid-navigation race is cheap to guard against.
+  const handleInsertAsset = async (asset: Asset) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    try {
+      // Dynamically imported — tldrawCanvasShared.ts pulls in the (heavy)
+      // tldraw package at module scope, and BoardPage.tsx itself is NOT
+      // lazy-loaded (unlike TldrawCanvas/TldrawCanvasSync, both already
+      // lazy() below), so a static import here would leak tldraw's bundle
+      // weight into every page load, not just boards that actually insert
+      // an asset.
+      const { insertImageAsset } = await import('./tldrawCanvasShared');
+      await insertImageAsset(editor, asset.url, asset.filename, asset.width, asset.height);
+      setShowAssetLibrary(false);
+      toast.success('Asset added to board');
+    } catch {
+      toast.error('Failed to add asset to board');
     }
   };
 
@@ -377,7 +411,7 @@ export default function BoardPage() {
                     title={m.name}
                     style={{
                       width: 28, height: 28, borderRadius: 'var(--radius-full)',
-                      background: `hsl(${parseInt(m.roll.slice(-3)) % 360}, 60%, 45%)`,
+                      background: rollToColor(m.roll),
                       border: `2px solid ${surfaceBg}`,
                       marginLeft: i === 0 ? 0 : -8,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -393,6 +427,72 @@ export default function BoardPage() {
             )}
 
             <button
+              onClick={() => {
+                setCommentMode(on => {
+                  const next = !on;
+                  // Opening comment mode is treated as "caught up" —
+                  // clears the unread badge/dot state for pins, since the
+                  // student is about to actually look at the board's
+                  // comments. See lastSeenAt's own declaration comment.
+                  if (next) setLastSeenAt(Date.now());
+                  return next;
+                });
+              }}
+              title={commentMode ? 'Exit comment mode' : 'Comment mode — click the canvas to leave a comment'}
+              aria-pressed={commentMode}
+              style={{
+                position: 'relative',
+                padding: '5px 12px',
+                background: commentMode ? 'var(--color-brand)' : 'none',
+                border: commentMode ? 'none' : `1px solid ${borderColor}`,
+                borderRadius: 'var(--radius-pill)',
+                color: commentMode ? '#fff' : textMuted, fontSize: 12,
+                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              Comment
+              {!commentMode && commentsApi.comments.some(
+                c => !c.parentCommentId && !c.resolvedAt && c.authorRoll !== studentSession?.rollNumber
+                  && new Date(c.updatedAt).getTime() > lastSeenAt
+              ) && (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute', top: -2, right: -2,
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: 'var(--color-brand)', border: `2px solid ${surfaceBg}`,
+                  }}
+                />
+              )}
+            </button>
+
+            <button
+              onClick={() => setShowAssetLibrary(true)}
+              title="Asset Library"
+              style={{
+                padding: '5px 12px', background: 'none',
+                border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
+                color: textMuted, fontSize: 12,
+                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              Assets
+            </button>
+
+            <button
+              onClick={() => setShowVersionHistory(true)}
+              title="Version History"
+              style={{
+                padding: '5px 12px', background: 'none',
+                border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
+                color: textMuted, fontSize: 12,
+                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              History
+            </button>
+
+            <button
               onClick={() => setShowShare(true)}
               style={{
                 padding: '5px 12px', background: 'var(--color-brand)',
@@ -403,20 +503,6 @@ export default function BoardPage() {
             >
               Share
             </button>
-
-            {isOwner && (
-              <button
-                onClick={() => setShowMembers(true)}
-                style={{
-                  padding: '5px 12px', background: 'none',
-                  border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
-                  color: textMuted, fontSize: 12,
-                  fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-                }}
-              >
-                + Invite
-              </button>
-            )}
 
             {isOwner && (
               <button
@@ -477,7 +563,66 @@ export default function BoardPage() {
 
         {/* Canvas area */}
         <div style={{ position: 'absolute', top: 48, left: 0, right: 0, bottom: 0 }}>
-          {!canvasReady ? (
+          {useRealtimeSync ? (
+            !studentSession?.rollNumber ? (
+              // The realtime WS layer always requires a valid student JWT
+              // (checkRoomAccess returns session_expired for an anonymous
+              // request — see roomAccess.ts) — an anonymous visitor could
+              // never actually connect, so this is shown instead of letting
+              // TldrawCanvasSync attempt a pre-check doomed to fail with a
+              // confusing "session expired" message for someone who was
+              // never signed in to begin with.
+              <div style={{
+                position: 'absolute', inset: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: theme === 'dark' ? '#1a1a1a' : '#f8f8f8',
+                color: textMuted, fontFamily: 'var(--font-body)', fontSize: 14,
+              }}>
+                Sign in to view this board's live session.
+              </div>
+            ) : (
+              // Realtime path: no canvasReady gate — TldrawCanvasSync has no
+              // dependency on the manual loadCanvas() REST fetch above (it
+              // loads its document state over the WebSocket connection
+              // itself, seeded server-side from the same canvas_data column —
+              // see backend/src/realtime/roomPersistence.ts) and shows its
+              // own internal Loading/Connecting UI, so gating it behind an
+              // irrelevant REST call would only add latency for no benefit.
+              <Suspense fallback={
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: theme === 'dark' ? '#1a1a1a' : '#f8f8f8',
+                  color: textMuted, fontFamily: 'var(--font-body)', fontSize: 14,
+                }}>
+                  Loading canvas...
+                </div>
+              }>
+                {/* PresenceProvider scoped here (not global in Root.tsx) —
+                    presence identity is only meaningful on a realtime board;
+                    every other page has no use for it. See
+                    PresenceProvider.tsx for what it derives and why. */}
+                <PresenceProvider>
+                  <TldrawCanvasSync
+                    boardId={id!}
+                    roomId={board.room_id!}
+                    roll={studentSession.rollNumber}
+                    theme={theme}
+                    pendingItems={board.items}
+                    onEditorReady={editor => { editorRef.current = editor; }}
+                    comments={{
+                      commentsApi,
+                      commentMode,
+                      onExitCommentMode: () => setCommentMode(false),
+                      currentRoll: studentSession.rollNumber,
+                      canModerate: canModerateComments,
+                      lastSeenAt,
+                    }}
+                  />
+                </PresenceProvider>
+              </Suspense>
+            )
+          ) : !canvasReady ? (
             <div style={{
               position: 'absolute', inset: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -509,341 +654,50 @@ export default function BoardPage() {
                 boardId={id!}
                 theme={theme}
                 initialData={canvasData}
+                pendingItems={board.items}
                 onSave={handleSave}
                 readOnly={!isMember && board.edit_mode === 'members_only'}
+                onEditorReady={editor => { editorRef.current = editor; }}
+                comments={studentSession?.rollNumber ? {
+                  commentsApi,
+                  commentMode,
+                  onExitCommentMode: () => setCommentMode(false),
+                  currentRoll: studentSession.rollNumber,
+                  canModerate: canModerateComments,
+                  lastSeenAt,
+                } : undefined}
               />
             </Suspense>
           )}
         </div>
       </div>
 
-      {/* Share modal */}
-      <AnimatePresence>
-        {showShare && board && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={{
-              position: 'fixed', inset: 0, zIndex: 9999,
-              background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-            }}
-            onClick={() => setShowShare(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 24, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 16 }}
-              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-              onClick={e => e.stopPropagation()}
-              style={{
-                width: '100%', maxWidth: 420,
-                background: 'var(--color-surface-1)',
-                border: '1px solid var(--color-hairline)',
-                borderRadius: 'var(--radius-xl)',
-                padding: '28px 24px',
-                display: 'flex', flexDirection: 'column', gap: 20,
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{
-                  margin: 0, fontSize: 18, fontWeight: 700,
-                  color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.3px',
-                }}>
-                  Share Board
-                </h3>
-                <button
-                  onClick={() => setShowShare(false)}
-                  style={{
-                    width: 32, height: 32, borderRadius: 'var(--radius-full)',
-                    border: '1px solid var(--color-hairline)', background: 'none',
-                    color: 'var(--color-ink-muted)', fontSize: 18, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >
-                  ×
-                </button>
-              </div>
+      {showShare && board && studentSession?.rollNumber && (
+        <ShareBoardDialog
+          boardId={board.id}
+          roll={studentSession.rollNumber}
+          onClose={() => setShowShare(false)}
+          onUpdated={(_boardId, patch) => {
+            setBoard(prev => prev ? { ...prev, ...patch } : prev);
+            // member_count changing means the members array itself changed
+            // (add/remove) — reload so isMember/the collaborator avatar
+            // strip stay in sync with what the dialog just did, since it
+            // maintains its own separate BoardDetail rather than sharing
+            // this page's.
+            if (patch.member_count !== undefined) loadBoard();
+          }}
+        />
+      )}
 
-              {isOwner && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <p style={{
-                    margin: 0, fontSize: 11, fontWeight: 600,
-                    color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-                    textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                  }}>
-                    Visibility
-                  </p>
-                  <div style={{
-                    display: 'flex', border: '1px solid var(--color-hairline)',
-                    borderRadius: 'var(--radius-md)', overflow: 'hidden',
-                  }}>
-                    {(['private', 'shared'] as const).map(opt => (
-                      <button
-                        key={opt}
-                        onClick={() => { if (board.visibility !== opt) handleVisibilityToggle(); }}
-                        disabled={updatingVisibility}
-                        style={{
-                          flex: 1, padding: '10px 0',
-                          background: board.visibility === opt ? 'var(--color-brand)' : 'none',
-                          border: 'none',
-                          color: board.visibility === opt ? '#fff' : 'var(--color-ink-muted)',
-                          fontSize: 13, fontWeight: board.visibility === opt ? 600 : 400,
-                          fontFamily: 'var(--font-body)',
-                          cursor: updatingVisibility ? 'not-allowed' : 'pointer',
-                          textTransform: 'capitalize', transition: 'all 0.15s ease',
-                        }}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                  <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-                    {board.visibility === 'private'
-                      ? 'Only invited collaborators can access.'
-                      : 'Anyone with the link can view.'
-                    }
-                  </p>
-                </div>
-              )}
-
-              {isOwner && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <p style={{
-                    margin: 0, fontSize: 11, fontWeight: 600,
-                    color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-                    textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                  }}>
-                    Who can edit?
-                  </p>
-                  <div style={{
-                    display: 'flex', border: '1px solid var(--color-hairline)',
-                    borderRadius: 'var(--radius-md)', overflow: 'hidden',
-                  }}>
-                    {([
-                      { value: 'members_only', label: 'Invited only' },
-                      { value: 'anyone', label: 'Anyone with link' },
-                    ] as const).map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => { if (board.edit_mode !== opt.value) handleEditModeToggle(); }}
-                        disabled={updatingEditMode}
-                        style={{
-                          flex: 1, padding: '10px 0',
-                          background: board.edit_mode === opt.value ? 'var(--color-brand)' : 'none',
-                          border: 'none',
-                          color: board.edit_mode === opt.value ? '#fff' : 'var(--color-ink-muted)',
-                          fontSize: 12, fontWeight: board.edit_mode === opt.value ? 600 : 400,
-                          fontFamily: 'var(--font-body)',
-                          cursor: updatingEditMode ? 'not-allowed' : 'pointer',
-                          transition: 'all 0.15s ease',
-                        }}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div style={{ height: 1, background: 'var(--color-hairline)' }} />
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <p style={{
-                  margin: 0, fontSize: 11, fontWeight: 600,
-                  color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-                  textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                }}>
-                  Board Link
-                </p>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{
-                    flex: 1, padding: '10px 12px',
-                    background: 'var(--color-canvas)',
-                    border: '1px solid var(--color-hairline)',
-                    borderRadius: 'var(--radius-sm)', fontSize: 12,
-                    color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono)',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {shareUrl}
-                  </div>
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleCopy}
-                    style={{
-                      padding: '10px 16px',
-                      background: copied ? 'var(--color-success)' : 'var(--color-brand)',
-                      color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)',
-                      fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)',
-                      cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                      transition: 'background 0.2s ease',
-                    }}
-                  >
-                    {copied ? 'Copied!' : 'Copy'}
-                  </motion.button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Collaborators modal */}
-      <AnimatePresence>
-        {showMembers && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            style={{
-              position: 'fixed', inset: 0, zIndex: 9999,
-              background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-            }}
-            onClick={() => setShowMembers(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 24, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 16 }}
-              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-              onClick={e => e.stopPropagation()}
-              style={{
-                width: '100%', maxWidth: 400,
-                background: 'var(--color-surface-1)',
-                border: '1px solid var(--color-hairline)',
-                borderRadius: 'var(--radius-xl)', padding: '28px 24px',
-                display: 'flex', flexDirection: 'column', gap: 20,
-                maxHeight: '80vh', overflowY: 'auto',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{
-                  margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)',
-                  fontFamily: 'var(--font-display)', letterSpacing: '-0.3px',
-                }}>
-                  Collaborators
-                </h3>
-                <button
-                  onClick={() => setShowMembers(false)}
-                  style={{
-                    width: 32, height: 32, borderRadius: 'var(--radius-full)',
-                    border: '1px solid var(--color-hairline)', background: 'none',
-                    color: 'var(--color-ink-muted)', fontSize: 18, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {/* Owner */}
-                <div style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '12px 0', borderBottom: '1px solid var(--color-hairline)',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{
-                      width: 32, height: 32, borderRadius: 'var(--radius-full)',
-                      background: `hsl(${parseInt(board.owner_roll.slice(-3)) % 360}, 60%, 45%)`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-body)',
-                    }}>
-                      {(board.owner_name ?? board.owner_roll)[0].toUpperCase()}
-                    </div>
-                    <div>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
-                        {board.owner_name ?? board.owner_roll}
-                      </p>
-                      <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-                        {board.owner_roll} · Owner
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {board.members.map(m => (
-                  <div key={m.roll_number} style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '12px 0', borderBottom: '1px solid var(--color-hairline)',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{
-                        width: 32, height: 32, borderRadius: 'var(--radius-full)',
-                        background: `hsl(${parseInt(m.roll_number.slice(-3)) % 360}, 60%, 45%)`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-body)',
-                      }}>
-                        {(m.name ?? m.roll_number)[0].toUpperCase()}
-                      </div>
-                      <div>
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
-                          {m.name ?? m.roll_number}
-                        </p>
-                        <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-                          {m.roll_number}
-                        </p>
-                      </div>
-                    </div>
-                    {isOwner && (
-                      <button
-                        onClick={() => handleRemoveMember(m.roll_number)}
-                        style={{
-                          fontSize: 12, color: 'var(--color-error)',
-                          background: 'none', border: 'none',
-                          fontFamily: 'var(--font-body)', cursor: 'pointer', padding: '4px 8px',
-                        }}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {isOwner && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <label style={{
-                    fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)',
-                    letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                  }}>
-                    Invite by Roll Number
-                  </label>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input
-                      className="input-base"
-                      type="text"
-                      placeholder="e.g. 250004"
-                      value={memberRoll}
-                      onChange={e => { setMemberRoll(e.target.value); setMemberError(''); }}
-                      onKeyDown={e => { if (e.key === 'Enter') handleAddMember(); }}
-                      style={{ flex: 1 }}
-                    />
-                    <button
-                      onClick={handleAddMember}
-                      disabled={addingMember || !memberRoll.trim()}
-                      style={{
-                        padding: '0 16px', background: 'var(--color-brand)', color: '#fff',
-                        border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 13, fontWeight: 600,
-                        fontFamily: 'var(--font-body)',
-                        cursor: addingMember ? 'not-allowed' : 'pointer',
-                        opacity: addingMember ? 0.6 : 1,
-                      }}
-                    >
-                      {addingMember ? '...' : 'Invite'}
-                    </button>
-                  </div>
-                  {memberError && (
-                    <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>
-                      {memberError}
-                    </p>
-                  )}
-                </div>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {showAssetLibrary && board && studentSession?.rollNumber && (
+        <AssetLibrary
+          workspaceId={board.workspace_id}
+          workspaceName="Board's Workspace"
+          roll={studentSession.rollNumber}
+          onClose={() => setShowAssetLibrary(false)}
+          onSelect={handleInsertAsset}
+        />
+      )}
 
       {/* Delete confirm */}
       <AnimatePresence>
@@ -910,6 +764,54 @@ export default function BoardPage() {
                 </button>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Version History panel — lazy-loaded, and its own data fetch only
+          starts once mounted (i.e. once opened), per VersionHistoryPanel.tsx's
+          own comment on the performance requirement this satisfies. */}
+      <AnimatePresence>
+        {showVersionHistory && studentSession?.rollNumber && (
+          <Suspense fallback={null}>
+            <VersionHistoryPanel
+              boardId={board.id}
+              actorRoll={studentSession.rollNumber}
+              isOwnerOrMember={isMember}
+              onClose={() => setShowVersionHistory(false)}
+              onRestored={(hadLiveRoom) => {
+                if (hadLiveRoom) {
+                  setShowReconnectHint(true);
+                  setTimeout(() => setShowReconnectHint(false), 5000);
+                }
+              }}
+            />
+          </Suspense>
+        )}
+      </AnimatePresence>
+
+      {/* Reconnect hint — see showReconnectHint's own declaration comment
+          for why this exists: a restore on a board with connected
+          collaborators causes one clean, deliberate reconnect cycle for
+          everyone (verified against @tldraw/sync-core's actual behavior in
+          rooms.ts), which without this would look identical to an
+          unexplained disconnect. Purely informational — TldrawCanvasSync's
+          own connection banner (already built in Commit 3) is what actually
+          reports the live reconnect status; this is just context for why
+          it's about to happen. */}
+      <AnimatePresence>
+        {showReconnectHint && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            style={{
+              position: 'fixed', top: 60, left: '50%', transform: 'translateX(-50%)',
+              zIndex: 9998, padding: '8px 16px', borderRadius: 'var(--radius-pill)',
+              background: 'var(--color-surface-1)', border: '1px solid var(--color-hairline)',
+              color: 'var(--color-ink-muted)', fontSize: 12, fontFamily: 'var(--font-body)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+            }}
+          >
+            Board restored — collaborators will briefly reconnect.
           </motion.div>
         )}
       </AnimatePresence>
