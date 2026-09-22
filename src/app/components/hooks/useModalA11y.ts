@@ -31,6 +31,26 @@ export function useModalA11y(open: boolean, onClose: () => void) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
+  // Every call site passes an inline `() => setX(false)` arrow, which is a
+  // new function identity on every render of the CALLER (not just when the
+  // dialog opens/closes) — e.g. typing into a controlled input inside the
+  // dialog re-renders the parent, which used to be in this effect's own
+  // dependency array via `onClose`, tearing the effect down and back up on
+  // every keystroke. Teardown calls previouslyFocused.current.focus() (the
+  // element that had focus BEFORE the dialog opened — never the input being
+  // typed into) and setup immediately re-steals focus to the dialog
+  // container itself, so a character would land, then focus would jump
+  // away, breaking typing entirely in every modal built on this hook
+  // (confirmed: MoodboardsPage's create/rename dialogs, WorkspaceSettingsModal,
+  // NotificationBell, and in fact every current caller, since none of them
+  // memoize onClose). Routing calls through a ref instead of the dependency
+  // array is the standard fix (the "latest ref" pattern) — the effect now
+  // only keys off `open`, so it runs once per actual open/close, and
+  // handleKeyDown/cleanup always call the CURRENT onClose via the ref
+  // without needing it as a dependency.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+
   useEffect(() => {
     if (!open) return;
 
@@ -46,7 +66,7 @@ export function useModalA11y(open: boolean, onClose: () => void) {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab' || !dialogRef.current) return;
@@ -74,7 +94,7 @@ export function useModalA11y(open: boolean, onClose: () => void) {
       document.removeEventListener('keydown', handleKeyDown);
       previouslyFocused.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   return dialogRef;
 }
