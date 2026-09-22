@@ -13,6 +13,7 @@ import notifyRouter      from './routes/notify';
 import liveSessionsRouter from './routes/liveSessions';
 import boardsRouter from './routes/boards';
 import workspacesRouter from './routes/workspaces';
+import assetsRouter from './routes/assets';
 import settingsRouter from './routes/settings';
 import coordinatorsRouter from './routes/coordinators';
 import internalRouter from './routes/internal';
@@ -129,6 +130,7 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
   app.use('/api/live-sessions', liveSessionsRouter);
   app.use('/api/boards',        boardsRouter);
   app.use('/api/workspaces',    workspacesRouter);
+  app.use('/api/assets',        assetsRouter);
   if (realtime) {
     app.use('/api/boards', createVersionsRouter(realtime));
     app.use('/api/boards', createCommentsRouter(realtime.commentBroadcaster));
