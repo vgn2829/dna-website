@@ -5,6 +5,7 @@ import { LogOut, Menu, Moon, Sun, X, Mail } from 'lucide-react';
 import { useStudent } from '../context/StudentContext';
 import { useTheme } from '../context/ThemeContext';
 import { ChangeEmailModal } from './ChangeEmailModal';
+import { NotificationBell } from './NotificationBell';
 
 // PALETTE_STUDIO_FEATURE — remove the Palette entry below to disable
 const NAV_LINKS = [
@@ -269,6 +270,7 @@ export function Navigation() {
                         </span>
                       )}
                     </div>
+                    <NotificationBell roll={studentSession.rollNumber} isDark={isDark} />
                     <button
                       onClick={() => setEmailModalOpen(true)}
                       title="Change email"

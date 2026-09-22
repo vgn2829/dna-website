@@ -178,6 +178,29 @@ export interface Asset {
   url: string;
 }
 
+// Mirrors backend/src/routes/notifications.ts's toPublicNotification().
+// boardId/workspaceId/commentId are whichever subset the event type
+// actually populates (see notificationService.ts's own comment on the
+// type -> populated-columns mapping) — the frontend navigates using
+// whichever of these is present, never assumes all three.
+export type NotificationType =
+  | 'board_shared' | 'workspace_added' | 'workspace_role_changed'
+  | 'comment_created' | 'comment_replied';
+
+export interface Notification {
+  id: string;
+  actorRoll: string | null;
+  actorName: string | null;
+  type: NotificationType;
+  boardId: string | null;
+  boardName: string | null;
+  workspaceId: string | null;
+  workspaceName: string | null;
+  commentId: string | null;
+  read: boolean;
+  createdAt: string;
+}
+
 // Mirrors backend/src/realtime/history/versionStorage.ts's BoardVersion —
 // deliberately metadata only, no snapshot content (see that file's own
 // comment on why: the timeline list must stay cheap regardless of history
@@ -747,6 +770,23 @@ export const api = {
       request<Asset>('GET', `/assets/${id}`, { roll }),
     delete: (roll: string, id: string) =>
       request<{ success: boolean; storageWarning?: string }>('DELETE', `/assets/${id}`, { roll }),
+  },
+  // Basic Notifications (Phase C) — mirrors backend/src/routes/notifications.ts.
+  // No realtime channel: the panel refetches on open (see NotificationBell.tsx).
+  notifications: {
+    list: (roll: string, opts?: { unreadOnly?: boolean; cursor?: string }) => {
+      const params = new URLSearchParams();
+      if (opts?.unreadOnly) params.set('unread_only', 'true');
+      if (opts?.cursor) params.set('cursor', opts.cursor);
+      const qs = params.toString();
+      return request<{ notifications: Notification[]; unreadCount: number; nextCursor: string | null }>(
+        'GET', `/notifications${qs ? `?${qs}` : ''}`, { roll }
+      );
+    },
+    markRead: (roll: string, id: string) =>
+      request<Notification>('POST', `/notifications/${id}/read`, { roll }),
+    markAllRead: (roll: string) =>
+      request<{ success: boolean; markedCount: number }>('POST', '/notifications/read-all', { roll }),
   },
   liveSessions: {
     getActive: (roll?: string) =>
