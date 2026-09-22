@@ -16,6 +16,18 @@ if (hasSupabaseUrl !== hasSupabaseKey) {
   process.exit(1);
 }
 
+// Canvas-file and asset uploads (storage/index.ts's getStorage()) fall back
+// to local disk when both Supabase Storage vars are absent — correct and
+// desired for local dev, but on Render's ephemeral filesystem a production
+// boot with this fallback silently loses every uploaded file on the next
+// redeploy/restart, with no error until a user notices missing images.
+// Same "refuse to boot rather than silently ship a bad production
+// fallback" precedent as the RESEND_API_KEY guard above.
+if (process.env.NODE_ENV === 'production' && !hasSupabaseUrl) {
+  console.error('FATAL: SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY are required in production (persistent asset/canvas-file storage). Refusing to start with the local-disk fallback.');
+  process.exit(1);
+}
+
 // Student login depends on email OTP delivery. Without RESEND_API_KEY the mailer
 // falls back to logging codes to the console — fine for dev, unacceptable in
 // production — so refuse to boot rather than silently ship that fallback.

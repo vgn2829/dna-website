@@ -152,7 +152,12 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
   app.use((err: Error & { status?: number; type?: string; code?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const status = err.status ?? 500;
     if (err.code === 'LIMIT_FILE_SIZE') {
-      res.status(400).json({ error: 'File exceeds 50 MB limit' });
+      // Generic message, not a hardcoded number — this one handler serves
+      // every multer instance in the app, and they don't share a single
+      // limit (artworks.ts: 50MB, boards.ts canvas-files: 10MB, assets.ts:
+      // 15MB, team.ts: 10MB). A specific number here would be wrong for
+      // three of the four routes that can trigger this branch.
+      res.status(400).json({ error: 'File exceeds the size limit for this upload' });
     } else if (err.code?.startsWith('LIMIT_')) {
       res.status(400).json({ error: `Upload error: ${err.message}` });
     } else if (err.type === 'entity.parse.failed') {
