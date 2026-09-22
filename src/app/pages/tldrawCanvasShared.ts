@@ -126,7 +126,20 @@ export function ClipboardOverride() {
     // capture option), regardless of React effect mount ordering — so this
     // reliably gets first look at every copy event on the page.
     const onCopyCapture = (e: ClipboardEvent) => {
-      if (!editor.getInstanceState().isFocused) return;
+      // NOT editor.getInstanceState().isFocused — that tracks tldraw's own
+      // internal focus bookkeeping, which can already read false at the
+      // moment a copy event fires for perfectly legitimate ways of
+      // triggering copy (right-click → Copy from the browser's native
+      // context menu, or the OS/browser's Edit menu) even though the
+      // user's selection and intent are completely valid — silently
+      // falling through to Tldraw's default (text-only) copy for those
+      // paths with no attempt at a real image at all. Checking that the
+      // event's own target is inside the editor's container is a more
+      // direct, focus-state-independent proxy for "this copy actually
+      // targets the canvas" — it reflects where the browser dispatched
+      // the event, not a separately-tracked boolean that can drift.
+      const container = editor.getContainer();
+      if (!container.contains(e.target as Node) && document.activeElement !== document.body) return;
       if (editor.getEditingShapeId() !== null) return;
       if (isEditingTextElsewhere()) return;
 
