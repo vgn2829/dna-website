@@ -1220,4 +1220,54 @@ export async function initSchema(): Promise<void> {
   `);
 
   console.log('assets migration done');
+
+  // Notifications (Phase C) — deliberately minimal: no read receipts
+  // beyond a single read_at, no preferences, no digesting, no delivery
+  // channels. recipient_roll is the only required identity column;
+  // actor_roll/board_id/workspace_id/comment_id are all nullable because
+  // no single notification type needs all four (a workspace-role-change
+  // notification has no board_id or comment_id, a board-share notification
+  // has no comment_id, etc.) — see routes/notifications.ts's own comment
+  // on the exact type -> populated-columns mapping.
+  //
+  // type is plain TEXT (zod-validated at the route layer), matching every
+  // other enum-shaped column in this file (boards.visibility,
+  // workspace_members.role, etc.) — no new convention introduced here.
+  //
+  // No FK to boards/workspaces/board_comments (ON DELETE CASCADE would be
+  // natural, but board_comments/boards can already be hard-deleted — see
+  // boards.ts's DELETE /:id — and a notification instructively surviving
+  // as "comment on a since-deleted board" is more useful than silently
+  // vanishing; the frontend already has to handle a stale/missing target
+  // gracefully for other reasons, e.g. a board deleted after being
+  // favorited). recipient_roll/actor_roll follow the same raw-string,
+  // no-FK convention boards.owner_roll already uses throughout this file.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id             TEXT PRIMARY KEY,
+      recipient_roll TEXT NOT NULL,
+      actor_roll     TEXT,
+      actor_name     TEXT,
+      type           TEXT NOT NULL,
+      board_id       TEXT,
+      board_name     TEXT,
+      workspace_id   TEXT,
+      workspace_name TEXT,
+      comment_id     TEXT,
+      read_at        TEXT,
+      created_at     TEXT NOT NULL
+    )
+  `);
+
+  // The notification list/unread-count read is ALWAYS scoped to one
+  // recipient, ordered newest-first — this composite index covers both
+  // "list mine" and "count my unread" (the latter via a read_at IS NULL
+  // filter, which doesn't need its own index: recipient_roll leading is
+  // what matters, Postgres can filter read_at cheaply from there).
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_notifications_recipient_created
+    ON notifications (recipient_roll, created_at DESC)
+  `);
+
+  console.log('notifications migration done');
 }
