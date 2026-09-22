@@ -27,11 +27,46 @@ export interface RoomPersistence {
 // realtime-enabled board's canvas_data holds a serialized RoomSnapshot
 // (tldraw sync's native format, richer than the manual path's TLStoreSnapshot
 // — includes `clock`/`tombstones` needed for sync continuity across
-// reconnects) instead of a TLStoreSnapshot, but TLSocketRoom's constructor
-// and loadSnapshot() both accept either shape, so no migration/transform is
-// needed to move a board between modes — whichever mode last wrote the
-// column determines the shape found there, and the room manager loading it
-// back always goes through TLSocketRoom's own parsing.
+// reconnects) instead of a TLStoreSnapshot.
+//
+// PRODUCTION BUG FIX — the comment that used to sit here claimed
+// "TLSocketRoom's constructor and loadSnapshot() both accept either shape,
+// so no migration/transform is needed." That was never actually verified
+// against the library's source and is only half true. Verified directly
+// against @tldraw/sync-core 2.4.4's installed TLSocketRoom.js: the
+// constructor does `"store" in opts.initialSnapshot ?
+// convertStoreSnapshotToRoomSnapshot(...) : opts.initialSnapshot` — it only
+// auto-converts a FLAT TLStoreSnapshot (top-level `store`/`schema` keys).
+// TldrawCanvas.tsx's manual save path calls tldraw's own getSnapshot(store),
+// which returns a TLEditorSnapshot — `{ document: TLStoreSnapshot, session:
+// TLSessionStateSnapshot }`, a DOUBLY-NESTED wrapper with no top-level
+// `store` key at all. That shape fails the `"store" in ...` check, so
+// TLSocketRoom treated it as an already-valid RoomSnapshot (which needs
+// `clock`/`documents`, neither present), silently producing a broken room
+// whose connect handshake never completes — reproduced live: a real
+// tldraw-sync-protocol connect request against a room seeded from this
+// unconverted shape never received a response at all (10s timeout), while
+// the identical request against an empty room (no stored data) succeeded
+// instantly. Confirmed in production: 16 of 18 realtime-enabled boards had
+// canvas_data in exactly this legacy `{document, session}` shape (written
+// before this board ever went through the sync path), 0 had the flat shape
+// TLSocketRoom actually needs.
+//
+// Fix: unwrap a TLEditorSnapshot's nested `.document` before handing it to
+// TLSocketRoom, so what TLSocketRoom actually receives is always either a
+// flat TLStoreSnapshot (which it already knows how to auto-convert) or a
+// real RoomSnapshot (a board that's already been through the sync path at
+// least once, whose canvas_data was written by save() below, not the
+// manual path) — never the wrapper shape neither of TLSocketRoom's two
+// documented branches understands.
+function isEditorSnapshotWrapper(value: unknown): value is { document: unknown; session: unknown } {
+  return (
+    typeof value === 'object' && value !== null &&
+    'document' in value && 'session' in value &&
+    !('store' in value) && !('clock' in value)
+  );
+}
+
 export class BoardCanvasPersistence implements RoomPersistence {
   async load(roomId: string): Promise<RoomSnapshot | null> {
     const result = await pool.query(
@@ -41,7 +76,9 @@ export class BoardCanvasPersistence implements RoomPersistence {
     const row = result.rows[0] as { canvas_data: string | null } | undefined;
     if (!row?.canvas_data) return null;
     try {
-      return JSON.parse(row.canvas_data) as RoomSnapshot;
+      const parsed: unknown = JSON.parse(row.canvas_data);
+      const unwrapped = isEditorSnapshotWrapper(parsed) ? parsed.document : parsed;
+      return unwrapped as RoomSnapshot;
     } catch (err) {
       console.error(`Realtime: failed to parse stored snapshot for room ${roomId}, starting empty:`, err);
       return null;
