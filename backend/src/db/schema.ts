@@ -1166,4 +1166,58 @@ export async function initSchema(): Promise<void> {
   `);
 
   console.log('boards.workspace_id backfill migration done');
+
+  // Asset Manager (Phase B) — a persistent, reusable file library, scoped
+  // to a workspace, distinct from boards.ts's canvas-files upload (which
+  // stores objects via the same StorageProvider but keeps no DB row of its
+  // own — those are referenced only from a board's own canvas_data/tldraw
+  // document JSON, never listed or reused across boards). An asset row
+  // here is the thing a user can browse, preview, and re-insert onto ANY
+  // board they can write to; canvas-files stays exactly as it is.
+  //
+  // workspace_id NOT NULL + ON DELETE CASCADE from day one (unlike
+  // boards.workspace_id's nullable->backfill->NOT NULL rollout above) —
+  // there is no pre-existing data to backfill here, this is a brand new
+  // table, so it can start at the end state directly. Deleting a
+  // workspace deletes its assets outright (no "move assets out first"
+  // pre-check the way routes/workspaces.ts's DELETE has for boards,
+  // since an orphaned asset with no workspace has no home in this
+  // product's model — assets don't have a personal/global fallback the
+  // way a board does).
+  //
+  // owner_roll/owner_name follow the same denormalized-pair convention as
+  // boards.owner_roll/owner_name above (raw string, no FK) — owner_roll is
+  // who uploaded it (delete permission), not re-derived from a join.
+  //
+  // storage_key is the StorageProvider path (e.g.
+  // "assets/<workspace_id>/<uuid>.<ext>"), NOT a public URL — the public
+  // URL is derived on read via getStorage().getPublicUrl(storage_key), so
+  // switching storage providers (local disk <-> Supabase Storage) never
+  // requires touching stored rows.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS assets (
+      id            TEXT PRIMARY KEY,
+      workspace_id  TEXT NOT NULL REFERENCES workspaces(id)
+                    ON DELETE CASCADE,
+      owner_roll    TEXT NOT NULL,
+      owner_name    TEXT,
+      filename      TEXT NOT NULL,
+      storage_key   TEXT NOT NULL,
+      mime_type     TEXT NOT NULL,
+      size_bytes    INTEGER NOT NULL,
+      width         INTEGER,
+      height        INTEGER,
+      created_at    TEXT NOT NULL
+    )
+  `);
+
+  // Every list query filters on workspace_id (workspace-scoped library, see
+  // routes/assets.ts) — without this index that degrades to a sequential
+  // scan as the table grows, same reasoning as idx_boards_workspace_id above.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_assets_workspace_id
+    ON assets (workspace_id)
+  `);
+
+  console.log('assets migration done');
 }
