@@ -663,6 +663,37 @@ export async function initSchema(): Promise<void> {
 
   console.log('boards.realtime_enabled migration done');
 
+  // Realtime graduates from opt-in pilot to the V1 default (production bug
+  // report: two users on the same board never saw each other's edits
+  // without a refresh — traced to REALTIME_ENABLED being unset AND every
+  // board's realtime_enabled defaulting to false with NO route or UI ever
+  // existing to flip it per-board, so no board could ever reach the
+  // @tldraw/sync path regardless of the global switch). Changes the
+  // column's default to true for boards created from now on, and
+  // one-time-backfills every existing board to true — guarded by
+  // schema_migrations so this UPDATE runs at most once, same pattern as
+  // clear_pre_email_sessions_v1 above (an UPDATE that's safe to define
+  // declaratively but NOT safe to blindly re-run every boot, since a user
+  // could deliberately flip a specific board back to false later and this
+  // must never overwrite that choice on the next deploy).
+  await pool.query(`
+    ALTER TABLE boards
+    ALTER COLUMN realtime_enabled SET DEFAULT true
+  `);
+
+  const realtimeBackfillMigration = 'backfill_realtime_enabled_v1';
+  const realtimeAlreadyBackfilled = await pool.query(
+    'SELECT 1 FROM schema_migrations WHERE key = $1', [realtimeBackfillMigration]
+  );
+  if (realtimeAlreadyBackfilled.rows.length === 0) {
+    await pool.query(`UPDATE boards SET realtime_enabled = true WHERE realtime_enabled = false`);
+    await pool.query(
+      'INSERT INTO schema_migrations (key) VALUES ($1) ON CONFLICT DO NOTHING',
+      [realtimeBackfillMigration]
+    );
+    console.log('Migration applied: backfilled realtime_enabled to true for all existing boards');
+  }
+
   // Per-user, not per-board: two students can independently star the same
   // shared board, so this can't be a column on boards.
   await pool.query(`

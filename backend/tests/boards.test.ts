@@ -146,6 +146,44 @@ describe('POST /api/boards — workspace_id wiring (Commit 4/9)', () => {
   });
 });
 
+describe('POST /api/boards — realtime_enabled defaults to true (V1 production fix)', () => {
+  // Regression coverage for the "two users never see each other's edits"
+  // production bug: traced to every board being created with
+  // realtime_enabled=false and NO route ever existing to flip it, so no
+  // board could ever reach the @tldraw/sync path regardless of the
+  // REALTIME_ENABLED global switch. schema.ts's ALTER COLUMN ... SET
+  // DEFAULT true (plus a one-time backfill of pre-existing rows) fixes
+  // this at the column level — this test proves a newly created board
+  // actually gets that default, not just that the migration ran.
+  it('a newly created board has realtime_enabled: true without the route setting it explicitly', async () => {
+    await registerStudent('RTDEFAULT1');
+
+    const res = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${tokenFor('RTDEFAULT1')}`)
+      .send({ name: 'Realtime Default Check' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.realtime_enabled).toBe(true);
+  });
+
+  it('a duplicated board also has realtime_enabled: true', async () => {
+    await registerStudent('RTDEFAULT2');
+
+    const original = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${tokenFor('RTDEFAULT2')}`)
+      .send({ name: 'Original' });
+
+    const duplicate = await request(app)
+      .post(`/api/boards/${original.body.id}/duplicate`)
+      .set('Authorization', `Bearer ${tokenFor('RTDEFAULT2')}`);
+
+    expect(duplicate.status).toBe(201);
+    expect(duplicate.body.realtime_enabled).toBe(true);
+  });
+});
+
 describe('GET /api/boards, /api/boards/archived — workspace scoping (Commit 5/9)', () => {
   it('GET / with no workspace_id returns boards across ALL of the caller\'s workspaces, unscoped (unchanged default)', async () => {
     await registerStudent('LISTB1');
