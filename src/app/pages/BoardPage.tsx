@@ -8,11 +8,7 @@ import { clearBoardsCache } from './MoodboardsPage';
 import { rollToColor } from '../lib/utils';
 import { PresenceProvider } from '../context/PresenceProvider';
 import { useBoardComments } from '../components/hooks/useBoardComments';
-
-// Matches backend/src/routes/auth.ts's ROLL_SCHEMA — see RollModal.tsx's
-// own comment on why the frontend keeps this in sync rather than only
-// relying on the backend's 404 for a malformed roll.
-const ROLL_RE = /^[0-9]{2}[a-zA-Z0-9]{4,10}$/i;
+import { ShareBoardDialog } from '../components/ShareBoardDialog';
 
 const TldrawCanvas = lazy(() =>
   import('./TldrawCanvas').then(m => ({ default: m.TldrawCanvas }))
@@ -92,13 +88,6 @@ export default function BoardPage() {
   }, []);
 
   const [showShare, setShowShare] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [updatingVisibility, setUpdatingVisibility] = useState(false);
-  const [updatingEditMode, setUpdatingEditMode] = useState(false);
-
-  const [memberRoll, setMemberRoll] = useState('');
-  const [addingMember, setAddingMember] = useState(false);
-  const [memberError, setMemberError] = useState('');
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -156,8 +145,6 @@ export default function BoardPage() {
   });
 
   const canModerateComments = isMember;
-
-  const shareUrl = `${window.location.origin}/moodboards/${board?.id}`;
 
   useEffect(() => {
     const observer = new MutationObserver(() => setTheme(getSiteTheme()));
@@ -259,99 +246,6 @@ export default function BoardPage() {
     lastFailedSnapshotRef.current = null;
     setSaveStatus('idle');
   }, []);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      const el = document.createElement('textarea');
-      el.value = shareUrl;
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand('copy');
-      document.body.removeChild(el);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  const handleVisibilityToggle = async () => {
-    if (!board || !studentSession?.rollNumber) return;
-    setUpdatingVisibility(true);
-    const newVisibility = board.visibility === 'private' ? 'shared' : 'private';
-    try {
-      const updated = await api.boards.update(board.id, studentSession.rollNumber, { visibility: newVisibility });
-      setBoard(prev => prev ? { ...prev, visibility: updated.visibility } : prev);
-      toast.success(newVisibility === 'shared' ? 'Board is now shared' : 'Board is now private');
-    } catch {
-      toast.error('Failed to update visibility');
-    } finally {
-      setUpdatingVisibility(false);
-    }
-  };
-
-  const handleEditModeToggle = async () => {
-    if (!board || !studentSession?.rollNumber) return;
-    setUpdatingEditMode(true);
-    const newMode = board.edit_mode === 'members_only' ? 'anyone' : 'members_only';
-    try {
-      const updated = await api.boards.update(board.id, studentSession.rollNumber, { edit_mode: newMode });
-      setBoard(prev => prev ? { ...prev, edit_mode: updated.edit_mode } : prev);
-      toast.success('Edit access updated');
-    } catch {
-      toast.error('Failed to update edit access');
-    } finally {
-      setUpdatingEditMode(false);
-    }
-  };
-
-  const handleAddMember = async () => {
-    const trimmed = memberRoll.trim();
-    if (!id || !studentSession?.rollNumber || !trimmed || !board) return;
-    if (!ROLL_RE.test(trimmed)) {
-      setMemberError('Invalid roll number format');
-      return;
-    }
-    if (board.members.some(m => m.roll_number.toLowerCase() === trimmed.toLowerCase()) || trimmed.toLowerCase() === board.owner_roll.toLowerCase()) {
-      setMemberError('Already a collaborator on this board');
-      return;
-    }
-    setAddingMember(true);
-    setMemberError('');
-    try {
-      const res = await api.boards.addMember(id, studentSession.rollNumber, trimmed);
-      setBoard(prev => prev ? {
-        ...prev,
-        members: [...prev.members, {
-          roll_number: trimmed,
-          name: res.name,
-          added_at: new Date().toISOString(),
-        }],
-      } : prev);
-      toast.success(`Added ${res.name ?? trimmed} as a collaborator`);
-      setMemberRoll('');
-    } catch {
-      setMemberError('Student not found — must register first');
-    } finally {
-      setAddingMember(false);
-    }
-  };
-
-  const handleRemoveMember = async (roll: string) => {
-    if (!id || !studentSession?.rollNumber) return;
-    try {
-      await api.boards.removeMember(id, studentSession.rollNumber, roll);
-      setBoard(prev => prev ? {
-        ...prev,
-        members: prev.members.filter(m => m.roll_number !== roll),
-      } : prev);
-      toast.success('Collaborator removed');
-    } catch {
-      toast.error('Failed to remove collaborator');
-    }
-  };
 
   const handleDeleteBoard = async () => {
     if (!id || !studentSession?.rollNumber) return;
@@ -724,322 +618,22 @@ export default function BoardPage() {
         </div>
       </div>
 
-      {/* Share modal */}
-      <AnimatePresence>
-        {showShare && board && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={{
-              position: 'fixed', inset: 0, zIndex: 9999,
-              background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-            }}
-            onClick={() => setShowShare(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 24, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 16 }}
-              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-              onClick={e => e.stopPropagation()}
-              style={{
-                width: '100%', maxWidth: 420,
-                background: 'var(--color-surface-1)',
-                border: '1px solid var(--color-hairline)',
-                borderRadius: 'var(--radius-xl)',
-                padding: '28px 24px',
-                display: 'flex', flexDirection: 'column', gap: 20,
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{
-                  margin: 0, fontSize: 18, fontWeight: 700,
-                  color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.3px',
-                }}>
-                  Share Board
-                </h3>
-                <button
-                  onClick={() => setShowShare(false)}
-                  style={{
-                    width: 32, height: 32, borderRadius: 'var(--radius-full)',
-                    border: '1px solid var(--color-hairline)', background: 'none',
-                    color: 'var(--color-ink-muted)', fontSize: 18, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-
-              {/* Permission summary — a one-line, always-visible answer to
-                  "who can do what right now", combining visibility +
-                  edit_mode + workspace-ceiling access into one sentence so
-                  a viewer doesn't have to mentally combine three separate
-                  controls to know the current state. */}
-              <p style={{
-                margin: 0, padding: '10px 12px', fontSize: 12, lineHeight: 1.5,
-                color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)',
-                background: 'var(--color-canvas)', border: '1px solid var(--color-hairline)',
-                borderRadius: 'var(--radius-sm)',
-              }}>
-                {board.visibility === 'private'
-                  ? 'Private — only the owner and explicitly added collaborators can open this board.'
-                  : board.edit_mode === 'anyone'
-                  ? 'Shared — anyone signed in can view and edit this board.'
-                  : 'Shared — anyone signed in can view; workspace members and explicit collaborators can edit.'}
-              </p>
-
-              {isOwner && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <p style={{
-                    margin: 0, fontSize: 11, fontWeight: 600,
-                    color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-                    textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                  }}>
-                    Visibility
-                  </p>
-                  <div style={{
-                    display: 'flex', border: '1px solid var(--color-hairline)',
-                    borderRadius: 'var(--radius-md)', overflow: 'hidden',
-                  }}>
-                    {(['private', 'shared'] as const).map(opt => (
-                      <button
-                        key={opt}
-                        onClick={() => { if (board.visibility !== opt) handleVisibilityToggle(); }}
-                        disabled={updatingVisibility}
-                        style={{
-                          flex: 1, padding: '10px 0',
-                          background: board.visibility === opt ? 'var(--color-brand)' : 'none',
-                          border: 'none',
-                          color: board.visibility === opt ? '#fff' : 'var(--color-ink-muted)',
-                          fontSize: 13, fontWeight: board.visibility === opt ? 600 : 400,
-                          fontFamily: 'var(--font-body)',
-                          cursor: updatingVisibility ? 'not-allowed' : 'pointer',
-                          textTransform: 'capitalize', transition: 'all 0.15s ease',
-                        }}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                  <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-                    {board.visibility === 'private'
-                      ? 'Only invited collaborators can access.'
-                      : 'Anyone with the link can view. Workspace members automatically get the access below — this is what makes a board "shared" different from just handing out a link.'
-                    }
-                  </p>
-                </div>
-              )}
-
-              {isOwner && board.visibility === 'shared' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <p style={{
-                    margin: 0, fontSize: 11, fontWeight: 600,
-                    color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-                    textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                  }}>
-                    Who can edit?
-                  </p>
-                  <div style={{
-                    display: 'flex', border: '1px solid var(--color-hairline)',
-                    borderRadius: 'var(--radius-md)', overflow: 'hidden',
-                  }}>
-                    {([
-                      { value: 'members_only', label: 'Workspace + invited' },
-                      { value: 'anyone', label: 'Anyone with link' },
-                    ] as const).map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => { if (board.edit_mode !== opt.value) handleEditModeToggle(); }}
-                        disabled={updatingEditMode}
-                        style={{
-                          flex: 1, padding: '10px 0',
-                          background: board.edit_mode === opt.value ? 'var(--color-brand)' : 'none',
-                          border: 'none',
-                          color: board.edit_mode === opt.value ? '#fff' : 'var(--color-ink-muted)',
-                          fontSize: 12, fontWeight: board.edit_mode === opt.value ? 600 : 400,
-                          fontFamily: 'var(--font-body)',
-                          cursor: updatingEditMode ? 'not-allowed' : 'pointer',
-                          transition: 'all 0.15s ease',
-                        }}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                  <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-                    "Workspace + invited" means anyone in this board's workspace can edit, on top of anyone explicitly added below — a private board opts out of that workspace-wide access entirely.
-                  </p>
-                </div>
-              )}
-
-              <div style={{ height: 1, background: 'var(--color-hairline)' }} />
-
-              {/* Explicit collaborators — merged in from the former
-                  separate Collaborators modal (Sharing & Invite Flow
-                  phase). Same handleAddMember/handleRemoveMember logic,
-                  unchanged; only the presentation moved into this single
-                  Share dialog per that phase's spec (one modal: visibility
-                  + workspace explanation + collaborators + link +
-                  summary, not two). */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <p style={{
-                  margin: 0, fontSize: 11, fontWeight: 600,
-                  color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-                  textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                }}>
-                  Collaborators
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                  <div style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '10px 0', borderBottom: '1px solid var(--color-hairline)',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{
-                        width: 28, height: 28, borderRadius: 'var(--radius-full)',
-                        background: rollToColor(board.owner_roll),
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 12, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-body)',
-                      }}>
-                        {(board.owner_name ?? board.owner_roll)[0].toUpperCase()}
-                      </div>
-                      <div>
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
-                          {board.owner_name ?? board.owner_roll}
-                        </p>
-                        <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-                          {board.owner_roll} · Owner
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {board.members.map(m => (
-                    <div key={m.roll_number} style={{
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '10px 0', borderBottom: '1px solid var(--color-hairline)',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{
-                          width: 28, height: 28, borderRadius: 'var(--radius-full)',
-                          background: rollToColor(m.roll_number),
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 12, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-body)',
-                        }}>
-                          {(m.name ?? m.roll_number)[0].toUpperCase()}
-                        </div>
-                        <div>
-                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
-                            {m.name ?? m.roll_number}
-                          </p>
-                          <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-                            {m.roll_number}
-                          </p>
-                        </div>
-                      </div>
-                      {isOwner && (
-                        <button
-                          onClick={() => handleRemoveMember(m.roll_number)}
-                          style={{
-                            fontSize: 12, color: 'var(--color-error)',
-                            background: 'none', border: 'none',
-                            fontFamily: 'var(--font-body)', cursor: 'pointer', padding: '4px 8px',
-                          }}
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {isOwner && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-                    <label style={{
-                      fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)',
-                      letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                    }}>
-                      Add Collaborator by Roll Number
-                    </label>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input
-                        className="input-base"
-                        type="text"
-                        placeholder="e.g. 250004"
-                        value={memberRoll}
-                        onChange={e => { setMemberRoll(e.target.value); setMemberError(''); }}
-                        onKeyDown={e => { if (e.key === 'Enter') handleAddMember(); }}
-                        maxLength={12}
-                        style={{ flex: 1 }}
-                      />
-                      <button
-                        onClick={handleAddMember}
-                        disabled={addingMember || !memberRoll.trim()}
-                        style={{
-                          padding: '0 16px', background: 'var(--color-brand)', color: '#fff',
-                          border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 13, fontWeight: 600,
-                          fontFamily: 'var(--font-body)',
-                          cursor: addingMember ? 'not-allowed' : 'pointer',
-                          opacity: addingMember ? 0.6 : 1,
-                        }}
-                      >
-                        {addingMember ? '...' : 'Add'}
-                      </button>
-                    </div>
-                    {memberError && (
-                      <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>
-                        {memberError}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div style={{ height: 1, background: 'var(--color-hairline)' }} />
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <p style={{
-                  margin: 0, fontSize: 11, fontWeight: 600,
-                  color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-                  textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                }}>
-                  Board Link
-                </p>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{
-                    flex: 1, padding: '10px 12px',
-                    background: 'var(--color-canvas)',
-                    border: '1px solid var(--color-hairline)',
-                    borderRadius: 'var(--radius-sm)', fontSize: 12,
-                    color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono)',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {shareUrl}
-                  </div>
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleCopy}
-                    style={{
-                      padding: '10px 16px',
-                      background: copied ? 'var(--color-success)' : 'var(--color-brand)',
-                      color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)',
-                      fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)',
-                      cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                      transition: 'background 0.2s ease',
-                    }}
-                  >
-                    {copied ? 'Copied!' : 'Copy'}
-                  </motion.button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
+      {showShare && board && studentSession?.rollNumber && (
+        <ShareBoardDialog
+          boardId={board.id}
+          roll={studentSession.rollNumber}
+          onClose={() => setShowShare(false)}
+          onUpdated={(_boardId, patch) => {
+            setBoard(prev => prev ? { ...prev, ...patch } : prev);
+            // member_count changing means the members array itself changed
+            // (add/remove) — reload so isMember/the collaborator avatar
+            // strip stay in sync with what the dialog just did, since it
+            // maintains its own separate BoardDetail rather than sharing
+            // this page's.
+            if (patch.member_count !== undefined) loadBoard();
+          }}
+        />
+      )}
 
       {/* Delete confirm */}
       <AnimatePresence>
