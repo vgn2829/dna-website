@@ -1301,4 +1301,86 @@ export async function initSchema(): Promise<void> {
   `);
 
   console.log('notifications migration done');
+
+  // Projects (V2.2 — Workspace → Project → Moodboard organization layer).
+  // A project is a pure organizational grouping ONE LEVEL BELOW a
+  // workspace, ABOVE boards — it introduces no new identity/ownership
+  // system: owner_roll is the same raw-string, no-FK convention
+  // boards.owner_roll and workspaces.owner_roll already use throughout
+  // this file (who created it, not the source of truth for permission —
+  // see routes/projects.ts's own comment on why project authorization is
+  // derived entirely from workspace_members, never a project-level role
+  // table).
+  //
+  // workspace_id is NOT NULL + ON DELETE RESTRICT, matching
+  // boards.workspace_id's own FK exactly (see that column's comment,
+  // above in this file) — a workspace cannot be deleted while it still
+  // has projects, same "no orphaned child" guarantee boards already get.
+  // This is a deliberate DEVIATION from the V2 Foundation Architecture
+  // Audit's draft (which proposed CASCADE here) — the V2.2 brief
+  // explicitly calls for RESTRICT/explicit-protection over cascading
+  // deletes, and matching boards.workspace_id's existing RESTRICT is more
+  // consistent with this file's own precedent than introducing the only
+  // CASCADE workspace-child relationship in the schema.
+  //
+  // is_archived mirrors boards.is_archived's own boolean-flag convention
+  // (not a soft-delete/deleted_at column) — an archived project is a
+  // normal, listable row with its boards still fully intact and
+  // accessible, exactly like an archived board's canvas remains readable.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id           TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+      name         TEXT NOT NULL,
+      description  TEXT,
+      owner_roll   TEXT NOT NULL,
+      owner_name   TEXT,
+      created_at   TEXT NOT NULL,
+      is_archived  BOOLEAN NOT NULL DEFAULT false
+    )
+  `);
+
+  // Every project list/lookup (routes/projects.ts) filters on
+  // workspace_id — without this index that degrades to a sequential scan
+  // as the table grows, same reasoning as idx_boards_workspace_id below.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_projects_workspace_id
+    ON projects (workspace_id)
+  `);
+
+  console.log('projects migration done');
+
+  // boards.project_id — nullable from day one, no backfill (unlike
+  // boards.workspace_id's nullable -> backfill -> NOT NULL rollout,
+  // earlier in this file): NULL is a PERMANENT, valid state here
+  // ("ungrouped, workspace-level board"), not a migration-in-progress
+  // placeholder waiting to be forced NOT NULL later. Every existing V1/
+  // V2.0 board stays NULL forever unless a user explicitly assigns it to
+  // a project — this migration does not, and must never, backfill boards
+  // into arbitrary projects (see the V2.2 brief's own explicit
+  // requirement on this point).
+  //
+  // ON DELETE SET NULL (not RESTRICT, and NOT a cascading delete of the
+  // board) — deleting a project un-groups its boards rather than
+  // orphaning or destroying them. In practice routes/projects.ts's DELETE
+  // handler pre-checks for attached boards and 409s before this
+  // constraint would ever fire in normal operation (same
+  // pre-check-then-clean-constraint pattern workspaces.ts's own DELETE
+  // handler already uses for boards) — SET NULL here is defense-in-depth
+  // ("a board can never be silently destroyed by a project delete") on
+  // top of that route-level protection, not the primary mechanism.
+  await pool.query(`
+    ALTER TABLE boards
+    ADD COLUMN IF NOT EXISTS project_id TEXT REFERENCES projects(id) ON DELETE SET NULL
+  `);
+
+  // Every project-scoped board list (routes/projects.ts's board list,
+  // and any future project_id filter on routes/boards.ts) filters on
+  // this column — same reasoning as idx_boards_workspace_id.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_boards_project_id
+    ON boards (project_id)
+  `);
+
+  console.log('boards.project_id migration done');
 }
