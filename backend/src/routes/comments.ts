@@ -40,10 +40,20 @@ import { notifyCommentCreated, notifyCommentReplied } from '../services/notifica
 //     reusing the exact same predicate the realtime write gate uses for
 //     the canvas itself (roomSocketGate.ts), not a separate "can edit
 //     comments" concept.
-//   - A comment's OWN AUTHOR may always edit or delete their own comment,
-//     even without write-canvas access — this is the Commenter tier's
-//     actual capability (comment on a board you can't edit, then manage
-//     your own comment), matching Figma's own behavior.
+//   - A comment's OWN AUTHOR may edit or delete their own comment without
+//     write-canvas access — this is the Commenter tier's actual capability
+//     (comment on a board you can't edit, then manage your own comment),
+//     matching Figma's own behavior. AUTHORSHIP DOES NOT BYPASS CURRENT
+//     BOARD AUTHORIZATION (V2.6 Phase A): the author still has to pass
+//     roleCanComment against CURRENT board access first. Before this, the
+//     author branch skipped getBoardRole entirely, so a user whose board
+//     access had been revoked could keep editing and soft-deleting their
+//     own comments indefinitely — each mutation also broadcasting to every
+//     collaborator still on the board. Reproduced against the real router
+//     (PUT and DELETE both returned 200 after revocation, and the row was
+//     genuinely mutated) before being fixed here. Authorship is now a
+//     NARROWING of an existing permission, never a substitute for one —
+//     the same invariant V2.5 established for canvas writes.
 //   - getBoardRole returning null (no read access at all — private board,
 //     not a member) is rejected with 403, same as every other
 //     board-scoped endpoint in this app.
@@ -230,12 +240,20 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
       if (!existing || existing.deletedAt) {
         return res.status(404).json({ error: 'Comment not found' });
       }
+
+      // CURRENT board access is checked FIRST, unconditionally — authorship
+      // is a narrowing of an existing permission, never a substitute for
+      // one. See this file's header comment (AUTHORSHIP DOES NOT BYPASS
+      // CURRENT BOARD AUTHORIZATION) for the vulnerability this closes.
+      const boardRole = await getBoardRole(boardId, roll);
+      if (boardRole === null || !roleCanComment(boardRole.role)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      // Then the pre-existing policy: your own comment, or board-edit
+      // (moderation) access over anyone's.
       const isAuthor = existing.authorRoll === roll;
-      if (!isAuthor) {
-        const boardRole = await getBoardRole(boardId, roll);
-        if (boardRole === null || !roleCanWriteCanvas(boardRole.role, boardRole.isArchived)) {
-          return res.status(403).json({ error: 'Access denied' });
-        }
+      if (!isAuthor && !roleCanWriteCanvas(boardRole.role, boardRole.isArchived)) {
+        return res.status(403).json({ error: 'Access denied' });
       }
 
       const bodySchema = z.object({ content: z.string().trim().min(1).max(CONTENT_MAX_LENGTH) });
@@ -269,12 +287,17 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
       if (!existing || existing.deletedAt) {
         return res.status(404).json({ error: 'Comment not found' });
       }
+
+      // CURRENT board access first, unconditionally — same rule as PUT
+      // above: authorship narrows an existing permission, it never
+      // substitutes for one.
+      const boardRole = await getBoardRole(boardId, roll);
+      if (boardRole === null || !roleCanComment(boardRole.role)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
       const isAuthor = existing.authorRoll === roll;
-      if (!isAuthor) {
-        const boardRole = await getBoardRole(boardId, roll);
-        if (boardRole === null || !roleCanWriteCanvas(boardRole.role, boardRole.isArchived)) {
-          return res.status(403).json({ error: 'Access denied' });
-        }
+      if (!isAuthor && !roleCanWriteCanvas(boardRole.role, boardRole.isArchived)) {
+        return res.status(403).json({ error: 'Access denied' });
       }
 
       const deleted = await commentsStorage.softDeleteComment(boardId, commentId);

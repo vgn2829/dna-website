@@ -1,6 +1,6 @@
 import type { IncomingMessage } from 'http';
 import type { WebSocket } from 'ws';
-import { checkRoomAccess, checkRoomAccessForRoll, roleCanWriteCanvas, type RoomRole } from './roomAccess';
+import { checkRoomAccess, checkRoomAccessForRoll, roleCanComment, roleCanWriteCanvas, type RoomRole } from './roomAccess';
 import { bufferMessagesDuringInit, type ConnectionBuffer } from './connectionBuffer';
 import { RoomManager } from './rooms';
 import type { CommentBroadcaster } from './comments/commentBroadcaster';
@@ -42,6 +42,17 @@ export interface StudentSessionMeta {
 // affects how quickly an ALREADY-OPEN realtime session notices).
 export const REVALIDATION_INTERVAL_MS = 15_000;
 
+// The slice of CommentBroadcaster the re-validator needs (V2.6 Phase A).
+// A structural interface rather than the class itself, for the same reason
+// the canvas branch talks to RoomManager through its public accessors:
+// tests can supply a minimal fake, and this module stays unaware of how
+// sockets are actually stored.
+export interface CommentRevalidationTarget {
+  getActiveRoomIds(): string[];
+  getConnectedRolls(roomId: string): string[];
+  disconnectRoll(roomId: string, roll: string): number;
+}
+
 export function startPeriodicRevalidation(
   roomManager: RoomManager<StudentSessionMeta>,
   getActiveRoomIds: () => string[],
@@ -52,9 +63,40 @@ export function startPeriodicRevalidation(
   // actual socket I/O completion), so tests use REAL timers with a very
   // short interval here instead — see periodic-revalidation.test.ts's own
   // comment on why.
-  intervalMs: number = REVALIDATION_INTERVAL_MS
+  intervalMs: number = REVALIDATION_INTERVAL_MS,
+  // Comment-channel re-validation (V2.6 Phase A). OPTIONAL and injected so
+  // this keeps working for every existing caller/test that passes only a
+  // RoomManager. When supplied, the SAME tick that re-checks canvas
+  // sessions also re-checks comment sockets, reusing the same interval and
+  // the same checkRoomAccessForRoll helper — deliberately not a second
+  // timer, not a second cache, and not a second permission model.
+  //
+  // Why this is needed: the comment channel stores no write flag to
+  // downgrade (it is receive-only), so the only two outcomes are "still
+  // allowed to read" or "disconnect". roleCanComment is the same bar the
+  // connect path and the REST list endpoint already apply.
+  commentBroadcaster?: CommentRevalidationTarget
 ): () => void {
   const tick = async (): Promise<void> => {
+    if (commentBroadcaster) {
+      for (const roomId of commentBroadcaster.getActiveRoomIds()) {
+        for (const roll of commentBroadcaster.getConnectedRolls(roomId)) {
+          try {
+            const access = await checkRoomAccessForRoll(roomId, roll);
+            // Fail CLOSED only on a definite denial. A thrown error is
+            // handled below and deliberately does NOT disconnect, matching
+            // the canvas branch's own "never disconnect on a false
+            // negative from a transient DB error" rule.
+            if (!access.ok || !roleCanComment(access.role)) {
+              commentBroadcaster.disconnectRoll(roomId, roll);
+            }
+          } catch (err) {
+            console.error(`Realtime: comment permission re-validation failed for ${roll} in room ${roomId}:`, err);
+          }
+        }
+      }
+    }
+
     for (const roomId of getActiveRoomIds()) {
       for (const { sessionId, meta } of roomManager.getSessionMetas(roomId)) {
         try {
@@ -180,7 +222,12 @@ async function handleConnection(
     // is exactly what happened before this buffer existed. Discarding
     // still detaches the temporary listener, leaving no dangling handler.
     buffer.discard();
-    commentBroadcaster.join(roomId, ws);
+    // access.roll is retained by the broadcaster (V2.6 Phase A) so the
+    // periodic re-validator can re-check this socket's CURRENT board
+    // access and close it on revocation — previously the roll was
+    // discarded here, leaving connected comment sockets permanently
+    // unrevalidatable. See commentBroadcaster.ts's own header comment.
+    commentBroadcaster.join(roomId, ws, access.roll);
     return;
   }
 
