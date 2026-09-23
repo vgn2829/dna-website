@@ -1,27 +1,28 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { api, type Board, type Asset, type Project } from '../lib/api';
+import { api, type Board, type Asset, type Project, type Template } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
 import { useWorkspace } from '../context/WorkspaceContext';
 
 // ─────────────────────────────────────────────────────────────────────────
-// HomeShellPage (V2.0 Phase 3; V2.2 Phase 8 adds Recent Projects) — the
-// signed-in Home landing page for the workspace app shell. Deliberately
-// small per the V2.0 brief ("do not overbuild Home... do NOT introduce a
-// new activity-log database"): recent Moodboards, favorite Moodboards,
-// recent Assets, recent Projects (each only when a concrete workspace is
-// resolvable), and quick-create actions. Templates recents remain
-// omitted — that feature still doesn't exist (still a placeholder page),
-// so there is nothing real to surface for it yet.
+// HomeShellPage (V2.0 Phase 3; V2.2 adds Recent Projects; V2.3 Phase 10
+// adds Recent Templates) — the signed-in Home landing page for the
+// workspace app shell. Deliberately small per the V2.0 brief ("do not
+// overbuild Home... do NOT introduce a new activity-log database"):
+// recent Moodboards, favorite Moodboards, recent Assets, recent Projects,
+// recent Templates (each only when a concrete workspace is resolvable),
+// and quick-create actions.
 //
 // Reuses existing, already-shipped endpoints only — api.boards.getMyBoards,
-// api.assets.list, and (V2.2) api.projects.list, each already used
-// elsewhere (MoodboardsPage/AssetLibrary/ProjectsPage) — filtered/sliced
-// client-side for "recent"/"favorite". No new backend aggregate endpoint;
-// api.projects.list's own board_count join is already cheap (a single
-// COUNT via LEFT JOIN, same shape the route uses everywhere else), so
-// showing it here costs nothing extra per the brief's "basic board count
-// if cheap" allowance.
+// api.assets.list, api.projects.list, and (V2.3) api.templates.list, each
+// already used elsewhere (MoodboardsPage/AssetLibrary/ProjectsPage/
+// TemplatesPage) — filtered/sliced client-side for "recent"/"favorite".
+// No new backend aggregate endpoint. Clicking a template card here
+// navigates to /templates rather than duplicating that page's own
+// name+project "Use Template" modal — same "don't duplicate existing UI"
+// choice the "+ New Project" button below already makes for project
+// creation, keeping this page a dashboard, not a second templates
+// management surface.
 // ─────────────────────────────────────────────────────────────────────────
 
 function timeAgo(iso: string): string {
@@ -78,6 +79,27 @@ function ProjectCard({ project }: { project: Project }) {
   );
 }
 
+function TemplateCard({ template }: { template: Template }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      onClick={() => navigate('/templates')}
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'left',
+        padding: 14, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)',
+        background: 'var(--color-surface-1)', cursor: 'pointer', minWidth: 0,
+      }}
+    >
+      <span style={{ fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 600, color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {template.name}
+      </span>
+      <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--color-ink-muted)' }}>
+        Use Template →
+      </span>
+    </button>
+  );
+}
+
 function SectionHeading({ title, action }: { title: string; action?: { label: string; onClick: () => void } }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -104,6 +126,7 @@ export default function HomeShellPage() {
   const [myBoards, setMyBoards] = useState<Board[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -147,6 +170,24 @@ export default function HomeShellPage() {
         if (cancelled) return;
         const active = list.filter(p => !p.is_archived).sort((a, b) => b.created_at.localeCompare(a.created_at));
         setProjects(active.slice(0, 6));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [studentSession?.rollNumber, activeWorkspaceId, personalWorkspace?.id]);
+
+  // Templates — same workspace-scoping/personal-fallback shape as
+  // Projects/Assets above (V2.3 Phase 10); a template has no cross-
+  // workspace view (see api.ts's own comment on api.templates.list).
+  useEffect(() => {
+    if (!studentSession?.rollNumber) return;
+    const targetWorkspaceId = activeWorkspaceId ?? personalWorkspace?.id;
+    if (!targetWorkspaceId) return;
+    let cancelled = false;
+    api.templates.list(studentSession.rollNumber, targetWorkspaceId)
+      .then(list => {
+        if (cancelled) return;
+        const active = list.filter(t => !t.is_archived).sort((a, b) => b.created_at.localeCompare(a.created_at));
+        setTemplates(active.slice(0, 6));
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -236,6 +277,15 @@ export default function HomeShellPage() {
               <SectionHeading title="Recent Projects" action={{ label: 'View all', onClick: () => navigate('/projects') }} />
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
                 {projects.map(p => <ProjectCard key={p.id} project={p} />)}
+              </div>
+            </div>
+          )}
+
+          {templates.length > 0 && (
+            <div style={{ marginBottom: 36 }}>
+              <SectionHeading title="Recent Templates" action={{ label: 'View all', onClick: () => navigate('/templates') }} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                {templates.map(t => <TemplateCard key={t.id} template={t} />)}
               </div>
             </div>
           )}
