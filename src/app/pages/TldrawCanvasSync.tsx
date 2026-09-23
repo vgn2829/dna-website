@@ -5,6 +5,7 @@ import {
   type Editor,
   type TLAsset,
   type TLAssetStore,
+  type TLComponents,
 } from 'tldraw';
 import 'tldraw/tldraw.css';
 import { api, type BoardItem, type RoomAccessDenialReason } from '../lib/api';
@@ -161,6 +162,22 @@ function AccessDeniedScreen({ reason, theme }: { reason: RoomAccessDenialReason;
 // type on that socket would crash @tldraw/sync's client
 // (exhaustiveSwitchError), verified directly against its source.
 const ACCESS_POLL_INTERVAL_MS = 20_000;
+
+// Overrides tldraw's default SharePanel — its OWN collaboration slot,
+// which TldrawUi renders inside `.tlui-layout__top__right` (a flex column)
+// directly above StylePanel. Occupying it means the collaborator list and
+// the style panel lay out as siblings and can never overlap. The previous
+// version of CollaboratorList was an absolutely-positioned overlay pinned
+// at top:12/right:12 — i.e. underneath the style panel — and was visibly
+// clipped whenever a shape was selected. See CollaboratorList.tsx's own
+// header comment for the full rationale.
+//
+// Declared at module scope so its identity is stable across renders; an
+// inline object here would be a new reference every render and would
+// remount the panel each time.
+const TLDRAW_COMPONENTS: TLComponents = {
+  SharePanel: CollaboratorList,
+};
 
 function ConnectionBanner({ state, onRetry }: { state: Exclude<ConnectionState, 'connected'>; onRetry?: () => void }) {
   const { label, tone } = STATUS_COPY[state];
@@ -507,14 +524,9 @@ export function TldrawCanvasSync({
           acceptedImageMimeTypes={ACCEPTED_IMAGE_MIME_TYPES}
           acceptedVideoMimeTypes={[]}
           onMount={handleMount}
+          components={TLDRAW_COMPONENTS}
         >
           <ClipboardOverride />
-          {/* Renders as a child of <Tldraw> (not a sibling in this
-              component's own JSX) because CollaboratorList/its hooks call
-              useEditor(), which requires an EditorContext ancestor —
-              exactly the same reason ClipboardOverride is mounted here
-              rather than outside <Tldraw>. */}
-          <CollaboratorList />
           {comments && (
             <CommentsOverlay
               commentsApi={comments.commentsApi}

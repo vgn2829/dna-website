@@ -492,16 +492,27 @@ export default function BoardPage() {
 
           {/* Right — avatars + actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            {/* Member avatars */}
+            {/* Board MEMBERS (who has access) — deliberately distinct from
+                the live collaborator list rendered on the canvas itself,
+                which shows who is connected RIGHT NOW (see
+                CollaboratorList.tsx). These are static, come from REST, and
+                do not change as people join or leave, so the group is
+                labelled explicitly rather than leaving two visually
+                identical avatar rows for the user to tell apart. */}
             {(board.members.length > 0 || isOwner) && (
-              <div style={{ display: 'flex', alignItems: 'center' }}>
+              <div
+                role="group"
+                aria-label="People with access to this board"
+                style={{ display: 'flex', alignItems: 'center' }}
+              >
                 {[
                   { name: board.owner_name ?? board.owner_roll, roll: board.owner_roll },
                   ...board.members.slice(0, 3).map(m => ({ name: m.name ?? m.roll_number, roll: m.roll_number })),
                 ].map((m, i) => (
                   <div
                     key={m.roll}
-                    title={m.name}
+                    title={`${m.name} — has access`}
+                    aria-label={`${m.name} — has access`}
                     style={{
                       width: 28, height: 28, borderRadius: 'var(--radius-full)',
                       background: rollToColor(m.roll),
