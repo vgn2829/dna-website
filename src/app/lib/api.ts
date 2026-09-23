@@ -187,6 +187,26 @@ export interface Project {
   board_count: number;
 }
 
+// Templates (V2.3) — mirrors backend/src/routes/templates.ts's
+// toPublicTemplate(). No canvas_data here (never sent to the list/detail
+// response — only POST /:id/use reads it, server-side); no template-level
+// role — access is entirely derived from workspace_members, same as
+// Project above. source_board_id is provenance only (the board a
+// template was originally saved from), never a live dependency — it may
+// be null if that board was later deleted.
+export interface Template {
+  id: string;
+  workspace_id: string;
+  source_board_id: string | null;
+  name: string;
+  description: string | null;
+  thumbnail_url: string | null;
+  owner_roll: string;
+  owner_name: string | null;
+  created_at: string;
+  is_archived: boolean;
+}
+
 // Mirrors backend/src/routes/assets.ts's toPublicAsset() — note there is
 // no storage_key here (an internal StorageProvider path, never sent to
 // the frontend); `url` is the derived public URL the backend already
@@ -797,6 +817,27 @@ export const api = {
       request<Project>('PATCH', `/projects/${id}`, { body: data, roll }),
     delete: (id: string, roll: string) =>
       request<{ success: boolean }>('DELETE', `/projects/${id}`, { roll }),
+  },
+  // Templates (V2.3) — mirrors backend/src/routes/templates.ts.
+  // workspace_id is required on list, same reasoning as api.projects.list
+  // above. create() takes source_board_id (never workspace_id — the
+  // backend always derives it from the board, ignoring anything else
+  // sent). use() creates a new, fully independent board from the
+  // template's snapshot; project_id is optional and must belong to the
+  // template's own workspace (enforced server-side).
+  templates: {
+    list: (roll: string, workspaceId: string) =>
+      request<Template[]>('GET', `/templates?workspace_id=${encodeURIComponent(workspaceId)}`, { roll }),
+    create: (roll: string, data: { name: string; description?: string; source_board_id: string }) =>
+      request<Template>('POST', '/templates', { body: data, roll }),
+    get: (id: string, roll: string) =>
+      request<Template>('GET', `/templates/${id}`, { roll }),
+    update: (id: string, roll: string, data: { name?: string; description?: string | null; is_archived?: boolean }) =>
+      request<Template>('PATCH', `/templates/${id}`, { body: data, roll }),
+    delete: (id: string, roll: string) =>
+      request<{ success: boolean }>('DELETE', `/templates/${id}`, { roll }),
+    use: (id: string, roll: string, data: { name?: string; project_id?: string }) =>
+      request<Board>('POST', `/templates/${id}/use`, { body: data, roll }),
   },
   // Asset Manager (Phase B) — mirrors backend/src/routes/assets.ts. A
   // persistent, workspace-scoped file library, distinct from
