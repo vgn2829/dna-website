@@ -1,6 +1,7 @@
 import type { IncomingMessage } from 'http';
 import type { WebSocket } from 'ws';
 import { checkRoomAccess, checkRoomAccessForRoll, roleCanWriteCanvas, type RoomRole } from './roomAccess';
+import { bufferMessagesDuringInit, type ConnectionBuffer } from './connectionBuffer';
 import { RoomManager } from './rooms';
 import type { CommentBroadcaster } from './comments/commentBroadcaster';
 import type { RealtimeUpgradeHandler } from './server';
@@ -103,14 +104,30 @@ export function createConnectionHandler(
   commentBroadcaster: CommentBroadcaster
 ): RealtimeUpgradeHandler {
   return (req: IncomingMessage, ws: WebSocket, roomPath: string) => {
+    // INSTALLED FIRST, SYNCHRONOUSLY, BEFORE ANY AWAIT — this is the fix
+    // for the handshake race described in connectionBuffer.ts's header
+    // comment. The socket is already live by the time this callback runs
+    // (server.ts's wss.handleUpgrade made it so), and a real tldraw client
+    // sends `connect` immediately on open, so a 'message' listener has to
+    // exist right now or that frame is discarded by EventEmitter and the
+    // handshake never completes. Buffering is NOT authorization: nothing
+    // is parsed, classified or forwarded here, and every failure path
+    // below discards the buffer without replaying it.
+    const buffer = bufferMessagesDuringInit(ws);
+
     // handleConnection is async and called fire-and-forget (attachRealtimeServer's
     // onUpgrade callback is synchronous) — an unhandled rejection here (a DB
     // error from checkRoomAccess, a persistence failure from roomManager.join)
     // would otherwise be a process-crashing unhandled rejection, not just a
     // failed connection. One bad connection attempt must never take down
     // every other room's live sessions.
-    handleConnection(req, ws, roomPath, roomManager, commentBroadcaster).catch(err => {
+    handleConnection(req, ws, roomPath, roomManager, commentBroadcaster, buffer).catch(err => {
       console.error('Realtime: unhandled error during connection setup:', err);
+      // Room load/join threw (persistence failure, TLSocketRoom
+      // construction error). The session is not usable, so the buffered
+      // frames must never be replayed — dropping them is the only safe
+      // outcome, and leaves no dangling listener behind.
+      buffer.discard();
       try {
         ws.close(1011, 'Internal error');
       } catch {
@@ -125,7 +142,8 @@ async function handleConnection(
   ws: WebSocket,
   roomPath: string,
   roomManager: RoomManager<StudentSessionMeta>,
-  commentBroadcaster: CommentBroadcaster
+  commentBroadcaster: CommentBroadcaster,
+  buffer: ConnectionBuffer
 ): Promise<void> {
   const [pathOnly, query] = roomPath.split('?');
   const params = new URLSearchParams(query ?? '');
@@ -151,15 +169,24 @@ async function handleConnection(
     // document-sync socket below.
     const access = await checkRoomAccess(roomId, token);
     if (!access.ok) {
+      buffer.discard();
       ws.close(access.code, access.reason);
       return;
     }
+    // The comments channel is broadcast-only — it carries no client→server
+    // messages that mutate anything (see commentBroadcaster.ts's own
+    // comment), so there is nothing meaningful to replay into it. Anything
+    // a client sent during initialization on this path is dropped, which
+    // is exactly what happened before this buffer existed. Discarding
+    // still detaches the temporary listener, leaving no dangling handler.
+    buffer.discard();
     commentBroadcaster.join(roomId, ws);
     return;
   }
 
   const match = BOARD_ROOM_PATH_RE.exec(pathOnly);
   if (!match) {
+    buffer.discard();
     ws.close(1008, 'Unknown room path');
     return;
   }
@@ -177,13 +204,30 @@ async function handleConnection(
   // minted server-side.
   const sessionId = params.get('sessionId');
   if (!sessionId) {
+    buffer.discard();
     ws.close(1008, 'Missing sessionId');
     return;
   }
 
   const access = await checkRoomAccess(roomId, token);
   if (!access.ok) {
+    // AUTHORIZATION FAILED — buffered frames are dropped, never replayed.
+    // An unauthorized client may have sent arbitrary frames during the
+    // initialization window; none of them have been parsed, classified or
+    // forwarded, and none of them ever reach TLSocketRoom. The close
+    // code/reason are unchanged from before this buffer existed, so the
+    // client observes exactly the same denial behavior as it always did.
+    buffer.discard();
     ws.close(access.code, access.reason);
+    return;
+  }
+
+  // The socket may have closed (or overflowed the buffer and been closed)
+  // while the access check was in flight. Joining now would register a
+  // session for a dead socket and leave dangling room membership behind,
+  // so abandon instead — discard() is still called so no listener leaks.
+  if (buffer.isAborted()) {
+    buffer.discard();
     return;
   }
 
@@ -192,4 +236,14 @@ async function handleConnection(
     { roll: access.roll, role: access.role },
     roleCanWriteCanvas(access.role, access.isArchived)
   );
+
+  // Authorization succeeded, the room is loaded and joined, and
+  // RoomManager has installed the real room socket gate (which is what
+  // attaches the production 'message' listener to this same socket — see
+  // roomSocketGate.ts). Only now is it safe to release the buffered
+  // frames, and they are re-emitted through the socket's own emitter so
+  // they travel the identical path a frame arriving one millisecond later
+  // would: gate -> classification -> write check -> TLSocketRoom. This is
+  // what makes the client's immediately-sent `connect` survive.
+  buffer.replayAndDetach();
 }
