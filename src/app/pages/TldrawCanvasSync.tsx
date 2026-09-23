@@ -18,6 +18,7 @@ import {
 } from './tldrawCanvasShared';
 import { usePresenceUserInfo } from '../context/PresenceProvider';
 import { CollaboratorList } from '../components/CollaboratorList';
+import { FollowingBanner } from '../components/FollowingBanner';
 import { CommentsOverlay } from '../components/CommentsOverlay';
 import type { CommentsProps } from './commentsProps';
 
@@ -175,8 +176,13 @@ const ACCESS_POLL_INTERVAL_MS = 20_000;
 // Declared at module scope so its identity is stable across renders; an
 // inline object here would be a new reference every render and would
 // remount the panel each time.
+// HelperButtons is wrapped (not replaced) by FollowingBanner, which keeps
+// tldraw's own ExitPenMode/BackToContent/StopFollowing buttons exactly as
+// shipped and adds a banner naming WHO is being followed — tldraw's native
+// control says only "Stop following". See FollowingBanner.tsx.
 const TLDRAW_COMPONENTS: TLComponents = {
   SharePanel: CollaboratorList,
+  HelperButtons: FollowingBanner,
 };
 
 function ConnectionBanner({ state, onRetry }: { state: Exclude<ConnectionState, 'connected'>; onRetry?: () => void }) {

@@ -113,9 +113,14 @@ export function CollaboratorAvatar({
           </span>
           {/* The popover has room to spell the state out, so it does —
               the activity dot on the avatar is a reinforcement of this
-              text, not the only way to read it. */}
+              text, not the only way to read it. The follow affordance is
+              named here too ("Follow" / "Following — tap to stop") rather
+              than left implicit in the row's click handler, so the action
+              is discoverable without hovering for a tooltip. */}
           <span style={{ fontSize: 10, color: 'var(--color-ink-muted)' }}>
-            {activityWord(activity)}
+            {isFollowing
+              ? `${activityWord(activity)} · Following — tap to stop`
+              : `${activityWord(activity)} · Follow`}
           </span>
         </span>
       </button>
