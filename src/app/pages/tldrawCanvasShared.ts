@@ -353,12 +353,30 @@ export async function injectPendingBoardItems(editor: Editor, items: BoardItem[]
 // twice creates two independent shape instances, not a dedup no-op —
 // that's the correct behavior for a reusable library (Figma/Canva both
 // let you drop the same asset multiple times).
+//
+// ASSET PROVENANCE (V2.4 Phase 6, architecture-audit recommendation) —
+// sourceAssetId, when provided, is stamped onto the CREATED TLAsset
+// record's own `meta` field (meta: JsonObject, a first-class part of
+// every tldraw record's schema — see @tldraw/tlschema's TLBaseAsset,
+// confirmed by reading its .d.ts directly before writing this). This is
+// NOT a new persistence mechanism: meta rides inside the same
+// canvas_data snapshot every other shape/asset property already does,
+// serialized by tldraw's own getSnapshot/useSync exactly like `props` or
+// `x`/`y` — no new table, no new column, no asset-to-board join table,
+// no file duplication. It survives local editing, refresh, and realtime
+// sync for the same reason `props.src` does: tldraw treats `meta` as
+// ordinary record data, not something this app has to shepherd through
+// persistence by hand. Optional (defaults to undefined) so every
+// EXISTING call site (and every asset inserted before this phase) keeps
+// working with no meta at all — this is purely additive metadata on
+// newly-inserted assets, never a required/breaking parameter.
 export async function insertImageAsset(
   editor: Editor,
   url: string,
   name: string,
   knownWidth: number | null,
-  knownHeight: number | null
+  knownHeight: number | null,
+  sourceAssetId?: string
 ): Promise<void> {
   const { w, h } = knownWidth && knownHeight
     ? { w: knownWidth, h: knownHeight }
@@ -381,6 +399,7 @@ export async function insertImageAsset(
       id: assetId,
       type: 'image',
       props: { w, h, name, src: url, mimeType: null, isAnimated: false },
+      ...(sourceAssetId ? { meta: { sourceAssetId } } : {}),
     }),
   ]);
   editor.createShapes([
