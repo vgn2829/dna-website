@@ -1383,4 +1383,76 @@ export async function initSchema(): Promise<void> {
   `);
 
   console.log('boards.project_id migration done');
+
+  // Templates (V2.3) — a reusable, frozen canvas snapshot a user can
+  // instantiate into a new board. Deliberately workspace-scoped only, no
+  // global/system-template concept: this codebase has no precedent for a
+  // cross-workspace-visible content type anywhere (boards, assets, and
+  // projects are all strictly workspace-scoped with zero exceptions —
+  // confirmed by auditing every one of their schema/route definitions
+  // before writing this table), and the V2.3 brief's own guidance is to
+  // introduce a nullable/global workspace_id ONLY if a concrete existing
+  // mechanism already justifies it. None does, so workspace_id here is
+  // NOT NULL, same as assets.workspace_id (the most structurally similar
+  // existing table — also a workspace-scoped, owner-tagged, reusable
+  // content item with no member/role system of its own).
+  //
+  // canvas_data is a plain TEXT column holding the EXACT SAME raw JSON
+  // string representation boards.canvas_data already uses — no second
+  // snapshot schema. Confirmed by reading POST /:id/duplicate
+  // (routes/boards.ts): it already copies a board's canvas_data into a
+  // new board's canvas_data as an opaque string, no parsing, no shape
+  // validation beyond what PUT /:id/canvas already requires (valid
+  // JSON). Templates reuse that exact copy-as-opaque-string approach in
+  // both directions (board -> template, template -> new board) — see
+  // routes/templates.ts. Whatever shape a given board's canvas_data
+  // happens to be in (legacy TLEditorSnapshot wrapper vs. flat
+  // RoomSnapshot — see roomPersistence.ts's own extensive comment on why
+  // both exist) is preserved as-is; the existing load-time unwrap logic
+  // in roomPersistence.ts already handles both when a template-created
+  // board is later opened, so nothing new needs to understand either
+  // shape here.
+  //
+  // source_board_id is PROVENANCE ONLY (which board this template was
+  // originally saved from) — never a live dependency. ON DELETE SET NULL
+  // (not RESTRICT, not CASCADE): a template must survive its source
+  // board being deleted, exactly the same reasoning
+  // board_versions.restored_from_version_id already established for the
+  // same kind of "this points at where it came from, not something it
+  // depends on" relationship.
+  //
+  // owner_roll/owner_name follow the same denormalized-pair, no-FK
+  // convention every other owner-tagged table in this file uses
+  // (boards.owner_roll, workspaces.owner_roll, projects.owner_roll,
+  // assets.owner_roll).
+  //
+  // No template_members/template_roles/template_permissions table — per
+  // the V2.3 brief, template authorization is entirely derived from
+  // workspace_members (see routes/templates.ts), identical to how
+  // routes/projects.ts already has no project-level role system.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS templates (
+      id              TEXT PRIMARY KEY,
+      workspace_id    TEXT NOT NULL REFERENCES workspaces(id),
+      source_board_id TEXT REFERENCES boards(id) ON DELETE SET NULL,
+      name            TEXT NOT NULL,
+      description     TEXT,
+      canvas_data     TEXT,
+      thumbnail_url   TEXT,
+      owner_roll      TEXT NOT NULL,
+      owner_name      TEXT,
+      created_at      TEXT NOT NULL,
+      is_archived     BOOLEAN NOT NULL DEFAULT false
+    )
+  `);
+
+  // Every template list/lookup (routes/templates.ts) filters on
+  // workspace_id — same reasoning as idx_projects_workspace_id/
+  // idx_assets_workspace_id above.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_templates_workspace_id
+    ON templates (workspace_id)
+  `);
+
+  console.log('templates migration done');
 }
