@@ -115,9 +115,18 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
     const roll = req.studentRoll!;
     const workspaceId = typeof req.query.workspace_id === 'string' ? req.query.workspace_id : undefined;
 
+    // V2.2 Projects layer — a lightweight LEFT JOIN for project_name
+    // (display only, purely so board cards can show "in {project}"
+    // without a second request per board — see MoodboardsPage.tsx's
+    // BoardCard usage). Same join-for-display-data shape this query
+    // already uses for item_count/member_count/is_favorite; p.name has
+    // to join the GROUP BY (it's functionally dependent on b.project_id,
+    // but Postgres still requires it listed) alongside the pre-existing
+    // b.id, bf.roll_number.
     const result = await pool.query(`
       SELECT DISTINCT
         b.*,
+        p.name as project_name,
         COUNT(DISTINCT bi.id)::int as item_count,
         COUNT(DISTINCT bm.roll_number)::int as member_count,
         (bf.roll_number IS NOT NULL) as is_favorite
@@ -125,6 +134,7 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
       LEFT JOIN board_items bi ON bi.board_id = b.id
       LEFT JOIN board_members bm ON bm.board_id = b.id
       LEFT JOIN board_favorites bf ON bf.board_id = b.id AND bf.roll_number = $1
+      LEFT JOIN projects p ON p.id = b.project_id
       WHERE NOT b.is_archived
         AND (
           b.owner_roll = $1
@@ -134,7 +144,7 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
           )
         )
         AND ($2::text IS NULL OR b.workspace_id = $2)
-      GROUP BY b.id, bf.roll_number
+      GROUP BY b.id, bf.roll_number, p.name
       ORDER BY b.created_at DESC
     `, [roll, workspaceId ?? null]);
 

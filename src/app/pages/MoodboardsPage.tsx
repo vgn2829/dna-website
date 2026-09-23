@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
-import { api, type Board } from '../lib/api';
+import { api, type Board, type Project } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { ShareBoardDialog } from '../components/ShareBoardDialog';
@@ -125,7 +125,15 @@ export default function MoodboardsPage() {
   const [archivedLoading, setArchivedLoading] = useState(false);
   const [archivedLoaded, setArchivedLoaded] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ name: '', description: '', visibility: 'private' as 'private' | 'shared' });
+  const [form, setForm] = useState({ name: '', description: '', visibility: 'private' as 'private' | 'shared', projectId: '' as string });
+  // Projects for the active workspace — fetched only when a concrete
+  // workspace is selected (projects have no cross-workspace view, same
+  // constraint ProjectsPage/AssetsPage already have) so the create-board
+  // form can offer "put this board in a project" without turning this
+  // page into project management (V2.2 Phase 7 — kept deliberately
+  // lightweight: a picker in the create form + a label on cards, nothing
+  // more).
+  const [projectOptions, setProjectOptions] = useState<Project[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const [menuBoard, setMenuBoard] = useState<Board | null>(null);
@@ -202,6 +210,22 @@ export default function MoodboardsPage() {
     setArchivedLoaded(false);
   }, [activeWorkspaceId]);
 
+  // Project options for the create-board form's picker — only fetchable
+  // for a concrete workspace (activeWorkspaceId === null, "All
+  // Workspaces", has no single project list to offer; falls back to the
+  // personal workspace, same pattern the Assets button already uses).
+  // Not fetched at all until the create modal is actually opened, so
+  // visiting Moodboards never triggers a projects request a user might
+  // never need.
+  useEffect(() => {
+    if (!showCreate || !studentSession?.rollNumber) return;
+    const workspaceId = activeWorkspaceId ?? personalWorkspace?.id;
+    if (!workspaceId) { setProjectOptions([]); return; }
+    api.projects.list(studentSession.rollNumber, workspaceId)
+      .then(list => setProjectOptions(list.filter(p => !p.is_archived)))
+      .catch(() => setProjectOptions([]));
+  }, [showCreate, studentSession?.rollNumber, activeWorkspaceId, personalWorkspace?.id]);
+
   // Archived boards are fetched lazily — only once the user actually opens
   // that tab — since most sessions never look at it.
   useEffect(() => {
@@ -256,12 +280,16 @@ export default function MoodboardsPage() {
         // otherwise falls back server-side to the caller's personal
         // workspace (see api.ts's own comment on this being optional).
         workspace_id: activeWorkspaceId ?? undefined,
+        // V2.2 Projects layer — optional, ungrouped (undefined) by
+        // default, exactly the pre-Phase-7 behavior when no project is
+        // picked in the form below.
+        project_id: form.projectId || undefined,
       });
       setMyBoards(prev => [board, ...prev]);
       if (form.visibility === 'shared') setSharedBoards(prev => [board, ...prev]);
       clearBoardsCache();
       setShowCreate(false);
-      setForm({ name: '', description: '', visibility: 'private' });
+      setForm({ name: '', description: '', visibility: 'private', projectId: '' });
       toast.success('Board created');
       navigate(`/moodboards/${board.id}`);
     } catch {
@@ -743,6 +771,25 @@ export default function MoodboardsPage() {
                   {form.visibility === 'private' ? 'Only you and collaborators can see this board.' : 'Anyone with the link can view this board.'}
                 </p>
               </div>
+
+              {projectOptions.length > 0 && (
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                    Project (optional)
+                  </label>
+                  <select
+                    className="input-base"
+                    value={form.projectId}
+                    onChange={e => setForm(prev => ({ ...prev, projectId: e.target.value }))}
+                    style={{ width: '100%', boxSizing: 'border-box' }}
+                  >
+                    <option value="">No project — ungrouped</option>
+                    {projectOptions.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {error && <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>{error}</p>}
 

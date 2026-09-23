@@ -131,6 +131,13 @@ export interface Board {
   // a permanent valid state, not a migration placeholder. Every V1/V2.0
   // board stays null unless explicitly moved into a project.
   project_id: string | null;
+  // Display-only, joined server-side (GET /api/boards only, for the
+  // MoodboardsPage card grid) — not present on every board response
+  // (e.g. GET /api/boards/:id detail doesn't join it, since BoardPage's
+  // canvas UI has no project-association display today); optional so
+  // TypeScript reflects that honestly rather than claiming it's always
+  // populated.
+  project_name?: string | null;
 }
 
 export interface BoardDetail extends Board {

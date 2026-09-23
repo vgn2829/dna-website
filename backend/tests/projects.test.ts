@@ -45,12 +45,22 @@ async function createProject(roll: string, workspaceId: string, name = 'Test Pro
   return res.body.id as string;
 }
 
-async function createBoard(roll: string, workspaceId: string, projectId?: string): Promise<string> {
-  const res = await request(app)
-    .post('/api/boards')
-    .set('Authorization', `Bearer ${tokenFor(roll)}`)
-    .send({ name: 'Test Board', workspace_id: workspaceId, ...(projectId ? { project_id: projectId } : {}) });
-  return res.body.id as string;
+// Inserts a board directly via SQL, bypassing createBoardLimiter (15/60s,
+// module-level, shared across this whole file since createApp() is built
+// once at module load) — same helper/rationale as boards.test.ts's own
+// createBoardDirect. Used by every test here that just needs a board to
+// exist; the handful of tests that specifically verify creation/
+// attachment behavior itself (POST /api/boards) call request(app).post(...)
+// directly instead, so they still exercise the real route.
+async function createBoardDirect(roll: string, workspaceId: string, projectId?: string | null): Promise<string> {
+  const id = `board-direct-${Math.random().toString(36).slice(2, 10)}`;
+  const now = new Date().toISOString();
+  await query(
+    `INSERT INTO boards (id, name, owner_roll, owner_name, visibility, edit_mode, created_at, updated_at, room_id, is_archived, workspace_id, project_id)
+     VALUES ($1, 'Test Board', $2, 'Owner', 'private', 'members_only', $3, $3, $4, false, $5, $6)`,
+    [id, roll, now, `room-${id}`, workspaceId, projectId ?? null]
+  );
+  return id;
 }
 
 beforeEach(async () => {
@@ -68,8 +78,8 @@ describe('GET /api/projects — list', () => {
     await registerStudent('PROJL2');
     const ws = await createWorkspace('PROJL2', 'Team');
     const projectId = await createProject('PROJL2', ws, 'Design Sprint');
-    await createBoard('PROJL2', ws, projectId);
-    await createBoard('PROJL2', ws, projectId);
+    await createBoardDirect('PROJL2', ws, projectId);
+    await createBoardDirect('PROJL2', ws, projectId);
 
     const res = await request(app)
       .get('/api/projects')
@@ -272,7 +282,7 @@ describe('DELETE /api/projects/:id — explicit protection, not cascade', () => 
     await registerStudent('PROJDEL2');
     const ws = await createWorkspace('PROJDEL2', 'Team');
     const projectId = await createProject('PROJDEL2', ws);
-    const boardId = await createBoard('PROJDEL2', ws, projectId);
+    const boardId = await createBoardDirect('PROJDEL2', ws, projectId);
 
     const res = await request(app)
       .delete(`/api/projects/${projectId}`)
@@ -329,8 +339,8 @@ describe('GET /api/projects/:id/boards', () => {
     await registerStudent('PROJB1');
     const ws = await createWorkspace('PROJB1', 'Team');
     const projectId = await createProject('PROJB1', ws);
-    const boardId = await createBoard('PROJB1', ws, projectId);
-    await createBoard('PROJB1', ws); // ungrouped, should NOT appear
+    const boardId = await createBoardDirect('PROJB1', ws, projectId);
+    await createBoardDirect('PROJB1', ws); // ungrouped, should NOT appear
 
     const res = await request(app)
       .get(`/api/projects/${projectId}/boards`)
@@ -380,7 +390,7 @@ describe('Board <-> Project attachment — cross-workspace protection', () => {
     const wsA = await createWorkspace('ATTACH2', 'Workspace A');
     const wsB = await createWorkspace('ATTACH2', 'Workspace B');
     const projectA = await createProject('ATTACH2', wsA);
-    const boardInB = await createBoard('ATTACH2', wsB);
+    const boardInB = await createBoardDirect('ATTACH2', wsB);
 
     const res = await request(app)
       .put(`/api/boards/${boardInB}`)
@@ -410,7 +420,7 @@ describe('Board <-> Project attachment — cross-workspace protection', () => {
     await registerStudent('ATTACH4');
     const ws = await createWorkspace('ATTACH4', 'Team');
     const projectId = await createProject('ATTACH4', ws);
-    const boardId = await createBoard('ATTACH4', ws);
+    const boardId = await createBoardDirect('ATTACH4', ws);
 
     const moved = await request(app)
       .put(`/api/boards/${boardId}`)
@@ -440,12 +450,62 @@ describe('Board <-> Project attachment — cross-workspace protection', () => {
   });
 });
 
+describe('GET /api/boards — project_name join (V2.2 Phase 7)', () => {
+  it('returns project_name for a board attached to a project', async () => {
+    await registerStudent('PNAME1');
+    const ws = await createWorkspace('PNAME1', 'Team');
+    const projectId = await createProject('PNAME1', ws, 'Design Sprint');
+    await createBoardDirect('PNAME1', ws, projectId);
+
+    const res = await request(app)
+      .get('/api/boards')
+      .query({ workspace_id: ws })
+      .set('Authorization', `Bearer ${tokenFor('PNAME1')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].project_name).toBe('Design Sprint');
+  });
+
+  it('returns project_name null for an ungrouped board', async () => {
+    await registerStudent('PNAME2');
+    const ws = await createWorkspace('PNAME2', 'Team');
+    await createBoardDirect('PNAME2', ws);
+
+    const res = await request(app)
+      .get('/api/boards')
+      .query({ workspace_id: ws })
+      .set('Authorization', `Bearer ${tokenFor('PNAME2')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].project_name).toBeNull();
+  });
+
+  it('does not duplicate rows when a board has a project (GROUP BY correctness)', async () => {
+    await registerStudent('PNAME3');
+    const ws = await createWorkspace('PNAME3', 'Team');
+    const projectId = await createProject('PNAME3', ws);
+    await createBoardDirect('PNAME3', ws, projectId);
+    await createBoardDirect('PNAME3', ws, projectId);
+    await createBoardDirect('PNAME3', ws);
+
+    const res = await request(app)
+      .get('/api/boards')
+      .query({ workspace_id: ws })
+      .set('Authorization', `Bearer ${tokenFor('PNAME3')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(3);
+  });
+});
+
 describe('Existing board behavior remains intact (V2.2 non-regression)', () => {
   // Required scenario 8
   it('an existing board with project_id NULL remains fully valid and readable', async () => {
     await registerStudent('REGR1');
     const ws = await createWorkspace('REGR1', 'Team');
-    const boardId = await createBoard('REGR1', ws); // no project_id
+    const boardId = await createBoardDirect('REGR1', ws); // no project_id
 
     const res = await request(app)
       .get(`/api/boards/${boardId}`)

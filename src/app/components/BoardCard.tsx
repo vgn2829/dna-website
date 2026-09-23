@@ -170,6 +170,11 @@ export function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerR
             by {board.owner_name}
           </p>
         )}
+        {board.project_name && (
+          <p style={{ margin: '0 0 6px', fontSize: 11.5, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span aria-hidden="true" style={{ opacity: 0.7 }}>📁</span> {board.project_name}
+          </p>
+        )}
         <p style={{ margin: 0, fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
           {board.item_count} item{board.item_count !== 1 ? 's' : ''}
           {board.member_count > 0 ? ` · ${board.member_count + 1} members` : ''}
