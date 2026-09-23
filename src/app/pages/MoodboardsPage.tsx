@@ -2,10 +2,9 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
-import { api, type Board, type Workspace } from '../lib/api';
+import { api, type Board } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
-import { WorkspacesPanel } from '../components/WorkspacesPanel';
-import { WorkspaceSettingsModal } from '../components/WorkspaceSettingsModal';
+import { useWorkspace } from '../context/WorkspaceContext';
 import { ShareBoardDialog } from '../components/ShareBoardDialog';
 import { AssetLibrary } from '../components/AssetLibrary';
 import { useModalA11y } from '../components/hooks/useModalA11y';
@@ -277,16 +276,16 @@ const CARD_GRID_STYLE: React.CSSProperties = {
 export default function MoodboardsPage() {
   const navigate = useNavigate();
   const { studentSession, openRollModal } = useStudent();
+  // Workspace identity/switching (activeWorkspaceId, the workspaces list,
+  // switching) now lives in WorkspaceContext (V2.0 Phase 1/4), shared with
+  // the shell's WorkspaceSwitcher — this page no longer owns its own copy.
+  // null = "All workspaces" — the exact pre-existing unscoped-across-MY-
+  // workspaces behavior (see backend/src/routes/boards.ts's own comment,
+  // tightened in Phase 0 to never fall back to a global, cross-tenant
+  // result), still the default every session starts at.
+  const { activeWorkspaceId, workspaces, personalWorkspace } = useWorkspace();
   const [tab, setTab] = useState<Tab>('mine');
-  // null = "All workspaces" — the exact pre-existing unscoped behavior,
-  // and the default every session starts at, so a user who never opens
-  // the switcher sees no change at all. Set to a specific workspace id
-  // to narrow every list below to just that workspace.
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [showWorkspacesPanel, setShowWorkspacesPanel] = useState(false);
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
-  const [settingsWorkspaceId, setSettingsWorkspaceId] = useState<string | null>(null);
   const [myBoards, setMyBoards] = useState<Board[]>([]);
   const [sharedBoards, setSharedBoards] = useState<Board[]>([]);
   const [archivedBoards, setArchivedBoards] = useState<Board[]>([]);
@@ -320,18 +319,6 @@ export default function MoodboardsPage() {
   const createDialogRef = useModalA11y(showCreate, () => setShowCreate(false));
   const deleteDialogRef = useModalA11y(!!confirmDeleteBoard, () => setConfirmDeleteBoard(null));
   const renameDialogRef = useModalA11y(!!renameBoard, () => setRenameBoard(null));
-
-  // Workspace list — fetched once per session (not workspace-scoped
-  // itself, obviously), independent of the board-list effects below. Also
-  // lazily auto-provisions the caller's personal workspace server-side
-  // (see routes/workspaces.ts's GET /), so this always resolves to at
-  // least one entry for a signed-in student.
-  useEffect(() => {
-    if (!studentSession?.rollNumber) { setWorkspaces([]); return; }
-    api.workspaces.list(studentSession.rollNumber)
-      .then(setWorkspaces)
-      .catch(() => {});
-  }, [studentSession?.rollNumber]);
 
   useEffect(() => {
     const cacheKey = CACHE_KEY_SHARED(activeWorkspaceId);
@@ -372,12 +359,20 @@ export default function MoodboardsPage() {
       .finally(() => setMyLoading(false));
   }, [studentSession?.rollNumber, activeWorkspaceId]);
 
-  // Archived boards are fetched lazily — only once the user actually opens
-  // that tab — since most sessions never look at it. archivedLoaded is
-  // reset whenever activeWorkspaceId changes (see the switcher's onClick
-  // below) so switching workspaces while already on the Archived tab
-  // triggers a fresh scoped fetch instead of reusing a different
+  // activeWorkspaceId now changes from OUTSIDE this component (the
+  // shell's WorkspaceSwitcher, via WorkspaceContext) rather than a local
+  // handler — this effect is what used to be handleWorkspaceSwitch's
+  // side-effect, now reacting to the context value instead of being
+  // called directly from a switcher onClick in this file. Resets
+  // archivedLoaded so the Archived tab's lazy-load-once effect below
+  // re-fetches for the new workspace instead of reusing a different
   // workspace's already-loaded list.
+  useEffect(() => {
+    setArchivedLoaded(false);
+  }, [activeWorkspaceId]);
+
+  // Archived boards are fetched lazily — only once the user actually opens
+  // that tab — since most sessions never look at it.
   useEffect(() => {
     if (tab !== 'archived' || !studentSession?.rollNumber || archivedLoaded) return;
     const cacheKey = CACHE_KEY_ARCHIVED(activeWorkspaceId);
@@ -416,15 +411,6 @@ export default function MoodboardsPage() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [menuBoard, search]);
-
-  // Switching workspaces resets archivedLoaded so the Archived tab's
-  // lazy-load-once effect (see above) re-fetches for the new workspace
-  // instead of silently keeping whatever was already loaded for the
-  // previous one.
-  const handleWorkspaceSwitch = (workspaceId: string | null) => {
-    setActiveWorkspaceId(workspaceId);
-    setArchivedLoaded(false);
-  };
 
   const handleCreate = async () => {
     if (!studentSession?.rollNumber || !form.name.trim()) return;
@@ -578,16 +564,15 @@ export default function MoodboardsPage() {
 
   // The Assets button needs a concrete workspace even in "All Workspaces"
   // view (activeWorkspaceId === null) — assets are always workspace-scoped,
-  // there's no cross-workspace asset list. Falls back to the first
-  // workspace in the list (in practice always the caller's personal one,
-  // auto-provisioned server-side — see ensurePersonalWorkspace) rather than
-  // hiding the button entirely, which is what it did before: a user with
-  // only their personal workspace (workspaces.length === 1, so the
-  // workspace-switcher pills above never render either) had NO way to ever
-  // set activeWorkspaceId away from null, making Assets permanently
-  // unreachable — the exact "Asset Library cannot be found in the UI" bug.
-  const assetsWorkspaceId = activeWorkspaceId ?? workspaces[0]?.id ?? null;
-  const assetsWorkspaceName = workspaces[0] ? (workspaces[0].is_personal ? 'Personal' : workspaces[0].name) : null;
+  // there's no cross-workspace asset list. Falls back to the caller's
+  // personal workspace (from WorkspaceContext, auto-provisioned server-side
+  // — see ensurePersonalWorkspace) rather than hiding the button entirely,
+  // which is what it did before this fallback existed: a user with only
+  // their personal workspace had NO way to ever set activeWorkspaceId away
+  // from null, making Assets permanently unreachable — the "Asset Library
+  // cannot be found in the UI" bug this fallback fixes.
+  const assetsWorkspaceId = activeWorkspaceId ?? personalWorkspace?.id ?? null;
+  const assetsWorkspaceName = personalWorkspace ? (personalWorkspace.is_personal ? 'Personal' : personalWorkspace.name) : null;
 
   const filteredSortedBoards = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -642,79 +627,26 @@ export default function MoodboardsPage() {
         </div>
       </motion.div>
 
-      {/* Workspace switcher — the pill row is only shown once there's more
-          than the personal workspace to switch between, so a user who has
-          never created/joined a real workspace sees no change to this
-          page at all. "All" (activeWorkspaceId = null) is always first
-          and is the default on load, preserving the exact pre-existing
-          unscoped behavior for every list below. The "Manage" affordance
-          is shown whenever signed in (even with just the personal
-          workspace) since it's also the discovery path for CREATING a
-          first real workspace. */}
-      {studentSession && (
+      {/* Workspace switching/management now lives in the shell's sidebar
+          (WorkspaceSwitcher.tsx, V2.0 Phase 2/4) via WorkspaceContext —
+          this page no longer renders its own switcher pill row or
+          WorkspacesPanel/WorkspaceSettingsModal. The Assets quick-action
+          stays here as a convenience for jumping into the library without
+          leaving the Moodboards list (AssetsPage.tsx, Phase 5, is the
+          first-class home for browsing/managing assets). */}
+      {studentSession && assetsWorkspaceId && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-          {workspaces.length > 1 && (
-            <>
-              <button
-                onClick={() => handleWorkspaceSwitch(null)}
-                style={{
-                  padding: '6px 14px', borderRadius: 'var(--radius-pill)',
-                  border: `1px solid ${activeWorkspaceId === null ? 'var(--color-brand)' : 'var(--color-border)'}`,
-                  background: activeWorkspaceId === null ? 'var(--color-brand)' : 'none',
-                  color: activeWorkspaceId === null ? '#fff' : 'var(--color-ink-muted)',
-                  fontSize: 13, fontWeight: activeWorkspaceId === null ? 600 : 400,
-                  fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-                }}
-              >
-                All Workspaces
-              </button>
-              {workspaces.map(ws => (
-                <button
-                  key={ws.id}
-                  onClick={() => handleWorkspaceSwitch(ws.id)}
-                  style={{
-                    padding: '6px 14px', borderRadius: 'var(--radius-pill)',
-                    border: `1px solid ${activeWorkspaceId === ws.id ? 'var(--color-brand)' : 'var(--color-border)'}`,
-                    background: activeWorkspaceId === ws.id ? 'var(--color-brand)' : 'none',
-                    color: activeWorkspaceId === ws.id ? '#fff' : 'var(--color-ink-muted)',
-                    fontSize: 13, fontWeight: activeWorkspaceId === ws.id ? 600 : 400,
-                    fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-                  }}
-                >
-                  {ws.is_personal ? 'Personal' : ws.name}
-                </button>
-              ))}
-            </>
-          )}
           <button
-            onClick={() => setShowWorkspacesPanel(true)}
+            onClick={() => setShowAssetLibrary(true)}
             style={{
               padding: '6px 14px', borderRadius: 'var(--radius-pill)',
               border: '1px solid var(--color-border)', background: 'none',
               color: 'var(--color-ink-muted)', fontSize: 13,
               fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-              display: 'flex', alignItems: 'center', gap: 6,
             }}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-            Manage Workspaces
+            Assets
           </button>
-          {assetsWorkspaceId && (
-            <button
-              onClick={() => setShowAssetLibrary(true)}
-              style={{
-                padding: '6px 14px', borderRadius: 'var(--radius-pill)',
-                border: '1px solid var(--color-border)', background: 'none',
-                color: 'var(--color-ink-muted)', fontSize: 13,
-                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}
-            >
-              Assets
-            </button>
-          )}
         </div>
       )}
 
@@ -724,36 +656,6 @@ export default function MoodboardsPage() {
           workspaceName={activeWorkspaceLabel ?? assetsWorkspaceName ?? 'Workspace'}
           roll={studentSession.rollNumber}
           onClose={() => setShowAssetLibrary(false)}
-        />
-      )}
-
-      <WorkspacesPanel
-        open={showWorkspacesPanel}
-        onClose={() => setShowWorkspacesPanel(false)}
-        workspaces={workspaces}
-        activeWorkspaceId={activeWorkspaceId}
-        roll={studentSession?.rollNumber ?? ''}
-        onSwitch={workspaceId => { handleWorkspaceSwitch(workspaceId); setShowWorkspacesPanel(false); }}
-        onOpenSettings={workspaceId => setSettingsWorkspaceId(workspaceId)}
-        onWorkspaceCreated={workspace => setWorkspaces(prev => [...prev, workspace])}
-      />
-
-      {settingsWorkspaceId && studentSession && (
-        <WorkspaceSettingsModal
-          workspaceId={settingsWorkspaceId}
-          roll={studentSession.rollNumber}
-          onClose={() => setSettingsWorkspaceId(null)}
-          onRenamed={(workspaceId, name) => setWorkspaces(prev => prev.map(w => w.id === workspaceId ? { ...w, name } : w))}
-          onDeleted={workspaceId => {
-            setWorkspaces(prev => prev.filter(w => w.id !== workspaceId));
-            if (activeWorkspaceId === workspaceId) handleWorkspaceSwitch(null);
-            setSettingsWorkspaceId(null);
-          }}
-          onLeft={workspaceId => {
-            setWorkspaces(prev => prev.filter(w => w.id !== workspaceId));
-            if (activeWorkspaceId === workspaceId) handleWorkspaceSwitch(null);
-            setSettingsWorkspaceId(null);
-          }}
         />
       )}
 
