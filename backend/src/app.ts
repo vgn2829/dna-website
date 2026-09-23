@@ -14,6 +14,7 @@ import liveSessionsRouter from './routes/liveSessions';
 import boardsRouter from './routes/boards';
 import workspacesRouter from './routes/workspaces';
 import assetsRouter from './routes/assets';
+import projectsRouter from './routes/projects';
 import notificationsRouter from './routes/notifications';
 import settingsRouter from './routes/settings';
 import coordinatorsRouter from './routes/coordinators';
@@ -132,6 +133,7 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
   app.use('/api/boards',        boardsRouter);
   app.use('/api/workspaces',    workspacesRouter);
   app.use('/api/assets',        assetsRouter);
+  app.use('/api/projects',      projectsRouter);
   app.use('/api/notifications', notificationsRouter);
   if (realtime) {
     app.use('/api/boards', createVersionsRouter(realtime));
