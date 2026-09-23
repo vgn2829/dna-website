@@ -222,8 +222,29 @@ type CommentThreadPanelProps =
       onClose: () => void;
     };
 
+
+// MOBILE BREAKPOINT (V2.6 Phase C) — 768 matches the repo's existing
+// use-mobile.ts constant, so the comment panel changes shape at the same
+// width as the rest of the app rather than at a second, drifting one.
+const MOBILE_BREAKPOINT = 768;
+
+function useIsNarrow(): boolean {
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < MOBILE_BREAKPOINT
+  );
+  useEffect(() => {
+    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
+    const onChange = () => setIsNarrow(window.innerWidth < MOBILE_BREAKPOINT);
+    mql.addEventListener('change', onChange);
+    onChange();
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+  return isNarrow;
+}
+
 export function CommentThreadPanel(props: CommentThreadPanelProps) {
   const { mode, currentRoll, canModerate, onClose } = props;
+  const isNarrow = useIsNarrow();
   const [composerValue, setComposerValue] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -277,11 +298,27 @@ export function CommentThreadPanel(props: CommentThreadPanelProps) {
     <motion.div
       role="dialog"
       aria-label={mode === 'draft' ? 'New comment' : 'Comment thread'}
-      initial={{ opacity: 0, x: 24 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 24 }}
+      initial={isNarrow ? { opacity: 0, y: 24 } : { opacity: 0, x: 24 }}
+      animate={isNarrow ? { opacity: 1, y: 0 } : { opacity: 1, x: 0 }}
+      exit={isNarrow ? { opacity: 0, y: 24 } : { opacity: 0, x: 24 }}
       transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-      style={{
+      // DESKTOP: unchanged — the same right-hand rail as before.
+      // NARROW (<768px): a bottom sheet pinned to the viewport's own
+      // edges. The old fixed 320px rail occupied ~82% of a 390px screen
+      // and could overflow it entirely; anchoring left/right to 0 and
+      // capping the height at 70vh keeps the canvas visible above the
+      // sheet, guarantees no horizontal overflow at any width, and keeps
+      // every control (reply, edit, delete, resolve, close) on screen.
+      style={isNarrow ? {
+        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 9000,
+        maxWidth: '100%', maxHeight: '70vh',
+        background: 'var(--color-surface-1)', border: '1px solid var(--color-hairline)',
+        borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0',
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '0 -8px 24px rgba(0,0,0,0.25)',
+        // Respect the home-indicator / notch area on phones.
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      } : {
         position: 'fixed', top: 96, right: 0, bottom: 24, width: 320, zIndex: 9000,
         background: 'var(--color-surface-1)', border: '1px solid var(--color-hairline)',
         borderRadius: 'var(--radius-xl) 0 0 var(--radius-xl)',

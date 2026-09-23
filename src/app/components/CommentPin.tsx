@@ -66,6 +66,14 @@ function CommentPinImpl({ comment, x, y, replyCount, isOpen, isUnread, isOrphane
       }}
       onPointerDown={(e) => e.stopPropagation()}
     >
+      {/* TOUCH TARGET (V2.6 Phase C) — the visible pin stays 32px so the
+          canvas doesn't get visually heavier, but the tappable area is
+          extended to ~44px via a transparent inset overlay. Pointer events
+          land on the parent button, so this needs no handler of its own. */}
+      <span
+        aria-hidden="true"
+        style={{ position: 'absolute', inset: -6, borderRadius: '50%' }}
+      />
       {initial}
       {isOrphaned && (
         <span

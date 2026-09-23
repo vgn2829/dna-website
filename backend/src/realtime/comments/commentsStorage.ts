@@ -194,3 +194,36 @@ export async function countComments(boardId: string): Promise<number> {
   );
   return (result.rows[0] as { count: number }).count;
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// READ STATE (V2.6 Phase E) — a per-(board, user) watermark, not a row per
+// comment. See schema.ts's board_comment_reads comment for why. Same
+// division of responsibility as the rest of this module: no authorization
+// here, callers (routes/comments.ts) enforce board access first.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Returns null when the user has never opened this board's comments —
+// which the caller renders as "everything is unread", the correct
+// first-visit behaviour.
+export async function getLastSeenAt(boardId: string, roll: string): Promise<string | null> {
+  const result = await pool.query(
+    'SELECT last_seen_at FROM board_comment_reads WHERE board_id = $1 AND roll_number = $2',
+    [boardId, roll]
+  );
+  return (result.rows[0] as { last_seen_at: string } | undefined)?.last_seen_at ?? null;
+}
+
+// Upsert. Deliberately monotonic — GREATEST() means a late-arriving or
+// out-of-order request can never move a user's watermark BACKWARDS and
+// resurrect threads they have already read.
+export async function markSeen(boardId: string, roll: string, seenAt: string): Promise<string> {
+  const result = await pool.query(
+    `INSERT INTO board_comment_reads (board_id, roll_number, last_seen_at)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (board_id, roll_number)
+     DO UPDATE SET last_seen_at = GREATEST(board_comment_reads.last_seen_at, EXCLUDED.last_seen_at)
+     RETURNING last_seen_at`,
+    [boardId, roll, seenAt]
+  );
+  return (result.rows[0] as { last_seen_at: string }).last_seen_at;
+}

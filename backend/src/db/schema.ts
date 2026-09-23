@@ -1066,6 +1066,35 @@ export async function initSchema(): Promise<void> {
   // New comments always carry a page, so the ambiguity does not grow.
   await pool.query(`ALTER TABLE board_comments ADD COLUMN IF NOT EXISTS anchor_page_id TEXT`);
 
+  // PERSISTENT COMMENT READ STATE (V2.6 Phase E) — one row per
+  // (board, user), NOT one per comment.
+  //
+  // THE BUG THIS FIXES: "unread" lived only in BoardPage's
+  // useState(() => Date.now()), so it reset on every mount. Refreshing the
+  // page marked every thread read, and the state was per-tab rather than
+  // per-user. There was no server-side read surface at all — no table, no
+  // endpoint (verified: GET .../comments/read-state returned 404).
+  //
+  // WHY A WATERMARK, NOT A ROW PER COMMENT: a single last_seen_at per
+  // (board, roll) answers the only question the UI actually asks — "has
+  // this thread had activity since I last looked?" — by comparing against
+  // the thread's newest updated_at. A row per comment would be orders of
+  // magnitude more storage and writes for the same answer, which the phase
+  // brief explicitly warned against. Per-thread granularity still works,
+  // because each thread is compared against the same watermark
+  // independently.
+  //
+  // No backfill: a missing row means "never looked", which correctly shows
+  // existing activity as unread the first time a user opens a board.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS board_comment_reads (
+      board_id     TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+      roll_number  TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      PRIMARY KEY (board_id, roll_number)
+    )
+  `);
+
   console.log('board_comments migration done');
 
   // Workspaces (Commit 1 of the workspace/organization layer) — the

@@ -328,6 +328,55 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
     }
   });
 
+  // GET /api/boards/:id/comments/read-state — this user's watermark for
+  // this board (V2.6 Phase E). null means "never looked", which the client
+  // renders as everything unread.
+  //
+  // Read state is strictly per (board, caller): the roll comes from the
+  // verified token, never from the request, so one user can neither read
+  // nor affect another's state. A revoked user is rejected by the same
+  // roleCanComment bar the list endpoint uses, so they cannot learn that a
+  // board has new activity either.
+  router.get('/:id/comments/read-state', requireStudent, async (req: Request, res: Response) => {
+    try {
+      const roll = req.studentRoll!;
+      const boardId = param(req.params.id);
+
+      const boardRole = await getBoardRole(boardId, roll);
+      if (boardRole === null || !roleCanComment(boardRole.role)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const lastSeenAt = await commentsStorage.getLastSeenAt(boardId, roll);
+      res.json({ lastSeenAt });
+    } catch (err) {
+      console.error('Get comment read-state error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // POST /api/boards/:id/comments/read-state — move this user's watermark
+  // forward. The timestamp is generated SERVER-side rather than taken from
+  // the body, so a client cannot mark itself read into the future and
+  // permanently suppress genuine unread activity.
+  router.post('/:id/comments/read-state', requireStudent, async (req: Request, res: Response) => {
+    try {
+      const roll = req.studentRoll!;
+      const boardId = param(req.params.id);
+
+      const boardRole = await getBoardRole(boardId, roll);
+      if (boardRole === null || !roleCanComment(boardRole.role)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const lastSeenAt = await commentsStorage.markSeen(boardId, roll, new Date().toISOString());
+      res.json({ lastSeenAt });
+    } catch (err) {
+      console.error('Set comment read-state error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // POST /api/boards/:id/comments/:commentId/resolve — thread roots only.
   // Requires board-edit access (not just authorship) — resolving affects
   // what every collaborator sees by default (resolved threads hide), so

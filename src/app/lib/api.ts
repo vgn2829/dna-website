@@ -752,6 +752,15 @@ export const api = {
       anchorPageId?: string;
     }) =>
       request<BoardComment>('POST', `/boards/${boardId}/comments`, { body: data, roll }),
+    // Persistent per-(board, user) unread watermark (V2.6 Phase E).
+    // lastSeenAt is null when this user has never opened the board's
+    // comments, which the UI renders as "everything unread".
+    getCommentReadState: (boardId: string, roll: string) =>
+      request<{ lastSeenAt: string | null }>('GET', `/boards/${boardId}/comments/read-state`, { roll }),
+    // The server stamps the time, so a client cannot mark itself read into
+    // the future and permanently suppress real activity.
+    markCommentsSeen: (boardId: string, roll: string) =>
+      request<{ lastSeenAt: string }>('POST', `/boards/${boardId}/comments/read-state`, { roll }),
     editComment: (boardId: string, roll: string, commentId: string, content: string) =>
       request<BoardComment>('PUT', `/boards/${boardId}/comments/${commentId}`, { body: { content }, roll }),
     deleteComment: (boardId: string, roll: string, commentId: string) =>

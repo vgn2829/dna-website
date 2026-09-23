@@ -192,12 +192,49 @@ export default function BoardPage() {
   // tradeoff, same one the manual canvas path already accepts for
   // document content itself).
   const [commentMode, setCommentMode] = useState(false);
-  // "Unread" is a purely local, this-session concept — no read-receipt
-  // state is persisted server-side (out of scope: no notifications system
-  // per the spec). Reset to "now" whenever comment mode opens, so a pin
-  // is marked unread only if its thread got new activity since the LAST
-  // time this student actually looked, not since some absolute epoch.
-  const [lastSeenAt, setLastSeenAt] = useState(() => Date.now());
+  // PERSISTENT UNREAD WATERMARK (V2.6 Phase E).
+  //
+  // This used to be useState(() => Date.now()) — purely in-memory, so it
+  // reset on every mount: refreshing the page silently marked every thread
+  // read, and the state was per-tab rather than per-user. It is now backed
+  // by board_comment_reads (one row per board+user, not per comment) and
+  // read back on mount.
+  //
+  // 0 while loading means "nothing is read yet", so pins briefly show as
+  // unread rather than briefly showing as read — failing toward showing
+  // activity is the safer default for an unread indicator.
+  const [lastSeenAt, setLastSeenAt] = useState(0);
+
+  // Load this user's watermark for this board. A 403 (revoked) or any
+  // error leaves it at 0; the comment list itself is separately authorized,
+  // so a revoked user sees no comments to mark unread in the first place.
+  useEffect(() => {
+    const boardId = board?.id;
+    const roll = studentSession?.rollNumber;
+    if (!boardId || !roll) return;
+    let cancelled = false;
+    api.boards.getCommentReadState(boardId, roll)
+      .then(res => {
+        if (cancelled) return;
+        setLastSeenAt(res.lastSeenAt ? new Date(res.lastSeenAt).getTime() : 0);
+      })
+      .catch(() => { /* leave at 0 — see above */ });
+    return () => { cancelled = true; };
+  }, [board?.id, studentSession?.rollNumber]);
+
+  // Opening comment mode is "I am looking at these now": persist the
+  // watermark server-side and move the local one immediately, so the UI
+  // updates without waiting for the round-trip. The server stamps the
+  // authoritative time and only ever moves a watermark FORWARD.
+  const markCommentsSeen = useCallback(() => {
+    const boardId = board?.id;
+    const roll = studentSession?.rollNumber;
+    setLastSeenAt(Date.now());
+    if (!boardId || !roll) return;
+    api.boards.markCommentsSeen(boardId, roll)
+      .then(res => setLastSeenAt(new Date(res.lastSeenAt).getTime()))
+      .catch(() => { /* local watermark already moved; retried on next open */ });
+  }, [board?.id, studentSession?.rollNumber]);
   const commentsApi = useBoardComments({
     boardId: board?.id ?? '',
     roll: studentSession?.rollNumber,
@@ -562,8 +599,9 @@ export default function BoardPage() {
                   // Opening comment mode is treated as "caught up" —
                   // clears the unread badge/dot state for pins, since the
                   // student is about to actually look at the board's
-                  // comments. See lastSeenAt's own declaration comment.
-                  if (next) setLastSeenAt(Date.now());
+                  // comments, and persists that server-side so it survives
+                  // a refresh. See lastSeenAt's own declaration comment.
+                  if (next) markCommentsSeen();
                   return next;
                 });
               }}
