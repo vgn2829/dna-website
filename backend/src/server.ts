@@ -44,6 +44,7 @@ import { createApp } from './app';
 import { attachRealtimeServer } from './realtime/server';
 import { RoomManager } from './realtime/rooms';
 import { BoardCanvasPersistence } from './realtime/roomPersistence';
+import { checkRoomAccessForRoll, roleCanWriteCanvas } from './realtime/roomAccess';
 import { createConnectionHandler, startPeriodicRevalidation, type StudentSessionMeta } from './realtime/connectionHandler';
 import { VersionHistoryService } from './realtime/history/versionHistoryService';
 import { RestoreService } from './realtime/history/restoreService';
@@ -92,7 +93,27 @@ async function main() {
   // meet, keeping both independently reusable for future collaboration
   // features (comments, presence, etc.) that aren't in scope for this commit.
   const persistence = new BoardCanvasPersistence();
-  const roomManager = new RoomManager<StudentSessionMeta>(persistence);
+  // The second argument is the per-push live authorization check (V2.5
+  // Phase 3). Injected here — the composition root is the only place that
+  // is allowed to know both RoomManager and roomAccess — so RoomManager
+  // itself stays authorization-agnostic. It reuses checkRoomAccessForRoll
+  // and roleCanWriteCanvas, the SAME helpers the connect-time check and
+  // the periodic re-validator already use; no new access path, no new
+  // query shape, no new table.
+  //
+  // This closes a real vulnerability: without it, a push was authorized
+  // against a cached boolean refreshed only every 15s, so a user whose
+  // board access had just been revoked could still mutate the board for
+  // up to 15s on their already-open socket (reproduced over the wire —
+  // the write was accepted and persisted). See WRITE_DECISION_TTL_MS.
+  const roomManager = new RoomManager<StudentSessionMeta>(
+    persistence,
+    async (roomId, meta) => {
+      const access = await checkRoomAccessForRoll(roomId, meta.roll);
+      if (!access.ok) return false;
+      return roleCanWriteCanvas(access.role, access.isArchived);
+    }
+  );
 
   // Version history (Commit 5) — constructed here, BEFORE createApp(), since
   // the REST endpoints in routes/versions.ts need real service instances to
