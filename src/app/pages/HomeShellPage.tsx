@@ -1,26 +1,27 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { api, type Board, type Asset } from '../lib/api';
+import { api, type Board, type Asset, type Project } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
 import { useWorkspace } from '../context/WorkspaceContext';
 
 // ─────────────────────────────────────────────────────────────────────────
-// HomeShellPage (V2.0 Phase 3) — the signed-in Home landing page for the
-// workspace app shell. Deliberately small per the brief ("do not overbuild
-// Home in this phase... do NOT introduce a new activity-log database"):
-// recent Moodboards, favorite Moodboards, recent Assets (when a concrete
-// workspace is resolvable), and quick-create actions. Projects/Templates
-// recents are intentionally omitted — those features don't exist yet
-// (Phase 6/7 are placeholders only), so there is nothing real to surface;
-// adding them here would mean either fake data or a premature schema
-// dependency, both explicitly out of scope.
+// HomeShellPage (V2.0 Phase 3; V2.2 Phase 8 adds Recent Projects) — the
+// signed-in Home landing page for the workspace app shell. Deliberately
+// small per the V2.0 brief ("do not overbuild Home... do NOT introduce a
+// new activity-log database"): recent Moodboards, favorite Moodboards,
+// recent Assets, recent Projects (each only when a concrete workspace is
+// resolvable), and quick-create actions. Templates recents remain
+// omitted — that feature still doesn't exist (still a placeholder page),
+// so there is nothing real to surface for it yet.
 //
-// Reuses existing, already-shipped endpoints only — api.boards.getMyBoards
-// (same call MoodboardsPage already makes) and api.assets.list (same call
-// AssetLibrary already makes) — filtered/sliced client-side for "recent"
-// and "favorite". No new backend aggregate endpoint was needed for this
-// phase's scope; if a future phase needs true cross-workspace recents,
-// that's a small, explicitly-scoped read-only addition then, not now.
+// Reuses existing, already-shipped endpoints only — api.boards.getMyBoards,
+// api.assets.list, and (V2.2) api.projects.list, each already used
+// elsewhere (MoodboardsPage/AssetLibrary/ProjectsPage) — filtered/sliced
+// client-side for "recent"/"favorite". No new backend aggregate endpoint;
+// api.projects.list's own board_count join is already cheap (a single
+// COUNT via LEFT JOIN, same shape the route uses everywhere else), so
+// showing it here costs nothing extra per the brief's "basic board count
+// if cheap" allowance.
 // ─────────────────────────────────────────────────────────────────────────
 
 function timeAgo(iso: string): string {
@@ -56,6 +57,27 @@ function BoardCard({ board }: { board: Board }) {
   );
 }
 
+function ProjectCard({ project }: { project: Project }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      onClick={() => navigate(`/projects/${project.id}`)}
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'left',
+        padding: 14, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)',
+        background: 'var(--color-surface-1)', cursor: 'pointer', minWidth: 0,
+      }}
+    >
+      <span style={{ fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 600, color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {project.name}
+      </span>
+      <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--color-ink-muted)' }}>
+        {project.board_count} board{project.board_count === 1 ? '' : 's'}
+      </span>
+    </button>
+  );
+}
+
 function SectionHeading({ title, action }: { title: string; action?: { label: string; onClick: () => void } }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -81,6 +103,7 @@ export default function HomeShellPage() {
 
   const [myBoards, setMyBoards] = useState<Board[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -106,6 +129,25 @@ export default function HomeShellPage() {
     let cancelled = false;
     api.assets.list(studentSession.rollNumber, targetWorkspaceId)
       .then(res => { if (!cancelled) setAssets(res.assets.slice(0, 6)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [studentSession?.rollNumber, activeWorkspaceId, personalWorkspace?.id]);
+
+  // Projects — same workspace-scoping/personal-fallback shape as Assets
+  // above (V2.2 Phase 8); a project has no cross-workspace view (see
+  // api.ts's own comment on why api.projects.list requires a concrete
+  // workspace_id).
+  useEffect(() => {
+    if (!studentSession?.rollNumber) return;
+    const targetWorkspaceId = activeWorkspaceId ?? personalWorkspace?.id;
+    if (!targetWorkspaceId) return;
+    let cancelled = false;
+    api.projects.list(studentSession.rollNumber, targetWorkspaceId)
+      .then(list => {
+        if (cancelled) return;
+        const active = list.filter(p => !p.is_archived).sort((a, b) => b.created_at.localeCompare(a.created_at));
+        setProjects(active.slice(0, 6));
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [studentSession?.rollNumber, activeWorkspaceId, personalWorkspace?.id]);
@@ -139,16 +181,28 @@ export default function HomeShellPage() {
         <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(32px,4.5vw,52px)', fontWeight: 500, lineHeight: 0.95, letterSpacing: '-2px', color: 'var(--color-ink)' }}>
           {studentSession.name ? `Welcome back, ${studentSession.name.split(' ')[0]}` : 'Home'}
         </h1>
-        <button
-          onClick={() => navigate('/moodboards')}
-          style={{
-            padding: '10px 20px', background: 'var(--color-brand)', color: '#fff',
-            border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14,
-            fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
-          }}
-        >
-          + New Board
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            onClick={() => navigate('/projects')}
+            style={{
+              padding: '10px 20px', background: 'none', color: 'var(--color-ink)',
+              border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 14,
+              fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
+            }}
+          >
+            + New Project
+          </button>
+          <button
+            onClick={() => navigate('/moodboards')}
+            style={{
+              padding: '10px 20px', background: 'var(--color-brand)', color: '#fff',
+              border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14,
+              fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
+            }}
+          >
+            + New Board
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -176,6 +230,15 @@ export default function HomeShellPage() {
               </p>
             )}
           </div>
+
+          {projects.length > 0 && (
+            <div style={{ marginBottom: 36 }}>
+              <SectionHeading title="Recent Projects" action={{ label: 'View all', onClick: () => navigate('/projects') }} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                {projects.map(p => <ProjectCard key={p.id} project={p} />)}
+              </div>
+            </div>
+          )}
 
           {assets.length > 0 && (
             <div style={{ marginBottom: 36 }}>
