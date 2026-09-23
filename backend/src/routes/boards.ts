@@ -610,6 +610,15 @@ router.post('/', createBoardLimiter, requireStudent, async (req: Request, res: R
       // role) — otherwise a board could be silently created inside a
       // workspace its creator has no business putting content into.
       workspace_id: z.string().optional(),
+      // Optional (V2.2 Projects layer): if omitted, the board is created
+      // ungrouped (project_id NULL) — the exact pre-V2.2 behavior, so
+      // every existing caller keeps working unchanged. If provided, must
+      // belong to the SAME workspace the board is about to be created in
+      // (resolved above/below as workspaceId) — verified after
+      // workspaceId is known, never trusted from the client in isolation,
+      // so a project_id can't smuggle a board into a project that
+      // belongs to a workspace the caller only guessed the id of.
+      project_id: z.string().optional(),
     });
 
     const parsed = schema.parse(req.body);
@@ -634,6 +643,27 @@ router.post('/', createBoardLimiter, requireStudent, async (req: Request, res: R
       workspaceId = await ensurePersonalWorkspace(roll, ownerName);
     }
 
+    let projectId: string | null = null;
+    if (parsed.project_id) {
+      const project = await pool.query(
+        'SELECT workspace_id FROM projects WHERE id = $1', [parsed.project_id]
+      );
+      const projectRow = project.rows[0] as { workspace_id: string } | undefined;
+      if (!projectRow) {
+        return res.status(404).json({ error: 'Project not found' });
+      }
+      // The project must belong to the board's own (already-authorized)
+      // workspace — membership in the WORKSPACE was already verified
+      // above; this additionally confirms the project itself lives in
+      // that same workspace, never a different one the caller happens to
+      // also have access to. This is the "never allow cross-workspace
+      // attachment" guarantee, enforced at insert time.
+      if (projectRow.workspace_id !== workspaceId) {
+        return res.status(400).json({ error: 'Project does not belong to that workspace' });
+      }
+      projectId = parsed.project_id;
+    }
+
     const id = uuidv4();
     const roomId = uuidv4();
     const now = new Date().toISOString();
@@ -641,12 +671,12 @@ router.post('/', createBoardLimiter, requireStudent, async (req: Request, res: R
     const result = await pool.query(`
       INSERT INTO boards
         (id, name, description, owner_roll,
-         owner_name, visibility, room_id, created_at, updated_at, workspace_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)
+         owner_name, visibility, room_id, created_at, updated_at, workspace_id, project_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10)
       RETURNING *
     `, [
       id, parsed.name, parsed.description ?? null,
-      roll, ownerName, parsed.visibility, roomId, now, workspaceId,
+      roll, ownerName, parsed.visibility, roomId, now, workspaceId, projectId,
     ]);
 
     res.status(201).json({ ...result.rows[0], item_count: 0, member_count: 0, is_favorite: false });
@@ -660,12 +690,13 @@ router.post('/', createBoardLimiter, requireStudent, async (req: Request, res: R
 });
 
 // PUT /api/boards/:id
-// Update board name/description/visibility (owner only)
+// Update board name/description/visibility/project (owner only)
 router.put('/:id', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
+    const boardId = param(req.params.id);
 
-    const owner = await isOwner(param(req.params.id), roll);
+    const owner = await isOwner(boardId, roll);
     if (!owner) {
       return res.status(403).json({ error: 'Only owner can update board' });
     }
@@ -676,9 +707,38 @@ router.put('/:id', requireStudent, async (req: Request, res: Response) => {
       visibility: z.enum(['private', 'shared']).optional(),
       edit_mode: z.enum(['members_only', 'anyone']).optional(),
       is_archived: z.boolean().optional(),
+      // V2.2 Projects layer — move this board into a project, or pass
+      // null to un-group it back to workspace-level. Omitted entirely =
+      // leave project_id untouched (the usual "field not in the request
+      // body isn't touched" convention every other field here already
+      // follows); explicit null IS a meaningful value (distinct from
+      // "not provided"), so this is nullable().optional(), not just
+      // optional() — the fields-array pattern below checks `!== undefined`
+      // specifically so an explicit null still gets included.
+      project_id: z.string().nullable().optional(),
     });
 
     const parsed = schema.parse(req.body);
+
+    // Resolved once, only if project_id was actually supplied — this
+    // board's own (immutable-via-this-route) workspace_id is what a
+    // target project must belong to. NEVER allow cross-workspace
+    // attachment: a project from a different workspace than this board's
+    // own is rejected outright, even if the caller happens to also have
+    // access to that other project.
+    if (parsed.project_id !== undefined && parsed.project_id !== null) {
+      const boardWorkspace = await pool.query('SELECT workspace_id FROM boards WHERE id = $1', [boardId]);
+      const boardWorkspaceId = (boardWorkspace.rows[0] as { workspace_id: string } | undefined)?.workspace_id;
+      const project = await pool.query('SELECT workspace_id FROM projects WHERE id = $1', [parsed.project_id]);
+      const projectRow = project.rows[0] as { workspace_id: string } | undefined;
+      if (!projectRow) {
+        return res.status(404).json({ error: 'Project not found' });
+      }
+      if (projectRow.workspace_id !== boardWorkspaceId) {
+        return res.status(400).json({ error: 'Project does not belong to this board\'s workspace' });
+      }
+    }
+
     const fields: string[] = [];
     const values: unknown[] = [];
     let i = 1;
@@ -688,6 +748,7 @@ router.put('/:id', requireStudent, async (req: Request, res: Response) => {
     if (parsed.visibility !== undefined) { fields.push(`visibility = $${i++}`); values.push(parsed.visibility); }
     if (parsed.edit_mode !== undefined) { fields.push(`edit_mode = $${i++}`); values.push(parsed.edit_mode); }
     if (parsed.is_archived !== undefined) { fields.push(`is_archived = $${i++}`); values.push(parsed.is_archived); }
+    if (parsed.project_id !== undefined) { fields.push(`project_id = $${i++}`); values.push(parsed.project_id); }
 
     if (fields.length === 0) {
       return res.status(400).json({ error: 'Nothing to update' });
