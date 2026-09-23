@@ -91,6 +91,12 @@ const createCommentSchema = z.object({
   anchorShapeId: z.string().min(1).max(200).optional(),
   anchorX: z.number().finite().optional(),
   anchorY: z.number().finite().optional(),
+  // Which tldraw page the anchor lives on (V2.6 Phase B). Optional at the
+  // schema level: a reply inherits it from the thread root, and a client
+  // older than this change simply omits it (the comment is then stored
+  // with a NULL page and behaves exactly as every pre-Phase-B comment
+  // does — see schema.ts's compatibility note).
+  anchorPageId: z.string().min(1).max(200).optional(),
 });
 
 export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
@@ -135,7 +141,10 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
       }
       const body = parsed.data;
 
-      let anchor: { anchorType: 'canvas' | 'shape'; anchorShapeId?: string; anchorX: number; anchorY: number };
+      let anchor: {
+        anchorType: 'canvas' | 'shape'; anchorShapeId?: string;
+        anchorX: number; anchorY: number; anchorPageId?: string;
+      };
       // Hoisted out of the if-branch below so the notification block
       // further down (which needs the root's author for a reply) doesn't
       // have to re-fetch it.
@@ -154,6 +163,10 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
           anchorShapeId: root.anchorShapeId ?? undefined,
           anchorX: root.anchorX,
           anchorY: root.anchorY,
+          // Inherited too, so a reply can never land on a different page
+          // from its own thread root — including inheriting NULL from a
+          // legacy root, which keeps that whole thread legacy-behaving.
+          anchorPageId: root.anchorPageId ?? undefined,
         };
       } else {
         if (body.anchorType === undefined || body.anchorX === undefined || body.anchorY === undefined) {
@@ -167,6 +180,7 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
           anchorShapeId: body.anchorShapeId,
           anchorX: body.anchorX,
           anchorY: body.anchorY,
+          anchorPageId: body.anchorPageId,
         };
       }
 
@@ -180,6 +194,7 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
         anchorShapeId: anchor.anchorShapeId ?? null,
         anchorX: anchor.anchorX,
         anchorY: anchor.anchorY,
+        anchorPageId: anchor.anchorPageId ?? null,
         content: body.content,
       });
 

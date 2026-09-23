@@ -1046,6 +1046,26 @@ export async function initSchema(): Promise<void> {
     ON board_comments (parent_comment_id)
   `);
 
+  // PAGE-AWARE ANCHORS (V2.6 Phase B) — which tldraw page a comment's
+  // anchor lives on.
+  //
+  // THE BUG THIS FIXES: nothing recorded a page, so every comment rendered
+  // on every page of a multi-page board. A comment pinned on Page A showed
+  // up at the same coordinates on Page B, C, ... — reproduced against the
+  // real router (the create endpoint silently dropped an anchorPageId and
+  // the list endpoint had no page dimension to filter on). tldraw's page
+  // menu is available to users, so this is reachable in normal use.
+  //
+  // DELIBERATELY NULLABLE, with NO backfill. A NULL here means "legacy
+  // comment, created before pages were tracked", and the renderer treats
+  // those as belonging to whichever page is being viewed — i.e. exactly
+  // the pre-existing behaviour, preserved. Backfilling every existing row
+  // to the board's first page would be a guess (the comment may genuinely
+  // have been made on another page) and would silently HIDE comments that
+  // are visible today, which is strictly worse than leaving them global.
+  // New comments always carry a page, so the ambiguity does not grow.
+  await pool.query(`ALTER TABLE board_comments ADD COLUMN IF NOT EXISTS anchor_page_id TEXT`);
+
   console.log('board_comments migration done');
 
   // Workspaces (Commit 1 of the workspace/organization layer) — the

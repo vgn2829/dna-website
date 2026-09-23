@@ -27,6 +27,12 @@ export interface BoardComment {
   anchorShapeId: string | null;
   anchorX: number;
   anchorY: number;
+  // Which tldraw page this anchor lives on (V2.6 Phase B). NULL for
+  // comments created before pages were tracked — see schema.ts's own
+  // comment on why those are deliberately not backfilled, and
+  // CommentsOverlay for the "legacy comments show on every page"
+  // compatibility rule that NULL implies.
+  anchorPageId: string | null;
   content: string;
 }
 
@@ -39,6 +45,7 @@ export interface CreateCommentInput {
   anchorShapeId?: string | null;
   anchorX: number;
   anchorY: number;
+  anchorPageId?: string | null;
   content: string;
 }
 
@@ -58,6 +65,7 @@ function rowToComment(row: Record<string, unknown>): BoardComment {
     anchorShapeId: (row.anchor_shape_id as string | null) ?? null,
     anchorX: Number(row.anchor_x),
     anchorY: Number(row.anchor_y),
+    anchorPageId: (row.anchor_page_id as string | null) ?? null,
     content: row.content as string,
   };
 }
@@ -65,7 +73,7 @@ function rowToComment(row: Record<string, unknown>): BoardComment {
 const SELECT_COLUMNS = `
   id, board_id, parent_comment_id, author_roll, author_name,
   created_at, updated_at, resolved_at, resolved_by_roll, deleted_at,
-  anchor_type, anchor_shape_id, anchor_x, anchor_y, content
+  anchor_type, anchor_shape_id, anchor_x, anchor_y, anchor_page_id, content
 `;
 
 export async function createComment(input: CreateCommentInput): Promise<BoardComment> {
@@ -74,12 +82,13 @@ export async function createComment(input: CreateCommentInput): Promise<BoardCom
   const result = await pool.query(
     `INSERT INTO board_comments
        (id, board_id, parent_comment_id, author_roll, author_name,
-        created_at, updated_at, anchor_type, anchor_shape_id, anchor_x, anchor_y, content)
-     VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, $11)
+        created_at, updated_at, anchor_type, anchor_shape_id, anchor_x, anchor_y, anchor_page_id, content)
+     VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, $11, $12)
      RETURNING ${SELECT_COLUMNS}`,
     [
       id, input.boardId, input.parentCommentId ?? null, input.authorRoll, input.authorName,
-      now, input.anchorType, input.anchorShapeId ?? null, input.anchorX, input.anchorY, input.content,
+      now, input.anchorType, input.anchorShapeId ?? null, input.anchorX, input.anchorY,
+      input.anchorPageId ?? null, input.content,
     ]
   );
   return rowToComment(result.rows[0] as Record<string, unknown>);

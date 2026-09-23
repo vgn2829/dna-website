@@ -291,6 +291,10 @@ export interface BoardComment {
   anchorShapeId: string | null;
   anchorX: number;
   anchorY: number;
+  // Which tldraw page this anchor lives on (V2.6 Phase B). null for
+  // comments created before pages were tracked — those render on every
+  // page, preserving their pre-Phase-B behaviour. See CommentsOverlay.
+  anchorPageId: string | null;
   content: string;
 }
 
@@ -745,6 +749,7 @@ export const api = {
       anchorShapeId?: string;
       anchorX?: number;
       anchorY?: number;
+      anchorPageId?: string;
     }) =>
       request<BoardComment>('POST', `/boards/${boardId}/comments`, { body: data, roll }),
     editComment: (boardId: string, roll: string, commentId: string, content: string) =>
