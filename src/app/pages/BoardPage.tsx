@@ -90,6 +90,45 @@ export default function BoardPage() {
       .catch(() => setRealtimeGloballyEnabled(false));
   }, []);
 
+  // Fullscreen (V2.4 Phase 8/9 — Professional Canvas UX polish). The
+  // standard browser Fullscreen API, not a tldraw concept at all — tldraw
+  // has no "fullscreen" notion of its own (confirmed: no such action in
+  // its actions registry), so this is genuinely new, non-duplicate value,
+  // unlike zoom controls (tldraw's own ZoomMenu already has zoom-in/out/
+  // 100%/fit-to-content/fit-to-selection — verified by reading its source
+  // before building anything here, so nothing new was added for that).
+  // Targets the SAME full-screen canvas container this page already
+  // renders (see the outer <div style={{ position: 'fixed', inset: 0 }}>
+  // below) — requesting fullscreen on that element, not document.body,
+  // keeps this page's own top bar inside the fullscreen view rather than
+  // hiding it. Reflects the browser's actual fullscreen state (not just
+  // "did the user click the button") via the fullscreenchange event, so
+  // pressing the browser/OS Escape-to-exit-fullscreen gesture keeps the
+  // button's label/icon correct without this component doing anything
+  // special for that gesture itself.
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === canvasContainerRef.current);
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      canvasContainerRef.current?.requestFullscreen?.().catch(() => {
+        // Fullscreen can be denied (no user gesture, iframe without the
+        // allow="fullscreen" attribute, browser policy) — fails silently,
+        // same as every other best-effort browser-API call in this file
+        // (e.g. handleSave's own network-failure handling). The button
+        // simply stays in its non-fullscreen state.
+      });
+    }
+  }, []);
+
   const [showShare, setShowShare] = useState(false);
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
   // Asset Manager (Phase B) board integration — see TldrawCanvas.tsx's
@@ -339,7 +378,10 @@ export default function BoardPage() {
       // weight into every page load, not just boards that actually insert
       // an asset.
       const { insertImageAsset } = await import('./tldrawCanvasShared');
-      await insertImageAsset(editor, asset.url, asset.filename, asset.width, asset.height);
+      // V2.4 Phase 6 — asset.id is the source-of-truth Asset Manager
+      // record; passed through so the created tldraw asset's meta field
+      // can carry sourceAssetId (see insertImageAsset's own comment).
+      await insertImageAsset(editor, asset.url, asset.filename, asset.width, asset.height, asset.id);
       setShowAssetLibrary(false);
       toast.success('Asset added to board');
     } catch {
@@ -389,7 +431,10 @@ export default function BoardPage() {
   return (
     <>
       {/* Full-screen canvas */}
-      <div style={{ position: 'fixed', inset: 0, zIndex: 300 }}>
+      <div
+        ref={canvasContainerRef}
+        style={{ position: 'fixed', inset: 0, zIndex: 300, background: theme === 'dark' ? '#1a1a1a' : '#ffffff' }}
+      >
 
         {/* Top bar */}
         <div style={{
@@ -472,6 +517,31 @@ export default function BoardPage() {
                   </div>
                 ))}
               </div>
+            )}
+
+            {typeof document.exitFullscreen === 'function' && (
+              <button
+                onClick={toggleFullscreen}
+                title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                aria-pressed={isFullscreen}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 28, height: 28, padding: 0,
+                  background: isFullscreen ? 'var(--color-brand)' : 'none',
+                  border: isFullscreen ? 'none' : `1px solid ${borderColor}`,
+                  borderRadius: 'var(--radius-pill)',
+                  color: isFullscreen ? '#fff' : textMuted, cursor: 'pointer',
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+                  {isFullscreen ? (
+                    <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+                  ) : (
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                  )}
+                </svg>
+              </button>
             )}
 
             <button
