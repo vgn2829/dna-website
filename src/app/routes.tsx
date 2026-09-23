@@ -16,6 +16,7 @@ import { WorkspaceShell } from './components/shell/WorkspaceShell';
 import HomeShellPage from './pages/HomeShellPage';
 import AssetsPage from './pages/AssetsPage';
 import ProjectsPage from './pages/ProjectsPage';
+import ProjectDetailPage from './pages/ProjectDetailPage';
 import TemplatesPage from './pages/TemplatesPage';
 
 export const router = createBrowserRouter([
@@ -50,6 +51,7 @@ export const router = createBrowserRouter([
           { path: 'moodboards', Component: MoodboardsPage },
           { path: 'assets', Component: AssetsPage },
           { path: 'projects', Component: ProjectsPage },
+          { path: 'projects/:id', Component: ProjectDetailPage },
           { path: 'templates', Component: TemplatesPage },
         ],
       },

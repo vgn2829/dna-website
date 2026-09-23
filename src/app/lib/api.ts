@@ -127,6 +127,10 @@ export interface Board {
   thumbnail_url: string | null;
   realtime_enabled: boolean;
   workspace_id: string;
+  // V2.2 Projects layer — null means "ungrouped, workspace-level board",
+  // a permanent valid state, not a migration placeholder. Every V1/V2.0
+  // board stays null unless explicitly moved into a project.
+  project_id: string | null;
 }
 
 export interface BoardDetail extends Board {
@@ -158,6 +162,22 @@ export interface WorkspaceMember {
 
 export interface WorkspaceDetail extends Workspace {
   members: WorkspaceMember[];
+}
+
+// Projects (V2.2) — mirrors backend/src/routes/projects.ts. A pure
+// organizational grouping between a workspace and its boards; no
+// project-level role — access is entirely derived from the caller's
+// workspace_members row (see api.workspaces above), never stored here.
+export interface Project {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  owner_roll: string;
+  owner_name: string | null;
+  created_at: string;
+  is_archived: boolean;
+  board_count: number;
 }
 
 // Mirrors backend/src/routes/assets.ts's toPublicAsset() — note there is
@@ -588,9 +608,9 @@ export const api = {
       request<Board[]>('GET', `/boards/archived${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, { roll }),
     getShared: (roll?: string, workspaceId?: string) =>
       request<Board[]>('GET', `/boards/shared${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, roll ? { roll } : {}),
-    create: (roll: string, data: { name: string; description?: string; visibility?: 'private' | 'shared'; workspace_id?: string }) =>
+    create: (roll: string, data: { name: string; description?: string; visibility?: 'private' | 'shared'; workspace_id?: string; project_id?: string }) =>
       request<Board>('POST', '/boards', { body: data, roll }),
-    update: (id: string, roll: string, data: { name?: string; description?: string; visibility?: 'private' | 'shared'; edit_mode?: 'members_only' | 'anyone'; is_archived?: boolean }) =>
+    update: (id: string, roll: string, data: { name?: string; description?: string; visibility?: 'private' | 'shared'; edit_mode?: 'members_only' | 'anyone'; is_archived?: boolean; project_id?: string | null }) =>
       request<Board>('PUT', `/boards/${id}`, { body: data, roll }),
     getBoard: (id: string, roll?: string) =>
       request<BoardDetail>('GET', `/boards/${id}`, { roll }),
@@ -751,6 +771,25 @@ export const api = {
       request<{ success: boolean }>('DELETE', `/workspaces/${id}/members/${memberRoll}`, { roll }),
     setMemberRole: (id: string, roll: string, memberRoll: string, role: 'admin' | 'member') =>
       request<{ success: boolean; role: string }>('PUT', `/workspaces/${id}/members/${memberRoll}/role`, { body: { role }, roll }),
+  },
+  // Projects (V2.2) — mirrors backend/src/routes/projects.ts. workspace_id
+  // is required on list (unlike boards.getMyBoards/getArchived, which
+  // default to "across all my workspaces" when omitted) — a project has
+  // no meaningful cross-workspace view, so this namespace never offers an
+  // unscoped call shape to begin with.
+  projects: {
+    list: (roll: string, workspaceId: string) =>
+      request<Project[]>('GET', `/projects?workspace_id=${encodeURIComponent(workspaceId)}`, { roll }),
+    create: (roll: string, data: { workspace_id: string; name: string; description?: string }) =>
+      request<Project>('POST', '/projects', { body: data, roll }),
+    get: (id: string, roll: string) =>
+      request<Project>('GET', `/projects/${id}`, { roll }),
+    getBoards: (id: string, roll: string) =>
+      request<Board[]>('GET', `/projects/${id}/boards`, { roll }),
+    update: (id: string, roll: string, data: { name?: string; description?: string | null; is_archived?: boolean }) =>
+      request<Project>('PATCH', `/projects/${id}`, { body: data, roll }),
+    delete: (id: string, roll: string) =>
+      request<{ success: boolean }>('DELETE', `/projects/${id}`, { roll }),
   },
   // Asset Manager (Phase B) — mirrors backend/src/routes/assets.ts. A
   // persistent, workspace-scoped file library, distinct from
