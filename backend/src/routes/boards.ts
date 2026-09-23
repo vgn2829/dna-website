@@ -178,27 +178,80 @@ router.get('/archived', requireStudent, async (req: Request, res: Response) => {
 });
 
 // GET /api/boards/shared
-// Returns all shared, non-archived boards (for discovery)
-// Workspace scoping (workspace/organization layer, Commit 7/9) — this
-// route used to return EVERY shared, non-archived board across the
-// entire app, with no tenancy boundary at all. That's a real leak once
-// multiple workspaces exist: a private team's shared boards would
-// otherwise surface in every OTHER workspace's "discover" feed. Rolled
-// out in two steps to avoid a breaking-change window (see Commit 9,
-// which removes the fallback below once the frontend always sends the
-// param): for now, ?workspace_id= is OPTIONAL — when present, results
-// are scoped to that workspace; when absent, this still returns the old
-// global, unscoped result (logged once per call so the gap is visible
-// in server logs, not silently masked) until every caller has migrated.
+// Returns shared, non-archived boards for discovery — ALWAYS scoped to an
+// authorized workspace context, never the whole app.
+//
+// Workspace scoping (workspace/organization layer, Commit 7/9; tightened
+// V2.0 Phase 0): this route used to fall back to EVERY shared,
+// non-archived board across the entire app whenever ?workspace_id= was
+// omitted — a real cross-tenant leak (a private team's shared boards
+// would surface in every OTHER workspace's "discover" feed) that a V2
+// multi-workspace product cannot ship with. There is no longer an
+// unscoped path:
+//
+//   - workspace_id explicitly provided: the caller must be a member of
+//     that workspace (checked below) or this 403s — a workspace_id for a
+//     workspace the caller can't prove membership of is never silently
+//     ignored/dropped, it's a hard denial. This is what lets an anonymous
+//     visitor with a direct link/workspace context still browse that ONE
+//     workspace's shared boards (matching the pre-existing "guests can
+//     browse a shared board" UX), while never leaking any OTHER
+//     workspace's contents to them.
+//   - workspace_id omitted, caller signed in: scoped to the UNION of
+//     every workspace the caller is actually a member of — same
+//     "unscoped means across all of MY workspaces, never anyone else's"
+//     shape GET / already uses, not a global result.
+//   - workspace_id omitted, caller anonymous: there is no authorized
+//     workspace context to fall back to (an anonymous caller has no
+//     memberships), so this returns an empty list rather than any
+//     board's contents — confirmed product decision, not an inferred
+//     default.
 router.get('/shared', optionalStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll;
     const workspaceId = typeof req.query.workspace_id === 'string' ? req.query.workspace_id : undefined;
 
-    if (!workspaceId) {
-      console.warn('GET /api/boards/shared called without workspace_id — returning unscoped (deprecated) global result');
+    if (workspaceId) {
+      // Explicit workspace requested — membership required for a signed-in
+      // caller. An anonymous caller has no membership to check, so a
+      // direct workspace_id link stays browsable for guests (pre-existing
+      // "shared board is publicly viewable" behavior), same as visiting
+      // /moodboards/:id directly already allows.
+      if (roll) {
+        const membership = await pool.query(
+          'SELECT 1 FROM workspace_members WHERE workspace_id = $1 AND roll_number = $2',
+          [workspaceId, roll]
+        );
+        if (membership.rows.length === 0) {
+          return res.status(403).json({ error: 'Not a member of that workspace' });
+        }
+      }
+
+      const result = await pool.query(`
+        SELECT
+          b.*,
+          COUNT(DISTINCT bi.id)::int as item_count,
+          COUNT(DISTINCT bm.roll_number)::int as member_count,
+          (bf.roll_number IS NOT NULL) as is_favorite
+        FROM boards b
+        LEFT JOIN board_items bi ON bi.board_id = b.id
+        LEFT JOIN board_members bm ON bm.board_id = b.id
+        LEFT JOIN board_favorites bf ON bf.board_id = b.id AND bf.roll_number = $1
+        WHERE b.visibility = 'shared' AND NOT b.is_archived AND b.workspace_id = $2
+        GROUP BY b.id, bf.roll_number
+        ORDER BY b.created_at DESC
+      `, [roll ?? null, workspaceId]);
+      return res.json(result.rows);
     }
 
+    if (!roll) {
+      // Anonymous + no workspace_id: no authorized context exists.
+      // Never fall back to a global, cross-tenant result.
+      return res.json([]);
+    }
+
+    // Signed in, no workspace_id: scope to every workspace this caller is
+    // actually a member of — an authorized set, not the whole app.
     const result = await pool.query(`
       SELECT
         b.*,
@@ -210,12 +263,15 @@ router.get('/shared', optionalStudent, async (req: Request, res: Response) => {
       LEFT JOIN board_members bm ON bm.board_id = b.id
       LEFT JOIN board_favorites bf ON bf.board_id = b.id AND bf.roll_number = $1
       WHERE b.visibility = 'shared' AND NOT b.is_archived
-        AND ($2::text IS NULL OR b.workspace_id = $2)
+        AND b.workspace_id IN (
+          SELECT workspace_id FROM workspace_members WHERE roll_number = $1
+        )
       GROUP BY b.id, bf.roll_number
       ORDER BY b.created_at DESC
-    `, [roll ?? null, workspaceId ?? null]);
+    `, [roll]);
     res.json(result.rows);
   } catch (err) {
+    console.error('Get shared boards error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

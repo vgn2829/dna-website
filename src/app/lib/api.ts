@@ -571,14 +571,17 @@ export const api = {
   },
   boards: {
     // workspaceId is optional and purely additive (workspace/organization
-    // layer): omitted, these three list calls keep their exact pre-
+    // layer). Omitted, getMyBoards/getArchived keep their exact pre-
     // existing unscoped meaning ("every board I own or am a member of /
-    // my own archived boards / every shared board app-wide, across ALL
-    // workspaces"). Passed, they narrow to that one workspace — see
-    // backend/src/routes/boards.ts's own comment on why GET / and
-    // GET /archived stay unscoped-by-default while GET /shared's
-    // unscoped path is a deprecated fallback (Commit 9 removes it once
-    // every caller here always sends workspace_id for /shared).
+    // my own archived boards, across ALL of MY workspaces") — always
+    // bounded by the caller's own ownership/membership, never global.
+    // getShared, omitted, is scoped the same way (every shared board
+    // across every workspace the caller is a MEMBER of) — see
+    // backend/src/routes/boards.ts's own comment: as of V2.0 Phase 0
+    // there is no unscoped-across-the-whole-app fallback for /shared
+    // anymore (that was a cross-tenant leak once multiple workspaces
+    // exist); passing workspaceId narrows to exactly that one workspace
+    // and 403s a signed-in caller who isn't a member of it.
     getMyBoards: (roll: string, workspaceId?: string) =>
       request<Board[]>('GET', `/boards${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, { roll }),
     getArchived: (roll: string, workspaceId?: string) =>
