@@ -104,6 +104,17 @@ export default function BoardPage() {
   const [deleting, setDeleting] = useState(false);
 
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  // Save as Template (V2.3 Phase 8) — uses the board's CURRENT PERSISTED
+  // canvas_data (read server-side from the DB row by POST /api/templates,
+  // never anything sent from this client) as the template's snapshot, the
+  // same guarantee POST /:id/duplicate's own canvas_data copy already
+  // relies on. No second canvas-save path is introduced here — this
+  // button only calls the templates API; it never reads editor.store
+  // directly or serializes anything client-side.
+  const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
+  const [templateForm, setTemplateForm] = useState({ name: '', description: '' });
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateError, setTemplateError] = useState('');
   // Shown briefly after a restore on a board with connected collaborators —
   // see restoreVersion's hadLiveRoom in api.ts and rooms.ts's own comment on
   // why a restore causes one clean, deliberate reconnect cycle for everyone
@@ -268,6 +279,43 @@ export default function BoardPage() {
     } catch {
       setError('Failed to delete board');
       setDeleting(false);
+    }
+  };
+
+  const openSaveAsTemplate = () => {
+    if (!board) return;
+    setTemplateForm({ name: board.name, description: '' });
+    setTemplateError('');
+    setShowSaveAsTemplate(true);
+  };
+
+  // POST /api/templates only ever needs source_board_id — it reads
+  // canvas_data itself, server-side, from the board's own DB row (see
+  // routes/templates.ts's own comment on why this is what guarantees the
+  // persisted server snapshot is used, never a stale client-only one,
+  // for a realtime-enabled board). This handler never touches the
+  // editor/canvas at all.
+  const handleSaveAsTemplate = async () => {
+    if (!id || !studentSession?.rollNumber || !templateForm.name.trim()) return;
+    setSavingTemplate(true);
+    setTemplateError('');
+    try {
+      await api.templates.create(studentSession.rollNumber, {
+        name: templateForm.name.trim(),
+        description: templateForm.description.trim() || undefined,
+        source_board_id: id,
+      });
+      setShowSaveAsTemplate(false);
+      toast.success('Template saved');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      setTemplateError(
+        message.includes('no saved canvas content')
+          ? 'This board has no saved canvas content yet — make an edit first, then try again.'
+          : 'Failed to save template'
+      );
+    } finally {
+      setSavingTemplate(false);
     }
   };
 
@@ -492,6 +540,21 @@ export default function BoardPage() {
               History
             </button>
 
+            {isOwner && (
+              <button
+                onClick={openSaveAsTemplate}
+                title="Save as Template"
+                style={{
+                  padding: '5px 12px', background: 'none',
+                  border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
+                  color: textMuted, fontSize: 12,
+                  fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >
+                Save as Template
+              </button>
+            )}
+
             <button
               onClick={() => setShowShare(true)}
               style={{
@@ -698,6 +761,100 @@ export default function BoardPage() {
           onSelect={handleInsertAsset}
         />
       )}
+
+      {/* Save as Template (V2.3 Phase 8) */}
+      <AnimatePresence>
+        {showSaveAsTemplate && board && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9999,
+              background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+            }}
+            onClick={() => setShowSaveAsTemplate(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: '100%', maxWidth: 400,
+                background: 'var(--color-surface-1)',
+                border: '1px solid var(--color-hairline)',
+                borderRadius: 'var(--radius-xl)', padding: '28px 24px',
+                display: 'flex', flexDirection: 'column', gap: 16,
+              }}
+            >
+              <h3 style={{
+                margin: 0, fontSize: 18, fontWeight: 700,
+                color: 'var(--color-ink)', fontFamily: 'var(--font-display)',
+              }}>
+                Save as Template
+              </h3>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                  Template Name
+                </label>
+                <input
+                  className="input-base"
+                  type="text"
+                  value={templateForm.name}
+                  onChange={e => setTemplateForm(prev => ({ ...prev, name: e.target.value }))}
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                  Description (optional)
+                </label>
+                <input
+                  className="input-base"
+                  type="text"
+                  placeholder="What is this template for?"
+                  value={templateForm.description}
+                  onChange={e => setTemplateForm(prev => ({ ...prev, description: e.target.value }))}
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', lineHeight: 1.5 }}>
+                Saves this board's current canvas as a reusable template in this workspace. Editing this board later won't change the template.
+              </p>
+              {templateError && <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>{templateError}</p>}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={handleSaveAsTemplate}
+                  disabled={savingTemplate || !templateForm.name.trim()}
+                  style={{
+                    flex: 1, padding: '12px 20px',
+                    background: 'var(--color-brand)', color: '#fff',
+                    border: 'none', borderRadius: 'var(--radius-pill)',
+                    fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)',
+                    cursor: savingTemplate || !templateForm.name.trim() ? 'not-allowed' : 'pointer',
+                    opacity: savingTemplate || !templateForm.name.trim() ? 0.6 : 1,
+                  }}
+                >
+                  {savingTemplate ? 'Saving...' : 'Save Template'}
+                </button>
+                <button
+                  onClick={() => setShowSaveAsTemplate(false)}
+                  style={{
+                    flex: 1, padding: '12px 20px',
+                    background: 'none', color: 'var(--color-ink-muted)',
+                    border: '1px solid var(--color-hairline)',
+                    borderRadius: 'var(--radius-pill)', fontSize: 13,
+                    fontFamily: 'var(--font-body)', cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Delete confirm */}
       <AnimatePresence>
