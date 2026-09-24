@@ -5,6 +5,7 @@ import { pool } from '../db/client';
 import { requireStudent } from '../middleware/studentAuth';
 import { param } from '../routeParams';
 import { getWorkspaceMembership } from './assets';
+import { toPublicBoard, BOARD_ITEM_COUNT_SQL } from '../lib/boardRows';
 
 const router = Router();
 
@@ -194,7 +195,7 @@ router.get('/:id/boards', requireStudent, async (req: Request, res: Response) =>
     const result = await pool.query(`
       SELECT
         b.*,
-        COUNT(DISTINCT bi.id)::int as item_count,
+        ${BOARD_ITEM_COUNT_SQL},
         COUNT(DISTINCT bm.roll_number)::int as member_count,
         (bf.roll_number IS NOT NULL) as is_favorite
       FROM boards b
@@ -212,7 +213,7 @@ router.get('/:id/boards', requireStudent, async (req: Request, res: Response) =>
       ORDER BY b.updated_at DESC
     `, [roll, id]);
 
-    res.json(result.rows);
+    res.json(result.rows.map(toPublicBoard));
   } catch (err) {
     console.error('List project boards error:', err);
     res.status(500).json({ error: 'Internal server error' });

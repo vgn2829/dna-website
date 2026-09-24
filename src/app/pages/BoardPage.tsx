@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronLeft, Home, MessageCircle, MoreHorizontal, Image as ImageIcon, History, LayoutTemplate, Trash2 } from 'lucide-react';
+import { ArrowLeft, Home, MessageCircle, MoreHorizontal, Image as ImageIcon, History, LayoutTemplate, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useStudent } from '../context/StudentContext';
@@ -14,7 +14,7 @@ import { ShareBoardDialog } from '../components/ShareBoardDialog';
 import { AssetLibrary } from '../components/AssetLibrary';
 import { PortalContainerProvider } from '../components/PortalContainer';
 import { useScreenSize } from '../components/hooks/use-screen-size';
-import { boardCrumbs, isCompactBoardHeader } from '../lib/boardNav';
+import { boardCrumbs, isCompactBoardHeader, MOODBOARDS_HREF } from '../lib/boardNav';
 import type { Editor } from 'tldraw';
 import type { Asset } from '../lib/api';
 
@@ -187,6 +187,10 @@ export default function BoardPage() {
   // Board header (compact below lg and in fullscreen — see lib/boardNav.ts).
   const screenSize = useScreenSize();
   const compactHeader = isCompactBoardHeader(screenSize.greaterThanOrEqual('lg'), isFullscreen);
+  // "← Moodboards" shows its text label from md up; below md it's an
+  // arrow-only pill (same destination, labelled for assistive tech) so the
+  // board name keeps room at phone widths.
+  const showBackLabel = screenSize.greaterThanOrEqual('md');
   // The viewer's own workspaces — only used to NAME the board's workspace
   // in the breadcrumb. Best-effort: on failure the crumb reads
   // "Workspace" and still links to /home.
@@ -550,23 +554,36 @@ export default function BoardPage() {
         }}>
           {/* Left — breadcrumb + board identity */}
           <nav aria-label="Breadcrumb" style={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0, flex: '1 1 auto' }}>
+            {/* Primary exit: always /moodboards (a fixed destination, never
+                browser history), whether the board was opened from Home, a
+                project, a template, a shared link or a refresh. The only
+                back control in the header, in every mode incl. fullscreen. */}
+            <Link
+              to={MOODBOARDS_HREF}
+              className="board-back-link"
+              aria-label="Back to Moodboards"
+              title="Back to Moodboards"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexShrink: 0,
+                height: 30, minWidth: 30, padding: showBackLabel ? '0 12px 0 9px' : 0, marginRight: 6,
+                border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
+                color: textColor, textDecoration: 'none', whiteSpace: 'nowrap',
+                fontSize: 13, fontWeight: 500, fontFamily: 'var(--font-body)',
+              }}
+            >
+              <ArrowLeft size={15} aria-hidden="true" />
+              {showBackLabel && 'Moodboards'}
+            </Link>
             {compactHeader ? (
-              <>
-                <Link to={crumbs[1].href!} aria-label="Back to Moodboards" title="Back to Moodboards" style={{ ...headerIconLink, color: textMuted }}>
-                  <ChevronLeft size={18} />
-                </Link>
-                <Link to={crumbs[0].href!} aria-label={`Workspace home — ${crumbs[0].label}`} title={`Workspace home — ${crumbs[0].label}`} style={{ ...headerIconLink, color: textMuted }}>
-                  <Home size={15} />
-                </Link>
-              </>
+              <Link to={crumbs[0].href!} aria-label={`Workspace home — ${crumbs[0].label}`} title={`Workspace home — ${crumbs[0].label}`} style={{ ...headerIconLink, color: textMuted }}>
+                <Home size={15} />
+              </Link>
             ) : (
               <>
                 <Link to={crumbs[0].href!} title="Workspace home" style={{ ...crumbLink, color: textMuted }}>
                   <Home size={14} style={{ flexShrink: 0 }} />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 }}>{crumbs[0].label}</span>
                 </Link>
-                <span aria-hidden="true" style={{ color: textMuted, opacity: 0.6, fontSize: 13, padding: '0 2px' }}>/</span>
-                <Link to={crumbs[1].href!} style={{ ...crumbLink, color: textMuted }}>{crumbs[1].label}</Link>
                 <span aria-hidden="true" style={{ color: textMuted, opacity: 0.6, fontSize: 13, padding: '0 2px' }}>/</span>
               </>
             )}

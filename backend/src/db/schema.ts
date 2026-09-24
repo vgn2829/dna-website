@@ -1,4 +1,5 @@
 import { pool } from './client';
+import { canvasSummaryColumns } from '../lib/canvasSummary';
 
 export async function initSchema(): Promise<void> {
   // Tracks one-time migrations so destructive/backfill steps can't silently re-run.
@@ -1571,4 +1572,43 @@ export async function initSchema(): Promise<void> {
   `);
 
   console.log('templates migration done');
+
+  // Moodboard card item count + preview (lib/canvasSummary.ts). Derived
+  // from canvas_data at WRITE time — every path that sets canvas_data
+  // (realtime save, manual PUT /:id/canvas, duplicate, board-from-
+  // template) also sets these — so board list endpoints never have to
+  // ship or parse whole tldraw documents to render a card. Additive:
+  //   canvas_item_count      — visible shapes (NULL = not yet summarized)
+  //   canvas_preview         — small JSON preview primitives, or NULL
+  //   canvas_placed_item_ids — shape ids of legacy board_items already
+  //                            placed on the canvas (see canvasSummary.ts)
+  await pool.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS canvas_item_count INTEGER`);
+  await pool.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS canvas_preview TEXT`);
+  await pool.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS canvas_placed_item_ids TEXT[] NOT NULL DEFAULT '{}'`);
+  await backfillCanvasSummaries();
+
+  console.log('boards canvas summary migration done');
+}
+
+// One-time (idempotent) backfill for boards written before the summary
+// columns existed: only rows whose canvas_item_count is still NULL are
+// touched, a few at a time so a legacy board with multi-MB base64 images
+// in canvas_data is never loaded alongside many others.
+export async function backfillCanvasSummaries(): Promise<number> {
+  let done = 0;
+  for (;;) {
+    const batch = await pool.query(
+      'SELECT id, canvas_data FROM boards WHERE canvas_item_count IS NULL ORDER BY id LIMIT 10'
+    );
+    const rows = batch.rows as Array<{ id: string; canvas_data: string | null }>;
+    if (rows.length === 0) return done;
+    for (const row of rows) {
+      const cols = canvasSummaryColumns(row.canvas_data);
+      await pool.query(
+        `UPDATE boards SET canvas_item_count = $2, canvas_preview = $3, canvas_placed_item_ids = $4 WHERE id = $1`,
+        [row.id, cols.canvas_item_count, cols.canvas_preview, cols.canvas_placed_item_ids]
+      );
+      done++;
+    }
+  }
 }

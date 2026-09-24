@@ -1,4 +1,5 @@
 import type { Board } from '../lib/api';
+import { BoardPreview } from './BoardPreview';
 
 // ─────────────────────────────────────────────────────────────────────────
 // BoardCard (V2.2) — extracted, unchanged, from MoodboardsPage.tsx, where
@@ -71,7 +72,9 @@ export function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerR
         e.currentTarget.style.boxShadow = 'none';
       }}
     >
-      {/* Cover placeholder — real thumbnails are a follow-up phase */}
+      {/* Cover — a real preview of the board's content (BoardPreview, from
+          the server-derived canvas_preview; no board document is loaded),
+          or the original placeholder for a board with nothing to show. */}
       <div style={{
         width: '100%',
         aspectRatio: '16 / 9',
@@ -81,11 +84,25 @@ export function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerR
         gridTemplateRows: '1fr 1fr',
         gap: 1,
         overflow: 'hidden',
-        background: 'var(--color-surface-2)',
+        background: board.canvas_preview ? 'var(--color-canvas)' : 'var(--color-surface-2)',
       }}>
-        {[0.04, 0.06, 0.08, 0.10].map((alpha, i) => (
-          <div key={i} style={{ background: `rgba(233,30,140,${alpha})` }} />
-        ))}
+        {board.canvas_preview ? (
+          <BoardPreview preview={board.canvas_preview} label={`Preview of ${board.name}`} />
+        ) : (
+          <>
+            {[0.04, 0.06, 0.08, 0.10].map((alpha, i) => (
+              <div key={i} style={{ background: `rgba(233,30,140,${alpha})` }} />
+            ))}
+            {board.item_count === 0 && (
+              <span style={{
+                position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, fontWeight: 500, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)',
+              }}>
+                Empty board
+              </span>
+            )}
+          </>
+        )}
 
         {onToggleFavorite && (
           <button

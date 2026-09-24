@@ -5,6 +5,8 @@ import { pool } from '../db/client';
 import { requireStudent } from '../middleware/studentAuth';
 import { param } from '../routeParams';
 import { getWorkspaceMembership } from './assets';
+import { canvasSummaryColumns } from '../lib/canvasSummary';
+import { toPublicBoard } from '../lib/boardRows';
 import { getBoardRole, roleCanWriteCanvas } from '../realtime/roomAccess';
 
 const router = Router();
@@ -351,17 +353,21 @@ router.post('/:id/use', requireStudent, async (req: Request, res: Response) => {
     // production-fix migration), and canvas_data is the template's
     // snapshot string copied verbatim, establishing a fully independent
     // board with no ongoing link to the template.
+    // Card count/preview from the copied snapshot (lib/canvasSummary.ts).
+    const summary = canvasSummaryColumns(template.canvas_data);
     const result = await pool.query(`
       INSERT INTO boards
-        (id, name, owner_roll, owner_name, visibility, room_id, created_at, updated_at, canvas_data, workspace_id, project_id)
-      VALUES ($1, $2, $3, $4, 'private', $5, $6, $6, $7, $8, $9)
+        (id, name, owner_roll, owner_name, visibility, room_id, created_at, updated_at, canvas_data, workspace_id, project_id,
+         canvas_item_count, canvas_preview, canvas_placed_item_ids)
+      VALUES ($1, $2, $3, $4, 'private', $5, $6, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `, [
       boardId, boardName, roll, ownerName, roomId, now,
       template.canvas_data, template.workspace_id, projectId,
+      summary.canvas_item_count, summary.canvas_preview, summary.canvas_placed_item_ids,
     ]);
 
-    res.status(201).json({ ...result.rows[0], item_count: 0, member_count: 0, is_favorite: false });
+    res.status(201).json({ ...toPublicBoard(result.rows[0]), item_count: summary.canvas_item_count, member_count: 0, is_favorite: false });
   } catch (err) {
     if (err instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid request' });

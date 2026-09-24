@@ -1,5 +1,6 @@
 import type { RoomSnapshot } from '@tldraw/sync-core';
 import { pool } from '../db/client';
+import { canvasSummaryColumns } from '../lib/canvasSummary';
 
 // ─────────────────────────────────────────────────────────────────────────
 // PERSISTENCE INTERFACE — kept deliberately separate from both the
@@ -85,10 +86,17 @@ export class BoardCanvasPersistence implements RoomPersistence {
     }
   }
 
+  // Also refreshes the card item count/preview columns in the same
+  // UPDATE (lib/canvasSummary.ts), computed from the in-memory snapshot.
   async save(roomId: string, snapshot: RoomSnapshot): Promise<void> {
+    const summary = canvasSummaryColumns(snapshot);
     await pool.query(
-      'UPDATE boards SET canvas_data = $1, updated_at = $2 WHERE room_id = $3',
-      [JSON.stringify(snapshot), new Date().toISOString(), roomId]
+      `UPDATE boards
+       SET canvas_data = $1, updated_at = $2,
+           canvas_item_count = $4, canvas_preview = $5, canvas_placed_item_ids = $6
+       WHERE room_id = $3`,
+      [JSON.stringify(snapshot), new Date().toISOString(), roomId,
+       summary.canvas_item_count, summary.canvas_preview, summary.canvas_placed_item_ids]
     );
   }
 }

@@ -118,7 +118,13 @@ export interface Board {
   visibility: 'private' | 'shared';
   room_id: string | null;
   edit_mode: 'members_only' | 'anyone';
+  // Visible canvas items (+ not-yet-placed gallery items) — see
+  // backend lib/boardRows.ts BOARD_ITEM_COUNT_SQL.
   item_count: number;
+  // Card preview primitives derived server-side from the persisted canvas
+  // (backend lib/canvasSummary.ts); null for an empty board. Optional:
+  // not every endpoint returning a Board includes it.
+  canvas_preview?: CanvasPreview | null;
   member_count: number;
   created_at: string;
   updated_at: string;
@@ -211,6 +217,19 @@ export interface Template {
 // no storage_key here (an internal StorageProvider path, never sent to
 // the frontend); `url` is the derived public URL the backend already
 // resolved via getStorage().getPublicUrl().
+// Mirrors backend/src/lib/canvasSummary.ts's CanvasPreview.
+export interface CanvasPreviewItem {
+  k: 'geo' | 'frame' | 'image' | 'note' | 'text' | 'path' | 'box';
+  x: number; y: number; r: number; w: number; h: number;
+  c?: string; g?: string; f?: string; src?: string; t?: string; fs?: number;
+  p?: number[]; hl?: boolean; sw?: number;
+}
+export interface CanvasPreview {
+  v: 1;
+  x: number; y: number; w: number; h: number;
+  items: CanvasPreviewItem[];
+}
+
 // Mirrors backend/src/routes/assets.ts's toPublicAsset(). kind 'image' is
 // the only kind that can be inserted onto a board; 'file' is any other
 // library resource (PSD/AI/PDF/ZIP/...), whose url is a download URL;

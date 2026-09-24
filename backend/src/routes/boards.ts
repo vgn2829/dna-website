@@ -11,6 +11,8 @@ import { param } from '../routeParams';
 import { ensurePersonalWorkspace } from './workspaces';
 import { getBoardRole, roleCanWriteCanvas } from '../realtime/roomAccess';
 import { notifyBoardShared } from '../services/notificationService';
+import { canvasSummaryColumns } from '../lib/canvasSummary';
+import { toPublicBoard, BOARD_ITEM_COUNT_SQL } from '../lib/boardRows';
 
 const router = Router();
 
@@ -127,7 +129,7 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
       SELECT DISTINCT
         b.*,
         p.name as project_name,
-        COUNT(DISTINCT bi.id)::int as item_count,
+        ${BOARD_ITEM_COUNT_SQL},
         COUNT(DISTINCT bm.roll_number)::int as member_count,
         (bf.roll_number IS NOT NULL) as is_favorite
       FROM boards b
@@ -148,7 +150,7 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
       ORDER BY b.created_at DESC
     `, [roll, workspaceId ?? null]);
 
-    res.json(result.rows);
+    res.json(result.rows.map(toPublicBoard));
   } catch (err) {
     console.error('Get boards error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -167,7 +169,7 @@ router.get('/archived', requireStudent, async (req: Request, res: Response) => {
     const result = await pool.query(`
       SELECT
         b.*,
-        COUNT(DISTINCT bi.id)::int as item_count,
+        ${BOARD_ITEM_COUNT_SQL},
         COUNT(DISTINCT bm.roll_number)::int as member_count,
         (bf.roll_number IS NOT NULL) as is_favorite
       FROM boards b
@@ -180,7 +182,7 @@ router.get('/archived', requireStudent, async (req: Request, res: Response) => {
       ORDER BY b.updated_at DESC
     `, [roll, workspaceId ?? null]);
 
-    res.json(result.rows);
+    res.json(result.rows.map(toPublicBoard));
   } catch (err) {
     console.error('Get archived boards error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -240,7 +242,7 @@ router.get('/shared', optionalStudent, async (req: Request, res: Response) => {
       const result = await pool.query(`
         SELECT
           b.*,
-          COUNT(DISTINCT bi.id)::int as item_count,
+          ${BOARD_ITEM_COUNT_SQL},
           COUNT(DISTINCT bm.roll_number)::int as member_count,
           (bf.roll_number IS NOT NULL) as is_favorite
         FROM boards b
@@ -251,7 +253,7 @@ router.get('/shared', optionalStudent, async (req: Request, res: Response) => {
         GROUP BY b.id, bf.roll_number
         ORDER BY b.created_at DESC
       `, [roll ?? null, workspaceId]);
-      return res.json(result.rows);
+      return res.json(result.rows.map(toPublicBoard));
     }
 
     if (!roll) {
@@ -265,7 +267,7 @@ router.get('/shared', optionalStudent, async (req: Request, res: Response) => {
     const result = await pool.query(`
       SELECT
         b.*,
-        COUNT(DISTINCT bi.id)::int as item_count,
+        ${BOARD_ITEM_COUNT_SQL},
         COUNT(DISTINCT bm.roll_number)::int as member_count,
         (bf.roll_number IS NOT NULL) as is_favorite
       FROM boards b
@@ -279,7 +281,7 @@ router.get('/shared', optionalStudent, async (req: Request, res: Response) => {
       GROUP BY b.id, bf.roll_number
       ORDER BY b.created_at DESC
     `, [roll]);
-    res.json(result.rows);
+    res.json(result.rows.map(toPublicBoard));
   } catch (err) {
     console.error('Get shared boards error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -369,18 +371,23 @@ router.post('/:id/duplicate', requireStudent, async (req: Request, res: Response
     const now = new Date().toISOString();
     const copyName = `${source.name} (copy)`.slice(0, 100);
 
+    // The copy's card count/preview come from the copied snapshot itself
+    // (lib/canvasSummary.ts); it has no board_items of its own.
+    const summary = canvasSummaryColumns(source.canvas_data);
     const result = await pool.query(`
       INSERT INTO boards
         (id, name, description, owner_roll, owner_name,
-         visibility, room_id, created_at, updated_at, canvas_data, workspace_id)
-      VALUES ($1, $2, $3, $4, $5, 'private', $6, $7, $7, $8, $9)
+         visibility, room_id, created_at, updated_at, canvas_data, workspace_id,
+         canvas_item_count, canvas_preview, canvas_placed_item_ids)
+      VALUES ($1, $2, $3, $4, $5, 'private', $6, $7, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `, [
       id, copyName, source.description,
       roll, ownerName, roomId, now, source.canvas_data, workspaceId,
+      summary.canvas_item_count, summary.canvas_preview, summary.canvas_placed_item_ids,
     ]);
 
-    res.status(201).json({ ...result.rows[0], item_count: 0, member_count: 0, is_favorite: false });
+    res.status(201).json({ ...toPublicBoard(result.rows[0]), item_count: summary.canvas_item_count, member_count: 0, is_favorite: false });
   } catch (err) {
     console.error('Duplicate board error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -394,7 +401,7 @@ router.get('/admin/all', requireAdmin, async (req: Request, res: Response) => {
     const result = await pool.query(`
       SELECT
         b.*,
-        COUNT(DISTINCT bi.id)::int as item_count,
+        ${BOARD_ITEM_COUNT_SQL},
         COUNT(DISTINCT bm.roll_number)::int as member_count
       FROM boards b
       LEFT JOIN board_items bi ON bi.board_id = b.id
@@ -402,7 +409,7 @@ router.get('/admin/all', requireAdmin, async (req: Request, res: Response) => {
       GROUP BY b.id
       ORDER BY b.created_at DESC
     `);
-    res.json(result.rows);
+    res.json(result.rows.map(toPublicBoard));
   } catch (err) {
     console.error('Admin get boards error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -464,7 +471,7 @@ router.put('/admin/:id', requireAdmin, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Board not found' });
     }
 
-    res.json(result.rows[0]);
+    res.json(toPublicBoard(result.rows[0]));
   } catch (err) {
     if (err instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid request' });
@@ -489,17 +496,23 @@ router.put('/:id/canvas', requireStudent, async (req: Request, res: Response) =>
       return res.status(400).json({ error: 'canvas_data is required' });
     }
 
+    let parsedCanvas: unknown;
     try {
-      JSON.parse(canvas_data);
+      parsedCanvas = JSON.parse(canvas_data);
     } catch {
       return res.status(400).json({ error: 'canvas_data must be valid JSON' });
     }
 
+    // Card item count/preview kept in sync with every canvas write
+    // (lib/canvasSummary.ts).
+    const summary = canvasSummaryColumns(parsedCanvas as object);
     await pool.query(`
       UPDATE boards
-      SET canvas_data = $1, updated_at = $2
+      SET canvas_data = $1, updated_at = $2,
+          canvas_item_count = $4, canvas_preview = $5, canvas_placed_item_ids = $6
       WHERE id = $3
-    `, [canvas_data, new Date().toISOString(), req.params.id]);
+    `, [canvas_data, new Date().toISOString(), req.params.id,
+        summary.canvas_item_count, summary.canvas_preview, summary.canvas_placed_item_ids]);
 
     res.json({ success: true });
   } catch (err) {
@@ -591,7 +604,7 @@ router.get('/:id', optionalStudent, async (req: Request, res: Response) => {
       : false;
 
     res.json({
-      ...board,
+      ...toPublicBoard(board),
       is_favorite: isFavorite,
       items: itemsResult.rows,
       members: membersResult.rows,
@@ -689,7 +702,7 @@ router.post('/', createBoardLimiter, requireStudent, async (req: Request, res: R
       roll, ownerName, parsed.visibility, roomId, now, workspaceId, projectId,
     ]);
 
-    res.status(201).json({ ...result.rows[0], item_count: 0, member_count: 0, is_favorite: false });
+    res.status(201).json({ ...toPublicBoard(result.rows[0]), item_count: 0, member_count: 0, is_favorite: false });
   } catch (err) {
     if (err instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid request' });
@@ -781,7 +794,7 @@ router.put('/:id', requireStudent, async (req: Request, res: Response) => {
     const result = await pool.query(`
       SELECT
         b.*,
-        COUNT(DISTINCT bi.id)::int as item_count,
+        ${BOARD_ITEM_COUNT_SQL},
         COUNT(DISTINCT bm.roll_number)::int as member_count,
         (bf.roll_number IS NOT NULL) as is_favorite
       FROM boards b
@@ -810,7 +823,7 @@ router.put('/:id', requireStudent, async (req: Request, res: Response) => {
       checkpointHook(param(req.params.id), 'archive', roll, updated.owner_name);
     }
 
-    res.json(result.rows[0]);
+    res.json(toPublicBoard(result.rows[0]));
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }

@@ -562,6 +562,11 @@
     .ws-main { padding: 20px 16px 48px; }
   }
 
+  /* Board header "← Moodboards" exit (BoardPage). */
+  .board-back-link { transition: background 0.15s, border-color 0.15s; }
+  .board-back-link:hover { background: rgba(127,127,127,0.14); }
+  .board-back-link:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
   /* ── Workspace menus (Radix DropdownMenu content) ──
      Asset card actions + the board header's overflow menu. Radix exposes
      keyboard/pointer highlight as [data-highlighted], which inline styles
