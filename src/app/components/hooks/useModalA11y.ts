@@ -64,6 +64,17 @@ export function useModalA11y(open: boolean, onClose: () => void) {
     const raf = requestAnimationFrame(() => dialogRef.current?.focus());
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Nested modals (e.g. the workspace switcher panel opened from the
+      // mobile nav drawer, portalled to document.body so it is no longer
+      // a DOM descendant of the drawer) each register a document-level
+      // listener. Only the dialog that actually contains focus should
+      // react — otherwise one Escape closes both layers at once.
+      const active = document.activeElement;
+      if (
+        dialogRef.current && active && !dialogRef.current.contains(active)
+        && active.closest('[aria-modal="true"]')
+      ) return;
+
       if (e.key === 'Escape') {
         e.stopPropagation();
         onCloseRef.current();
@@ -77,7 +88,6 @@ export function useModalA11y(open: boolean, onClose: () => void) {
 
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      const active = document.activeElement;
 
       if (e.shiftKey && active === first) {
         e.preventDefault();

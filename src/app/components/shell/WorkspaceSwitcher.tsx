@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { WorkspacesPanel } from '../WorkspacesPanel';
 import { WorkspaceSettingsModal } from '../WorkspaceSettingsModal';
@@ -12,6 +13,16 @@ import { useStudent } from '../../context/StudentContext';
 // shell (not just Moodboards). Reuses WorkspacesPanel/WorkspaceSettingsModal
 // unchanged — this component only supplies them with context data instead
 // of page-local props.
+//
+// Both modals are PORTALLED to document.body. This component lives inside
+// the sidebar <aside>, which is position:sticky on desktop (sticky always
+// creates a stacking context) and a transformed, z-indexed motion.aside in
+// the mobile drawer (a transform makes it the containing block for fixed
+// descendants). Rendered in place, the modals' z-index only competed inside
+// that aside, so the shell header and positioned page content (board-card
+// thumbnails, the Moodboards search box) painted OVER the open modal, and
+// in the drawer the "full-screen" overlay was sized to the drawer. The
+// portal puts them back in the root stacking context — no z-index change.
 // ─────────────────────────────────────────────────────────────────────────
 
 export function WorkspaceSwitcher() {
@@ -58,32 +69,37 @@ export function WorkspaceSwitcher() {
         </svg>
       </button>
 
-      <WorkspacesPanel
-        open={showPanel}
-        onClose={() => setShowPanel(false)}
-        workspaces={workspaces}
-        activeWorkspaceId={activeWorkspaceId}
-        roll={studentSession.rollNumber}
-        onSwitch={workspaceId => { switchWorkspace(workspaceId); setShowPanel(false); }}
-        onOpenSettings={workspaceId => setSettingsWorkspaceId(workspaceId)}
-        onWorkspaceCreated={addWorkspaceLocal}
-      />
+      {createPortal(
+        <>
+          <WorkspacesPanel
+            open={showPanel}
+            onClose={() => setShowPanel(false)}
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+            roll={studentSession.rollNumber}
+            onSwitch={workspaceId => { switchWorkspace(workspaceId); setShowPanel(false); }}
+            onOpenSettings={workspaceId => setSettingsWorkspaceId(workspaceId)}
+            onWorkspaceCreated={addWorkspaceLocal}
+          />
 
-      {settingsWorkspaceId && (
-        <WorkspaceSettingsModal
-          workspaceId={settingsWorkspaceId}
-          roll={studentSession.rollNumber}
-          onClose={() => setSettingsWorkspaceId(null)}
-          onRenamed={(workspaceId, name) => renameWorkspaceLocal(workspaceId, name)}
-          onDeleted={workspaceId => {
-            removeWorkspaceLocal(workspaceId);
-            setSettingsWorkspaceId(null);
-          }}
-          onLeft={workspaceId => {
-            removeWorkspaceLocal(workspaceId);
-            setSettingsWorkspaceId(null);
-          }}
-        />
+          {settingsWorkspaceId && (
+            <WorkspaceSettingsModal
+              workspaceId={settingsWorkspaceId}
+              roll={studentSession.rollNumber}
+              onClose={() => setSettingsWorkspaceId(null)}
+              onRenamed={(workspaceId, name) => renameWorkspaceLocal(workspaceId, name)}
+              onDeleted={workspaceId => {
+                removeWorkspaceLocal(workspaceId);
+                setSettingsWorkspaceId(null);
+              }}
+              onLeft={workspaceId => {
+                removeWorkspaceLocal(workspaceId);
+                setSettingsWorkspaceId(null);
+              }}
+            />
+          )}
+        </>,
+        document.body
       )}
     </>
   );
