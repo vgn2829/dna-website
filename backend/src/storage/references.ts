@@ -39,14 +39,21 @@ export interface StorageReference {
 
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, c => `\\${c}`);
 
-export async function findStorageReferences(storageKey: string, limit = 5): Promise<StorageReference[]> {
+// Anything that can run a query — the shared pool (default) or a single
+// client, e.g. one inside a BEGIN READ ONLY transaction (the storage
+// inventory command uses that to make its session provably read-only).
+export interface DbExecutor {
+  query(text: string, params?: unknown[]): Promise<{ rows: unknown[] }>;
+}
+
+export async function findStorageReferences(storageKey: string, limit = 5, db: DbExecutor = pool): Promise<StorageReference[]> {
   if (!storageKey || storageKey.length < 8) {
     // An empty/degenerate key would match everything — refuse rather than
     // report a meaningless "referenced".
     throw new Error(`findStorageReferences: refusing to search for an unsafe storage key ${JSON.stringify(storageKey)}`);
   }
   const like = `%${escapeLike(storageKey)}%`;
-  const result = await pool.query(
+  const result = await db.query(
     `SELECT 'board canvas' AS surface, id FROM boards WHERE canvas_data LIKE $1
      UNION ALL SELECT 'board version', id FROM board_versions WHERE snapshot LIKE $1
      UNION ALL SELECT 'template', id FROM templates WHERE canvas_data LIKE $1

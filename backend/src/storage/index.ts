@@ -1,6 +1,11 @@
 import { LocalStorageProvider } from './local';
 import { SupabaseStorageProvider } from './supabase';
 
+export interface StoredObject {
+  path: string;
+  size: number;
+}
+
 export interface StorageProvider {
   upload(path: string, buffer: Buffer, mimeType: string): Promise<void>;
   // opts.download: serve the object as an attachment (Content-Disposition)
@@ -9,6 +14,10 @@ export interface StorageProvider {
   // on the storage origin.
   getPublicUrl(path: string, opts?: { download?: string }): string;
   delete(path: string): Promise<void>;
+  // Read-only enumeration of every object whose path starts with `prefix`
+  // ('' = everything), recursively, sorted by path. Used by the storage
+  // inventory (storage/inventory.ts); never deletes.
+  list(prefix: string): Promise<StoredObject[]>;
 }
 
 let _provider: StorageProvider | null = null;
