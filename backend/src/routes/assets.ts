@@ -90,16 +90,58 @@ const ASSET_MIME_EXT: Record<string, string> = {
   'image/svg+xml': 'svg',
 };
 
+// Normalizes a user-supplied external link. Only absolute http(s) URLs,
+// no embedded credentials (user:pass@ — a classic phishing disguise), at
+// most 2048 chars. Returns the canonical href, or null if unacceptable.
+// The URL is stored and displayed only — never fetched server-side.
+export function normalizeLinkUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > 2048) return null;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  if (url.username || url.password) return null;
+  if (!url.hostname) return null;
+  return url.href.length > 2048 ? null : url.href;
+}
+
+// True if collectionId names a collection in workspaceId. Every write that
+// sets assets.collection_id goes through this, so an asset can never be
+// grouped into another workspace's collection (and a foreign collection
+// id is indistinguishable from a nonexistent one).
+async function collectionInWorkspace(collectionId: string, workspaceId: string): Promise<boolean> {
+  const result = await pool.query(
+    'SELECT 1 FROM asset_collections WHERE id = $1 AND workspace_id = $2',
+    [collectionId, workspaceId]
+  );
+  return result.rows.length > 0;
+}
+
+// Optional collection_id on create: absent/empty -> null (ungrouped).
+async function resolveCreateCollection(raw: unknown, workspaceId: string): Promise<{ ok: true; id: string | null } | { ok: false }> {
+  if (raw === undefined || raw === null || raw === '') return { ok: true, id: null };
+  if (typeof raw !== 'string' || !(await collectionInWorkspace(raw, workspaceId))) return { ok: false };
+  return { ok: true, id: raw };
+}
+
 interface AssetRow {
   id: string;
   workspace_id: string;
   owner_roll: string;
   owner_name: string | null;
   kind: AssetKind;
+  collection_id: string | null;
   filename: string;
-  storage_key: string;
-  mime_type: string;
-  size_bytes: number;
+  link_url: string | null;
+  // null only for kind='link' (no stored object).
+  storage_key: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
   width: number | null;
   height: number | null;
   created_at: string;
@@ -114,10 +156,13 @@ function toPublicAsset(row: AssetRow) {
   // Non-image files get a download (Content-Disposition: attachment) URL
   // under their display filename; images keep their plain inline URL,
   // exactly as before, since the board picker and <img> previews use it.
-  const { storage_key: _storage_key, ...rest } = row;
-  const extension = row.storage_key.slice(row.storage_key.lastIndexOf('.') + 1) || null;
+  // Links have no stored object: url is null and link_url carries the
+  // external address.
+  const { storage_key: storageKey, ...rest } = row;
+  if (!storageKey) return { ...rest, extension: null, url: null };
+  const extension = storageKey.slice(storageKey.lastIndexOf('.') + 1) || null;
   const url = getStorage().getPublicUrl(
-    row.storage_key,
+    storageKey,
     row.kind === 'file' ? { download: row.filename } : undefined,
   );
   return { ...rest, extension, url };
@@ -155,6 +200,11 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
 
     if (!req.file) {
       return res.status(400).json({ error: 'No file provided' });
+    }
+
+    const collection = await resolveCreateCollection(req.body.collection_id, workspaceId);
+    if (!collection.ok) {
+      return res.status(400).json({ error: 'Collection not found in this workspace' });
     }
 
     // Classification. An allowlisted image MIME is ALWAYS an image
@@ -231,10 +281,10 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
     try {
       const result = await pool.query(`
         INSERT INTO assets
-          (id, workspace_id, owner_roll, owner_name, kind, filename, storage_key, mime_type, size_bytes, width, height, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          (id, workspace_id, owner_roll, owner_name, kind, collection_id, filename, storage_key, mime_type, size_bytes, width, height, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING *
-      `, [id, workspaceId, roll, ownerName, kind, filename, storageKey,
+      `, [id, workspaceId, roll, ownerName, kind, collection.id, filename, storageKey,
           kind === 'image' ? req.file.mimetype : displayMime(req.file.mimetype),
           req.file.size, width, height, now]);
       row = result.rows[0] as AssetRow;
@@ -269,6 +319,9 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
 //   kind — image | file | link
 //   q    — case-insensitive substring of the display name (plain ILIKE;
 //          library sizes here don't justify full-text infrastructure)
+//   collection_id — a collection id, or 'none' for ungrouped assets. A
+//          collection from another workspace simply matches nothing (the
+//          workspace_id predicate still applies).
 router.get('/', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
@@ -297,6 +350,13 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
     if (kindFilter) {
       params.push(kindFilter);
       where.push(`kind = $${params.length}`);
+    }
+    const collectionFilter = typeof req.query.collection_id === 'string' && req.query.collection_id ? req.query.collection_id : undefined;
+    if (collectionFilter === 'none') {
+      where.push('collection_id IS NULL');
+    } else if (collectionFilter) {
+      params.push(collectionFilter);
+      where.push(`collection_id = $${params.length}`);
     }
     if (q) {
       // Escape LIKE metacharacters so a search for "50%" or "a_b" is literal.
@@ -327,6 +387,125 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
     res.json({ assets: rows.map(toPublicAsset), nextCursor });
   } catch (err) {
     console.error('List assets error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+const createLinkLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: 'Too many requests — please slow down' },
+});
+
+const createLinkSchema = z.object({
+  workspace_id: z.string().min(1),
+  name: z.string().trim().min(1).max(255),
+  url: z.string().max(2048),
+  collection_id: z.string().min(1).nullable().optional(),
+});
+
+// POST /api/assets/links
+// An external link as a first-class library asset (Envato, Figma, Behance,
+// Dribbble, Pinterest, Google Drive, any http(s) URL). Stores name + URL
+// only: the server never fetches the URL (no previews, no scraping), so
+// this route can't be used to make the backend request arbitrary hosts.
+router.post('/links', requireStudent, createLinkLimiter, async (req: Request, res: Response) => {
+  try {
+    const roll = req.studentRoll!;
+    const parsed = createLinkSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid link: name, url and workspace_id are required' });
+    }
+    const { workspace_id: workspaceId, name } = parsed.data;
+
+    const membership = await getWorkspaceMembership(workspaceId, roll);
+    if (!membership) {
+      return res.status(403).json({ error: 'Not a member of that workspace' });
+    }
+
+    const linkUrl = normalizeLinkUrl(parsed.data.url);
+    if (!linkUrl) {
+      return res.status(400).json({ error: 'Enter a full http:// or https:// URL' });
+    }
+
+    const collection = await resolveCreateCollection(parsed.data.collection_id, workspaceId);
+    if (!collection.ok) {
+      return res.status(400).json({ error: 'Collection not found in this workspace' });
+    }
+
+    const studentResult = await pool.query('SELECT name FROM student_sessions WHERE roll_number = $1', [roll]);
+    const ownerName = (studentResult.rows[0] as { name: string } | undefined)?.name ?? null;
+
+    const result = await pool.query(`
+      INSERT INTO assets
+        (id, workspace_id, owner_roll, owner_name, kind, collection_id, filename, link_url, created_at)
+      VALUES ($1, $2, $3, $4, 'link', $5, $6, $7, $8)
+      RETURNING *
+    `, [uuidv4(), workspaceId, roll, ownerName, collection.id, name, linkUrl, new Date().toISOString()]);
+
+    res.status(201).json(toPublicAsset(result.rows[0] as AssetRow));
+  } catch (err) {
+    console.error('Create link asset error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+const updateAssetSchema = z.object({
+  filename: z.string().trim().min(1).max(255).optional(),
+  collection_id: z.string().min(1).nullable().optional(),
+}).refine(v => v.filename !== undefined || v.collection_id !== undefined, { message: 'Nothing to update' });
+
+// PATCH /api/assets/:id
+// Two edits, two tiers (both reuse existing workspace roles, no new
+// permission concept):
+//   collection_id — any member of the asset's workspace: grouping is
+//     organisational and fully reversible, and collections exist so the
+//     whole team can curate packs together.
+//   filename (rename) — the uploader or a workspace owner/admin, the same
+//     tier as DELETE, since it changes how everyone sees the asset.
+// The target collection must belong to the asset's own workspace.
+router.patch('/:id', requireStudent, async (req: Request, res: Response) => {
+  try {
+    const roll = req.studentRoll!;
+    const id = param(req.params.id);
+    const parsed = updateAssetSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid update' });
+    }
+
+    const found = await pool.query('SELECT * FROM assets WHERE id = $1', [id]);
+    const row = found.rows[0] as AssetRow | undefined;
+    if (!row) {
+      return res.status(404).json({ error: 'Asset not found' });
+    }
+
+    const membership = await getWorkspaceMembership(row.workspace_id, roll);
+    if (!membership) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { filename, collection_id: collectionId } = parsed.data;
+    if (filename !== undefined && filename !== row.filename) {
+      const canRename = row.owner_roll === roll || membership === 'owner' || membership === 'admin';
+      if (!canRename) {
+        return res.status(403).json({ error: 'Only the uploader or a workspace admin can rename this asset' });
+      }
+    }
+    if (collectionId && !(await collectionInWorkspace(collectionId, row.workspace_id))) {
+      return res.status(400).json({ error: 'Collection not found in this workspace' });
+    }
+
+    const result = await pool.query(`
+      UPDATE assets SET
+        filename = COALESCE($2, filename),
+        collection_id = CASE WHEN $3::boolean THEN $4 ELSE collection_id END
+      WHERE id = $1
+      RETURNING *
+    `, [id, filename ?? null, collectionId !== undefined, collectionId ?? null]);
+
+    res.json(toPublicAsset(result.rows[0] as AssetRow));
+  } catch (err) {
+    console.error('Update asset error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -384,6 +563,11 @@ router.delete('/:id', requireStudent, async (req: Request, res: Response) => {
     }
 
     await pool.query('DELETE FROM assets WHERE id = $1', [id]);
+
+    // Links have no stored object to remove.
+    if (!row.storage_key) {
+      return res.json({ success: true });
+    }
 
     try {
       await getStorage().delete(row.storage_key);

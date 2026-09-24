@@ -69,7 +69,60 @@ export const FAMILY_LABEL: Record<FileFamily, string> = {
   image: 'Image file', video: 'Video', audio: 'Audio', font: 'Font', other: 'File',
 };
 
-export const KIND_LABEL: Record<AssetKind, string> = { image: 'Image', file: 'File' };
+export const KIND_LABEL: Record<AssetKind, string> = { image: 'Image', file: 'File', link: 'Link' };
+
+// Hostname for display ("www." dropped), or null for an unparseable URL.
+export function linkDomain(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).hostname.replace(/^www\./, '') || null;
+  } catch {
+    return null;
+  }
+}
+
+// Friendly source name for well-known design resources, derived purely
+// from the hostname (nothing is fetched). Unknown hosts fall back to the
+// domain itself — any http(s) link is a valid asset.
+const KNOWN_SOURCES: [RegExp, string][] = [
+  [/(^|\.)envato\.com$/, 'Envato'],
+  [/(^|\.)figma\.com$/, 'Figma'],
+  [/(^|\.)behance\.net$/, 'Behance'],
+  [/(^|\.)dribbble\.com$/, 'Dribbble'],
+  [/(^|\.)pinterest\.[a-z.]+$/, 'Pinterest'],
+  [/^drive\.google\.com$/, 'Google Drive'],
+  [/^docs\.google\.com$/, 'Google Docs'],
+  [/(^|\.)canva\.com$/, 'Canva'],
+  [/(^|\.)unsplash\.com$/, 'Unsplash'],
+  [/(^|\.)fonts\.google\.com$/, 'Google Fonts'],
+  [/(^|\.)github\.com$/, 'GitHub'],
+];
+
+export function linkSource(url: string | null | undefined): string | null {
+  const domain = linkDomain(url);
+  if (!domain) return null;
+  return KNOWN_SOURCES.find(([re]) => re.test(domain))?.[1] ?? domain;
+}
+
+// URL for display: protocol and "www." dropped, trailing slash trimmed
+// ("https://www.figma.com/file/1/" -> "figma.com/file/1").
+export function displayUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '') || null;
+}
+
+// Client-side mirror of the backend's normalizeLinkUrl for instant form
+// feedback: absolute http(s), no embedded credentials. The server decides.
+export function isAcceptableLinkUrl(raw: string): boolean {
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > 2048) return false;
+  try {
+    const url = new URL(trimmed);
+    return (url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password && !!url.hostname;
+  } catch {
+    return false;
+  }
+}
 
 // Secondary line under an asset card's name, e.g. "PSD · 2.4 MB".
 export function assetMetaLine(asset: Pick<Asset, 'kind' | 'extension' | 'size_bytes' | 'width' | 'height'>): string {

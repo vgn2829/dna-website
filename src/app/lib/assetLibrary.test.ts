@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { assetMetaLine, classifyUpload, fileExtension, fileFamily, formatSize, FILE_MAX_BYTES, IMAGE_MAX_BYTES } from './assetLibrary';
+import { assetMetaLine, classifyUpload, fileExtension, fileFamily, formatSize, displayUrl, isAcceptableLinkUrl, linkDomain, linkSource, FILE_MAX_BYTES, IMAGE_MAX_BYTES } from './assetLibrary';
 
 describe('classifyUpload', () => {
   it('routes allowlisted images through the image path', () => {
@@ -52,5 +52,31 @@ describe('assetMetaLine / formatSize', () => {
   it('formats sizes', () => {
     expect(formatSize(512)).toBe('512 B');
     expect(formatSize(null)).toBe('');
+  });
+});
+
+describe('link helpers', () => {
+  it('extracts a display domain', () => {
+    expect(linkDomain('https://www.behance.net/gallery/1')).toBe('behance.net');
+    expect(linkDomain('not a url')).toBeNull();
+  });
+  it('names well-known sources and falls back to the domain', () => {
+    expect(linkSource('https://elements.envato.com/t-shirt-mockup')).toBe('Envato');
+    expect(linkSource('https://www.figma.com/community/file/1')).toBe('Figma');
+    expect(linkSource('https://dribbble.com/shots/1')).toBe('Dribbble');
+    expect(linkSource('https://in.pinterest.com/pin/1')).toBe('Pinterest');
+    expect(linkSource('https://drive.google.com/file/d/1')).toBe('Google Drive');
+    expect(linkSource('https://notfigma.com.evil.io/x')).toBe('notfigma.com.evil.io');
+    expect(linkSource('https://example.org/x')).toBe('example.org');
+  });
+  it('formats a URL for display', () => {
+    expect(displayUrl('https://www.figma.com/community/file/1/')).toBe('figma.com/community/file/1');
+    expect(displayUrl(null)).toBeNull();
+  });
+  it('accepts only absolute http(s) URLs without credentials', () => {
+    expect(isAcceptableLinkUrl('https://figma.com/file/1')).toBe(true);
+    expect(isAcceptableLinkUrl('javascript:alert(1)')).toBe(false);
+    expect(isAcceptableLinkUrl('figma.com/file')).toBe(false);
+    expect(isAcceptableLinkUrl('https://a:b@x.com')).toBe(false);
   });
 });

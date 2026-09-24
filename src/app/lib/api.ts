@@ -213,8 +213,10 @@ export interface Template {
 // resolved via getStorage().getPublicUrl().
 // Mirrors backend/src/routes/assets.ts's toPublicAsset(). kind 'image' is
 // the only kind that can be inserted onto a board; 'file' is any other
-// library resource (PSD/AI/PDF/ZIP/...), whose url is a download URL.
-export type AssetKind = 'image' | 'file';
+// library resource (PSD/AI/PDF/ZIP/...), whose url is a download URL;
+// 'link' is an external http(s) URL (link_url) with no stored object
+// (url is null).
+export type AssetKind = 'image' | 'file' | 'link';
 
 export interface Asset {
   id: string;
@@ -222,14 +224,28 @@ export interface Asset {
   owner_roll: string;
   owner_name: string | null;
   kind: AssetKind;
+  collection_id: string | null;
   extension: string | null;
   filename: string;
-  mime_type: string;
-  size_bytes: number;
+  link_url: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
   width: number | null;
   height: number | null;
   created_at: string;
-  url: string;
+  url: string | null;
+}
+
+// Mirrors backend/src/routes/assetCollections.ts.
+export interface AssetCollection {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  created_by_roll: string;
+  created_at: string;
+  updated_at: string;
+  asset_count: number;
 }
 
 // Mirrors backend/src/routes/notifications.ts's toPublicNotification().
@@ -867,18 +883,26 @@ export const api = {
   assets: {
     // opts.kind 'file' opts in to general (non-image) library files; an
     // allowlisted image is always stored as an image regardless.
-    upload: (workspaceId: string, file: File, opts?: { kind?: 'file' }) => {
+    upload: (workspaceId: string, file: File, opts?: { kind?: 'file'; collectionId?: string | null }) => {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('workspace_id', workspaceId);
       formData.append('filename', file.name);
       if (opts?.kind) formData.append('kind', opts.kind);
+      if (opts?.collectionId) formData.append('collection_id', opts.collectionId);
       return studentUploadRequest<Asset>('/assets', formData);
     },
-    list: (roll: string, workspaceId: string, cursor?: string, filters?: { kind?: AssetKind; q?: string; limit?: number }) => {
+    createLink: (roll: string, body: { workspace_id: string; name: string; url: string; collection_id?: string | null }) =>
+      request<Asset>('POST', '/assets/links', { roll, body }),
+    // collection_id: an id, or null to ungroup. filename: rename.
+    update: (roll: string, id: string, body: { filename?: string; collection_id?: string | null }) =>
+      request<Asset>('PATCH', `/assets/${id}`, { roll, body }),
+    // filters.collectionId: an id, or 'none' for ungrouped assets.
+    list: (roll: string, workspaceId: string, cursor?: string, filters?: { kind?: AssetKind; q?: string; collectionId?: string; limit?: number }) => {
       const params = new URLSearchParams({ workspace_id: workspaceId });
       if (cursor) params.set('cursor', cursor);
       if (filters?.kind) params.set('kind', filters.kind);
+      if (filters?.collectionId) params.set('collection_id', filters.collectionId);
       if (filters?.q?.trim()) params.set('q', filters.q.trim());
       if (filters?.limit) params.set('limit', String(filters.limit));
       return request<{ assets: Asset[]; nextCursor: string | null }>('GET', `/assets?${params}`, { roll });
@@ -887,6 +911,17 @@ export const api = {
       request<Asset>('GET', `/assets/${id}`, { roll }),
     delete: (roll: string, id: string) =>
       request<{ success: boolean; storageWarning?: string }>('DELETE', `/assets/${id}`, { roll }),
+  },
+  // Asset collections ("asset packs") — mirrors backend/src/routes/assetCollections.ts.
+  assetCollections: {
+    list: (roll: string, workspaceId: string) =>
+      request<{ collections: AssetCollection[] }>('GET', `/asset-collections?workspace_id=${encodeURIComponent(workspaceId)}`, { roll }),
+    create: (roll: string, body: { workspace_id: string; name: string; description?: string | null }) =>
+      request<AssetCollection>('POST', '/asset-collections', { roll, body }),
+    update: (roll: string, id: string, body: { name?: string; description?: string | null }) =>
+      request<AssetCollection>('PATCH', `/asset-collections/${id}`, { roll, body }),
+    delete: (roll: string, id: string) =>
+      request<{ success: boolean; ungroupedAssets: number }>('DELETE', `/asset-collections/${id}`, { roll }),
   },
   // Basic Notifications (Phase C) — mirrors backend/src/routes/notifications.ts.
   // No realtime channel: the panel refetches on open (see NotificationBell.tsx).

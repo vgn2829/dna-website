@@ -1312,6 +1312,60 @@ export async function initSchema(): Promise<void> {
     ALTER TABLE assets ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'image'
   `);
 
+  // Asset collections ("asset packs") — a flat, workspace-scoped grouping
+  // (Branding Pack, UI References, Mockups, ...), NOT a folder hierarchy:
+  // an asset belongs to at most one collection (assets.collection_id),
+  // and deleting a collection only un-groups its assets (ON DELETE SET
+  // NULL), never deletes them. Workspace scoping mirrors assets exactly
+  // (NOT NULL + ON DELETE CASCADE). created_by_roll follows the raw-roll,
+  // no-FK convention of assets.owner_roll; it gates rename/delete the
+  // same way owner_roll gates asset delete (routes/assetCollections.ts).
+  // Names are unique per workspace, case-insensitively.
+  //
+  // That an asset's collection belongs to the SAME workspace as the asset
+  // is enforced at the route layer (assets.ts's collectionInWorkspace) on
+  // every write that sets collection_id.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS asset_collections (
+      id              TEXT PRIMARY KEY,
+      workspace_id    TEXT NOT NULL REFERENCES workspaces(id)
+                      ON DELETE CASCADE,
+      name            TEXT NOT NULL,
+      description     TEXT,
+      created_by_roll TEXT NOT NULL,
+      created_at      TEXT NOT NULL,
+      updated_at      TEXT NOT NULL
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_asset_collections_workspace_id
+    ON asset_collections (workspace_id)
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_asset_collections_workspace_name
+    ON asset_collections (workspace_id, lower(name))
+  `);
+
+  // Collection membership + external link assets. Additive/idempotent:
+  //   collection_id — nullable; existing assets start ungrouped.
+  //   link_url      — only set for kind='link' (an external http(s) URL,
+  //                   stored as-is and NEVER fetched server-side).
+  // A link has no stored object, so storage_key/mime_type/size_bytes
+  // become nullable. DROP NOT NULL is a metadata-only change, a no-op on
+  // re-run, and every existing row keeps its values.
+  await pool.query(`
+    ALTER TABLE assets ADD COLUMN IF NOT EXISTS collection_id TEXT
+      REFERENCES asset_collections(id) ON DELETE SET NULL
+  `);
+  await pool.query(`ALTER TABLE assets ADD COLUMN IF NOT EXISTS link_url TEXT`);
+  await pool.query(`ALTER TABLE assets ALTER COLUMN storage_key DROP NOT NULL`);
+  await pool.query(`ALTER TABLE assets ALTER COLUMN mime_type DROP NOT NULL`);
+  await pool.query(`ALTER TABLE assets ALTER COLUMN size_bytes DROP NOT NULL`);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_assets_collection_id
+    ON assets (collection_id)
+  `);
+
   console.log('assets migration done');
 
   // Notifications (Phase C) — deliberately minimal: no read receipts

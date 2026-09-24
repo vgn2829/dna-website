@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
-import { UploadCloud, Check, AlertCircle, Loader2 } from 'lucide-react';
-import { api, type Asset } from '../../lib/api';
-import { classifyUpload, FILE_MAX_BYTES, formatSize, IMAGE_MAX_BYTES } from '../../lib/assetLibrary';
+import { UploadCloud, Check, AlertCircle, Loader2, Link2 } from 'lucide-react';
+import { api, type Asset, type AssetCollection } from '../../lib/api';
+import { classifyUpload, FILE_MAX_BYTES, formatSize, IMAGE_MAX_BYTES, isAcceptableLinkUrl, linkSource } from '../../lib/assetLibrary';
 import { LibraryDialog } from './LibraryDialog';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -10,21 +10,45 @@ import { LibraryDialog } from './LibraryDialog';
 // resource as a general file; each file is classified client-side by
 // classifyUpload() for instant feedback and re-validated by the server.
 // Files upload one at a time so each row reports its own result.
+//
+// "Add link" stores an external URL (Envato, Figma, Behance, Dribbble,
+// Pinterest, Google Drive, anything http/https) as a first-class asset —
+// name + URL only; nothing is fetched to build a preview.
+//
+// Both flows can file the new asset straight into a collection; the
+// default is the collection currently being browsed.
 // ─────────────────────────────────────────────────────────────────────────
+
+const FIELD_LABEL: React.CSSProperties = {
+  display: 'block', marginBottom: 6, fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
+  textTransform: 'uppercase', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)',
+};
 
 type QueueItem = { key: string; name: string; status: 'waiting' | 'uploading' | 'done' | 'error'; message?: string };
 
 export function AddAssetDialog({
   workspaceId,
   workspaceName,
+  roll,
+  collections,
+  defaultCollectionId,
   onClose,
   onAdded,
 }: {
   workspaceId: string;
   workspaceName: string;
+  roll: string;
+  collections: AssetCollection[];
+  defaultCollectionId: string | null;
   onClose: () => void;
   onAdded: (asset: Asset) => void;
 }) {
+  const [mode, setMode] = useState<'upload' | 'link'>('upload');
+  const [collectionId, setCollectionId] = useState<string | null>(defaultCollectionId);
+  const [linkName, setLinkName] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [savingLink, setSavingLink] = useState(false);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -48,7 +72,7 @@ export function AddAssetDialog({
       }
       setItem(key, { status: 'uploading' });
       try {
-        const asset = await api.assets.upload(workspaceId, file, plan.kind === 'file' ? { kind: 'file' } : undefined);
+        const asset = await api.assets.upload(workspaceId, file, { kind: plan.kind === 'file' ? 'file' : undefined, collectionId });
         onAdded(asset);
         setItem(key, { status: 'done' });
       } catch (err) {
@@ -58,17 +82,114 @@ export function AddAssetDialog({
     setBusy(false);
   };
 
+  const urlLooksValid = isAcceptableLinkUrl(linkUrl);
+  const saveLink = async () => {
+    if (!linkName.trim() || savingLink) return;
+    if (!urlLooksValid) {
+      setLinkError('Enter a full URL starting with https:// or http://');
+      return;
+    }
+    setSavingLink(true);
+    setLinkError(null);
+    try {
+      const asset = await api.assets.createLink(roll, { workspace_id: workspaceId, name: linkName.trim(), url: linkUrl.trim(), collection_id: collectionId });
+      onAdded(asset);
+      onClose();
+    } catch (err) {
+      setLinkError(err instanceof Error ? err.message : 'Failed to add link');
+      setSavingLink(false);
+    }
+  };
+
   return (
     <LibraryDialog
       title="Add asset"
       subtitle={`To ${workspaceName}`}
       onClose={onClose}
-      footer={
+      footer={mode === 'upload' ? (
         <button type="button" className="btn-secondary" onClick={onClose} disabled={busy} style={{ minHeight: 40 }}>
           {queue.some(q => q.status === 'done') ? 'Done' : 'Close'}
         </button>
-      }
+      ) : (<>
+          <button type="button" className="btn-secondary" onClick={onClose} style={{ minHeight: 40 }}>Cancel</button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={saveLink}
+            disabled={!linkName.trim() || !linkUrl.trim() || savingLink}
+            style={{ minHeight: 40, opacity: !linkName.trim() || !linkUrl.trim() || savingLink ? 0.6 : 1 }}
+          >
+            {savingLink ? 'Adding…' : 'Add link'}
+          </button>
+      </>)}
     >
+      <div role="tablist" aria-label="Add asset type" style={{ display: 'flex', gap: 4, padding: 4, marginBottom: 16, borderRadius: 'var(--radius-pill)', background: 'var(--color-canvas)', border: '1px solid var(--color-hairline)' }}>
+        {([['upload', 'Upload file', UploadCloud], ['link', 'Add link', Link2]] as const).map(([id, label, Icon]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={mode === id}
+            disabled={busy}
+            onClick={() => setMode(id)}
+            style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              padding: '8px 12px', borderRadius: 'var(--radius-pill)', border: 'none', cursor: 'pointer',
+              background: mode === id ? 'var(--color-surface-2)' : 'transparent',
+              color: mode === id ? 'var(--color-ink)' : 'var(--color-ink-muted)',
+              fontSize: 13, fontWeight: 500, fontFamily: 'var(--font-body)',
+            }}
+          >
+            <Icon size={14} /> {label}
+          </button>
+        ))}
+      </div>
+
+      {collections.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <label htmlFor="add-asset-collection" style={FIELD_LABEL}>Collection</label>
+          <select
+            id="add-asset-collection"
+            className="input-base"
+            value={collectionId ?? ''}
+            onChange={e => setCollectionId(e.target.value || null)}
+            style={{ fontSize: 14 }}
+          >
+            <option value="">No collection</option>
+            {collections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+      )}
+
+      {mode === 'link' ? (
+        <form onSubmit={e => { e.preventDefault(); saveLink(); }}>
+          <label htmlFor="link-name" style={FIELD_LABEL}>Name</label>
+          <input
+            id="link-name"
+            className="input-base"
+            value={linkName}
+            maxLength={255}
+            onChange={e => setLinkName(e.target.value)}
+            placeholder="Envato T-Shirt Mockup"
+            autoFocus
+          />
+          <label htmlFor="link-url" style={{ ...FIELD_LABEL, marginTop: 14 }}>URL</label>
+          <input
+            id="link-url"
+            className="input-base"
+            type="url"
+            inputMode="url"
+            value={linkUrl}
+            maxLength={2048}
+            onChange={e => { setLinkUrl(e.target.value); setLinkError(null); }}
+            placeholder="https://elements.envato.com/…"
+          />
+          <p style={{ margin: '8px 0 0', fontSize: 12, color: linkError ? 'var(--color-error)' : 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }} role={linkError ? 'alert' : undefined}>
+            {linkError ?? (urlLooksValid ? `Links to ${linkSource(linkUrl)}` : 'Figma, Envato, Behance, Dribbble, Pinterest, Google Drive or any web link.')}
+          </p>
+          <button type="submit" hidden />
+        </form>
+      ) : (<>
       <input
         ref={inputRef}
         type="file"
@@ -125,6 +246,7 @@ export function AddAssetDialog({
           ))}
         </ul>
       )}
+      </>)}
     </LibraryDialog>
   );
 }

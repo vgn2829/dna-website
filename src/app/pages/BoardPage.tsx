@@ -421,6 +421,9 @@ export default function BoardPage() {
   const handleInsertAsset = async (asset: Asset) => {
     const editor = editorRef.current;
     if (!editor) return;
+    // Only library images are canvas-insertable (files are downloads,
+    // links have no stored object/url); the picker only offers images.
+    if (asset.kind !== 'image' || !asset.url) return;
     try {
       // Dynamically imported — tldrawCanvasShared.ts pulls in the (heavy)
       // tldraw package at module scope, and BoardPage.tsx itself is NOT
