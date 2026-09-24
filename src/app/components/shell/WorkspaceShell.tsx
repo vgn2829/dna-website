@@ -9,6 +9,7 @@ import { useScreenSize } from '../hooks/use-screen-size';
 import { useModalA11y } from '../hooks/useModalA11y';
 import { Sidebar } from './Sidebar';
 import { NotificationBell } from '../NotificationBell';
+import { SITE_NAV_OFFSET } from '../../lib/layout';
 
 // ─────────────────────────────────────────────────────────────────────────
 // WorkspaceShell (V2.0 Phase 2) — the persistent app shell for the
@@ -46,14 +47,17 @@ export function WorkspaceShell() {
 
   return (
     <WorkspaceProvider>
-      <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-canvas)' }}>
+      {/* The public site navbar (Root renders <Navigation/> here too) is
+          fixed at the top; the whole shell starts SITE_NAV_OFFSET below it,
+          so nothing sits underneath the navbar. */}
+      <div style={{ display: 'flex', minHeight: '100vh', boxSizing: 'border-box', paddingTop: SITE_NAV_OFFSET, background: 'var(--color-canvas)' }}>
         {isDesktop && (
           <aside
             style={{
               width: SIDEBAR_WIDTH, flexShrink: 0,
               borderRight: '1px solid var(--color-border)',
               background: 'var(--color-canvas)',
-              position: 'sticky', top: 0, height: '100vh', overflowY: 'auto',
+              position: 'sticky', top: SITE_NAV_OFFSET, height: `calc(100vh - ${SITE_NAV_OFFSET}px)`, overflowY: 'auto',
             }}
           >
             <Sidebar />
@@ -91,41 +95,51 @@ export function WorkspaceShell() {
         )}
 
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <header
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              gap: 12, padding: '10px 20px', minHeight: 56,
-              borderBottom: '1px solid var(--color-hairline)',
-              // Same translucent, blurred surface as the public site's nav.
-              position: 'sticky', top: 0, zIndex: 10,
-              background: 'var(--color-nav-blur-bg)',
-              backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-            }}
-          >
-            {!isDesktop ? (
+          {/* Shell top row — only below lg. At lg+ the sidebar is always
+              visible and the public navbar above already carries the bell
+              / sign-in, so the content starts directly under the navbar.
+              Below lg it holds the workspace drawer toggle (labelled, so it
+              isn't confused with the navbar's own site menu) and the bell /
+              sign-in: the navbar hides its account chip below md, and at
+              md widths that chip can be clipped off the navbar's right
+              edge, so the shell keeps its own until lg. */}
+          {!isDesktop && (
+            <header
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                gap: 12, padding: '8px 16px', minHeight: 52,
+                borderBottom: '1px solid var(--color-hairline)',
+                // Same translucent, blurred surface as the public site's nav.
+                position: 'sticky', top: SITE_NAV_OFFSET, zIndex: 10,
+                background: 'var(--color-nav-blur-bg)',
+                backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+              }}
+            >
               <button
                 onClick={() => setDrawerOpen(true)}
-                aria-label="Open navigation"
+                aria-label="Open workspace navigation"
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  width: 32, height: 32, background: 'none', border: 'none',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  height: 36, padding: '0 12px 0 8px', background: 'none',
+                  border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-pill)',
                   color: 'var(--color-ink)', cursor: 'pointer',
+                  fontSize: 13, fontWeight: 500, fontFamily: 'var(--font-body)',
                 }}
               >
-                <Menu size={19} />
+                <Menu size={17} /> Workspace
               </button>
-            ) : <span />}
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              {studentSession ? (
-                <NotificationBell roll={studentSession.rollNumber} isDark={theme === 'dark'} />
-              ) : (
-                <button onClick={openRollModal} className="btn-primary" style={{ minHeight: 36, padding: '8px 16px', fontSize: 13 }}>
-                  Sign in
-                </button>
-              )}
-            </div>
-          </header>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                {studentSession ? (
+                  <NotificationBell roll={studentSession.rollNumber} isDark={theme === 'dark'} />
+                ) : (
+                  <button onClick={openRollModal} className="btn-primary" style={{ minHeight: 36, padding: '8px 16px', fontSize: 13 }}>
+                    Sign in
+                  </button>
+                )}
+              </div>
+            </header>
+          )}
 
           <main className="ws-main" style={{ flex: 1, maxWidth: 1200, width: '100%', margin: '0 auto', minWidth: 0 }} key={location.pathname}>
             <Outlet />

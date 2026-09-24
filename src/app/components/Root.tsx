@@ -10,6 +10,7 @@ import { ThemeProvider } from '../context/ThemeContext';
 import { StudentProvider, useStudent } from '../context/StudentContext';
 import { AppDataProvider } from '../context/AppDataContext';
 import { Toaster } from './ui/sonner';
+import { SITE_NAV_OFFSET } from '../lib/layout';
 
 function SessionGate({ isAdminPage }: { isAdminPage: boolean }) {
   const { studentSession } = useStudent();
@@ -19,9 +20,10 @@ function SessionGate({ isAdminPage }: { isAdminPage: boolean }) {
 
 // Path prefixes owned by the workspace app shell (WorkspaceShell.tsx) —
 // V2.0's Home/Moodboards/Assets/Projects/Templates. Root suppresses its
-// own Navigation/Footer/padded <main> chrome for these exactly like it
-// already does for the board canvas below, since WorkspaceShell renders
-// its own sidebar/header instead. This is the ONLY change V2.0 makes to
+// Footer/padded <main> chrome for these, since WorkspaceShell lays out its
+// own sidebar + content (offset below the public Navigation, which Root
+// still renders above the shell). The board canvas below gets neither.
+// This is the ONLY change V2.0 makes to
 // Root.tsx — every public/marketing route (/, /academy, /resources,
 // /gallery, /events, /team, /palette, /design-studio) and /admin keep
 // rendering through Root's existing chrome exactly as before.
@@ -59,7 +61,11 @@ export function Root() {
             style={{ background: 'var(--color-canvas)', color: 'var(--color-ink)' }}
           >
             {!isBoardPage && !isAdminPage && !isWorkspaceShell && <LiveSessionBanner />}
-            {!isBoardPage && !isWorkspaceShell && <Navigation />}
+            {/* The public navbar also sits above the workspace shell (/home,
+                /moodboards, /assets, /projects, /templates) — WorkspaceShell
+                offsets itself by SITE_NAV_OFFSET. The board canvas
+                (/moodboards/:id) stays a focused, navbar-free view. */}
+            {!isBoardPage && <Navigation />}
             {!isAdminPage && <RollModal />}
             <SessionGate isAdminPage={isAdminPage} />
 
@@ -67,7 +73,7 @@ export function Root() {
               <Outlet />
             ) : (
               <>
-                <main style={{ paddingTop: '72px' }}>
+                <main style={{ paddingTop: SITE_NAV_OFFSET }}>
                   <Outlet />
                 </main>
                 <Footer />
