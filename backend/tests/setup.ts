@@ -1,26 +1,20 @@
 import { beforeAll, afterAll, afterEach } from 'vitest';
 
-// Test environment must be fully configured before any app module is
-// imported, since server.ts-style guards and the mailer/JWT modules read
-// process.env at import/call time, not lazily behind a config object.
-process.env.NODE_ENV = 'test';
-process.env.DATABASE_URL = process.env.TEST_DATABASE_URL
-  ?? 'postgresql://localhost:5432/dna_club_test';
-process.env.JWT_SECRET = 'test-jwt-secret-not-for-production-use-only-in-ci';
-process.env.ADMIN_PASSWORD = 'test-admin-password-123';
-process.env.CORS_ORIGINS = 'http://localhost:5173';
-// Leave RESEND_API_KEY unset — sendOtpEmail/sendWelcomeEmail intentionally no-op
-// (and log to console) when it's absent, which is exactly the behavior tests want:
-// no real network calls, no thrown errors, OTP flow still completes.
-delete process.env.RESEND_API_KEY;
-delete process.env.SUPABASE_URL;
-delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-delete process.env.INTERNAL_TICK_SECRET;
+// The test environment (NODE_ENV, the test DATABASE_URL, secrets) is set
+// up by tests/env.ts, which vitest runs BEFORE this file — see its header
+// for why it can't live here (ESM import hoisting vs. the pg Pool).
 
-import { pool, query } from '../src/db/client';
+import { pool, query, poolTarget } from '../src/db/client';
 import { initSchema } from '../src/db/schema';
 
 beforeAll(async () => {
+  // Belt and braces: the Pool must have been built from the validated test
+  // URL, and the server must agree about which database it is.
+  const connected = (await query<{ db: string }>('SELECT current_database() AS db'))[0].db;
+  if (!poolTarget || poolTarget.database !== connected) {
+    throw new Error(`Test pool target mismatch: pool built for ${JSON.stringify(poolTarget)}, connected to "${connected}"`);
+  }
+
   await initSchema();
 
   // server.ts normally seeds admin_config.admin_password_hash from

@@ -1,7 +1,16 @@
 import { pool } from './client';
 import { canvasSummaryColumns } from '../lib/canvasSummary';
+import { checkSchemaInitAllowed } from './dbTarget';
 
 export async function initSchema(): Promise<void> {
+  // Refuse to run DDL/backfills against a database this process shouldn't
+  // be migrating (e.g. a dev server whose .env points at the hosted DB) —
+  // see db/dbTarget.ts for the exact rules and the explicit override.
+  const check = checkSchemaInitAllowed(process.env);
+  console.log(`Schema initialization target: ${check.target ? `${check.target.host} / ${check.target.database}` : '(none)'} — env ${process.env.NODE_ENV || 'development'} — ${check.allowed ? 'allowed' : 'REFUSED'} (${check.reason})`);
+  if (!check.allowed) {
+    throw new Error(check.reason);
+  }
   // Tracks one-time migrations so destructive/backfill steps can't silently re-run.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
