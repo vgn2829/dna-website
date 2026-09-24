@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app';
 import { query } from '../src/db/client';
@@ -80,9 +80,16 @@ const list = (boardId: string, roll: string) =>
   request(app).get(`/api/boards/${boardId}/comments`).set(auth(roll));
 
 beforeEach(async () => {
-  await query('TRUNCATE "board_comments","board_members","boards","workspace_members","workspaces","student_sessions" CASCADE');
+  await query('TRUNCATE "board_comments","board_members","boards","workspace_members","workspaces" CASCADE');
   process.env.REALTIME_ENABLED = 'true';
   await Promise.all([registerStudent(OWNER), registerStudent(MEMBER)]);
+});
+
+// Same rationale as comment-mentions.test.ts: let fire-and-forget
+// notification writes drain so they cannot land during the next file's
+// TRUNCATE.
+afterAll(async () => {
+  await new Promise(r => setTimeout(r, 500));
 });
 
 describe('page-aware comment anchors', () => {

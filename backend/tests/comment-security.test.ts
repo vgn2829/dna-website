@@ -88,7 +88,7 @@ async function postComment(boardId: string, roll: string, content = 'hello'): Pr
 }
 
 beforeEach(async () => {
-  await query('TRUNCATE "board_comments","board_members","boards","workspace_members","workspaces","student_sessions" CASCADE');
+  await query('TRUNCATE "board_comments","board_members","boards","workspace_members","workspaces" CASCADE');
   process.env.REALTIME_ENABLED = 'true';
   await Promise.all([registerStudent(OWNER), registerStudent(MEMBER), registerStudent(OUTSIDER)]);
 });

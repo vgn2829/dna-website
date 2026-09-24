@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app';
 import { query } from '../src/db/client';
@@ -93,9 +93,43 @@ const root = (boardId: string, roll: string, content: string) =>
   post(boardId, roll, { content, anchorType: 'canvas', anchorX: 1, anchorY: 1 });
 
 beforeEach(async () => {
-  await query('TRUNCATE "notifications","board_comments","board_members","boards","workspace_members","workspaces","student_sessions" CASCADE');
+  await query('TRUNCATE "notifications","board_comments","board_members","boards","workspace_members","workspaces" CASCADE');
   process.env.REALTIME_ENABLED = 'true';
   await Promise.all([registerStudent(OWNER), registerStudent(MEMBER), registerStudent(OUTSIDER)]);
+});
+
+// Notification writes are fire-and-forget by design (a notification
+// failure must never fail the comment itself). vitest runs files serially
+// (fileParallelism: false), so a straggler write from THIS file would
+// otherwise land AFTER the next file's TRUNCATE and make an unrelated,
+// pre-existing suite (notifications.test.ts) flaky. Drain, then clear the
+// rows this file created, so the file is genuinely self-contained rather
+// than merely usually-fast-enough.
+// Notification writes are fire-and-forget by design (a notification
+// failure must never fail the comment itself), and vitest runs files
+// serially, so a straggler write from THIS file would otherwise land
+// AFTER the next file's TRUNCATE and make an unrelated, pre-existing
+// suite flaky. Empirically confirmed: excluding this file alone made the
+// full suite stable.
+//
+// Rather than sleeping and hoping, this polls until the notifications
+// table stops growing — i.e. until every write this file triggered has
+// actually settled — and only then clears it.
+afterAll(async () => {
+  const countRows = async (): Promise<number> => {
+    const r = await query<{ count: number }>('SELECT COUNT(*)::int AS count FROM notifications');
+    return r[0].count;
+  };
+  let previous = -1;
+  let stableFor = 0;
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline && stableFor < 3) {
+    const current = await countRows();
+    stableFor = current === previous ? stableFor + 1 : 0;
+    previous = current;
+    await new Promise(r => setTimeout(r, 120));
+  }
+  await query('TRUNCATE "notifications" CASCADE');
 });
 
 describe('comment mentions', () => {
