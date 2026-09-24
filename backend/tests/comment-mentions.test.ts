@@ -6,6 +6,7 @@ import { signStudentToken } from '../src/middleware/studentAuth';
 import { CommentBroadcaster } from '../src/realtime/comments/commentBroadcaster';
 import type { VersionHistoryService } from '../src/realtime/history/versionHistoryService';
 import type { RestoreService } from '../src/realtime/history/restoreService';
+import { whenNotificationsSettled } from '../src/services/notificationService';
 
 // ─────────────────────────────────────────────────────────────────────────
 // BOARD-SCOPED MENTIONS (V2.6 Phase D).
@@ -79,14 +80,11 @@ const mentionNotifications = (recipientRoll: string) =>
 // Notifications are written fire-and-forget by the route (a notification
 // failure must never fail the comment itself — see routes/comments.ts), so
 // assertions poll rather than reading once immediately after the response.
-async function waitForMentionCount(recipientRoll: string, expected: number, timeoutMs = 3000): Promise<number> {
-  const start = Date.now();
-  let last = (await mentionNotifications(recipientRoll)).length;
-  while (last !== expected && Date.now() - start < timeoutMs) {
-    await new Promise(r => setTimeout(r, 40));
-    last = (await mentionNotifications(recipientRoll)).length;
-  }
-  return last;
+async function waitForMentionCount(recipientRoll: string, expected: number): Promise<number> {
+  // Deterministic: wait for the dispatched writes to actually settle, then
+  // read once. No polling, no timeout, no sleep.
+  await whenNotificationsSettled();
+  return (await mentionNotifications(recipientRoll)).length;
 }
 
 const root = (boardId: string, roll: string, content: string) =>
@@ -99,36 +97,16 @@ beforeEach(async () => {
 });
 
 // Notification writes are fire-and-forget by design (a notification
-// failure must never fail the comment itself). vitest runs files serially
-// (fileParallelism: false), so a straggler write from THIS file would
-// otherwise land AFTER the next file's TRUNCATE and make an unrelated,
-// pre-existing suite (notifications.test.ts) flaky. Drain, then clear the
-// rows this file created, so the file is genuinely self-contained rather
-// than merely usually-fast-enough.
-// Notification writes are fire-and-forget by design (a notification
-// failure must never fail the comment itself), and vitest runs files
-// serially, so a straggler write from THIS file would otherwise land
-// AFTER the next file's TRUNCATE and make an unrelated, pre-existing
-// suite flaky. Empirically confirmed: excluding this file alone made the
-// full suite stable.
+// failure must never fail the comment itself), so they can still be in
+// flight when this file finishes. vitest runs files serially, so such a
+// write would otherwise land AFTER the next file's TRUNCATE and make an
+// unrelated, pre-existing suite fail intermittently.
 //
-// Rather than sleeping and hoping, this polls until the notifications
-// table stops growing — i.e. until every write this file triggered has
-// actually settled — and only then clears it.
+// whenNotificationsSettled() waits for the ACTUAL dispatched work rather
+// than sleeping a guessed interval — see notificationService.ts. The
+// production request path is unchanged and still never awaits this.
 afterAll(async () => {
-  const countRows = async (): Promise<number> => {
-    const r = await query<{ count: number }>('SELECT COUNT(*)::int AS count FROM notifications');
-    return r[0].count;
-  };
-  let previous = -1;
-  let stableFor = 0;
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline && stableFor < 3) {
-    const current = await countRows();
-    stableFor = current === previous ? stableFor + 1 : 0;
-    previous = current;
-    await new Promise(r => setTimeout(r, 120));
-  }
+  await whenNotificationsSettled();
   await query('TRUNCATE "notifications" CASCADE');
 });
 
@@ -228,7 +206,7 @@ describe('comment mentions', () => {
     expect(await waitForMentionCount(MEMBER, 1)).toBe(1);
 
     await edit(boardId, OWNER, created.body.id, `@${MEMBER} first draft, typo fixed`);
-    await new Promise(r => setTimeout(r, 120));
+    await whenNotificationsSettled();
 
     // Still exactly one — fixing a typo must not spam the mentioned user.
     expect(await waitForMentionCount(MEMBER, 1)).toBe(1);
@@ -244,7 +222,7 @@ describe('comment mentions', () => {
     expect(await waitForMentionCount(OUTSIDER, 0)).toBe(0);
 
     await edit(boardId, OWNER, created.body.id, `@${MEMBER} hello and @${OUTSIDER}`);
-    await new Promise(r => setTimeout(r, 200));
+    await whenNotificationsSettled();
 
     expect(await waitForMentionCount(MEMBER, 1)).toBe(1);    // unchanged
     expect(await waitForMentionCount(OUTSIDER, 1)).toBe(1);  // newly added
@@ -256,7 +234,7 @@ describe('comment mentions', () => {
 
     const created = await root(boardId, OWNER, `@${MEMBER} hello`);
     await edit(boardId, OWNER, created.body.id, 'hello (mention removed)');
-    await new Promise(r => setTimeout(r, 150));
+    await whenNotificationsSettled();
 
     expect(await waitForMentionCount(MEMBER, 1)).toBe(1);   // the original only
     const stored = await query<{ mentions: string | null }>(
@@ -272,7 +250,7 @@ describe('comment mentions', () => {
     const before = await waitForMentionCount(MEMBER, 1);
 
     await request(app).delete(`/api/boards/${boardId}/comments/${created.body.id}`).set(auth(OWNER));
-    await new Promise(r => setTimeout(r, 120));
+    await whenNotificationsSettled();
 
     expect(await waitForMentionCount(MEMBER, before)).toBe(before);
   });
@@ -283,12 +261,8 @@ describe('comment mentions', () => {
 
     // MEMBER comments on OWNER's board -> owner gets comment_created.
     await root(boardId, MEMBER, 'plain comment, no mentions');
-    const start = Date.now();
-    let created = await query(`SELECT id FROM notifications WHERE recipient_roll = $1 AND type = 'comment_created'`, [OWNER]);
-    while (created.length === 0 && Date.now() - start < 3000) {
-      await new Promise(r => setTimeout(r, 40));
-      created = await query(`SELECT id FROM notifications WHERE recipient_roll = $1 AND type = 'comment_created'`, [OWNER]);
-    }
+    await whenNotificationsSettled();
+    const created = await query(`SELECT id FROM notifications WHERE recipient_roll = $1 AND type = 'comment_created'`, [OWNER]);
     expect(created).toHaveLength(1);
   });
 

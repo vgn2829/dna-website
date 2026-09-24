@@ -52,7 +52,77 @@ interface CreateNotificationInput {
   commentId?: string | null;
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────
+// IN-FLIGHT TRACKING (test determinism).
+//
+// Routes dispatch notifications fire-and-forget ON PURPOSE: a notification
+// failure must never fail the comment request that triggered it, and the
+// caller must never pay its latency. That contract is unchanged — nothing
+// below makes any production path await anything.
+//
+// What it DOES do is let a caller that genuinely needs to know — the test
+// suite — observe when the dispatched work has settled. Without this, an
+// integration test's TRUNCATE could run while a notification INSERT from
+// the previous test file was still in flight, so a row would reappear
+// after the table was cleared and an unrelated, pre-existing suite would
+// fail intermittently. Whether the write won that race depended purely on
+// event-loop scheduling, which is exactly what made the suite
+// non-deterministic.
+//
+// The tracker is a counter plus a promise: registering is O(1) and costs
+// production nothing beyond an increment/decrement, and no test-only
+// branch exists in the request path.
+let inFlight = 0;
+let idleResolvers: Array<() => void> = [];
+
+function trackNotificationWrite<T>(work: Promise<T>): Promise<T> {
+  inFlight++;
+  return work.finally(() => {
+    inFlight--;
+    if (inFlight === 0) {
+      const resolvers = idleResolvers;
+      idleResolvers = [];
+      for (const resolve of resolvers) resolve();
+    }
+  });
+}
+
+// Resolves once no notification write is outstanding. Intended for test
+// teardown; harmless (and immediate) in production, where nothing calls
+// it. Resolves synchronously-ish when already idle, so it never adds a
+// fixed delay — it waits for the actual work, not for a guessed interval.
+export function whenNotificationsSettled(): Promise<void> {
+  if (inFlight === 0) return Promise.resolve();
+  return new Promise<void>(resolve => { idleResolvers.push(resolve); });
+}
+
+// Diagnostic, for a test that wants to assert the tracker itself works.
+export function pendingNotificationCount(): number {
+  return inFlight;
+}
+
+// Registers a whole fire-and-forget DISPATCH — not just the final INSERT.
+//
+// This distinction is the entire point: a route's notification block does
+// real work (board lookup, author lookup, a loop over recipients) BEFORE
+// the first createNotification call. Tracking only the INSERT would mean a
+// caller asking "has everything settled?" between dispatch and the first
+// insert sees an empty tracker and resolves immediately — which is exactly
+// the race being closed. Registering here covers the full tail.
+//
+// Production semantics are unchanged: this returns void, nothing awaits
+// it, and a rejection is swallowed by the caller's own .catch exactly as
+// before.
+export function dispatchNotifications(work: () => Promise<void>): Promise<void> {
+  return trackNotificationWrite(work());
+}
+
 async function createNotification(input: CreateNotificationInput): Promise<NotificationRow | null> {
+  return trackNotificationWrite(createNotificationInner(input));
+}
+
+async function createNotificationInner(input: CreateNotificationInput): Promise<NotificationRow | null> {
   if (input.actorRoll && input.actorRoll === input.recipientRoll) return null;
 
   const id = uuidv4();

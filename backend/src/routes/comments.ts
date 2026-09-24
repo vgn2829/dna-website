@@ -7,7 +7,7 @@ import * as commentsStorage from '../realtime/comments/commentsStorage';
 import type { CommentBroadcaster } from '../realtime/comments/commentBroadcaster';
 import type { BoardComment } from '../realtime/comments/commentsStorage';
 import { getBoardRole, roleCanWriteCanvas, roleCanComment } from '../realtime/roomAccess';
-import { notifyCommentCreated, notifyCommentReplied, notifyCommentMentioned } from '../services/notificationService';
+import { notifyCommentCreated, notifyCommentReplied, notifyCommentMentioned, dispatchNotifications } from '../services/notificationService';
 
 // ─────────────────────────────────────────────────────────────────────────
 // COMMENTS REST ENDPOINTS — a dedicated router, same reasoning as
@@ -261,7 +261,7 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
       // board owner. Both service functions already no-op on
       // self-notification, so no separate "don't notify yourself" check
       // is needed here.
-      (async () => {
+      dispatchNotifications(async () => {
         const boardResult = await pool.query('SELECT owner_roll, name FROM boards WHERE id = $1', [boardId]);
         const board = boardResult.rows[0] as { owner_roll: string; name: string } | undefined;
         if (!board) return;
@@ -296,7 +296,7 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
             boardId, boardName: board.name, commentId: comment.id,
           });
         }
-      })().catch(err => console.error('Comment notification failed (non-fatal):', err));
+      }).catch(err => console.error('Comment notification failed (non-fatal):', err));
 
       res.status(201).json(comment);
     } catch (err) {
@@ -360,7 +360,7 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
       await broadcastIfConnected(boardId, { type: 'edit', comment: updated });
 
       if (addedMentions.length > 0) {
-        void (async () => {
+        void dispatchNotifications(async () => {
           const boardResult = await pool.query('SELECT name FROM boards WHERE id = $1', [boardId]);
           const board = boardResult.rows[0] as { name: string } | undefined;
           if (!board) return;
@@ -371,7 +371,7 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
               boardId, boardName: board.name, commentId,
             });
           }
-        })().catch(err => console.error('Mention notification failed (non-fatal):', err));
+        }).catch(err => console.error('Mention notification failed (non-fatal):', err));
       }
 
       res.json(updated);

@@ -3,6 +3,7 @@ import request from 'supertest';
 import { createApp } from '../src/app';
 import { query } from '../src/db/client';
 import { signStudentToken } from '../src/middleware/studentAuth';
+import { whenNotificationsSettled } from '../src/services/notificationService';
 import { CommentBroadcaster } from '../src/realtime/comments/commentBroadcaster';
 import type { VersionHistoryService } from '../src/realtime/history/versionHistoryService';
 import type { RestoreService } from '../src/realtime/history/restoreService';
@@ -54,6 +55,12 @@ async function createBoard(roll: string, workspaceId: string): Promise<string> {
 }
 
 async function getNotifications(roll: string, query_ = '') {
+  // Notification writes are dispatched fire-and-forget by the routes (a
+  // notification failure must never fail the request that triggered it),
+  // so reading the inbox immediately after a mutation raced the INSERT.
+  // Waiting for the dispatched work to settle makes every assertion below
+  // deterministic without changing production behaviour or adding sleeps.
+  await whenNotificationsSettled();
   return request(app)
     .get(`/api/notifications${query_}`)
     .set('Authorization', `Bearer ${tokenFor(roll)}`);
