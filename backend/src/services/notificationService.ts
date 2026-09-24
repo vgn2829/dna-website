@@ -22,7 +22,8 @@ export type NotificationType =
   | 'workspace_added'
   | 'workspace_role_changed'
   | 'comment_created'
-  | 'comment_replied';
+  | 'comment_replied'
+  | 'comment_mentioned';
 
 export interface NotificationRow {
   id: string;
@@ -175,6 +176,37 @@ export async function notifyCommentReplied(params: {
     actorRoll: params.actorRoll,
     actorName: params.actorName,
     type: 'comment_replied',
+    boardId: params.boardId,
+    boardName: params.boardName,
+    commentId: params.commentId,
+  });
+}
+
+// "[Actor] mentioned you in a comment on [Board]" — V2.6 Phase D.
+//
+// Recipients are ALWAYS the server-validated mention list from
+// routes/comments.ts (resolveMentions), never anything the client sent:
+// every recipient has been confirmed to have current comment access to
+// this board, so a mention can never leak a board's name or a comment id
+// to someone who cannot already see them. createNotification's existing
+// self-notification suppression applies here too, so mentioning yourself
+// is a no-op without a separate check.
+//
+// Fires only for NEWLY introduced mentions — re-saving a comment whose
+// mentions are unchanged notifies nobody (see the edit handler's diff).
+export async function notifyCommentMentioned(params: {
+  recipientRoll: string;
+  actorRoll: string;
+  actorName: string | null;
+  boardId: string;
+  boardName: string;
+  commentId: string;
+}): Promise<void> {
+  await createNotification({
+    recipientRoll: params.recipientRoll,
+    actorRoll: params.actorRoll,
+    actorName: params.actorName,
+    type: 'comment_mentioned',
     boardId: params.boardId,
     boardName: params.boardName,
     commentId: params.commentId,

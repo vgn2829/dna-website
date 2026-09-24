@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -226,6 +226,20 @@ export default function BoardPage() {
   // watermark server-side and move the local one immediately, so the UI
   // updates without waiting for the round-trip. The server stamps the
   // authoritative time and only ever moves a watermark FORWARD.
+  // Mention candidates: the board's OWN owner + members. Using the list
+  // the page already loaded means the picker can never surface users from
+  // another workspace, and no user-search endpoint (an enumeration
+  // surface) has to exist. The server re-validates every mention anyway.
+  const mentionables = useMemo(() => {
+    if (!board) return [];
+    const out = [{ roll: board.owner_roll, name: board.owner_name ?? board.owner_roll }];
+    for (const m of board.members) {
+      if (m.roll_number === board.owner_roll) continue;
+      out.push({ roll: m.roll_number, name: m.name ?? m.roll_number });
+    }
+    return out;
+  }, [board]);
+
   const markCommentsSeen = useCallback(() => {
     const boardId = board?.id;
     const roll = studentSession?.rollNumber;
@@ -799,6 +813,7 @@ export default function BoardPage() {
                       currentRoll: studentSession.rollNumber,
                       canModerate: canModerateComments,
                       lastSeenAt,
+                      mentionables,
                     }}
                   />
                 </PresenceProvider>
@@ -847,6 +862,7 @@ export default function BoardPage() {
                   currentRoll: studentSession.rollNumber,
                   canModerate: canModerateComments,
                   lastSeenAt,
+                  mentionables,
                 } : undefined}
               />
             </Suspense>

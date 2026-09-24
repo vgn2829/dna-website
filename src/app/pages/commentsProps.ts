@@ -19,4 +19,5 @@ export interface CommentsProps {
   currentRoll: string | undefined;
   canModerate: boolean;
   lastSeenAt: number;
+  mentionables?: Array<{ roll: string; name: string | null }>;
 }

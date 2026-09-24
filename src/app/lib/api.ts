@@ -232,7 +232,7 @@ export interface Asset {
 // whichever of these is present, never assumes all three.
 export type NotificationType =
   | 'board_shared' | 'workspace_added' | 'workspace_role_changed'
-  | 'comment_created' | 'comment_replied';
+  | 'comment_created' | 'comment_replied' | 'comment_mentioned';
 
 export interface Notification {
   id: string;

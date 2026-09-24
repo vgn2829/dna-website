@@ -7,7 +7,7 @@ import * as commentsStorage from '../realtime/comments/commentsStorage';
 import type { CommentBroadcaster } from '../realtime/comments/commentBroadcaster';
 import type { BoardComment } from '../realtime/comments/commentsStorage';
 import { getBoardRole, roleCanWriteCanvas, roleCanComment } from '../realtime/roomAccess';
-import { notifyCommentCreated, notifyCommentReplied } from '../services/notificationService';
+import { notifyCommentCreated, notifyCommentReplied, notifyCommentMentioned } from '../services/notificationService';
 
 // ─────────────────────────────────────────────────────────────────────────
 // COMMENTS REST ENDPOINTS — a dedicated router, same reasoning as
@@ -98,6 +98,50 @@ const createCommentSchema = z.object({
   // does — see schema.ts's compatibility note).
   anchorPageId: z.string().min(1).max(200).optional(),
 });
+
+
+// ─────────────────────────────────────────────────────────────────────────
+// MENTIONS (V2.6 Phase D) — server-side parse + authorization.
+//
+// The client is NEVER trusted for mentions. It may send whatever it likes
+// in the comment body; this function re-derives the mention list from the
+// CONTENT itself and then keeps only rolls that genuinely have access to
+// this board. Consequences that matter:
+//
+//   - A user cannot notify someone who cannot see the board (which would
+//     leak the board's name and a comment id into their notifications).
+//   - A user cannot enumerate other workspaces: an unknown or
+//     non-member roll is silently dropped, and the response is identical
+//     whether the roll does not exist or simply has no access — so
+//     mentions cannot be used as an existence oracle.
+//   - Self-mentions are dropped, matching the existing suppression in
+//     notificationService.
+//
+// Syntax is deliberately minimal and deterministic: @<rollNumber>, the
+// same identifier the rest of this codebase uses as a user's identity.
+// No rich-text editor, no display-name resolution (names are not unique
+// and would be ambiguous to parse).
+const MENTION_RE = /@([A-Za-z0-9]{3,20})/g;
+const MAX_MENTIONS_PER_COMMENT = 20;
+
+async function resolveMentions(boardId: string, content: string, authorRoll: string): Promise<string[]> {
+  const candidates = new Set<string>();
+  for (const m of content.matchAll(MENTION_RE)) {
+    const roll = m[1].toUpperCase();
+    if (roll !== authorRoll.toUpperCase()) candidates.add(roll);
+    if (candidates.size >= MAX_MENTIONS_PER_COMMENT) break;
+  }
+  if (candidates.size === 0) return [];
+
+  // Authorize each candidate through the SAME helper every other
+  // board-scoped check uses — no parallel permission model.
+  const allowed: string[] = [];
+  for (const roll of candidates) {
+    const role = await getBoardRole(boardId, roll);
+    if (role !== null && roleCanComment(role.role)) allowed.push(roll);
+  }
+  return allowed;
+}
 
 export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
   const router = Router();
@@ -198,6 +242,14 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
         content: body.content,
       });
 
+      // Mentions are derived from the CONTENT server-side and filtered to
+      // users who genuinely have board access (see resolveMentions).
+      const mentioned = await resolveMentions(boardId, body.content, roll);
+      if (mentioned.length > 0) {
+        await commentsStorage.setCommentMentions(boardId, comment.id, mentioned);
+        comment.mentions = mentioned;
+      }
+
       await broadcastIfConnected(boardId, { type: 'create', comment });
 
       // Best-effort — a notification failure must never fail the comment
@@ -231,6 +283,17 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
             boardId,
             boardName: board.name,
             commentId: comment.id,
+          });
+        }
+
+        // Mention notifications are independent of the root/reply
+        // notification above: someone can be both the thread author AND
+        // mentioned, and createNotification is the single place that
+        // suppresses self-notification.
+        for (const recipientRoll of mentioned) {
+          await notifyCommentMentioned({
+            recipientRoll, actorRoll: roll, actorName: authorName,
+            boardId, boardName: board.name, commentId: comment.id,
           });
         }
       })().catch(err => console.error('Comment notification failed (non-fatal):', err));
@@ -282,7 +345,35 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
         return res.status(404).json({ error: 'Comment not found' });
       }
 
+      // EDIT IDEMPOTENCY (V2.6 Phase D). Re-deriving the mention list on
+      // every edit is what keeps it correct, but notifying that whole list
+      // again would spam everyone already mentioned each time the author
+      // fixes a typo. So the stored list is diffed against the new one and
+      // ONLY genuinely new mentions notify. Removing a mention notifies
+      // nobody; an unchanged mention notifies nobody.
+      const previousMentions = await commentsStorage.getCommentMentions(boardId, commentId);
+      const nextMentions = await resolveMentions(boardId, parsed.data.content, updated.authorRoll);
+      const addedMentions = nextMentions.filter(m => !previousMentions.includes(m));
+      await commentsStorage.setCommentMentions(boardId, commentId, nextMentions);
+      updated.mentions = nextMentions;
+
       await broadcastIfConnected(boardId, { type: 'edit', comment: updated });
+
+      if (addedMentions.length > 0) {
+        void (async () => {
+          const boardResult = await pool.query('SELECT name FROM boards WHERE id = $1', [boardId]);
+          const board = boardResult.rows[0] as { name: string } | undefined;
+          if (!board) return;
+          const actorName = await getStudentName(roll);
+          for (const recipientRoll of addedMentions) {
+            await notifyCommentMentioned({
+              recipientRoll, actorRoll: roll, actorName,
+              boardId, boardName: board.name, commentId,
+            });
+          }
+        })().catch(err => console.error('Mention notification failed (non-fatal):', err));
+      }
+
       res.json(updated);
     } catch (err) {
       console.error('Edit comment error:', err);

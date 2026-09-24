@@ -34,6 +34,9 @@ export interface BoardComment {
   // compatibility rule that NULL implies.
   anchorPageId: string | null;
   content: string;
+  // Normalized roll numbers of users mentioned in this comment (V2.6
+  // Phase D). Always server-validated — see routes/comments.ts.
+  mentions: string[];
 }
 
 export interface CreateCommentInput {
@@ -47,6 +50,17 @@ export interface CreateCommentInput {
   anchorY: number;
   anchorPageId?: string | null;
   content: string;
+}
+
+// Hoisted so rowToComment (declared above parseMentions) can use it.
+function parseMentionsInline(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 function rowToComment(row: Record<string, unknown>): BoardComment {
@@ -66,6 +80,7 @@ function rowToComment(row: Record<string, unknown>): BoardComment {
     anchorX: Number(row.anchor_x),
     anchorY: Number(row.anchor_y),
     anchorPageId: (row.anchor_page_id as string | null) ?? null,
+    mentions: parseMentionsInline((row.mentions as string | null) ?? null),
     content: row.content as string,
   };
 }
@@ -73,7 +88,7 @@ function rowToComment(row: Record<string, unknown>): BoardComment {
 const SELECT_COLUMNS = `
   id, board_id, parent_comment_id, author_roll, author_name,
   created_at, updated_at, resolved_at, resolved_by_roll, deleted_at,
-  anchor_type, anchor_shape_id, anchor_x, anchor_y, anchor_page_id, content
+  anchor_type, anchor_shape_id, anchor_x, anchor_y, anchor_page_id, content, mentions
 `;
 
 export async function createComment(input: CreateCommentInput): Promise<BoardComment> {
@@ -226,4 +241,36 @@ export async function markSeen(boardId: string, roll: string, seenAt: string): P
     [boardId, roll, seenAt]
   );
   return (result.rows[0] as { last_seen_at: string }).last_seen_at;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MENTIONS (V2.6 Phase D) — stored as a JSON array of roll numbers in the
+// long-reserved `mentions` TEXT column (see schema.ts, which set it aside
+// for exactly this and left it unused until now). No new column, no new
+// table.
+// ─────────────────────────────────────────────────────────────────────────
+
+export function parseMentions(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getCommentMentions(boardId: string, commentId: string): Promise<string[]> {
+  const result = await pool.query(
+    'SELECT mentions FROM board_comments WHERE id = $1 AND board_id = $2',
+    [commentId, boardId]
+  );
+  return parseMentions((result.rows[0] as { mentions: string | null } | undefined)?.mentions ?? null);
+}
+
+export async function setCommentMentions(boardId: string, commentId: string, rolls: string[]): Promise<void> {
+  await pool.query(
+    'UPDATE board_comments SET mentions = $1 WHERE id = $2 AND board_id = $3',
+    [JSON.stringify(rolls), commentId, boardId]
+  );
 }

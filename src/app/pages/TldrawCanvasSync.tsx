@@ -541,6 +541,7 @@ export function TldrawCanvasSync({
               currentRoll={comments.currentRoll}
               canModerate={comments.canModerate}
               lastSeenAt={comments.lastSeenAt}
+              mentionables={comments.mentionables}
             />
           )}
         </Tldraw>

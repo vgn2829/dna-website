@@ -40,6 +40,9 @@ interface CommentsOverlayProps {
   currentRoll: string | undefined;
   canModerate: boolean;
   lastSeenAt: number;
+  // Board members available to @mention (V2.6 Phase D) — threaded through
+  // from BoardPage, which already has them. No new endpoint.
+  mentionables?: Array<{ roll: string; name: string | null }>;
 }
 
 interface DraftPin {
@@ -67,7 +70,7 @@ function groupByThread(comments: BoardComment[]): Map<string, { root: BoardComme
 }
 
 export function CommentsOverlay({
-  commentsApi, commentMode, onExitCommentMode, currentRoll, canModerate, lastSeenAt,
+  commentsApi, commentMode, onExitCommentMode, currentRoll, canModerate, lastSeenAt, mentionables,
 }: CommentsOverlayProps) {
   const editor = useEditor();
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
@@ -271,6 +274,7 @@ export function CommentsOverlay({
 
       {draftPin && (
         <CommentThreadPanel
+          mentionables={mentionables}
           mode="draft"
           root={null}
           replies={[]}
@@ -283,6 +287,7 @@ export function CommentsOverlay({
 
       {!draftPin && openThread && (
         <CommentThreadPanel
+          mentionables={mentionables}
           mode="thread"
           root={openThread.root}
           replies={openThread.replies}

@@ -205,6 +205,12 @@ type CommentThreadPanelProps =
       replies: [];
       currentRoll: string | undefined;
       canModerate: boolean;
+      // People who can be @mentioned here (V2.6 Phase D). Sourced from the
+      // board's OWN member list, which the page already has — so the
+      // picker can never surface users from another workspace, and no new
+      // user-search endpoint (which would be an enumeration surface)
+      // exists. The server re-validates every mention regardless.
+      mentionables?: Array<{ roll: string; name: string | null }>;
       onSubmitDraft: (content: string) => Promise<void>;
       onClose: () => void;
     }
@@ -214,6 +220,7 @@ type CommentThreadPanelProps =
       replies: BoardComment[];
       currentRoll: string | undefined;
       canModerate: boolean;
+      mentionables?: Array<{ roll: string; name: string | null }>;
       onReply: (content: string) => Promise<BoardComment | null>;
       onEdit: (commentId: string, content: string) => Promise<boolean>;
       onDelete: (commentId: string) => Promise<boolean>;
@@ -246,6 +253,32 @@ export function CommentThreadPanel(props: CommentThreadPanelProps) {
   const { mode, currentRoll, canModerate, onClose } = props;
   const isNarrow = useIsNarrow();
   const [composerValue, setComposerValue] = useState('');
+  // @mention autocomplete (V2.6 Phase D). Deliberately a plain textarea
+  // with a suggestion list rather than a rich-text editor: the stored
+  // format is just text containing @<rollNumber>, which the SERVER
+  // re-parses and re-authorizes, so the picker is a convenience and never
+  // the source of truth.
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const mentionables = props.mentionables ?? [];
+  const mentionMatches = mentionQuery === null ? [] : mentionables
+    .filter(m => {
+      const q = mentionQuery.toLowerCase();
+      return m.roll.toLowerCase().startsWith(q) || (m.name ?? '').toLowerCase().includes(q);
+    })
+    .slice(0, 6);
+
+  // Tracks the trailing "@word" the caret currently sits in, if any.
+  const handleComposerChange = (value: string) => {
+    setComposerValue(value);
+    const match = /@([A-Za-z0-9]*)$/.exec(value);
+    setMentionQuery(match ? match[1] : null);
+  };
+
+  const insertMention = (roll: string) => {
+    setComposerValue(v => v.replace(/@([A-Za-z0-9]*)$/, `@${roll} `));
+    setMentionQuery(null);
+    composerRef.current?.focus();
+  };
   const [submitting, setSubmitting] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -404,11 +437,49 @@ export function CommentThreadPanel(props: CommentThreadPanelProps) {
       )}
 
       {(mode === 'draft' || !isResolved) && (
-        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--color-hairline)', flexShrink: 0 }}>
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--color-hairline)', flexShrink: 0, position: 'relative' }}>
+          {mentionMatches.length > 0 && (
+            <ul
+              role="listbox"
+              aria-label="Mention a collaborator"
+              style={{
+                position: 'absolute', bottom: '100%', left: 16, right: 16, zIndex: 10,
+                margin: 0, padding: 4, listStyle: 'none',
+                background: 'var(--color-surface-1)',
+                border: '1px solid var(--color-hairline)',
+                borderRadius: 'var(--radius-md, 10px)',
+                boxShadow: '0 -6px 20px rgba(0,0,0,0.2)',
+                maxHeight: 180, overflowY: 'auto',
+              }}
+            >
+              {mentionMatches.map(m => (
+                <li key={m.roll} role="option" aria-selected="false">
+                  <button
+                    type="button"
+                    onClick={() => insertMention(m.roll)}
+                    aria-label={`Mention ${m.name ?? m.roll}`}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                      padding: '8px 8px', background: 'none', border: 'none',
+                      borderRadius: 'var(--radius-sm, 6px)', cursor: 'pointer',
+                      textAlign: 'left', fontFamily: 'var(--font-body)',
+                      // 44px-friendly row height for touch.
+                      minHeight: 40,
+                    }}
+                  >
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink)' }}>
+                      {m.name ?? m.roll}
+                    </span>
+                    <span style={{ fontSize: 10, color: 'var(--color-ink-muted)' }}>@{m.roll}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           <textarea
             ref={composerRef}
             value={composerValue}
-            onChange={e => setComposerValue(e.target.value)}
+            onChange={e => handleComposerChange(e.target.value)}
             onKeyDown={handleComposerKeyDown}
             placeholder={mode === 'draft' ? 'Add a comment…' : 'Reply…'}
             aria-label={mode === 'draft' ? 'New comment content' : 'Reply content'}

@@ -21,6 +21,7 @@ const TYPE_LABEL: Record<Notification['type'], (n: Notification) => string> = {
   workspace_role_changed: n => `Your role in "${n.workspaceName ?? 'a workspace'}" was changed`,
   comment_created: n => `${n.actorName ?? n.actorRoll ?? 'Someone'} commented on "${n.boardName ?? 'your board'}"`,
   comment_replied: n => `${n.actorName ?? n.actorRoll ?? 'Someone'} replied to your comment on "${n.boardName ?? 'a board'}"`,
+  comment_mentioned: n => `${n.actorName ?? n.actorRoll ?? 'Someone'} mentioned you in a comment on "${n.boardName ?? 'a board'}"`,
 };
 
 function timeAgo(iso: string): string {
