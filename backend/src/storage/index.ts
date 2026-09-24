@@ -3,7 +3,11 @@ import { SupabaseStorageProvider } from './supabase';
 
 export interface StorageProvider {
   upload(path: string, buffer: Buffer, mimeType: string): Promise<void>;
-  getPublicUrl(path: string): string;
+  // opts.download: serve the object as an attachment (Content-Disposition)
+  // under the given filename rather than inline — used for non-image
+  // library files so an uploaded HTML/PDF/etc. can never render as a page
+  // on the storage origin.
+  getPublicUrl(path: string, opts?: { download?: string }): string;
   delete(path: string): Promise<void>;
 }
 

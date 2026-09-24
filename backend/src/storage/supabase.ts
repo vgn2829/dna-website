@@ -21,8 +21,11 @@ export class SupabaseStorageProvider implements StorageProvider {
     }
   }
 
-  getPublicUrl(path: string): string {
-    const { data } = client().storage.from(bucket()).getPublicUrl(path);
+  getPublicUrl(path: string, opts?: { download?: string }): string {
+    const { data } = client().storage.from(bucket()).getPublicUrl(
+      path,
+      opts?.download ? { download: opts.download } : undefined,
+    );
     return data.publicUrl;
   }
 

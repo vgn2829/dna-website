@@ -1299,6 +1299,19 @@ export async function initSchema(): Promise<void> {
     ON assets (workspace_id)
   `);
 
+  // Workspace Asset Library — assets are no longer image-only. kind is
+  // 'image' (inline-previewable, insertable onto a board — the original
+  // and still the only kind the board picker inserts), or 'file' (any
+  // other design/document resource — PSD/AI/PDF/ZIP/... — stored and
+  // served download-only, never parsed server-side). Additive and
+  // idempotent: every pre-existing row was uploaded through the image
+  // MIME allowlist, so the DEFAULT 'image' is exactly right for them with
+  // no backfill. Plain TEXT validated at the route layer, same convention
+  // as every other enum-shaped column in this file.
+  await pool.query(`
+    ALTER TABLE assets ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'image'
+  `);
+
   console.log('assets migration done');
 
   // Notifications (Phase C) — deliberately minimal: no read receipts

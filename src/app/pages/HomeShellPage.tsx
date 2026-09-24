@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { api, type Board, type Asset, type Project, type Template } from '../lib/api';
+import { AssetPreview } from '../components/assets/AssetPreview';
 import { useStudent } from '../context/StudentContext';
 import { useWorkspace } from '../context/WorkspaceContext';
 
@@ -297,12 +298,15 @@ export default function HomeShellPage() {
                 {assets.map(a => (
                   <div
                     key={a.id}
+                    title={a.filename}
+                    role="img"
+                    aria-label={a.filename}
                     style={{
                       aspectRatio: '1', borderRadius: 'var(--radius-md)', overflow: 'hidden',
                       border: '1px solid var(--color-border)', background: 'var(--color-surface-1)',
                     }}
                   >
-                    <img src={a.url} alt={a.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <AssetPreview asset={a} compact />
                   </div>
                 ))}
               </div>

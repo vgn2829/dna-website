@@ -22,7 +22,9 @@ export class LocalStorageProvider implements StorageProvider {
     fs.writeFileSync(full, buffer);
   }
 
-  getPublicUrl(filePath: string): string {
+  // opts is accepted for interface parity only: app.ts already serves every
+  // /uploads object with Content-Disposition: attachment.
+  getPublicUrl(filePath: string, _opts?: { download?: string }): string {
     const base = process.env.API_BASE_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
     return `${base}/uploads/${filePath}`;
   }

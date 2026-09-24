@@ -1,20 +1,16 @@
-import { useNavigate } from 'react-router';
 import { useStudent } from '../context/StudentContext';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { AssetLibrary } from '../components/AssetLibrary';
+import { AssetBrowser } from '../components/assets/AssetBrowser';
 
 // ─────────────────────────────────────────────────────────────────────────
-// AssetsPage (V2.0 Phase 5) — the first-class /assets route. Deliberately
-// thin: per the V2.0 brief, this phase only needs "Assets has a route,
-// workspace scoping works, existing AssetLibrary functionality remains
-// available" — NOT the full V2.1 Asset Workspace redesign (grid layout,
-// filters, drag-to-board, etc.). AssetLibrary.tsx already IS the entire
-// Asset Manager UI (upload/browse/delete against the existing
-// workspace-scoped /api/assets surface) — this page just gives it a
-// permanent home instead of a modal triggered from MoodboardsPage/
-// BoardPage, with zero changes to AssetLibrary itself, so there is no
-// duplicate asset API and no duplicate storage system (both explicitly
-// disallowed by the brief).
+// AssetsPage — the Workspace Asset Library as a real page: existing
+// assets are browsable immediately, with search, type tabs, collections,
+// pagination and "+ Add Asset" (components/assets/AssetBrowser.tsx — the
+// same browser the board's asset picker modal uses, against the same
+// workspace-scoped /api/assets surface; no second asset API or storage
+// system). Previously this route mounted the AssetLibrary MODAL over the
+// shell, so "Assets" behaved like an upload dialog and closing it
+// navigated away.
 //
 // Workspace scoping: reads WorkspaceContext.activeWorkspaceId exactly
 // like MoodboardsPage now does (Phase 4) — "All Workspaces" (null) has no
@@ -28,7 +24,6 @@ import { AssetLibrary } from '../components/AssetLibrary';
 export default function AssetsPage() {
   const { studentSession, openRollModal } = useStudent();
   const { activeWorkspaceId, workspaces, personalWorkspace, loading } = useWorkspace();
-  const navigate = useNavigate();
 
   if (!studentSession) {
     return (
@@ -71,20 +66,23 @@ export default function AssetsPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 28 }}>
         <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-muted)', letterSpacing: '-0.13px', fontFamily: 'var(--font-body)', marginBottom: 8 }}>
           {targetWorkspace.is_personal ? 'Personal' : targetWorkspace.name}
         </p>
         <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(32px,4.5vw,52px)', fontWeight: 500, lineHeight: 0.95, letterSpacing: '-2px', color: 'var(--color-ink)' }}>
           Assets
         </h1>
+        <p style={{ margin: '10px 0 0', fontSize: 15, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+          Workspace asset library
+        </p>
       </div>
 
-      <AssetLibrary
+      <AssetBrowser
+        key={targetWorkspace.id}
         workspaceId={targetWorkspace.id}
         workspaceName={targetWorkspace.is_personal ? 'Personal' : targetWorkspace.name}
         roll={studentSession.rollNumber}
-        onClose={() => navigate('/home')}
       />
     </div>
   );

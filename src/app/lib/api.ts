@@ -211,11 +211,18 @@ export interface Template {
 // no storage_key here (an internal StorageProvider path, never sent to
 // the frontend); `url` is the derived public URL the backend already
 // resolved via getStorage().getPublicUrl().
+// Mirrors backend/src/routes/assets.ts's toPublicAsset(). kind 'image' is
+// the only kind that can be inserted onto a board; 'file' is any other
+// library resource (PSD/AI/PDF/ZIP/...), whose url is a download URL.
+export type AssetKind = 'image' | 'file';
+
 export interface Asset {
   id: string;
   workspace_id: string;
   owner_roll: string;
   owner_name: string | null;
+  kind: AssetKind;
+  extension: string | null;
   filename: string;
   mime_type: string;
   size_bytes: number;
@@ -858,18 +865,24 @@ export const api = {
   // boards.uploadCanvasFile (which stores objects the same way but keeps
   // no reusable/listable record — see that route's own comment).
   assets: {
-    upload: (workspaceId: string, file: File) => {
+    // opts.kind 'file' opts in to general (non-image) library files; an
+    // allowlisted image is always stored as an image regardless.
+    upload: (workspaceId: string, file: File, opts?: { kind?: 'file' }) => {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('workspace_id', workspaceId);
       formData.append('filename', file.name);
+      if (opts?.kind) formData.append('kind', opts.kind);
       return studentUploadRequest<Asset>('/assets', formData);
     },
-    list: (roll: string, workspaceId: string, cursor?: string) =>
-      request<{ assets: Asset[]; nextCursor: string | null }>(
-        'GET', `/assets?workspace_id=${encodeURIComponent(workspaceId)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
-        { roll }
-      ),
+    list: (roll: string, workspaceId: string, cursor?: string, filters?: { kind?: AssetKind; q?: string; limit?: number }) => {
+      const params = new URLSearchParams({ workspace_id: workspaceId });
+      if (cursor) params.set('cursor', cursor);
+      if (filters?.kind) params.set('kind', filters.kind);
+      if (filters?.q?.trim()) params.set('q', filters.q.trim());
+      if (filters?.limit) params.set('limit', String(filters.limit));
+      return request<{ assets: Asset[]; nextCursor: string | null }>('GET', `/assets?${params}`, { roll });
+    },
     get: (roll: string, id: string) =>
       request<Asset>('GET', `/assets/${id}`, { roll }),
     delete: (roll: string, id: string) =>

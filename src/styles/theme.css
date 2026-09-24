@@ -529,6 +529,54 @@
     /* Touch devices have no hover — keep the star reachable without a tap-to-reveal step. */
     .board-card-star { opacity: 1; }
   }
+
+  /* ── Workspace menus (Radix DropdownMenu content) ──
+     Asset card actions + the board header's overflow menu. Radix exposes
+     keyboard/pointer highlight as [data-highlighted], which inline styles
+     can't target. */
+  .dna-menu {
+    min-width: 188px;
+    padding: 4px;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-md);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+    font-family: var(--font-body);
+    z-index: 10050;
+  }
+  .dna-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: -0.13px;
+    color: var(--color-ink);
+    cursor: pointer;
+    outline: none;
+    user-select: none;
+    text-decoration: none;
+  }
+  .dna-menu-item[data-highlighted] { background: var(--color-surface-1); }
+  .dna-menu-item[data-disabled] { opacity: 0.45; cursor: default; }
+  .dna-menu-item[data-danger="true"] { color: var(--color-error); }
+  .dna-menu-sep { height: 1px; margin: 4px 2px; background: var(--color-hairline); }
+
+  /* Asset card: the actions trigger reveals on hover/focus, always visible
+     on touch — same affordance rule as .board-card-star above. */
+  .asset-card-actions { opacity: 0; transition: opacity 0.15s; }
+  .asset-card:hover .asset-card-actions,
+  .asset-card:focus-within .asset-card-actions,
+  .asset-card-actions[data-state="open"] { opacity: 1; }
+  @media (hover: none) {
+    .asset-card-actions { opacity: 1; }
+  }
+  .asset-card { transition: border-color 0.15s; }
+  .asset-card:hover { border-color: rgba(255,255,255,0.18); }
+  [data-theme="light"] .asset-card:hover { border-color: rgba(0,0,0,0.18); }
 }
 
 @media (max-width: 768px) {
