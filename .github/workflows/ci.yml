@@ -63,7 +63,15 @@ jobs:
 
       - name: Install backend dependencies
         working-directory: backend
-        run: npm ci
+        # sharp ships prebuilt per-platform binaries. This lockfile was
+        # generated on macOS, so `npm ci` alone leaves the linux-x64 variant
+        # absent and importing routes/artworks.ts throws "Could not load the
+        # sharp module using the linux-x64 runtime". Installing the matching
+        # optional binary afterwards is the documented cross-platform fix and
+        # touches nothing in the application.
+        run: |
+          npm ci
+          npm install --no-save --os=linux --cpu=x64 sharp
 
       - name: Backend typecheck
         working-directory: backend
@@ -103,9 +111,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # No `version:` here on purpose — package.json already declares
+      # packageManager: pnpm@11.6.0, and specifying both makes the action
+      # fail with "Multiple versions of pnpm specified".
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
 
       - uses: actions/setup-node@v4
         with:
