@@ -8,6 +8,7 @@ import { pool } from '../db/client';
 import { requireStudent } from '../middleware/studentAuth';
 import { param } from '../routeParams';
 import { getStorage } from '../storage';
+import { findStorageReferences } from '../storage/references';
 
 const router = Router();
 
@@ -535,14 +536,30 @@ router.get('/:id', requireStudent, async (req: Request, res: Response) => {
 // DELETE /api/assets/:id
 // Only the uploader, or a workspace owner/admin, may delete — same
 // workspace-management tier routes/workspaces.ts's member-removal already
-// uses. DB row is deleted first, then the storage object — if the storage
-// delete fails, the API does NOT claim success: it still reports the
-// failure rather than silently leaving an orphaned object while telling
-// the client everything is clean. The DB row is gone either way (deleting
-// it again is not retryable in a meaningful way once it succeeded), so a
-// storage-delete failure here is reported as a 500 with a distinct message
-// rather than rolled back — re-deleting is not attempted automatically,
-// matching this codebase's "no background job system for V1" scope limit.
+// uses.
+//
+// SHARED-FILE MODEL: inserting an image asset onto a board stores the
+// asset's own public URL in the canvas (no copy), and that URL travels into
+// version snapshots, templates, template-created boards and duplicates
+// (which may live in another workspace). So deleting the library asset
+// deletes its ROW, but its storage OBJECT is deleted only when no persisted
+// content references it (storage/references.ts) — otherwise it is kept, so
+// "copies already placed on boards are unaffected" actually holds.
+//
+// Ordering: row first, then the reference check, then (if unreferenced)
+// the object. Server-side copies (duplicate, template create/use, version
+// creation) only ever copy already-persisted canvas text, so any reference
+// they could produce is already visible to the check. What the check can't
+// see is state not yet persisted: an insertion still inside a realtime
+// room's save debounce or a manual board's unsaved/offline edits, or an
+// asset picker opened before the asset was deleted. Those windows existed
+// before this check (the object was always deleted) and are only closable
+// with server-mediated insertion or deferred deletion.
+//
+// If the object delete fails, the row is already gone; the API still
+// reports success with a storageWarning rather than claiming a clean
+// delete. The object is then row-less and unreferenced — exactly what the
+// historical orphan sweep identifies — so it remains cleanable later.
 router.delete('/:id', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
@@ -567,6 +584,12 @@ router.delete('/:id', requireStudent, async (req: Request, res: Response) => {
     // Links have no stored object to remove.
     if (!row.storage_key) {
       return res.json({ success: true });
+    }
+
+    const references = await findStorageReferences(row.storage_key);
+    if (references.length > 0) {
+      console.log(`Asset ${id} deleted; storage object ${row.storage_key} retained — still referenced by ${references.map(r => `${r.surface} ${r.id}`).join(', ')}`);
+      return res.json({ success: true, fileRetained: true });
     }
 
     try {
