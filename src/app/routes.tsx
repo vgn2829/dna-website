@@ -36,8 +36,8 @@ export const router = createBrowserRouter([
       // /moodboards/:id (the board canvas) stays a direct child of Root,
       // OUTSIDE WorkspaceShell below — see Root.tsx's isBoardPage check
       // and WorkspaceShell.tsx's own header comment on why: existing
-      // board URLs/share links keep their exact pre-existing full-screen,
-      // chrome-free rendering, unchanged by the V2.0 shell.
+      // board URLs/share links keep their full-screen canvas layout (below
+      // the public navbar, no workspace sidebar).
       { path: 'moodboards/:id', Component: BoardPage },
       // Workspace app shell (V2.0 Phase 2) — Home/Moodboards/Assets/
       // Projects/Templates, all under the new persistent sidebar shell.

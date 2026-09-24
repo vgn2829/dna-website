@@ -27,10 +27,9 @@ import { NotificationBell } from '../NotificationBell';
 // convention.
 //
 // /moodboards/:id (BoardPage, the canvas) is deliberately NOT a child of
-// this shell — see routes.tsx: BoardPage keeps its existing full-screen,
-// chrome-free layout exactly as before (its own top bar, no sidebar, no
-// shell header), preserving every existing board URL/share-link's visual
-// behavior unchanged.
+// this shell — see routes.tsx: BoardPage keeps its full-screen canvas
+// layout (the public navbar above its own compact board header; no
+// sidebar, no shell header).
 // ─────────────────────────────────────────────────────────────────────────
 
 const SIDEBAR_WIDTH = 240;

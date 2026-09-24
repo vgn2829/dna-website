@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate, Link } from 'react-router';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ChevronLeft, Home, MessageCircle, MoreHorizontal, Image as ImageIcon, History, LayoutTemplate, Trash2 } from 'lucide-react';
@@ -15,6 +16,7 @@ import { AssetLibrary } from '../components/AssetLibrary';
 import { PortalContainerProvider } from '../components/PortalContainer';
 import { useScreenSize } from '../components/hooks/use-screen-size';
 import { boardCrumbs, isCompactBoardHeader } from '../lib/boardNav';
+import { SITE_NAV_OFFSET } from '../lib/layout';
 import type { Editor } from 'tldraw';
 import type { Asset } from '../lib/api';
 
@@ -123,10 +125,10 @@ export default function BoardPage() {
   // button's label/icon correct without this component doing anything
   // special for that gesture itself.
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
-  // Same element as canvasContainerRef, as state: portalled overlays (the
-  // header's overflow menu, the asset library's dialogs/menus) mount into
-  // it via PortalContainerProvider so they stay visible in fullscreen,
-  // where only this element's subtree is rendered.
+  // Same element as canvasContainerRef, as state: while it's fullscreen,
+  // overlays (board dialogs, the header's overflow menu, the asset
+  // library's dialogs/menus) mount into it — the only subtree the browser
+  // displays then. See overlayRoot in the render.
   const [portalContainerEl, setPortalContainerEl] = useState<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   useEffect(() => {
@@ -520,18 +522,32 @@ export default function BoardPage() {
   const surfaceBg  = theme === 'dark' ? '#1a1a1a' : '#ffffff';
   const borderColor = theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
   const crumbs = boardCrumbs(board.name, board.workspace_id, viewerWorkspaces);
+  // Where board overlays mount — see the canvas container's comment below.
+  const overlayRoot: HTMLElement = isFullscreen && portalContainerEl ? portalContainerEl : document.body;
 
   return (
     <>
-      {/* Full-screen canvas */}
-      {/* Every overlay below — board dialogs included — renders INSIDE
-          this container (it closes at the very end of the component), and
-          portalled overlays target it too: while it's in browser
-          fullscreen, nothing outside its subtree is displayed. */}
-      <PortalContainerProvider value={portalContainerEl}>
+      {/* Board canvas container. Sits BELOW the site's public navbar
+          (Root renders <Navigation/> on board routes too): it starts
+          SITE_NAV_OFFSET from the top, and its z-index (150) stays under
+          the navbar's (200) so the navbar's own mobile menu can open over
+          the canvas. In browser fullscreen this element is the fullscreen
+          element — the UA's :fullscreen rules pin it to the whole screen,
+          top: 0 is set explicitly too, and nothing outside it (navbar
+          included) is displayed.
+
+          Overlays (board dialogs, portalled menus/dialogs) mount on
+          document.body normally, so their backdrops cover the navbar as
+          well; while fullscreen they mount inside this container instead,
+          the only subtree the browser displays then. */}
+      <PortalContainerProvider value={overlayRoot === document.body ? null : overlayRoot}>
       <div
         ref={el => { canvasContainerRef.current = el; setPortalContainerEl(el); }}
-        style={{ position: 'fixed', inset: 0, zIndex: 300, background: theme === 'dark' ? '#1a1a1a' : '#ffffff' }}
+        style={{
+          position: 'fixed', left: 0, right: 0, bottom: 0,
+          top: isFullscreen ? 0 : SITE_NAV_OFFSET,
+          zIndex: 150, background: theme === 'dark' ? '#1a1a1a' : '#ffffff',
+        }}
       >
 
         {/* Top bar — compact board header. Deterministic upward navigation
@@ -803,9 +819,9 @@ export default function BoardPage() {
                 >
                   <MoreHorizontal size={15} />
                 </DropdownMenu.Trigger>
-                {/* Portalled into the canvas container (not body) so it's
-                    still visible while that container is fullscreen. */}
-                <DropdownMenu.Portal container={portalContainerEl ?? undefined}>
+                {/* overlayRoot: body normally, the canvas container while
+                    it's fullscreen (the only subtree displayed then). */}
+                <DropdownMenu.Portal container={overlayRoot}>
                   <DropdownMenu.Content className="dna-menu" align="end" sideOffset={8} collisionPadding={8}>
                     <DropdownMenu.Item className="dna-menu-item" onSelect={() => setShowAssetLibrary(true)}>
                       <ImageIcon size={15} /> Assets
@@ -985,7 +1001,9 @@ export default function BoardPage() {
             </Suspense>
           )}
         </div>
-      {/* (canvas container continues — board overlays below render inside it; closed at the end) */}
+      </div>
+
+      {createPortal(<>
 
       {showShare && board && studentSession?.rollNumber && (
         <ShareBoardDialog
@@ -1224,7 +1242,7 @@ export default function BoardPage() {
           </motion.div>
         )}
       </AnimatePresence>
-      </div>
+      </>, overlayRoot)}
       </PortalContainerProvider>
     </>
   );
