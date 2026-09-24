@@ -1,15 +1,20 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, Link } from 'react-router';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { ChevronLeft, Home, MessageCircle, MoreHorizontal, Image as ImageIcon, History, LayoutTemplate, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useStudent } from '../context/StudentContext';
-import { api, type BoardDetail } from '../lib/api';
+import { api, type BoardDetail, type Workspace } from '../lib/api';
 import { clearBoardsCache } from './MoodboardsPage';
 import { rollToColor } from '../lib/utils';
 import { PresenceProvider } from '../context/PresenceProvider';
 import { useBoardComments } from '../components/hooks/useBoardComments';
 import { ShareBoardDialog } from '../components/ShareBoardDialog';
 import { AssetLibrary } from '../components/AssetLibrary';
+import { PortalContainerProvider } from '../components/PortalContainer';
+import { useScreenSize } from '../components/hooks/use-screen-size';
+import { boardCrumbs, isCompactBoardHeader } from '../lib/boardNav';
 import type { Editor } from 'tldraw';
 import type { Asset } from '../lib/api';
 
@@ -44,6 +49,17 @@ function getSiteTheme(): 'dark' | 'light' {
   if (attr === 'dark') return 'dark';
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
+
+// Board header link styles (see the compact header in BoardPage's render).
+const headerIconLink: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  width: 32, height: 32, borderRadius: 'var(--radius-pill)', textDecoration: 'none',
+};
+const crumbLink: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flexShrink: 1,
+  padding: '4px 8px', borderRadius: 'var(--radius-sm)', textDecoration: 'none',
+  fontSize: 13, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
+};
 
 export default function BoardPage() {
   const { id } = useParams<{ id: string }>();
@@ -106,7 +122,12 @@ export default function BoardPage() {
   // pressing the browser/OS Escape-to-exit-fullscreen gesture keeps the
   // button's label/icon correct without this component doing anything
   // special for that gesture itself.
-  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  // Same element as canvasContainerRef, as state: portalled overlays (the
+  // header's overflow menu, the asset library's dialogs/menus) mount into
+  // it via PortalContainerProvider so they stay visible in fullscreen,
+  // where only this element's subtree is rendered.
+  const [portalContainerEl, setPortalContainerEl] = useState<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -162,6 +183,23 @@ export default function BoardPage() {
   const [showReconnectHint, setShowReconnectHint] = useState(false);
 
   const isOwner = board?.owner_roll === studentSession?.rollNumber;
+
+  // Board header (compact below lg and in fullscreen — see lib/boardNav.ts).
+  const screenSize = useScreenSize();
+  const compactHeader = isCompactBoardHeader(screenSize.greaterThanOrEqual('lg'), isFullscreen);
+  // The viewer's own workspaces — only used to NAME the board's workspace
+  // in the breadcrumb. Best-effort: on failure the crumb reads
+  // "Workspace" and still links to /home.
+  const [viewerWorkspaces, setViewerWorkspaces] = useState<Workspace[]>([]);
+  useEffect(() => {
+    const roll = studentSession?.rollNumber;
+    if (!roll) return;
+    let cancelled = false;
+    api.workspaces.list(roll)
+      .then(list => { if (!cancelled) setViewerWorkspaces(list); })
+      .catch(() => { /* breadcrumb falls back to "Workspace" */ });
+    return () => { cancelled = true; };
+  }, [studentSession?.rollNumber]);
   const isMember = board
     ? (isOwner || board.members.some(m => m.roll_number === studentSession?.rollNumber))
     : false;
@@ -481,71 +519,94 @@ export default function BoardPage() {
   const textMuted  = theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
   const surfaceBg  = theme === 'dark' ? '#1a1a1a' : '#ffffff';
   const borderColor = theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+  const crumbs = boardCrumbs(board.name, board.workspace_id, viewerWorkspaces);
 
   return (
     <>
       {/* Full-screen canvas */}
+      {/* Every overlay below — board dialogs included — renders INSIDE
+          this container (it closes at the very end of the component), and
+          portalled overlays target it too: while it's in browser
+          fullscreen, nothing outside its subtree is displayed. */}
+      <PortalContainerProvider value={portalContainerEl}>
       <div
-        ref={canvasContainerRef}
+        ref={el => { canvasContainerRef.current = el; setPortalContainerEl(el); }}
         style={{ position: 'fixed', inset: 0, zIndex: 300, background: theme === 'dark' ? '#1a1a1a' : '#ffffff' }}
       >
 
-        {/* Top bar */}
+        {/* Top bar — compact board header. Deterministic upward navigation
+            (workspace home → Moodboards → this board) via real links, never
+            browser history; see lib/boardNav.ts. Below 1024px and in
+            fullscreen (compactHeader) the breadcrumb collapses to back/home
+            icons and the secondary actions move into the "⋯" menu, so
+            nothing is ever pushed off-screen. Height stays 48px — the
+            canvas area below is laid out against it. */}
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0,
           height: 48, background: surfaceBg,
           borderBottom: `1px solid ${borderColor}`,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '0 16px', gap: 16, zIndex: 10,
+          padding: compactHeader ? '0 8px 0 4px' : '0 12px 0 8px', gap: compactHeader ? 8 : 16, zIndex: 10,
         }}>
-          {/* Left — back */}
-          <button
-            onClick={() => {
-              if (window.history.state?.idx > 0) navigate(-1);
-              else navigate('/moodboards');
-            }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              background: 'none', border: 'none', color: textMuted,
-              fontSize: 13, fontFamily: 'var(--font-body)',
-              cursor: 'pointer', padding: '4px 8px', borderRadius: 'var(--radius-sm)', whiteSpace: 'nowrap',
-            }}
-          >
-            ← Boards
-          </button>
-
-          {/* Center — name + visibility badge + save status */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <p style={{
-              margin: 0, fontSize: 14, fontWeight: 600, color: textColor,
-              fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
+          {/* Left — breadcrumb + board identity */}
+          <nav aria-label="Breadcrumb" style={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0, flex: '1 1 auto' }}>
+            {compactHeader ? (
+              <>
+                <Link to={crumbs[1].href!} aria-label="Back to Moodboards" title="Back to Moodboards" style={{ ...headerIconLink, color: textMuted }}>
+                  <ChevronLeft size={18} />
+                </Link>
+                <Link to={crumbs[0].href!} aria-label={`Workspace home — ${crumbs[0].label}`} title={`Workspace home — ${crumbs[0].label}`} style={{ ...headerIconLink, color: textMuted }}>
+                  <Home size={15} />
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link to={crumbs[0].href!} title="Workspace home" style={{ ...crumbLink, color: textMuted }}>
+                  <Home size={14} style={{ flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 }}>{crumbs[0].label}</span>
+                </Link>
+                <span aria-hidden="true" style={{ color: textMuted, opacity: 0.6, fontSize: 13, padding: '0 2px' }}>/</span>
+                <Link to={crumbs[1].href!} style={{ ...crumbLink, color: textMuted }}>{crumbs[1].label}</Link>
+                <span aria-hidden="true" style={{ color: textMuted, opacity: 0.6, fontSize: 13, padding: '0 2px' }}>/</span>
+              </>
+            )}
+            <p
+              aria-current="page"
+              title={board.name}
+              style={{
+                margin: '0 0 0 4px', minWidth: 0, fontSize: 14, fontWeight: 600, color: textColor,
+                fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}
+            >
               {board.name}
             </p>
-            <span style={{
-              fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-              padding: '2px 8px', borderRadius: 'var(--radius-pill)', flexShrink: 0, fontFamily: 'var(--font-body)',
-              background: board.visibility === 'shared'
-                ? 'rgba(233,30,140,0.15)'
-                : theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-              color: board.visibility === 'shared' ? 'var(--color-brand)' : textMuted,
-            }}>
-              {board.visibility}
-            </span>
+            {!compactHeader && (
+              <span style={{
+                marginLeft: 6,
+                fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+                padding: '2px 8px', borderRadius: 'var(--radius-pill)', flexShrink: 0, fontFamily: 'var(--font-body)',
+                background: board.visibility === 'shared'
+                  ? 'rgba(233,30,140,0.15)'
+                  : theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+                color: board.visibility === 'shared' ? 'var(--color-brand)' : textMuted,
+              }}>
+                {board.visibility}
+              </span>
+            )}
             {saveStatus === 'saving' && (
-              <span style={{ fontSize: 11, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', color: textMuted }}>
-                Saving...
+              <span style={{ marginLeft: 8, fontSize: 11, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', color: textMuted, flexShrink: 0 }}>
+                {compactHeader ? '…' : 'Saving...'}
               </span>
             )}
             {saveStatus === 'saved' && (
-              <span style={{ fontSize: 11, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', color: 'var(--color-success)' }}>
-                Saved
+              <span style={{ marginLeft: 8, fontSize: 11, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', color: 'var(--color-success)', flexShrink: 0 }}>
+                {compactHeader ? '✓' : 'Saved'}
               </span>
             )}
-          </div>
+          </nav>
 
-          {/* Right — avatars + actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {/* Right — people + actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: compactHeader ? 6 : 8, flexShrink: 0 }}>
             {/* Board MEMBERS (who has access) — deliberately distinct from
                 the live collaborator list rendered on the canvas itself,
                 which shows who is connected RIGHT NOW (see
@@ -561,7 +622,7 @@ export default function BoardPage() {
               >
                 {[
                   { name: board.owner_name ?? board.owner_roll, roll: board.owner_roll },
-                  ...board.members.slice(0, 3).map(m => ({ name: m.name ?? m.roll_number, roll: m.roll_number })),
+                  ...board.members.slice(0, compactHeader ? 1 : 3).map(m => ({ name: m.name ?? m.roll_number, roll: m.roll_number })),
                 ].map((m, i) => (
                   <div
                     key={m.roll}
@@ -587,16 +648,17 @@ export default function BoardPage() {
             {typeof document.exitFullscreen === 'function' && (
               <button
                 onClick={toggleFullscreen}
-                title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Enter fullscreen'}
                 aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
                 aria-pressed={isFullscreen}
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  width: 28, height: 28, padding: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  height: 28, minWidth: 28, padding: isFullscreen ? '0 10px' : 0,
                   background: isFullscreen ? 'var(--color-brand)' : 'none',
                   border: isFullscreen ? 'none' : `1px solid ${borderColor}`,
                   borderRadius: 'var(--radius-pill)',
                   color: isFullscreen ? '#fff' : textMuted, cursor: 'pointer',
+                  fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
                 }}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
@@ -606,6 +668,9 @@ export default function BoardPage() {
                     <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
                   )}
                 </svg>
+                {/* Fullscreen hides everything but this header — keep the way
+                    out labelled, not just an icon. */}
+                {isFullscreen && 'Exit'}
               </button>
             )}
 
@@ -623,10 +688,13 @@ export default function BoardPage() {
                 });
               }}
               title={commentMode ? 'Exit comment mode' : 'Comment mode — click the canvas to leave a comment'}
+              aria-label={compactHeader ? (commentMode ? 'Exit comment mode' : 'Comment') : undefined}
               aria-pressed={commentMode}
               style={{
                 position: 'relative',
-                padding: '5px 12px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                height: 28, minWidth: 28,
+                padding: compactHeader ? 0 : '0 12px',
                 background: commentMode ? 'var(--color-brand)' : 'none',
                 border: commentMode ? 'none' : `1px solid ${borderColor}`,
                 borderRadius: 'var(--radius-pill)',
@@ -634,7 +702,7 @@ export default function BoardPage() {
                 fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
               }}
             >
-              Comment
+              {compactHeader ? <MessageCircle size={14} /> : 'Comment'}
               {!commentMode && commentsApi.comments.some(
                 c => !c.parentCommentId && !c.resolvedAt && c.authorRoll !== studentSession?.rollNumber
                   && new Date(c.updatedAt).getTime() > lastSeenAt
@@ -650,45 +718,49 @@ export default function BoardPage() {
               )}
             </button>
 
-            <button
-              onClick={() => setShowAssetLibrary(true)}
-              title="Asset Library"
-              style={{
-                padding: '5px 12px', background: 'none',
-                border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
-                color: textMuted, fontSize: 12,
-                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}
-            >
-              Assets
-            </button>
+            {!compactHeader && (
+              <>
+                <button
+                  onClick={() => setShowAssetLibrary(true)}
+                  title="Asset Library"
+                  style={{
+                    padding: '5px 12px', background: 'none',
+                    border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
+                    color: textMuted, fontSize: 12,
+                    fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+                  }}
+                >
+                  Assets
+                </button>
 
-            <button
-              onClick={() => setShowVersionHistory(true)}
-              title="Version History"
-              style={{
-                padding: '5px 12px', background: 'none',
-                border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
-                color: textMuted, fontSize: 12,
-                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}
-            >
-              History
-            </button>
+                <button
+                  onClick={() => setShowVersionHistory(true)}
+                  title="Version History"
+                  style={{
+                    padding: '5px 12px', background: 'none',
+                    border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
+                    color: textMuted, fontSize: 12,
+                    fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+                  }}
+                >
+                  History
+                </button>
 
-            {isOwner && (
-              <button
-                onClick={openSaveAsTemplate}
-                title="Save as Template"
-                style={{
-                  padding: '5px 12px', background: 'none',
-                  border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
-                  color: textMuted, fontSize: 12,
-                  fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-                }}
-              >
-                Save as Template
-              </button>
+                {isOwner && (
+                  <button
+                    onClick={openSaveAsTemplate}
+                    title="Save as Template"
+                    style={{
+                      padding: '5px 12px', background: 'none',
+                      border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
+                      color: textMuted, fontSize: 12,
+                      fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Save as Template
+                  </button>
+                )}
+              </>
             )}
 
             <button
@@ -703,7 +775,7 @@ export default function BoardPage() {
               Share
             </button>
 
-            {isOwner && (
+            {!compactHeader && isOwner && (
               <button
                 onClick={() => setConfirmDelete(true)}
                 style={{
@@ -715,6 +787,48 @@ export default function BoardPage() {
               >
                 Delete
               </button>
+            )}
+
+            {compactHeader && (
+              <DropdownMenu.Root modal={false}>
+                <DropdownMenu.Trigger
+                  aria-label="More board actions"
+                  title="More"
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    width: 28, height: 28, padding: 0, background: 'none',
+                    border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
+                    color: textMuted, cursor: 'pointer',
+                  }}
+                >
+                  <MoreHorizontal size={15} />
+                </DropdownMenu.Trigger>
+                {/* Portalled into the canvas container (not body) so it's
+                    still visible while that container is fullscreen. */}
+                <DropdownMenu.Portal container={portalContainerEl ?? undefined}>
+                  <DropdownMenu.Content className="dna-menu" align="end" sideOffset={8} collisionPadding={8}>
+                    <DropdownMenu.Item className="dna-menu-item" onSelect={() => setShowAssetLibrary(true)}>
+                      <ImageIcon size={15} /> Assets
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item className="dna-menu-item" onSelect={() => setShowVersionHistory(true)}>
+                      <History size={15} /> Version history
+                    </DropdownMenu.Item>
+                    {isOwner && (
+                      <DropdownMenu.Item className="dna-menu-item" onSelect={openSaveAsTemplate}>
+                        <LayoutTemplate size={15} /> Save as Template
+                      </DropdownMenu.Item>
+                    )}
+                    {isOwner && (
+                      <>
+                        <DropdownMenu.Separator className="dna-menu-sep" />
+                        <DropdownMenu.Item className="dna-menu-item" data-danger="true" onSelect={() => setConfirmDelete(true)}>
+                          <Trash2 size={15} /> Delete board
+                        </DropdownMenu.Item>
+                      </>
+                    )}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
             )}
           </div>
         </div>
@@ -871,7 +985,7 @@ export default function BoardPage() {
             </Suspense>
           )}
         </div>
-      </div>
+      {/* (canvas container continues — board overlays below render inside it; closed at the end) */}
 
       {showShare && board && studentSession?.rollNumber && (
         <ShareBoardDialog
@@ -893,7 +1007,7 @@ export default function BoardPage() {
       {showAssetLibrary && board && studentSession?.rollNumber && (
         <AssetLibrary
           workspaceId={board.workspace_id}
-          workspaceName="Board's Workspace"
+          workspaceName={crumbs[0].label}
           roll={studentSession.rollNumber}
           onClose={() => setShowAssetLibrary(false)}
           onSelect={handleInsertAsset}
@@ -1110,6 +1224,8 @@ export default function BoardPage() {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
+      </PortalContainerProvider>
     </>
   );
 }
