@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { api, type Workspace } from '../lib/api';
 import { rollToColor } from '../lib/utils';
 import { useModalA11y } from './hooks/useModalA11y';
-import { filterWorkspaces, workspaceLabel } from '../lib/workspaceSearch';
+import { filterWorkspaces, showAllWorkspacesOption, workspaceLabel } from '../lib/workspaceSearch';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Entry point for workspace management (Sharing & Invite Flow phase).
@@ -213,6 +213,69 @@ export function WorkspacesPanel({
                 margin: '0 -4px', padding: '0 4px 2px',
               }}
             >
+              {/* "All Workspaces" = activeWorkspaceId null (see
+                  WorkspaceContext). Rendered from the FULL list, outside
+                  the name search, so it can always be re-selected. */}
+              {showAllWorkspacesOption(workspaces) && (
+                <div
+                  role="listitem"
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                    flexWrap: 'wrap',
+                    padding: 14, borderRadius: 'var(--radius-lg)', flexShrink: 0, overflow: 'hidden',
+                    border: `1px solid ${activeWorkspaceId === null ? 'var(--color-brand)' : 'var(--color-hairline)'}`,
+                    background: activeWorkspaceId === null ? 'color-mix(in srgb, var(--color-brand) 6%, transparent)' : 'none',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: '1 1 240px' }}>
+                    <div aria-hidden="true" style={{
+                      width: 40, height: 40, borderRadius: 'var(--radius-md)', flexShrink: 0,
+                      background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+                        <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+                      </svg>
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+                          All Workspaces
+                        </p>
+                        {activeWorkspaceId === null && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+                            padding: '2px 7px', borderRadius: 'var(--radius-pill)',
+                            background: 'var(--color-brand)', color: '#fff',
+                            fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
+                          }}>
+                            Current
+                          </span>
+                        )}
+                      </div>
+                      <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                        Boards from every workspace you belong to
+                      </p>
+                    </div>
+                  </div>
+                  {activeWorkspaceId !== null && (
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 'auto' }}>
+                      <button
+                        onClick={() => onSwitch(null)}
+                        aria-label="Switch to All Workspaces"
+                        style={{
+                          padding: '7px 12px', background: 'none', color: 'var(--color-ink)',
+                          border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-sm)',
+                          fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
+                        }}
+                      >
+                        Switch
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               {visibleWorkspaces.length === 0 && (
                 <p style={{ margin: 0, padding: '24px 0', textAlign: 'center', fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
                   No workspaces match “{query.trim()}”.

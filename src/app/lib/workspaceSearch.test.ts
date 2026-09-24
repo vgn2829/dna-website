@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterWorkspaces, workspaceLabel } from './workspaceSearch';
+import { filterWorkspaces, showAllWorkspacesOption, workspaceLabel } from './workspaceSearch';
 
 const ws = [
   { is_personal: true, name: 'roll-123 personal' },
@@ -24,5 +24,19 @@ describe('filterWorkspaces', () => {
   });
   it('does not match the personal workspace by its hidden stored name', () => {
     expect(filterWorkspaces(ws, 'roll-123')).toEqual([]);
+  });
+});
+
+describe('showAllWorkspacesOption', () => {
+  it('is offered only when there is more than one workspace', () => {
+    expect(showAllWorkspacesOption([])).toBe(false);
+    expect(showAllWorkspacesOption([ws[0]])).toBe(false);
+    expect(showAllWorkspacesOption(ws.slice(0, 2))).toBe(true);
+    expect(showAllWorkspacesOption(ws)).toBe(true);
+  });
+  it('depends on the full list, not the search-filtered one', () => {
+    // A query that matches nothing (or one workspace) must not hide it.
+    expect(filterWorkspaces(ws, 'no such workspace')).toEqual([]);
+    expect(showAllWorkspacesOption(ws)).toBe(true);
   });
 });
