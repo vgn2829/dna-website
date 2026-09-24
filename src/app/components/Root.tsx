@@ -10,7 +10,6 @@ import { ThemeProvider } from '../context/ThemeContext';
 import { StudentProvider, useStudent } from '../context/StudentContext';
 import { AppDataProvider } from '../context/AppDataContext';
 import { Toaster } from './ui/sonner';
-import { SITE_NAV_OFFSET } from '../lib/layout';
 
 function SessionGate({ isAdminPage }: { isAdminPage: boolean }) {
   const { studentSession } = useStudent();
@@ -30,8 +29,8 @@ const WORKSPACE_SHELL_PREFIXES = ['/home', '/moodboards', '/assets', '/projects'
 
 function isWorkspaceShellPath(pathname: string): boolean {
   // /moodboards/:id (the board canvas) is explicitly excluded — it keeps
-  // its own full-screen canvas layout (under the public navbar — see
-  // BoardPage's canvas container), not the sidebar shell.
+  // its own pre-existing full-screen, chrome-free rendering (isBoardPage
+  // below), not the new sidebar shell.
   if (pathname.startsWith('/moodboards/') && pathname !== '/moodboards') return false;
   return WORKSPACE_SHELL_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
@@ -60,11 +59,7 @@ export function Root() {
             style={{ background: 'var(--color-canvas)', color: 'var(--color-ink)' }}
           >
             {!isBoardPage && !isAdminPage && !isWorkspaceShell && <LiveSessionBanner />}
-            {/* The public navbar also shows above a board (/moodboards/:id);
-                BoardPage offsets its canvas container by SITE_NAV_OFFSET and
-                sits below the navbar's z-index. Browser fullscreen shows only
-                the board's container, so the navbar never enters fullscreen. */}
-            {!isWorkspaceShell && <Navigation />}
+            {!isBoardPage && !isWorkspaceShell && <Navigation />}
             {!isAdminPage && <RollModal />}
             <SessionGate isAdminPage={isAdminPage} />
 
@@ -72,7 +67,7 @@ export function Root() {
               <Outlet />
             ) : (
               <>
-                <main style={{ paddingTop: SITE_NAV_OFFSET }}>
+                <main style={{ paddingTop: '72px' }}>
                   <Outlet />
                 </main>
                 <Footer />
