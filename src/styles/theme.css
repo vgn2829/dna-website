@@ -530,6 +530,38 @@
     .board-card-star { opacity: 1; }
   }
 
+  /* ── Workspace shell (WorkspaceShell / Sidebar) ──
+     Same pill-link language as the public site's floating nav: 13px/500,
+     pill radius, muted → ink on hover, a filled surface for the active
+     item. Pink stays an accent (active icon only). */
+  .ws-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 38px;
+    padding: 8px 12px;
+    border-radius: var(--radius-pill);
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: -0.13px;
+    text-decoration: none;
+    color: var(--color-ink-muted);
+    transition: background 0.15s, color 0.15s;
+  }
+  .ws-nav-link:hover { color: var(--color-ink); background: var(--color-surface-1); }
+  .ws-nav-link[aria-current="page"] { color: var(--color-ink); background: var(--color-surface-2); }
+  .ws-nav-link[aria-current="page"] svg { color: var(--color-brand); }
+  .ws-nav-link:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
+  .ws-switcher { transition: background 0.15s, border-color 0.15s; }
+  .ws-switcher:hover { background: var(--color-surface-2); }
+
+  .ws-main { padding: 32px 36px 56px; }
+  @media (max-width: 640px) {
+    .ws-main { padding: 20px 16px 48px; }
+  }
+
   /* ── Workspace menus (Radix DropdownMenu content) ──
      Asset card actions + the board header's overflow menu. Radix exposes
      keyboard/pointer highlight as [data-highlighted], which inline styles

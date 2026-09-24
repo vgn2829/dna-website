@@ -469,17 +469,11 @@ export default function MoodboardsPage() {
             Mood<br /><span style={{ color: 'var(--color-ink-muted)' }}>boards</span>
           </h1>
           {studentSession ? (
-            <button
-              onClick={() => setShowCreate(true)}
-              style={{ padding: '10px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
-            >
+            <button onClick={() => setShowCreate(true)} className="btn-primary">
               + New Board
             </button>
           ) : (
-            <button
-              onClick={openRollModal}
-              style={{ padding: '10px 20px', background: 'var(--color-surface-1)', color: 'var(--color-ink)', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
-            >
+            <button onClick={openRollModal} className="btn-secondary">
               Sign in to create boards
             </button>
           )}

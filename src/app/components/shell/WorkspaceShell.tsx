@@ -33,7 +33,7 @@ import { NotificationBell } from '../NotificationBell';
 // behavior unchanged.
 // ─────────────────────────────────────────────────────────────────────────
 
-const SIDEBAR_WIDTH = 232;
+const SIDEBAR_WIDTH = 240;
 
 export function WorkspaceShell() {
   const { studentSession, openRollModal } = useStudent();
@@ -94,9 +94,12 @@ export function WorkspaceShell() {
           <header
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              gap: 12, padding: '12px 20px',
-              borderBottom: '1px solid var(--color-border)',
-              position: 'sticky', top: 0, background: 'var(--color-canvas)', zIndex: 10,
+              gap: 12, padding: '10px 20px', minHeight: 56,
+              borderBottom: '1px solid var(--color-hairline)',
+              // Same translucent, blurred surface as the public site's nav.
+              position: 'sticky', top: 0, zIndex: 10,
+              background: 'var(--color-nav-blur-bg)',
+              backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
             }}
           >
             {!isDesktop ? (
@@ -117,21 +120,14 @@ export function WorkspaceShell() {
               {studentSession ? (
                 <NotificationBell roll={studentSession.rollNumber} isDark={theme === 'dark'} />
               ) : (
-                <button
-                  onClick={openRollModal}
-                  style={{
-                    padding: '7px 16px', background: 'var(--color-brand)', color: '#fff',
-                    border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13,
-                    fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
-                  }}
-                >
+                <button onClick={openRollModal} className="btn-primary" style={{ minHeight: 36, padding: '8px 16px', fontSize: 13 }}>
                   Sign in
                 </button>
               )}
             </div>
           </header>
 
-          <main style={{ flex: 1, padding: '28px 32px', maxWidth: 1200, width: '100%', margin: '0 auto' }} key={location.pathname}>
+          <main className="ws-main" style={{ flex: 1, maxWidth: 1200, width: '100%', margin: '0 auto', minWidth: 0 }} key={location.pathname}>
             <Outlet />
           </main>
         </div>

@@ -30,10 +30,10 @@ export function Sidebar({ onNavigate, onCloseMobile }: { onNavigate?: () => void
       aria-label="Workspace navigation"
       style={{
         display: 'flex', flexDirection: 'column', height: '100%',
-        padding: '16px 12px', gap: 4,
+        padding: '16px 14px', gap: 4,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div style={{ flex: 1 }}>
           <WorkspaceSwitcher />
         </div>
@@ -52,24 +52,22 @@ export function Sidebar({ onNavigate, onCloseMobile }: { onNavigate?: () => void
         )}
       </div>
 
+      <p style={{
+        margin: '0 0 6px', padding: '0 12px',
+        fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+        color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', opacity: 0.8,
+      }}>
+        Workspace
+      </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {/* Visual treatment lives in theme.css (.ws-nav-link) so hover and
+            the active state (NavLink sets aria-current="page") can share
+            the public nav's pill language. */}
         {NAV_ITEMS.map(item => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            onClick={onNavigate}
-            style={({ isActive }) => ({
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '9px 10px', borderRadius: 'var(--radius-md)',
-              fontSize: 14, fontWeight: isActive ? 600 : 500,
-              fontFamily: 'var(--font-body)', textDecoration: 'none',
-              color: isActive ? 'var(--color-ink)' : 'var(--color-ink-muted)',
-              background: isActive ? 'var(--color-surface-1)' : 'transparent',
-            })}
-          >
+          <NavLink key={item.to} to={item.to} onClick={onNavigate} className="ws-nav-link">
             {({ isActive }) => (
               <>
-                <item.icon size={16} strokeWidth={isActive ? 2.25 : 2} />
+                <item.icon size={16} strokeWidth={isActive ? 2.25 : 1.9} style={{ flexShrink: 0 }} />
                 {item.label}
               </>
             )}

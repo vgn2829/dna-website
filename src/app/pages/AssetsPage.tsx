@@ -31,14 +31,7 @@ export default function AssetsPage() {
         <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--color-ink-muted)', marginBottom: 16 }}>
           Sign in to view and manage your assets.
         </p>
-        <button
-          onClick={openRollModal}
-          style={{
-            padding: '10px 20px', background: 'var(--color-brand)', color: '#fff',
-            border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14,
-            fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
-          }}
-        >
+        <button onClick={openRollModal} className="btn-primary">
           Sign in
         </button>
       </div>

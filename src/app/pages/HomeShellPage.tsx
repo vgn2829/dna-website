@@ -200,14 +200,7 @@ export default function HomeShellPage() {
         <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--color-ink-muted)', marginBottom: 16 }}>
           Sign in to see your recent work.
         </p>
-        <button
-          onClick={openRollModal}
-          style={{
-            padding: '10px 20px', background: 'var(--color-brand)', color: '#fff',
-            border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14,
-            fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
-          }}
-        >
+        <button onClick={openRollModal} className="btn-primary">
           Sign in
         </button>
       </div>
@@ -224,24 +217,10 @@ export default function HomeShellPage() {
           {studentSession.name ? `Welcome back, ${studentSession.name.split(' ')[0]}` : 'Home'}
         </h1>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            onClick={() => navigate('/projects')}
-            style={{
-              padding: '10px 20px', background: 'none', color: 'var(--color-ink)',
-              border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 14,
-              fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
-            }}
-          >
+          <button onClick={() => navigate('/projects')} className="btn-secondary">
             + New Project
           </button>
-          <button
-            onClick={() => navigate('/moodboards')}
-            style={{
-              padding: '10px 20px', background: 'var(--color-brand)', color: '#fff',
-              border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14,
-              fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
-            }}
-          >
+          <button onClick={() => navigate('/moodboards')} className="btn-primary">
             + New Board
           </button>
         </div>
