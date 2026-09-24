@@ -125,7 +125,15 @@ describe('Student OTP auth flow', () => {
 
   it('rejects an expired OTP and deletes the stale row', async () => {
     const roll = '23ABC05';
-    await seedOtp(roll, '333333', { expiresAt: new Date(Date.now() - 1000) });
+    // 60s, not 1s. The invariant under test is simply "an OTP whose expiry
+    // is already in the past is rejected" (routes/auth.ts compares
+    // expires_at < Date.now()) — 1 second was never a meaningful boundary,
+    // just a narrow one. seedOtp bcrypt-hashes the code before inserting,
+    // which is deliberately slow, so on a loaded machine the 1s margin
+    // could be consumed before the comparison ran and the row would not
+    // yet be expired. A minute is still unambiguously "in the past" while
+    // being immune to that. The assertions below are unchanged.
+    await seedOtp(roll, '333333', { expiresAt: new Date(Date.now() - 60_000) });
 
     const res = await request(app)
       .post('/api/auth/student/verify-otp')
