@@ -230,18 +230,14 @@ export function TldrawCanvasSync({
   comments,
   onEditorReady,
 }: TldrawCanvasSyncProps) {
-  const boardIdRef = useRef(boardId);
-  useEffect(() => { boardIdRef.current = boardId; }, [boardId]);
-
-  const pendingItemsRef = useRef<BoardItem[]>(pendingItems ?? []);
-  useEffect(() => { pendingItemsRef.current = pendingItems ?? []; }, [pendingItems]);
-
   // Bumped to force useSync to tear down and recreate its connection —
   // this is the ONLY sanctioned way to retry after a hard 'error' status,
   // since useSync has no imperative reconnect() escape hatch (reconnection
   // for transient network loss is already automatic — see ReconnectManager
   // note above; this is specifically for the harder failure useSync itself
-  // reports as unrecoverable, e.g. a rejected/incompatible room).
+  // reports as unrecoverable, e.g. a rejected/incompatible room). It re-runs
+  // the pre-check below, whose 'checking' state unmounts SyncedCanvas; the
+  // 'allowed' result then mounts a fresh one, i.e. a brand-new useSync.
   const [retryNonce, setRetryNonce] = useState(0);
 
   // Commit 7 — the REST pre-check (see api.ts's getAccess doc comment for
@@ -307,6 +303,114 @@ export function TldrawCanvasSync({
 
   const readOnly = access.status !== 'allowed' || !access.canWriteCanvas;
 
+  // getRealtimeUrl reads the current student JWT at call time — recomputing
+  // it per roomId/retryNonce change (not memoizing across the component's
+  // whole lifetime) means a token refresh between mounts is picked up
+  // naturally, with no separate auth-refresh path to build. Only computed
+  // once the pre-check above has actually allowed this connection. Keyed on
+  // access.status, not the whole access object, so a poll that only flips
+  // canWriteCanvas never produces a new uri (no reconnect).
+  const uri = useMemo(
+    () => access.status === 'allowed' ? api.boards.getRealtimeUrl(roomId) : null,
+    [roomId, retryNonce, access.status]
+  );
+
+  // Access-denied — the pre-check itself rejected this connection, or the
+  // periodic re-poll downgraded an already-'allowed' session to fully
+  // denied (e.g. removed from a private board, board deleted). Takes
+  // priority over every store/connection-status UI below, since there is
+  // no live document worth showing a connection banner for in this case.
+  if (access.status === 'denied') {
+    return (
+      <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+        <AccessDeniedScreen reason={access.reason} theme={theme} />
+      </div>
+    );
+  }
+
+  // Still waiting on the pre-check's first result — deliberately the same
+  // "Connecting to board…" visual as useSync's own 'loading' state below,
+  // so there's no visible flash/flicker between the two phases.
+  if (access.status === 'checking' || !uri) {
+    return (
+      <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+        <ConnectingScreen theme={theme} />
+      </div>
+    );
+  }
+
+  return (
+    <SyncedCanvas
+      boardId={boardId}
+      roomId={roomId}
+      uri={uri}
+      readOnly={readOnly}
+      theme={theme}
+      pendingItems={pendingItems}
+      comments={comments}
+      onEditorReady={onEditorReady}
+      onRetry={() => setRetryNonce(n => n + 1)}
+    />
+  );
+}
+
+function ConnectingScreen({ theme }: { theme: 'dark' | 'light' }) {
+  return (
+    <div style={{
+      position: 'absolute', inset: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: theme === 'dark' ? '#1a1a1a' : '#f8f8f8',
+      color: theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)',
+      fontFamily: 'var(--font-body)', fontSize: 14,
+      flexDirection: 'column', gap: 12,
+    }}>
+      <div style={{
+        width: 20, height: 20,
+        border: `2px solid currentColor`,
+        borderTopColor: 'transparent',
+        borderRadius: 'var(--radius-full)',
+        animation: 'spin 0.8s linear infinite',
+      }} />
+      Connecting to board…
+    </div>
+  );
+}
+
+// The live, synced canvas. Mounted by TldrawCanvasSync ONLY once the
+// access pre-check has allowed the connection and a real sync URL exists,
+// so useSync is never handed an empty/placeholder uri (which it would feed
+// to `new URL()` inside @tldraw/sync-core's ReconnectManager — an uncaught
+// "Invalid URL" on every board load, re-thrown on each 'online'/
+// 'visibilitychange' while access was denied). Unmounting it (pre-check
+// 'checking' on Retry, or a poll downgrading to 'denied') tears the
+// connection down; a readOnly change alone only re-renders it.
+function SyncedCanvas({
+  boardId,
+  roomId,
+  uri,
+  readOnly,
+  theme,
+  pendingItems,
+  comments,
+  onEditorReady,
+  onRetry,
+}: {
+  boardId: string;
+  roomId: string;
+  uri: string;
+  readOnly: boolean;
+  theme: 'dark' | 'light';
+  pendingItems?: BoardItem[];
+  comments?: CommentsProps;
+  onEditorReady?: (editor: Editor) => void;
+  onRetry: () => void;
+}) {
+  const boardIdRef = useRef(boardId);
+  useEffect(() => { boardIdRef.current = boardId; }, [boardId]);
+
+  const pendingItemsRef = useRef<BoardItem[]>(pendingItems ?? []);
+  useEffect(() => { pendingItemsRef.current = pendingItems ?? []; }, [pendingItems]);
+
   const assetStore: TLAssetStore = useMemo(() => ({
     upload: async (_asset: TLAsset, file: File) => {
       const { url } = await api.boards.uploadCanvasFile(
@@ -315,18 +419,6 @@ export function TldrawCanvasSync({
       return url;
     },
   }), []);
-
-  // getRealtimeUrl reads the current student JWT at call time — recomputing
-  // it per roomId/retryNonce change (not memoizing across the component's
-  // whole lifetime) means a token refresh between mounts is picked up
-  // naturally, with no separate auth-refresh path to build. Only computed
-  // (and therefore only ever opens a socket) once the pre-check above has
-  // actually allowed this connection — see the `access.status === 'allowed'`
-  // guard on useSync's uri below.
-  const uri = useMemo(
-    () => access.status === 'allowed' ? api.boards.getRealtimeUrl(roomId) : '',
-    [roomId, retryNonce, access.status]
-  );
 
   // Presence identity (id/name/color) — see PresenceProvider.tsx for how
   // this is derived from the student session. Everything downstream of
@@ -338,13 +430,9 @@ export function TldrawCanvasSync({
   // parallel presence implementation.
   const userInfo = usePresenceUserInfo();
 
-  // useSync itself has no "don't connect yet" mode — passing an empty uri
-  // when access hasn't been allowed yet would have it attempt (and
-  // immediately fail) a connection to '', so its own status stays
-  // 'loading'/'error' rather than ever reaching 'synced-remote'; the
-  // access-gated screens below (AccessDeniedScreen / the 'checking'
-  // spinner) are what's actually shown to the user during this window,
-  // never useSync's own error UI for an empty-uri attempt.
+  // useSync itself has no "don't connect yet" mode — which is why this
+  // component only exists once `uri` is a real, access-allowed sync URL
+  // (see TldrawCanvasSync above).
   const store = useSync({
     uri,
     assets: assetStore,
@@ -427,52 +515,12 @@ export function TldrawCanvasSync({
     editorRef.current?.user.updateUserPreferences({ colorScheme: theme });
   }, [theme]);
 
-  // Access-denied — the pre-check itself rejected this connection, or the
-  // periodic re-poll downgraded an already-'allowed' session to fully
-  // denied (e.g. removed from a private board, board deleted). Takes
-  // priority over every store/connection-status UI below, since there is
-  // no live document worth showing a connection banner for in this case.
-  if (access.status === 'denied') {
-    return (
-      <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-        <AccessDeniedScreen reason={access.reason} theme={theme} />
-      </div>
-    );
-  }
-
-  // Still waiting on the pre-check's first result — deliberately the same
-  // "Connecting to board…" visual as useSync's own 'loading' state below,
-  // so there's no visible flash/flicker between the two phases.
-  if (access.status === 'checking') {
-    return (
-      <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-        <div style={{
-          position: 'absolute', inset: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: theme === 'dark' ? '#1a1a1a' : '#f8f8f8',
-          color: theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)',
-          fontFamily: 'var(--font-body)', fontSize: 14,
-          flexDirection: 'column', gap: 12,
-        }}>
-          <div style={{
-            width: 20, height: 20,
-            border: `2px solid currentColor`,
-            borderTopColor: 'transparent',
-            borderRadius: 'var(--radius-full)',
-            animation: 'spin 0.8s linear infinite',
-          }} />
-          Connecting to board…
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
       {connectionState !== 'connected' && connectionState !== 'loading' && (
         <ConnectionBanner
           state={connectionState}
-          onRetry={connectionState === 'failed' ? () => setRetryNonce(n => n + 1) : undefined}
+          onRetry={connectionState === 'failed' ? onRetry : undefined}
         />
       )}
 
@@ -505,7 +553,7 @@ export function TldrawCanvasSync({
           }}>
             <p style={{ margin: 0 }}>Couldn't connect to this board's live session.</p>
             <button
-              onClick={() => setRetryNonce(n => n + 1)}
+              onClick={onRetry}
               style={{
                 padding: '10px 20px', background: 'var(--color-brand)', color: '#fff',
                 border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13,
