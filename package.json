@@ -43,6 +43,7 @@
     "@radix-ui/react-tooltip": "1.1.8",
     "@splinetool/react-spline": "^4.1.0",
     "@tldraw/sync": "2.4.4",
+    "@vercel/speed-insights": "^2.0.0",
     "browser-image-compression": "^2.0.2",
     "canvas-confetti": "1.9.4",
     "class-variance-authority": "0.7.1",
