@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import request from 'supertest';
+import { localRequest } from './localServer';
 import { createApp } from '../src/app';
 import { query } from '../src/db/client';
 
 const app = createApp();
+// One loopback (127.0.0.1) server for this file — see tests/localServer.ts.
+const request = localRequest(app);
 
 // The real code is only ever emailed, never returned in the API response —
 // so tests that need to assert an exact success/failure outcome insert a

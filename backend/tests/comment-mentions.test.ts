@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
-import request from 'supertest';
+import { localRequest } from './localServer';
 import { createApp } from '../src/app';
 import { query } from '../src/db/client';
 import { signStudentToken } from '../src/middleware/studentAuth';
@@ -32,6 +32,8 @@ const app = createApp({
   restoreService: {} as RestoreService,
   commentBroadcaster: new CommentBroadcaster(),
 });
+// One loopback (127.0.0.1) server for this file — see tests/localServer.ts.
+const request = localRequest(app);
 
 const auth = (roll: string) => ({ Authorization: `Bearer ${signStudentToken(roll)}` });
 const OWNER = '230437';

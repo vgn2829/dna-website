@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import request from 'supertest';
+import { localRequest } from './localServer';
 import { v4 as uuidv4 } from 'uuid';
 import { createApp } from '../src/app';
 import { query } from '../src/db/client';
@@ -19,6 +19,8 @@ import { fileExtension, normalizeLinkUrl } from '../src/routes/assets';
 // ─────────────────────────────────────────────────────────────────────────
 
 const app = createApp();
+// One loopback (127.0.0.1) server for this file — see tests/localServer.ts.
+const request = localRequest(app);
 
 const PNG_1PX = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',

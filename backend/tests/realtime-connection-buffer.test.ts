@@ -11,6 +11,7 @@ import {
 } from '../src/realtime/connectionBuffer';
 import { RoomManager } from '../src/realtime/rooms';
 import type { RoomPersistence } from '../src/realtime/roomPersistence';
+import { LOOPBACK_HOST } from './localServer';
 
 // ─────────────────────────────────────────────────────────────────────────
 // REGRESSION SUITE FOR THE REALTIME HANDSHAKE RACE (V2.5 Phase 0b).
@@ -92,7 +93,10 @@ async function createSocketPair(
     });
   });
 
-  await new Promise<void>((resolve) => httpServer.listen(0, resolve));
+  // Explicit loopback bind (the client below connects to 127.0.0.1) — a
+  // wildcard bind can share a port with another process's 127.0.0.1
+  // listener on macOS; see tests/localServer.ts.
+  await new Promise<void>((resolve) => httpServer.listen(0, LOOPBACK_HOST, resolve));
   const { port } = httpServer.address() as AddressInfo;
 
   const clientSocket = new WsClient(`ws://127.0.0.1:${port}/`);
