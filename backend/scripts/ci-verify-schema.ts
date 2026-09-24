@@ -11,8 +11,11 @@ import { pool, query } from '../src/db/client';
 const REQUIRED_TABLES = [
   'boards', 'board_members', 'board_comments', 'board_comment_reads',
   'projects', 'templates', 'notifications', 'workspaces',
+  'assets', 'asset_collections',
 ];
 const REQUIRED_COMMENT_COLUMNS = ['anchor_page_id', 'mentions'];
+// Workspace Asset Library: kinds, collections, external links.
+const REQUIRED_ASSET_COLUMNS = ['kind', 'collection_id', 'link_url'];
 
 async function main(): Promise<void> {
   await initSchema();
@@ -39,7 +42,18 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.log(`migrations OK — ${tables.length} tables, V2/V2.6 objects present`);
+  const assetColumns = (await query<{ column_name: string }>(
+    `SELECT column_name FROM information_schema.columns WHERE table_name = 'assets'`
+  )).map(r => r.column_name);
+
+  const missingAssetColumns = REQUIRED_ASSET_COLUMNS.filter(c => !assetColumns.includes(c));
+  if (missingAssetColumns.length > 0) {
+    console.error('MISSING assets COLUMNS:', missingAssetColumns.join(', '));
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(`migrations OK — ${tables.length} tables, V2/V2.6 + asset library objects present`);
 }
 
 main()
