@@ -1,5 +1,6 @@
 import { pool } from './client';
 import { canvasSummaryColumns } from '../lib/canvasSummary';
+import { MARK_PLACED_BOARD_ITEMS_SQL } from '../lib/boardRows';
 import { checkSchemaInitAllowed } from './dbTarget';
 
 export async function initSchema(): Promise<void> {
@@ -1597,6 +1598,30 @@ export async function initSchema(): Promise<void> {
   await backfillCanvasSummaries();
 
   console.log('boards canvas summary migration done');
+
+  // Gallery item lifecycle (lib/boardRows.ts MARK_PLACED_BOARD_ITEMS_SQL):
+  // placed_at NULL = never placed on the canvas, so still pending injection;
+  // set once, never cleared. Additive and nullable — existing rows stay,
+  // unplaced by default. Backfilled AFTER the canvas summary backfill above,
+  // since it reads canvas_placed_item_ids.
+  await pool.query(`ALTER TABLE board_items ADD COLUMN IF NOT EXISTS placed_at TIMESTAMPTZ`);
+  await backfillBoardItemPlacement();
+
+  console.log('board_items placement migration done');
+}
+
+// Idempotent backfill for board_items saved before placed_at existed: marks
+// only rows whose shape is on the board's saved canvas right now (any page).
+// A row whose shape the user already deleted can't be told apart from a
+// never-placed one here, so it stays NULL — it is re-injected once, marked
+// on that save, and a later delete then sticks. Never touches canvas_data,
+// never deletes rows; already-marked rows are skipped.
+export async function backfillBoardItemPlacement(): Promise<number> {
+  const result = await pool.query(`
+    WITH saved AS (SELECT id, canvas_placed_item_ids FROM boards)
+    ${MARK_PLACED_BOARD_ITEMS_SQL}
+  `);
+  return result.rowCount ?? 0;
 }
 
 // One-time (idempotent) backfill for boards written before the summary

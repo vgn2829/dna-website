@@ -277,14 +277,18 @@ const ITEM_GRID_GAP = 40;
 // endpoint that predates this tldraw-based canvas — that table was the
 // content model before the canvas rewrite, and nothing here ever read it
 // back, so a saved item vanished with no error (see PR discussion / Phase 0
-// audit). This materializes any not-yet-placed board_items as real image
-// shapes on load. Shape/asset ids are deterministic (derived from the
-// item id), so a re-run on a later visit is a no-op for items already
-// placed — editor.getShape(id) is the dedup check. Once placed, the item
-// is a normal canvas shape: it moves/deletes/persists like anything else,
-// and board_items is never consulted again for it.
+// audit). This materializes never-placed board_items as real image shapes
+// on load. "Never placed" is the persisted lifecycle state, placed_at ===
+// null — the backend sets placed_at the first time a saved canvas contains
+// the item's shape and never clears it (lib/boardRows.ts), and the board
+// endpoints already return only pending rows. Shape existence is NOT the
+// lifecycle test (a shape the user deleted is gone too, and must not come
+// back); editor.getShape(id) stays only as a duplicate guard for a
+// placement that hasn't been saved yet. Shape/asset ids are deterministic
+// (derived from the item id). Once placed, the item is a normal canvas
+// shape: it moves/deletes/persists like anything else.
 export async function injectPendingBoardItems(editor: Editor, items: BoardItem[]): Promise<void> {
-  const toPlace = items.filter(item => !editor.getShape(createShapeId(item.id)));
+  const toPlace = items.filter(item => item.placed_at == null && !editor.getShape(createShapeId(item.id)));
   if (toPlace.length === 0) return;
 
   const viewport = editor.getViewportPageBounds();

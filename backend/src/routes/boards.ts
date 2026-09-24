@@ -12,7 +12,7 @@ import { ensurePersonalWorkspace } from './workspaces';
 import { getBoardRole, roleCanWriteCanvas } from '../realtime/roomAccess';
 import { notifyBoardShared } from '../services/notificationService';
 import { canvasSummaryColumns } from '../lib/canvasSummary';
-import { toPublicBoard, BOARD_ITEM_COUNT_SQL } from '../lib/boardRows';
+import { toPublicBoard, BOARD_ITEM_COUNT_SQL, MARK_PLACED_BOARD_ITEMS_SQL } from '../lib/boardRows';
 
 const router = Router();
 
@@ -504,13 +504,18 @@ router.put('/:id/canvas', requireStudent, async (req: Request, res: Response) =>
     }
 
     // Card item count/preview kept in sync with every canvas write
-    // (lib/canvasSummary.ts).
+    // (lib/canvasSummary.ts), and Gallery items on the saved canvas marked
+    // placed in the same statement (lib/boardRows.ts).
     const summary = canvasSummaryColumns(parsedCanvas as object);
     await pool.query(`
-      UPDATE boards
-      SET canvas_data = $1, updated_at = $2,
-          canvas_item_count = $4, canvas_preview = $5, canvas_placed_item_ids = $6
-      WHERE id = $3
+      WITH saved AS (
+        UPDATE boards
+        SET canvas_data = $1, updated_at = $2,
+            canvas_item_count = $4, canvas_preview = $5, canvas_placed_item_ids = $6
+        WHERE id = $3
+        RETURNING id, canvas_placed_item_ids
+      )
+      ${MARK_PLACED_BOARD_ITEMS_SQL}
     `, [canvas_data, new Date().toISOString(), req.params.id,
         summary.canvas_item_count, summary.canvas_preview, summary.canvas_placed_item_ids]);
 
@@ -583,9 +588,12 @@ router.get('/:id', optionalStudent, async (req: Request, res: Response) => {
       }
     }
 
+    // Only never-placed Gallery items — `items` is what the canvas
+    // injects as pending (injectPendingBoardItems); a placed item is
+    // already on the canvas or was deleted from it by the user.
     const itemsResult = await pool.query(`
       SELECT * FROM board_items
-      WHERE board_id = $1
+      WHERE board_id = $1 AND placed_at IS NULL
       ORDER BY created_at DESC
     `, [req.params.id]);
 
@@ -1025,7 +1033,9 @@ router.delete('/:id/items/:itemId', requireStudent, async (req: Request, res: Re
 });
 
 // GET /api/boards/:id/items
-// Get only items (for polling)
+// Get only pending (never-placed) items, same filter as GET /:id's
+// `items`. No in-app caller today (api.boards.getItems is unused); kept
+// for API compatibility.
 router.get('/:id/items', optionalStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll;
@@ -1049,7 +1059,7 @@ router.get('/:id/items', optionalStudent, async (req: Request, res: Response) =>
 
     const result = await pool.query(`
       SELECT * FROM board_items
-      WHERE board_id = $1
+      WHERE board_id = $1 AND placed_at IS NULL
       ORDER BY created_at DESC
     `, [req.params.id]);
 

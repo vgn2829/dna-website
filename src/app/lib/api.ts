@@ -107,6 +107,9 @@ export interface BoardItem {
   added_by_roll: string;
   added_by_name: string | null;
   created_at: string;
+  // Set once the item has been placed on the saved canvas; the board
+  // endpoints only return rows where this is still null (pending).
+  placed_at?: string | null;
 }
 
 export interface Board {
