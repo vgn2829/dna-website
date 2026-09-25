@@ -470,7 +470,7 @@
   .segmented.is-block { display: flex; width: 100%; }
   .segmented.is-block > .segmented-item { flex: 1; }
   .segmented-item {
-    padding: 6px 14px;
+    padding: 7px 14px;
     border: none;
     border-radius: var(--radius-pill);
     background: transparent;
@@ -571,6 +571,17 @@
   }
   .input-base::placeholder { color: var(--color-ink-muted); }
   .input-base:focus { box-shadow: var(--shadow-focus); border-color: transparent; }
+
+  /* Search field: .input-base plus a leading icon. One shape for every
+     search box (Moodboards, Assets) — radius md, caption-size text. The
+     metrics are Moodboards' existing ones: its toolbar sizes to the search
+     input's intrinsic width on mobile, so they must not grow. */
+  .search-field { position: relative; display: block; }
+  .search-field > svg {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    color: var(--color-ink-muted); pointer-events: none;
+  }
+  .search-field > .input-base { padding-left: 30px; font-size: 13px; }
 
   /* ── Hairline dividers ── */
   .divider       { border-top: 1px solid var(--color-hairline); }

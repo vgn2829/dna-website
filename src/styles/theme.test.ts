@@ -92,6 +92,7 @@ describe('.segmented control (H4)', () => {
     const item = css.match(/\n\s*\.segmented-item \{([^}]*)\}/)![1]; // the standalone rule, not `.is-block > .segmented-item`
     expect(prop(item, 'font-weight')).toBe('500');
     expect(prop(item, 'border-radius')).toBe('var(--radius-pill)');
+    expect(prop(item, 'padding')).toBe('7px 14px'); // 31px item + 4px inset = 40px tab (H3)
   });
 });
 

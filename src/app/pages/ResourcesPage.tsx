@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BookOpen, Video, Trophy, ArrowRight, Search, ExternalLink, Clock, Star, Filter } from 'lucide-react';
-import { GlassButton } from '../../imports/pasted_text/displacement-map';
 import { usePageMeta } from '../components/hooks/use-page-meta';
 
 interface Resource {
@@ -200,8 +199,8 @@ export function ResourcesPage() {
                       {resource.tags.map((tag) => (
                         <span
                           key={tag}
-                          className="px-2 py-0.5 rounded-full text-xs font-medium glass"
-                          style={{ color: resource.color }}
+                          className="type-micro px-2 py-0.5 rounded-full glass"
+                          style={{ color: 'var(--color-ink-muted)' }}
                         >
                           {tag}
                         </span>
@@ -215,10 +214,10 @@ export function ResourcesPage() {
                           {resource.duration}
                         </div>
                         <span
-                          className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                          className="type-micro px-2 py-0.5 rounded-full"
                           style={{
                             background: `${levelColors[resource.level]}22`,
-                            color: levelColors[resource.level],
+                            color: 'var(--color-ink)',
                             border: `1px solid ${levelColors[resource.level]}44`,
                           }}
                         >
@@ -261,15 +260,10 @@ export function ResourcesPage() {
           <p className="mb-6 max-w-md mx-auto" style={{ color: 'var(--color-ink-muted)' }}>
             Found something amazing? Submit it to our curated library and help the community grow.
           </p>
-          <GlassButton
-            size="lg"
-            className="inline-flex items-center gap-2 group"
-            glassColor="oklch(from var(--foreground) l c h / 15%)"
-            style={{ background: 'linear-gradient(135deg, #007AFF 0%, #BF5AF2 100%)' }}
-          >
+          <button type="button" className="btn-primary group">
             Submit a Resource
-            <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-          </GlassButton>
+            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+          </button>
         </motion.div>
       </div>
     </div>

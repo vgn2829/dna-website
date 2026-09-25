@@ -298,7 +298,7 @@ export function AcademyPage() {
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="type-micro px-2 py-0.5 rounded-full"
-                        style={{ background: `${DIFF_COLORS[activeVideo.difficulty]}18`, color: DIFF_COLORS[activeVideo.difficulty] }}>
+                        style={{ background: `${DIFF_COLORS[activeVideo.difficulty]}18`, color: 'var(--color-ink)' }}>
                         {activeVideo.difficulty}
                       </span>
                       <span className="type-micro">{activeVideo.duration}</span>
@@ -356,7 +356,7 @@ export function AcademyPage() {
                       <p className="type-micro mt-0.5">{v.duration}</p>
                     </div>
                     <span className="type-micro px-2 py-0.5 rounded-full shrink-0"
-                      style={{ background: `${DIFF_COLORS[v.difficulty]}10`, color: DIFF_COLORS[v.difficulty] }}>
+                      style={{ background: `${DIFF_COLORS[v.difficulty]}10`, color: 'var(--color-ink)' }}>
                       {v.difficulty}
                     </span>
                     <ChevronRight size={13} style={{ color: 'var(--color-ink-muted)', flexShrink: 0 }} />

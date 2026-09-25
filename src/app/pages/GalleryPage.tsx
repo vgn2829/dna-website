@@ -219,7 +219,7 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
 
         {/* Info */}
         <div style={{ padding: 16, borderBottom: '1px solid var(--color-hairline-soft)' }}>
-          <span className="type-micro inline-block mb-2 px-2 py-0.5 rounded-full" style={{ background: `${domainColor}18`, color: domainColor }}>{artwork.domain}</span>
+          <span className="type-micro inline-block mb-2 px-2 py-0.5 rounded-full" style={{ background: `${domainColor}18`, color: 'var(--color-ink)' }}>{artwork.domain}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
             <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-ink)', margin: 0, lineHeight: 1.3, textTransform: forceUpper ? 'uppercase' : 'none' }}>{artwork.title}</h2>
             <span className="type-micro px-2 py-0.5 rounded-full uppercase" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)', flexShrink: 0 }}>{artwork.mediaType}</span>
@@ -304,7 +304,7 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
           <div className="p-6" style={{ borderBottom: '1px solid var(--color-hairline-soft)' }}>
             <div className="flex items-start justify-between gap-3 mb-4">
               <div className="flex-1 min-w-0">
-                <span className="type-micro inline-block mb-2 px-2 py-0.5 rounded-full" style={{ background: `${domainColor}18`, color: domainColor }}>{artwork.domain}</span>
+                <span className="type-micro inline-block mb-2 px-2 py-0.5 rounded-full" style={{ background: `${domainColor}18`, color: 'var(--color-ink)' }}>{artwork.domain}</span>
                 <div className="flex items-center gap-2 mb-1">
                   <h2 className="type-headline leading-tight" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>{artwork.title}</h2>
                   <span className="type-micro px-2 py-0.5 rounded-full uppercase" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)' }}>{artwork.mediaType}</span>
@@ -579,7 +579,7 @@ export function GalleryPage() {
                     </div>
                     {/* Text area below image — always visible, never overlapped */}
                     <div style={{ padding: '20px 20px 24px' }}>
-                      <h3 className="type-display-md" style={{ marginBottom: 4, fontSize: 20, textTransform: forceUpper ? 'uppercase' : 'none' }}>{art.title}</h3>
+                      <h2 className="type-display-md" style={{ marginBottom: 4, fontSize: 20, textTransform: forceUpper ? 'uppercase' : 'none' }}>{art.title}</h2>
                       {art.artist?.trim() && <p className="type-caption" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>by {art.artist}</p>}
                     </div>
                   </div>
@@ -613,9 +613,9 @@ export function GalleryPage() {
               onClick={e => e.stopPropagation()}
               style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '80vh', overflowY: 'auto' }}
             >
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
+              <h2 className="type-headline" style={{ margin: 0 }}>
                 Save to Moodboard
-              </h3>
+              </h2>
 
               {myBoards.length === 0 ? (
                 <div>

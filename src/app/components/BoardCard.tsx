@@ -209,7 +209,7 @@ export function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerR
           <h3 className="type-body-sm" style={{
             margin: 0, color: 'var(--color-ink)',
             overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box',
-            WebkitLineClamp: 1, WebkitBoxOrient: 'vertical',
+            WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
           }}>
             {board.name}
           </h3>

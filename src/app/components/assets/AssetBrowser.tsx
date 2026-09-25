@@ -220,8 +220,8 @@ export function AssetBrowser({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
       {/* Toolbar: search + add */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <label style={{ position: 'relative', flex: '1 1 240px', minWidth: 0 }}>
-          <Search size={15} aria-hidden="true" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-ink-muted)', pointerEvents: 'none' }} />
+        <label className="search-field" style={{ flex: '1 1 240px', minWidth: 0 }}>
+          <Search size={14} aria-hidden="true" />
           <input
             className="input-base"
             type="search"
@@ -229,7 +229,6 @@ export function AssetBrowser({
             aria-label="Search assets"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            style={{ paddingLeft: 36, fontSize: 14, borderRadius: 'var(--radius-pill)' }}
           />
         </label>
         <button type="button" className="btn-primary" onClick={() => setShowAdd(true)} style={{ minHeight: 40 }}>

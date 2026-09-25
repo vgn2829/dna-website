@@ -1427,7 +1427,7 @@ export default function DesignStudio() {
       </nav>
       <main style={{maxWidth:1440,margin:"0 auto",padding:"40px 48px 80px"}}>
         <div style={{marginBottom:40,paddingTop:8}}>
-          <h1 style={{fontSize:48,fontWeight:600,letterSpacing:"-0.03em",lineHeight:1.0,color:"var(--color-ink)",fontFamily:"var(--font-display)",margin:"0 0 10px 0"}}>
+          <h1 className="type-display-lg" style={{margin:"0 0 10px 0"}}>
             {TOOLS.find(t=>t.id===active)!.label}
           </h1>
           <p style={{fontSize:16,fontWeight:400,color:"var(--color-ink-muted)",lineHeight:1.5,letterSpacing:"-0.01em",margin:0,fontFamily:"var(--font-body)"}}>{SUBTITLES[active]}</p>

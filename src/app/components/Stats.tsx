@@ -17,7 +17,7 @@ function Counter({ target }: { target: number }) {
   return <span ref={ref}><motion.span>{display}</motion.span></span>;
 }
 
-// Active Members rounds down to the nearest round increment so it reads
+// The member count rounds down to the nearest round increment so it reads
 // consistently with its still-hardcoded "50+"/"500+"/"30+" siblings instead of
 // showing an exact, oddly-specific figure (e.g. "247+") next to them.
 function roundDownForDisplay(n: number): number {
@@ -35,7 +35,9 @@ const STATIC_STATS = [
   { Icon: Calendar, label: 'Events This Year',    value: 30  },
 ];
 
-export function Stats() {
+// The one member figure on Home. Hero and Stats both read it, so the page can
+// no longer claim "250+ Members" above a live, different count.
+export function useMemberCount(): number {
   const [memberCount, setMemberCount] = useState(FALLBACK_MEMBERS);
 
   useEffect(() => {
@@ -46,8 +48,14 @@ export function Stats() {
     return () => { cancelled = true; };
   }, []);
 
+  return memberCount;
+}
+
+export function Stats() {
+  const memberCount = useMemberCount();
+
   const STATS = [
-    { Icon: Users, label: 'Active Members', value: memberCount },
+    { Icon: Users, label: 'Members', value: memberCount },
     ...STATIC_STATS,
   ];
 

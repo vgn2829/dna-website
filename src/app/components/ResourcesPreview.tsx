@@ -40,6 +40,13 @@ export function ResourcesPreview() {
                 <div style={{ height: 3, background: 'var(--color-surface-2)', borderRadius: 99 }} />
               </div>
             ))
+          ) : domainList.length === 0 ? (
+            <div className="card" style={{ gridColumn: '1 / -1', padding: 'var(--space-xl)', textAlign: 'center' }}>
+              <p className="type-headline" style={{ margin: '0 0 8px' }}>Learning tracks are on their way</p>
+              <p className="type-body" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>
+                No domains have been published yet. The Academy has everything that's available so far.
+              </p>
+            </div>
           ) : (
             domainList.map((domain, i) => {
               const barWidth = Math.max(15, Math.round((domain.videos.length / maxVideos) * 90));

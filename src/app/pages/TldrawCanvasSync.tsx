@@ -105,6 +105,15 @@ type ConnectionState = 'loading' | 'connected' | 'reconnecting' | 'offline' | 'f
 // Reconnecting (network is up but the socket isn't synced — e.g. the
 // server is restarting) using navigator.onLine, which is real signal, not
 // invented.
+// First connects that hang in 'loading' (no error ever arrives) used to leave a
+// spinner up indefinitely with no way out. After this long the screen offers
+// the same Retry the error screen does.
+export const CONNECT_STALL_MS = 20_000;
+
+export function shouldOfferConnectRetry(status: string, hasEverConnected: boolean, elapsedMs: number): boolean {
+  return !hasEverConnected && status === 'loading' && elapsedMs >= CONNECT_STALL_MS;
+}
+
 function deriveConnectionState(
   status: 'loading' | 'error' | 'synced-remote',
   connectionStatus: 'online' | 'offline' | undefined
@@ -471,6 +480,17 @@ function SyncedCanvas({
   const showCustomLoadingOrErrorScreen = !hasEverConnectedRef.current
     && (store.status === 'loading' || store.status === 'error');
 
+  const firstLoadPending = !hasEverConnectedRef.current && store.status === 'loading';
+  const [stalled, setStalled] = useState(false);
+  useEffect(() => {
+    if (!firstLoadPending) { setStalled(false); return; }
+    const startedAt = Date.now();
+    const t = setTimeout(() => {
+      setStalled(shouldOfferConnectRetry('loading', false, Date.now() - startedAt));
+    }, CONNECT_STALL_MS);
+    return () => clearTimeout(t);
+  }, [firstLoadPending]);
+
   const editorRef = useRef<Editor | null>(null);
   const injectedRef = useRef(false);
   const handleMount = (editor: Editor) => {
@@ -542,6 +562,12 @@ function SyncedCanvas({
               animation: 'spin 0.8s linear infinite',
             }} />
             Connecting to board…
+            {stalled && (
+              <div role="status" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                <p style={{ margin: 0 }}>This is taking longer than usual.</p>
+                <button type="button" className="btn-primary btn-sm touch-target" onClick={onRetry}>Retry</button>
+              </div>
+            )}
           </div>
         ) : (
           <div style={{
@@ -552,14 +578,7 @@ function SyncedCanvas({
             fontFamily: 'var(--font-body)', fontSize: 14,
           }}>
             <p style={{ margin: 0 }}>Couldn't connect to this board's live session.</p>
-            <button
-              onClick={onRetry}
-              style={{
-                padding: '10px 20px', background: 'var(--color-brand)', color: '#fff',
-                border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13,
-                fontFamily: 'var(--font-body)', cursor: 'pointer',
-              }}
-            >
+            <button type="button" className="btn-primary btn-sm touch-target" onClick={onRetry}>
               Retry
             </button>
           </div>

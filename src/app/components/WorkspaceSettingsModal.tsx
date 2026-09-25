@@ -212,7 +212,7 @@ export function WorkspaceSettingsModal({
             width: '100%', maxWidth: 460,
             background: 'var(--color-surface-1)',
             border: '1px solid var(--color-hairline)',
-            borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)',
+            borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', boxShadow: 'var(--shadow-level-2)',
             display: 'flex', flexDirection: 'column', gap: 20,
             maxHeight: '85vh', overflowY: 'auto',
             outline: 'none',
@@ -433,7 +433,7 @@ export function WorkspaceSettingsModal({
               width: '100%', maxWidth: 360,
               background: 'var(--color-surface-1)',
               border: '1px solid var(--color-hairline)',
-              borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)',
+              borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', boxShadow: 'var(--shadow-level-2)',
               display: 'flex', flexDirection: 'column', gap: 16,
             }}
           >
