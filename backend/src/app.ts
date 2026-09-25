@@ -73,6 +73,12 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    // Access-Control-Max-Age on preflight responses: lets the browser reuse
+    // a granted preflight for 10 minutes instead of re-sending OPTIONS
+    // before every authorized request (without it Chrome caches for ~5s).
+    // Conservative on purpose — a CORS config change still takes effect
+    // within 10 minutes. Affects preflight caching only, not what's allowed.
+    maxAge: 600,
   }));
 
   // Serve uploaded files for local dev storage.
