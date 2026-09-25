@@ -212,13 +212,18 @@
 
 /* ── Typography Utilities ───────────────────────────────────────────────────── */
 @layer utilities {
-  /* Display scale — Mona Sans (GT Walsheim substitute), weight 500 */
+  /* Display scale — Mona Sans (GT Walsheim substitute), weight 500.
+     Tracking is a fixed PERCENTAGE of the size (em), per the spec: "reduce
+     the SIZE if needed, but keep the percentage". At the max sizes these
+     equal the spec's -5.5 / -4.25 / -3.1 / -1.0px exactly; a fixed px value
+     here doubled the compression at the clamp minimums (-10% at 52/40/30px
+     on mobile), running words together ("Designand"). */
   .type-display-xxl {
     font-family: var(--font-display);
     font-size: clamp(52px, 8vw, 110px);
     font-weight: 500;
     line-height: 0.85;
-    letter-spacing: -5.5px;
+    letter-spacing: -0.05em;
     color: var(--color-ink);
   }
   .type-display-xl {
@@ -226,7 +231,7 @@
     font-size: clamp(40px, 6vw, 85px);
     font-weight: 500;
     line-height: 0.95;
-    letter-spacing: -4.25px;
+    letter-spacing: -0.05em;
     color: var(--color-ink);
   }
   .type-display-lg {
@@ -234,7 +239,7 @@
     font-size: clamp(30px, 4.5vw, 62px);
     font-weight: 500;
     line-height: 1.00;
-    letter-spacing: -3.1px;
+    letter-spacing: -0.05em;
     color: var(--color-ink);
   }
   .type-display-md {
@@ -242,7 +247,7 @@
     font-size: clamp(22px, 2.5vw, 32px);
     font-weight: 500;
     line-height: 1.13;
-    letter-spacing: -1.0px;
+    letter-spacing: -0.03125em;
     color: var(--color-ink);
   }
   .type-headline {
@@ -397,6 +402,31 @@
     transition: background 0.15s;
   }
   .btn-icon:hover { background: var(--color-surface-2); }
+
+  /* ── Touch target ──
+     Enlarges a control's HIT AREA to the spec minimum (Responsive
+     Behavior › Touch Targets: 40px on desktop, 44px on touch) without
+     changing how it looks: an invisible, centred ::after at least that
+     size. Only grows an axis that is smaller than the minimum, so wide pill
+     buttons gain height, not width. Use on compact controls that have room
+     around them — two neighbours closer than the growth would overlap.
+     A scroll container (overflow: auto/hidden) clips the growth. */
+  .touch-target {
+    position: relative;
+    --touch-min: 40px;
+  }
+  @media (pointer: coarse) {
+    .touch-target { --touch-min: 44px; }
+  }
+  .touch-target::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--touch-min));
+    height: max(100%, var(--touch-min));
+    transform: translate(-50%, -50%);
+  }
 
   .admin-action-btn:hover { filter: brightness(1.15); }
   .admin-action-label { display: inline; }

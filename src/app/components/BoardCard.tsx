@@ -196,6 +196,7 @@ export function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerR
               lineHeight: 1,
               zIndex: 2,
             }}
+            className="touch-target"
           >
             ⋮
           </button>

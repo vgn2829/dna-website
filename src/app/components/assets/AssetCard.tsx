@@ -131,7 +131,7 @@ export function AssetCard({
 
       <DropdownMenu.Root modal={false}>
         <DropdownMenu.Trigger
-          className="asset-card-actions"
+          className="asset-card-actions touch-target"
           aria-label={`Actions for ${asset.filename}`}
           style={{
             position: 'absolute', top: 8, right: 8,

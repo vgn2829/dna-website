@@ -677,6 +677,7 @@ export default function BoardPage() {
                   color: isFullscreen ? '#fff' : textMuted, cursor: 'pointer',
                   fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
                 }}
+                className="touch-target"
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
                   {isFullscreen ? (
@@ -718,6 +719,7 @@ export default function BoardPage() {
                 color: commentMode ? '#fff' : textMuted, fontSize: 12,
                 fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
               }}
+              className="touch-target"
             >
               {compactHeader ? <MessageCircle size={14} /> : 'Comment'}
               {!commentMode && commentsApi.comments.some(
@@ -746,6 +748,7 @@ export default function BoardPage() {
                     color: textMuted, fontSize: 12,
                     fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
                   }}
+                  className="touch-target"
                 >
                   Assets
                 </button>
@@ -759,6 +762,7 @@ export default function BoardPage() {
                     color: textMuted, fontSize: 12,
                     fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
                   }}
+                  className="touch-target"
                 >
                   History
                 </button>
@@ -773,6 +777,7 @@ export default function BoardPage() {
                       color: textMuted, fontSize: 12,
                       fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
                     }}
+                    className="touch-target"
                   >
                     Save as Template
                   </button>
@@ -788,6 +793,7 @@ export default function BoardPage() {
                 color: '#fff', fontSize: 12, fontWeight: 600,
                 fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
               }}
+              className="touch-target"
             >
               Share
             </button>
@@ -801,6 +807,7 @@ export default function BoardPage() {
                   color: 'var(--color-error)', fontSize: 11,
                   fontFamily: 'var(--font-body)', cursor: 'pointer',
                 }}
+                className="touch-target"
               >
                 Delete
               </button>
@@ -817,6 +824,7 @@ export default function BoardPage() {
                     border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
                     color: textMuted, cursor: 'pointer',
                   }}
+                  className="touch-target"
                 >
                   <MoreHorizontal size={15} />
                 </DropdownMenu.Trigger>

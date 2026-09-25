@@ -125,7 +125,7 @@ export function AddAssetDialog({
     >
       <div role="tablist" aria-label="Add asset type" style={{ display: 'flex', gap: 4, padding: 4, marginBottom: 16, borderRadius: 'var(--radius-pill)', background: 'var(--color-canvas)', border: '1px solid var(--color-hairline)' }}>
         {([['upload', 'Upload file', UploadCloud], ['link', 'Add link', Link2]] as const).map(([id, label, Icon]) => (
-          <button
+          <button className="touch-target"
             key={id}
             type="button"
             role="tab"

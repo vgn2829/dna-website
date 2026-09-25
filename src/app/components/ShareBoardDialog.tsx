@@ -244,6 +244,7 @@ export function ShareBoardDialog({
                     color: 'var(--color-ink-muted)', fontSize: 18, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}
+                  className="touch-target"
                 >
                   ×
                 </button>

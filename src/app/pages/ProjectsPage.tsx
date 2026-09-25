@@ -249,6 +249,7 @@ export default function ProjectsPage() {
                   }}
                   aria-label={`Options for ${project.name}`}
                   style={{ background: 'none', border: 'none', color: 'var(--color-ink-muted)', cursor: 'pointer', padding: 4, fontSize: 16, lineHeight: 1 }}
+                  className="touch-target"
                 >
                   ⋮
                 </button>

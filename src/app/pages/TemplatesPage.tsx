@@ -316,6 +316,7 @@ export default function TemplatesPage() {
                     border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: 16,
                     cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
                   }}
+                  className="touch-target"
                 >
                   ⋮
                 </button>

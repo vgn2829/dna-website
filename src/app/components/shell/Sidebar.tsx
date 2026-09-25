@@ -46,6 +46,7 @@ export function Sidebar({ onNavigate, onCloseMobile }: { onNavigate?: () => void
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: 'none', border: 'none', color: 'var(--color-ink-muted)', cursor: 'pointer',
             }}
+            className="touch-target"
           >
             <X size={18} />
           </button>

@@ -388,6 +388,7 @@ export function CommentThreadPanel(props: CommentThreadPanelProps) {
             color: 'var(--color-ink-muted)', fontSize: 14, cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
+          className="touch-target"
         >
           ×
         </button>
@@ -486,7 +487,9 @@ export function CommentThreadPanel(props: CommentThreadPanelProps) {
             rows={mode === 'draft' ? 3 : 2}
             style={textareaStyle}
           />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 8 }}>
+          {/* marginTop 10 = the submit button's touch-target growth at 44px
+              ((44 − 24) / 2), so its hit area stops at the textarea edge. */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 10 }}>
             <button
               onClick={handleSubmit}
               disabled={submitting || !composerValue.trim()}
@@ -495,6 +498,7 @@ export function CommentThreadPanel(props: CommentThreadPanelProps) {
                 cursor: submitting || !composerValue.trim() ? 'not-allowed' : 'pointer',
                 opacity: submitting || !composerValue.trim() ? 0.6 : 1,
               }}
+              className="touch-target"
             >
               {submitting ? 'Posting…' : mode === 'draft' ? 'Comment' : 'Reply'}
             </button>

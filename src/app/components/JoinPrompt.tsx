@@ -21,7 +21,7 @@ export function markGuestDismissed(): void {
 }
 
 export default function JoinPrompt() {
-  const { openRollModal } = useStudent();
+  const { openRollModal, isRollModalOpen } = useStudent();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -43,7 +43,9 @@ export default function JoinPrompt() {
 
   return (
     <AnimatePresence>
-      {visible && (
+      {/* Stand aside while the sign-in dialog is open (e.g. opened from the
+          navbar's Join) instead of stacking a second overlay above it. */}
+      {visible && !isRollModalOpen && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

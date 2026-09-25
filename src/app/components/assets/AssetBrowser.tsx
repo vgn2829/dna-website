@@ -242,7 +242,7 @@ export function AssetBrowser({
         {TABS.map(t => {
           const active = tab === t.id;
           return (
-            <button
+            <button className="touch-target"
               key={t.id}
               type="button"
               role="tab"
@@ -456,7 +456,7 @@ const GRID: React.CSSProperties = {
 
 function CollectionChip({ label, count, active, muted, onClick }: { label: string; count?: number; active: boolean; muted?: boolean; onClick: () => void }) {
   return (
-    <button
+    <button className="touch-target"
       type="button"
       aria-pressed={active}
       onClick={onClick}

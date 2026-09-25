@@ -27,9 +27,18 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
-export function useModalA11y(open: boolean, onClose: () => void) {
+export interface ModalA11yOptions {
+  // Element to focus on open instead of the dialog container — for a
+  // dialog whose whole purpose is one field (the sign-in modal's roll
+  // number input). Returning null falls back to the container.
+  initialFocus?: () => HTMLElement | null;
+}
+
+export function useModalA11y(open: boolean, onClose: () => void, options: ModalA11yOptions = {}) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
+  const initialFocusRef = useRef(options.initialFocus);
+  useEffect(() => { initialFocusRef.current = options.initialFocus; });
 
   // Every call site passes an inline `() => setX(false)` arrow, which is a
   // new function identity on every render of the CALLER (not just when the
@@ -61,7 +70,7 @@ export function useModalA11y(open: boolean, onClose: () => void) {
     // its contents, and avoids accidentally triggering an input's own
     // focus side effects (e.g. a search field's dropdown) the instant the
     // dialog appears.
-    const raf = requestAnimationFrame(() => dialogRef.current?.focus());
+    const raf = requestAnimationFrame(() => (initialFocusRef.current?.() ?? dialogRef.current)?.focus());
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // Nested modals (e.g. the workspace switcher panel opened from the
