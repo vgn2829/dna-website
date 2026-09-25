@@ -76,7 +76,7 @@ function MemberCard({ member, expanded = false, onToggle, size = 'normal' }: {
             </div>
           )}
         </div>
-        <p className="type-body-sm" style={{ color: member.color, fontWeight: 600, marginBottom: 2 }}>
+        <p className="type-body-sm" style={{ color: 'var(--color-ink-muted)', marginBottom: 2 }}>
           {member.designation}
         </p>
         {member.year && (
@@ -269,8 +269,8 @@ export function TeamPage() {
               href="https://www.instagram.com/dnaiitk/"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-6 py-3 rounded-2xl font-semibold text-black transition-all hover:opacity-90"
-              style={{ background: 'linear-gradient(135deg, #007AFF, #BF5AF2)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+              className="btn-primary"
+              style={{ textDecoration: 'none' }}
             >
               Apply Now
             </a>

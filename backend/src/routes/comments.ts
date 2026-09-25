@@ -7,7 +7,7 @@ import * as commentsStorage from '../realtime/comments/commentsStorage';
 import type { CommentBroadcaster } from '../realtime/comments/commentBroadcaster';
 import type { BoardComment } from '../realtime/comments/commentsStorage';
 import { getBoardRole, roleCanWriteCanvas, roleCanComment } from '../realtime/roomAccess';
-import { notifyCommentCreated, notifyCommentReplied } from '../services/notificationService';
+import { notifyCommentCreated, notifyCommentReplied, notifyCommentMentioned, dispatchNotifications } from '../services/notificationService';
 
 // ─────────────────────────────────────────────────────────────────────────
 // COMMENTS REST ENDPOINTS — a dedicated router, same reasoning as
@@ -40,10 +40,20 @@ import { notifyCommentCreated, notifyCommentReplied } from '../services/notifica
 //     reusing the exact same predicate the realtime write gate uses for
 //     the canvas itself (roomSocketGate.ts), not a separate "can edit
 //     comments" concept.
-//   - A comment's OWN AUTHOR may always edit or delete their own comment,
-//     even without write-canvas access — this is the Commenter tier's
-//     actual capability (comment on a board you can't edit, then manage
-//     your own comment), matching Figma's own behavior.
+//   - A comment's OWN AUTHOR may edit or delete their own comment without
+//     write-canvas access — this is the Commenter tier's actual capability
+//     (comment on a board you can't edit, then manage your own comment),
+//     matching Figma's own behavior. AUTHORSHIP DOES NOT BYPASS CURRENT
+//     BOARD AUTHORIZATION (V2.6 Phase A): the author still has to pass
+//     roleCanComment against CURRENT board access first. Before this, the
+//     author branch skipped getBoardRole entirely, so a user whose board
+//     access had been revoked could keep editing and soft-deleting their
+//     own comments indefinitely — each mutation also broadcasting to every
+//     collaborator still on the board. Reproduced against the real router
+//     (PUT and DELETE both returned 200 after revocation, and the row was
+//     genuinely mutated) before being fixed here. Authorship is now a
+//     NARROWING of an existing permission, never a substitute for one —
+//     the same invariant V2.5 established for canvas writes.
 //   - getBoardRole returning null (no read access at all — private board,
 //     not a member) is rejected with 403, same as every other
 //     board-scoped endpoint in this app.
@@ -81,7 +91,57 @@ const createCommentSchema = z.object({
   anchorShapeId: z.string().min(1).max(200).optional(),
   anchorX: z.number().finite().optional(),
   anchorY: z.number().finite().optional(),
+  // Which tldraw page the anchor lives on (V2.6 Phase B). Optional at the
+  // schema level: a reply inherits it from the thread root, and a client
+  // older than this change simply omits it (the comment is then stored
+  // with a NULL page and behaves exactly as every pre-Phase-B comment
+  // does — see schema.ts's compatibility note).
+  anchorPageId: z.string().min(1).max(200).optional(),
 });
+
+
+// ─────────────────────────────────────────────────────────────────────────
+// MENTIONS (V2.6 Phase D) — server-side parse + authorization.
+//
+// The client is NEVER trusted for mentions. It may send whatever it likes
+// in the comment body; this function re-derives the mention list from the
+// CONTENT itself and then keeps only rolls that genuinely have access to
+// this board. Consequences that matter:
+//
+//   - A user cannot notify someone who cannot see the board (which would
+//     leak the board's name and a comment id into their notifications).
+//   - A user cannot enumerate other workspaces: an unknown or
+//     non-member roll is silently dropped, and the response is identical
+//     whether the roll does not exist or simply has no access — so
+//     mentions cannot be used as an existence oracle.
+//   - Self-mentions are dropped, matching the existing suppression in
+//     notificationService.
+//
+// Syntax is deliberately minimal and deterministic: @<rollNumber>, the
+// same identifier the rest of this codebase uses as a user's identity.
+// No rich-text editor, no display-name resolution (names are not unique
+// and would be ambiguous to parse).
+const MENTION_RE = /@([A-Za-z0-9]{3,20})/g;
+const MAX_MENTIONS_PER_COMMENT = 20;
+
+async function resolveMentions(boardId: string, content: string, authorRoll: string): Promise<string[]> {
+  const candidates = new Set<string>();
+  for (const m of content.matchAll(MENTION_RE)) {
+    const roll = m[1].toUpperCase();
+    if (roll !== authorRoll.toUpperCase()) candidates.add(roll);
+    if (candidates.size >= MAX_MENTIONS_PER_COMMENT) break;
+  }
+  if (candidates.size === 0) return [];
+
+  // Authorize each candidate through the SAME helper every other
+  // board-scoped check uses — no parallel permission model.
+  const allowed: string[] = [];
+  for (const roll of candidates) {
+    const role = await getBoardRole(boardId, roll);
+    if (role !== null && roleCanComment(role.role)) allowed.push(roll);
+  }
+  return allowed;
+}
 
 export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
   const router = Router();
@@ -125,7 +185,10 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
       }
       const body = parsed.data;
 
-      let anchor: { anchorType: 'canvas' | 'shape'; anchorShapeId?: string; anchorX: number; anchorY: number };
+      let anchor: {
+        anchorType: 'canvas' | 'shape'; anchorShapeId?: string;
+        anchorX: number; anchorY: number; anchorPageId?: string;
+      };
       // Hoisted out of the if-branch below so the notification block
       // further down (which needs the root's author for a reply) doesn't
       // have to re-fetch it.
@@ -144,6 +207,10 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
           anchorShapeId: root.anchorShapeId ?? undefined,
           anchorX: root.anchorX,
           anchorY: root.anchorY,
+          // Inherited too, so a reply can never land on a different page
+          // from its own thread root — including inheriting NULL from a
+          // legacy root, which keeps that whole thread legacy-behaving.
+          anchorPageId: root.anchorPageId ?? undefined,
         };
       } else {
         if (body.anchorType === undefined || body.anchorX === undefined || body.anchorY === undefined) {
@@ -157,6 +224,7 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
           anchorShapeId: body.anchorShapeId,
           anchorX: body.anchorX,
           anchorY: body.anchorY,
+          anchorPageId: body.anchorPageId,
         };
       }
 
@@ -170,8 +238,17 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
         anchorShapeId: anchor.anchorShapeId ?? null,
         anchorX: anchor.anchorX,
         anchorY: anchor.anchorY,
+        anchorPageId: anchor.anchorPageId ?? null,
         content: body.content,
       });
+
+      // Mentions are derived from the CONTENT server-side and filtered to
+      // users who genuinely have board access (see resolveMentions).
+      const mentioned = await resolveMentions(boardId, body.content, roll);
+      if (mentioned.length > 0) {
+        await commentsStorage.setCommentMentions(boardId, comment.id, mentioned);
+        comment.mentions = mentioned;
+      }
 
       await broadcastIfConnected(boardId, { type: 'create', comment });
 
@@ -184,7 +261,7 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
       // board owner. Both service functions already no-op on
       // self-notification, so no separate "don't notify yourself" check
       // is needed here.
-      (async () => {
+      dispatchNotifications(async () => {
         const boardResult = await pool.query('SELECT owner_roll, name FROM boards WHERE id = $1', [boardId]);
         const board = boardResult.rows[0] as { owner_roll: string; name: string } | undefined;
         if (!board) return;
@@ -208,7 +285,18 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
             commentId: comment.id,
           });
         }
-      })().catch(err => console.error('Comment notification failed (non-fatal):', err));
+
+        // Mention notifications are independent of the root/reply
+        // notification above: someone can be both the thread author AND
+        // mentioned, and createNotification is the single place that
+        // suppresses self-notification.
+        for (const recipientRoll of mentioned) {
+          await notifyCommentMentioned({
+            recipientRoll, actorRoll: roll, actorName: authorName,
+            boardId, boardName: board.name, commentId: comment.id,
+          });
+        }
+      }).catch(err => console.error('Comment notification failed (non-fatal):', err));
 
       res.status(201).json(comment);
     } catch (err) {
@@ -230,12 +318,20 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
       if (!existing || existing.deletedAt) {
         return res.status(404).json({ error: 'Comment not found' });
       }
+
+      // CURRENT board access is checked FIRST, unconditionally — authorship
+      // is a narrowing of an existing permission, never a substitute for
+      // one. See this file's header comment (AUTHORSHIP DOES NOT BYPASS
+      // CURRENT BOARD AUTHORIZATION) for the vulnerability this closes.
+      const boardRole = await getBoardRole(boardId, roll);
+      if (boardRole === null || !roleCanComment(boardRole.role)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      // Then the pre-existing policy: your own comment, or board-edit
+      // (moderation) access over anyone's.
       const isAuthor = existing.authorRoll === roll;
-      if (!isAuthor) {
-        const boardRole = await getBoardRole(boardId, roll);
-        if (boardRole === null || !roleCanWriteCanvas(boardRole.role, boardRole.isArchived)) {
-          return res.status(403).json({ error: 'Access denied' });
-        }
+      if (!isAuthor && !roleCanWriteCanvas(boardRole.role, boardRole.isArchived)) {
+        return res.status(403).json({ error: 'Access denied' });
       }
 
       const bodySchema = z.object({ content: z.string().trim().min(1).max(CONTENT_MAX_LENGTH) });
@@ -249,7 +345,35 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
         return res.status(404).json({ error: 'Comment not found' });
       }
 
+      // EDIT IDEMPOTENCY (V2.6 Phase D). Re-deriving the mention list on
+      // every edit is what keeps it correct, but notifying that whole list
+      // again would spam everyone already mentioned each time the author
+      // fixes a typo. So the stored list is diffed against the new one and
+      // ONLY genuinely new mentions notify. Removing a mention notifies
+      // nobody; an unchanged mention notifies nobody.
+      const previousMentions = await commentsStorage.getCommentMentions(boardId, commentId);
+      const nextMentions = await resolveMentions(boardId, parsed.data.content, updated.authorRoll);
+      const addedMentions = nextMentions.filter(m => !previousMentions.includes(m));
+      await commentsStorage.setCommentMentions(boardId, commentId, nextMentions);
+      updated.mentions = nextMentions;
+
       await broadcastIfConnected(boardId, { type: 'edit', comment: updated });
+
+      if (addedMentions.length > 0) {
+        void dispatchNotifications(async () => {
+          const boardResult = await pool.query('SELECT name FROM boards WHERE id = $1', [boardId]);
+          const board = boardResult.rows[0] as { name: string } | undefined;
+          if (!board) return;
+          const actorName = await getStudentName(roll);
+          for (const recipientRoll of addedMentions) {
+            await notifyCommentMentioned({
+              recipientRoll, actorRoll: roll, actorName,
+              boardId, boardName: board.name, commentId,
+            });
+          }
+        }).catch(err => console.error('Mention notification failed (non-fatal):', err));
+      }
+
       res.json(updated);
     } catch (err) {
       console.error('Edit comment error:', err);
@@ -269,12 +393,17 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
       if (!existing || existing.deletedAt) {
         return res.status(404).json({ error: 'Comment not found' });
       }
+
+      // CURRENT board access first, unconditionally — same rule as PUT
+      // above: authorship narrows an existing permission, it never
+      // substitutes for one.
+      const boardRole = await getBoardRole(boardId, roll);
+      if (boardRole === null || !roleCanComment(boardRole.role)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
       const isAuthor = existing.authorRoll === roll;
-      if (!isAuthor) {
-        const boardRole = await getBoardRole(boardId, roll);
-        if (boardRole === null || !roleCanWriteCanvas(boardRole.role, boardRole.isArchived)) {
-          return res.status(403).json({ error: 'Access denied' });
-        }
+      if (!isAuthor && !roleCanWriteCanvas(boardRole.role, boardRole.isArchived)) {
+        return res.status(403).json({ error: 'Access denied' });
       }
 
       const deleted = await commentsStorage.softDeleteComment(boardId, commentId);
@@ -286,6 +415,55 @@ export function createCommentsRouter(broadcaster: CommentBroadcaster): Router {
       res.json({ success: true });
     } catch (err) {
       console.error('Delete comment error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // GET /api/boards/:id/comments/read-state — this user's watermark for
+  // this board (V2.6 Phase E). null means "never looked", which the client
+  // renders as everything unread.
+  //
+  // Read state is strictly per (board, caller): the roll comes from the
+  // verified token, never from the request, so one user can neither read
+  // nor affect another's state. A revoked user is rejected by the same
+  // roleCanComment bar the list endpoint uses, so they cannot learn that a
+  // board has new activity either.
+  router.get('/:id/comments/read-state', requireStudent, async (req: Request, res: Response) => {
+    try {
+      const roll = req.studentRoll!;
+      const boardId = param(req.params.id);
+
+      const boardRole = await getBoardRole(boardId, roll);
+      if (boardRole === null || !roleCanComment(boardRole.role)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const lastSeenAt = await commentsStorage.getLastSeenAt(boardId, roll);
+      res.json({ lastSeenAt });
+    } catch (err) {
+      console.error('Get comment read-state error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // POST /api/boards/:id/comments/read-state — move this user's watermark
+  // forward. The timestamp is generated SERVER-side rather than taken from
+  // the body, so a client cannot mark itself read into the future and
+  // permanently suppress genuine unread activity.
+  router.post('/:id/comments/read-state', requireStudent, async (req: Request, res: Response) => {
+    try {
+      const roll = req.studentRoll!;
+      const boardId = param(req.params.id);
+
+      const boardRole = await getBoardRole(boardId, roll);
+      if (boardRole === null || !roleCanComment(boardRole.role)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const lastSeenAt = await commentsStorage.markSeen(boardId, roll, new Date().toISOString());
+      res.json({ lastSeenAt });
+    } catch (err) {
+      console.error('Set comment read-state error:', err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

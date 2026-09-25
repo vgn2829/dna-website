@@ -1418,7 +1418,7 @@ export default function DesignStudio() {
     <div style={{minHeight:"100vh",background:T.canvas,fontFamily:"var(--font-body)",color:T.ink,paddingTop:"56px"}}>
       <nav style={{display:"flex",gap:4,alignItems:"center",overflowX:"auto",scrollbarWidth:"none",padding:"8px 24px",borderBottom:`1px solid ${T.hairline}`,background:"var(--color-canvas)",position:"sticky",top:56,zIndex:90}}>
         {TOOLS.map(t=>(
-          <button key={t.id} onClick={()=>setActive(t.id)} style={active===t.id
+          <button className="touch-target" key={t.id} onClick={()=>setActive(t.id)} style={active===t.id
             ? {background:"var(--color-surface-2)",color:"var(--color-ink)",borderRadius:"var(--radius-pill)",padding:"6px 16px",fontSize:13,fontWeight:500,border:"none",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"var(--font-body)",letterSpacing:"-0.1px"}
             : {background:"transparent",color:"var(--color-ink-muted)",borderRadius:"var(--radius-pill)",padding:"6px 16px",fontSize:13,fontWeight:400,border:"none",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"var(--font-body)"}}>
             {t.label}
@@ -1427,7 +1427,7 @@ export default function DesignStudio() {
       </nav>
       <main style={{maxWidth:1440,margin:"0 auto",padding:"40px 48px 80px"}}>
         <div style={{marginBottom:40,paddingTop:8}}>
-          <h1 style={{fontSize:48,fontWeight:600,letterSpacing:"-0.03em",lineHeight:1.0,color:"var(--color-ink)",fontFamily:"var(--font-display)",margin:"0 0 10px 0"}}>
+          <h1 className="type-display-lg" style={{margin:"0 0 10px 0"}}>
             {TOOLS.find(t=>t.id===active)!.label}
           </h1>
           <p style={{fontSize:16,fontWeight:400,color:"var(--color-ink-muted)",lineHeight:1.5,letterSpacing:"-0.01em",margin:0,fontFamily:"var(--font-body)"}}>{SUBTITLES[active]}</p>

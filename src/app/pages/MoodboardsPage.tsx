@@ -2,12 +2,13 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
-import { api, type Board, type Workspace } from '../lib/api';
+import { api, type Board, type Project } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
-import { WorkspacesPanel } from '../components/WorkspacesPanel';
-import { WorkspaceSettingsModal } from '../components/WorkspaceSettingsModal';
+import { useWorkspace } from '../context/WorkspaceContext';
+import { workspaceContext } from '../lib/workspaceSearch';
 import { ShareBoardDialog } from '../components/ShareBoardDialog';
 import { AssetLibrary } from '../components/AssetLibrary';
+import { BoardCard, StarIcon, timeAgo } from '../components/BoardCard';
 import { useModalA11y } from '../components/hooks/useModalA11y';
 
 // Cache keys are workspace-qualified (workspace/organization layer):
@@ -84,176 +85,6 @@ function sortBoards(boards: Board[], sort: SortKey): Board[] {
   }
 }
 
-function timeAgo(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diffMs / 60000);
-  if (min < 1) return 'just now';
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 7) return `${day}d ago`;
-  const wk = Math.floor(day / 7);
-  if (wk < 5) return `${wk}w ago`;
-  const mo = Math.floor(day / 30);
-  if (mo < 12) return `${mo}mo ago`;
-  return `${Math.floor(day / 365)}y ago`;
-}
-
-function StarIcon({ filled }: { filled: boolean }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={filled ? 0 : 2}>
-      <path d="M12 2.5l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9-6.3 3.9 1.7-7-5.4-4.7 7.1-.6z" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerRoll, favoriteBusy }: {
-  board: Board;
-  onClick: () => void;
-  onMenuOpen?: (e: React.MouseEvent, board: Board) => void;
-  onToggleFavorite?: (board: Board) => void;
-  ownerRoll?: string | null;
-  favoriteBusy?: boolean;
-}) {
-  const isOwner = ownerRoll === board.owner_roll;
-
-  return (
-    <div
-      onClick={onClick}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
-      role="button"
-      tabIndex={0}
-      aria-label={`Open board ${board.name}`}
-      className="board-card"
-      style={{
-        border: '1px solid var(--color-border)',
-        borderRadius: 'var(--radius-lg)',
-        overflow: 'hidden',
-        background: 'var(--color-surface-1)',
-        cursor: 'pointer',
-        transition: 'background 0.15s, transform 0.15s, box-shadow 0.15s',
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.background = 'var(--color-surface-2)';
-        e.currentTarget.style.transform = 'translateY(-2px)';
-        e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.12)';
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.background = 'var(--color-surface-1)';
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = 'none';
-      }}
-    >
-      {/* Cover placeholder — real thumbnails are a follow-up phase */}
-      <div style={{
-        width: '100%',
-        aspectRatio: '16 / 9',
-        position: 'relative',
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gridTemplateRows: '1fr 1fr',
-        gap: 1,
-        overflow: 'hidden',
-        background: 'var(--color-surface-2)',
-      }}>
-        {[0.04, 0.06, 0.08, 0.10].map((alpha, i) => (
-          <div key={i} style={{ background: `rgba(233,30,140,${alpha})` }} />
-        ))}
-
-        {onToggleFavorite && (
-          <button
-            onClick={e => { e.stopPropagation(); onToggleFavorite(board); }}
-            disabled={favoriteBusy}
-            title={board.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
-            aria-label={board.is_favorite ? `Remove ${board.name} from favorites` : `Add ${board.name} to favorites`}
-            aria-pressed={board.is_favorite}
-            className="board-card-star"
-            data-favorite={board.is_favorite}
-            style={{
-              position: 'absolute',
-              top: 8, left: 8,
-              width: 28, height: 28,
-              borderRadius: '50%',
-              background: 'rgba(0,0,0,0.5)',
-              backdropFilter: 'blur(4px)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              color: board.is_favorite ? '#ffd54a' : '#fff',
-              cursor: favoriteBusy ? 'default' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 2,
-              opacity: board.is_favorite ? 1 : undefined,
-            }}
-          >
-            <StarIcon filled={board.is_favorite} />
-          </button>
-        )}
-
-        {onMenuOpen && isOwner && (
-          <button
-            onClick={e => { e.stopPropagation(); onMenuOpen(e, board); }}
-            aria-label={`More options for ${board.name}`}
-            aria-haspopup="menu"
-            style={{
-              position: 'absolute',
-              top: 8, right: 8,
-              width: 28, height: 28,
-              borderRadius: '50%',
-              background: 'rgba(0,0,0,0.5)',
-              backdropFilter: 'blur(4px)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              color: '#fff',
-              fontSize: 16,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              lineHeight: 1,
-              zIndex: 2,
-            }}
-          >
-            ⋮
-          </button>
-        )}
-      </div>
-
-      {/* Card body */}
-      <div style={{ padding: '14px 16px 16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
-          <h3 style={{
-            margin: 0, fontSize: 15, fontWeight: 600,
-            color: 'var(--color-ink)', fontFamily: 'var(--font-body)', lineHeight: 1.3,
-            overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box',
-            WebkitLineClamp: 1, WebkitBoxOrient: 'vertical',
-          }}>
-            {board.name}
-          </h3>
-          <span style={{
-            fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-            padding: '2px 8px', borderRadius: 'var(--radius-pill)', flexShrink: 0, fontFamily: 'var(--font-body)',
-            background: board.visibility === 'shared' ? 'rgba(233,30,140,0.1)' : 'rgba(128,128,128,0.1)',
-            color: board.visibility === 'shared' ? 'var(--color-brand)' : 'var(--color-ink-muted)',
-          }}>
-            {board.visibility}
-          </span>
-        </div>
-        {board.owner_name && (
-          <p style={{ margin: '0 0 6px', fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-            by {board.owner_name}
-          </p>
-        )}
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-          {board.item_count} item{board.item_count !== 1 ? 's' : ''}
-          {board.member_count > 0 ? ` · ${board.member_count + 1} members` : ''}
-          {' · '}edited {timeAgo(board.updated_at)}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function SkeletonCard() {
   return (
     <div style={{
@@ -277,16 +108,16 @@ const CARD_GRID_STYLE: React.CSSProperties = {
 export default function MoodboardsPage() {
   const navigate = useNavigate();
   const { studentSession, openRollModal } = useStudent();
+  // Workspace identity/switching (activeWorkspaceId, the workspaces list,
+  // switching) now lives in WorkspaceContext (V2.0 Phase 1/4), shared with
+  // the shell's WorkspaceSwitcher — this page no longer owns its own copy.
+  // null = "All workspaces" — the exact pre-existing unscoped-across-MY-
+  // workspaces behavior (see backend/src/routes/boards.ts's own comment,
+  // tightened in Phase 0 to never fall back to a global, cross-tenant
+  // result), still the default every session starts at.
+  const { activeWorkspaceId, workspaces, personalWorkspace } = useWorkspace();
   const [tab, setTab] = useState<Tab>('mine');
-  // null = "All workspaces" — the exact pre-existing unscoped behavior,
-  // and the default every session starts at, so a user who never opens
-  // the switcher sees no change at all. Set to a specific workspace id
-  // to narrow every list below to just that workspace.
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [showWorkspacesPanel, setShowWorkspacesPanel] = useState(false);
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
-  const [settingsWorkspaceId, setSettingsWorkspaceId] = useState<string | null>(null);
   const [myBoards, setMyBoards] = useState<Board[]>([]);
   const [sharedBoards, setSharedBoards] = useState<Board[]>([]);
   const [archivedBoards, setArchivedBoards] = useState<Board[]>([]);
@@ -295,7 +126,15 @@ export default function MoodboardsPage() {
   const [archivedLoading, setArchivedLoading] = useState(false);
   const [archivedLoaded, setArchivedLoaded] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ name: '', description: '', visibility: 'private' as 'private' | 'shared' });
+  const [form, setForm] = useState({ name: '', description: '', visibility: 'private' as 'private' | 'shared', projectId: '' as string });
+  // Projects for the active workspace — fetched only when a concrete
+  // workspace is selected (projects have no cross-workspace view, same
+  // constraint ProjectsPage/AssetsPage already have) so the create-board
+  // form can offer "put this board in a project" without turning this
+  // page into project management (V2.2 Phase 7 — kept deliberately
+  // lightweight: a picker in the create form + a label on cards, nothing
+  // more).
+  const [projectOptions, setProjectOptions] = useState<Project[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const [menuBoard, setMenuBoard] = useState<Board | null>(null);
@@ -317,21 +156,11 @@ export default function MoodboardsPage() {
   // modals (Dashboard Polish phase) — same hook ShareBoardDialog already
   // uses, applied here since these three (create/delete/rename) are
   // simple enough to stay inline rather than becoming shared components.
-  const createDialogRef = useModalA11y(showCreate, () => setShowCreate(false));
+  // initialFocus, not autoFocus on the field: autoFocus runs before the hook
+  // records the opener, so focus could not return to it on close.
+  const createDialogRef = useModalA11y(showCreate, () => setShowCreate(false), { initialFocus: () => document.getElementById('new-board-name') });
   const deleteDialogRef = useModalA11y(!!confirmDeleteBoard, () => setConfirmDeleteBoard(null));
-  const renameDialogRef = useModalA11y(!!renameBoard, () => setRenameBoard(null));
-
-  // Workspace list — fetched once per session (not workspace-scoped
-  // itself, obviously), independent of the board-list effects below. Also
-  // lazily auto-provisions the caller's personal workspace server-side
-  // (see routes/workspaces.ts's GET /), so this always resolves to at
-  // least one entry for a signed-in student.
-  useEffect(() => {
-    if (!studentSession?.rollNumber) { setWorkspaces([]); return; }
-    api.workspaces.list(studentSession.rollNumber)
-      .then(setWorkspaces)
-      .catch(() => {});
-  }, [studentSession?.rollNumber]);
+  const renameDialogRef = useModalA11y(!!renameBoard, () => setRenameBoard(null), { initialFocus: () => renameDialogRef.current?.querySelector<HTMLElement>('input') ?? null });
 
   useEffect(() => {
     const cacheKey = CACHE_KEY_SHARED(activeWorkspaceId);
@@ -372,12 +201,36 @@ export default function MoodboardsPage() {
       .finally(() => setMyLoading(false));
   }, [studentSession?.rollNumber, activeWorkspaceId]);
 
-  // Archived boards are fetched lazily — only once the user actually opens
-  // that tab — since most sessions never look at it. archivedLoaded is
-  // reset whenever activeWorkspaceId changes (see the switcher's onClick
-  // below) so switching workspaces while already on the Archived tab
-  // triggers a fresh scoped fetch instead of reusing a different
+  // activeWorkspaceId now changes from OUTSIDE this component (the
+  // shell's WorkspaceSwitcher, via WorkspaceContext) rather than a local
+  // handler — this effect is what used to be handleWorkspaceSwitch's
+  // side-effect, now reacting to the context value instead of being
+  // called directly from a switcher onClick in this file. Resets
+  // archivedLoaded so the Archived tab's lazy-load-once effect below
+  // re-fetches for the new workspace instead of reusing a different
   // workspace's already-loaded list.
+  useEffect(() => {
+    setArchivedLoaded(false);
+  }, [activeWorkspaceId]);
+
+  // Project options for the create-board form's picker — only fetchable
+  // for a concrete workspace (activeWorkspaceId === null, "All
+  // Workspaces", has no single project list to offer; falls back to the
+  // personal workspace, same pattern the Assets button already uses).
+  // Not fetched at all until the create modal is actually opened, so
+  // visiting Moodboards never triggers a projects request a user might
+  // never need.
+  useEffect(() => {
+    if (!showCreate || !studentSession?.rollNumber) return;
+    const workspaceId = activeWorkspaceId ?? personalWorkspace?.id;
+    if (!workspaceId) { setProjectOptions([]); return; }
+    api.projects.list(studentSession.rollNumber, workspaceId)
+      .then(list => setProjectOptions(list.filter(p => !p.is_archived)))
+      .catch(() => setProjectOptions([]));
+  }, [showCreate, studentSession?.rollNumber, activeWorkspaceId, personalWorkspace?.id]);
+
+  // Archived boards are fetched lazily — only once the user actually opens
+  // that tab — since most sessions never look at it.
   useEffect(() => {
     if (tab !== 'archived' || !studentSession?.rollNumber || archivedLoaded) return;
     const cacheKey = CACHE_KEY_ARCHIVED(activeWorkspaceId);
@@ -417,15 +270,6 @@ export default function MoodboardsPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [menuBoard, search]);
 
-  // Switching workspaces resets archivedLoaded so the Archived tab's
-  // lazy-load-once effect (see above) re-fetches for the new workspace
-  // instead of silently keeping whatever was already loaded for the
-  // previous one.
-  const handleWorkspaceSwitch = (workspaceId: string | null) => {
-    setActiveWorkspaceId(workspaceId);
-    setArchivedLoaded(false);
-  };
-
   const handleCreate = async () => {
     if (!studentSession?.rollNumber || !form.name.trim()) return;
     setCreating(true);
@@ -439,12 +283,16 @@ export default function MoodboardsPage() {
         // otherwise falls back server-side to the caller's personal
         // workspace (see api.ts's own comment on this being optional).
         workspace_id: activeWorkspaceId ?? undefined,
+        // V2.2 Projects layer — optional, ungrouped (undefined) by
+        // default, exactly the pre-Phase-7 behavior when no project is
+        // picked in the form below.
+        project_id: form.projectId || undefined,
       });
       setMyBoards(prev => [board, ...prev]);
       if (form.visibility === 'shared') setSharedBoards(prev => [board, ...prev]);
       clearBoardsCache();
       setShowCreate(false);
-      setForm({ name: '', description: '', visibility: 'private' });
+      setForm({ name: '', description: '', visibility: 'private', projectId: '' });
       toast.success('Board created');
       navigate(`/moodboards/${board.id}`);
     } catch {
@@ -578,16 +426,15 @@ export default function MoodboardsPage() {
 
   // The Assets button needs a concrete workspace even in "All Workspaces"
   // view (activeWorkspaceId === null) — assets are always workspace-scoped,
-  // there's no cross-workspace asset list. Falls back to the first
-  // workspace in the list (in practice always the caller's personal one,
-  // auto-provisioned server-side — see ensurePersonalWorkspace) rather than
-  // hiding the button entirely, which is what it did before: a user with
-  // only their personal workspace (workspaces.length === 1, so the
-  // workspace-switcher pills above never render either) had NO way to ever
-  // set activeWorkspaceId away from null, making Assets permanently
-  // unreachable — the exact "Asset Library cannot be found in the UI" bug.
-  const assetsWorkspaceId = activeWorkspaceId ?? workspaces[0]?.id ?? null;
-  const assetsWorkspaceName = workspaces[0] ? (workspaces[0].is_personal ? 'Personal' : workspaces[0].name) : null;
+  // there's no cross-workspace asset list. Falls back to the caller's
+  // personal workspace (from WorkspaceContext, auto-provisioned server-side
+  // — see ensurePersonalWorkspace) rather than hiding the button entirely,
+  // which is what it did before this fallback existed: a user with only
+  // their personal workspace had NO way to ever set activeWorkspaceId away
+  // from null, making Assets permanently unreachable — the "Asset Library
+  // cannot be found in the UI" bug this fallback fixes.
+  const assetsWorkspaceId = activeWorkspaceId ?? personalWorkspace?.id ?? null;
+  const assetsWorkspaceName = personalWorkspace ? (personalWorkspace.is_personal ? 'Personal' : personalWorkspace.name) : null;
 
   const filteredSortedBoards = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -614,107 +461,41 @@ export default function MoodboardsPage() {
   const showRecentRail = tab === 'mine' && !search.trim() && recentBoards.length > 0;
 
   return (
-    <div className="page-container" style={{ paddingTop: 80, paddingBottom: 80, minHeight: '100vh' }}>
+    <div>
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 40 }}>
-        <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-muted)', letterSpacing: '-0.13px', fontFamily: 'var(--font-body)', marginBottom: 12 }}>
-          Creative Workspace
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 'var(--space-xl)' }}>
+        <p className="type-caption" style={{ marginBottom: 8 }}>
+          {workspaceContext(activeWorkspaceId ? workspaces.find(w => w.id === activeWorkspaceId) ?? null : null, { spansAllWorkspaces: true }).label}
         </p>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
-          <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(40px,6vw,85px)', fontWeight: 500, lineHeight: 0.95, letterSpacing: '-4.25px', color: 'var(--color-ink)' }}>
-            Mood<br /><span style={{ color: 'var(--color-ink-muted)' }}>boards</span>
-          </h1>
+          <h1 className="type-display-md" style={{ margin: 0 }}>Moodboards</h1>
           {studentSession ? (
-            <button
-              onClick={() => setShowCreate(true)}
-              style={{ padding: '10px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
-            >
+            <button onClick={() => setShowCreate(true)} className="btn-primary">
               + New Board
             </button>
           ) : (
-            <button
-              onClick={openRollModal}
-              style={{ padding: '10px 20px', background: 'var(--color-surface-1)', color: 'var(--color-ink)', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
-            >
+            <button onClick={openRollModal} className="btn-secondary">
               Sign in to create boards
             </button>
           )}
         </div>
       </motion.div>
 
-      {/* Workspace switcher — the pill row is only shown once there's more
-          than the personal workspace to switch between, so a user who has
-          never created/joined a real workspace sees no change to this
-          page at all. "All" (activeWorkspaceId = null) is always first
-          and is the default on load, preserving the exact pre-existing
-          unscoped behavior for every list below. The "Manage" affordance
-          is shown whenever signed in (even with just the personal
-          workspace) since it's also the discovery path for CREATING a
-          first real workspace. */}
-      {studentSession && (
+      {/* Workspace switching/management now lives in the shell's sidebar
+          (WorkspaceSwitcher.tsx, V2.0 Phase 2/4) via WorkspaceContext —
+          this page no longer renders its own switcher pill row or
+          WorkspacesPanel/WorkspaceSettingsModal. The Assets quick-action
+          stays here as a convenience for jumping into the library without
+          leaving the Moodboards list (AssetsPage.tsx, Phase 5, is the
+          first-class home for browsing/managing assets). */}
+      {studentSession && assetsWorkspaceId && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-          {workspaces.length > 1 && (
-            <>
-              <button
-                onClick={() => handleWorkspaceSwitch(null)}
-                style={{
-                  padding: '6px 14px', borderRadius: 'var(--radius-pill)',
-                  border: `1px solid ${activeWorkspaceId === null ? 'var(--color-brand)' : 'var(--color-border)'}`,
-                  background: activeWorkspaceId === null ? 'var(--color-brand)' : 'none',
-                  color: activeWorkspaceId === null ? '#fff' : 'var(--color-ink-muted)',
-                  fontSize: 13, fontWeight: activeWorkspaceId === null ? 600 : 400,
-                  fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-                }}
-              >
-                All Workspaces
-              </button>
-              {workspaces.map(ws => (
-                <button
-                  key={ws.id}
-                  onClick={() => handleWorkspaceSwitch(ws.id)}
-                  style={{
-                    padding: '6px 14px', borderRadius: 'var(--radius-pill)',
-                    border: `1px solid ${activeWorkspaceId === ws.id ? 'var(--color-brand)' : 'var(--color-border)'}`,
-                    background: activeWorkspaceId === ws.id ? 'var(--color-brand)' : 'none',
-                    color: activeWorkspaceId === ws.id ? '#fff' : 'var(--color-ink-muted)',
-                    fontSize: 13, fontWeight: activeWorkspaceId === ws.id ? 600 : 400,
-                    fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-                  }}
-                >
-                  {ws.is_personal ? 'Personal' : ws.name}
-                </button>
-              ))}
-            </>
-          )}
           <button
-            onClick={() => setShowWorkspacesPanel(true)}
-            style={{
-              padding: '6px 14px', borderRadius: 'var(--radius-pill)',
-              border: '1px solid var(--color-border)', background: 'none',
-              color: 'var(--color-ink-muted)', fontSize: 13,
-              fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}
+            onClick={() => setShowAssetLibrary(true)}
+            className="btn-secondary btn-sm touch-target"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-            Manage Workspaces
+            Assets
           </button>
-          {assetsWorkspaceId && (
-            <button
-              onClick={() => setShowAssetLibrary(true)}
-              style={{
-                padding: '6px 14px', borderRadius: 'var(--radius-pill)',
-                border: '1px solid var(--color-border)', background: 'none',
-                color: 'var(--color-ink-muted)', fontSize: 13,
-                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}
-            >
-              Assets
-            </button>
-          )}
         </div>
       )}
 
@@ -727,57 +508,15 @@ export default function MoodboardsPage() {
         />
       )}
 
-      <WorkspacesPanel
-        open={showWorkspacesPanel}
-        onClose={() => setShowWorkspacesPanel(false)}
-        workspaces={workspaces}
-        activeWorkspaceId={activeWorkspaceId}
-        roll={studentSession?.rollNumber ?? ''}
-        onSwitch={workspaceId => { handleWorkspaceSwitch(workspaceId); setShowWorkspacesPanel(false); }}
-        onOpenSettings={workspaceId => setSettingsWorkspaceId(workspaceId)}
-        onWorkspaceCreated={workspace => setWorkspaces(prev => [...prev, workspace])}
-      />
-
-      {settingsWorkspaceId && studentSession && (
-        <WorkspaceSettingsModal
-          workspaceId={settingsWorkspaceId}
-          roll={studentSession.rollNumber}
-          onClose={() => setSettingsWorkspaceId(null)}
-          onRenamed={(workspaceId, name) => setWorkspaces(prev => prev.map(w => w.id === workspaceId ? { ...w, name } : w))}
-          onDeleted={workspaceId => {
-            setWorkspaces(prev => prev.filter(w => w.id !== workspaceId));
-            if (activeWorkspaceId === workspaceId) handleWorkspaceSwitch(null);
-            setSettingsWorkspaceId(null);
-          }}
-          onLeft={workspaceId => {
-            setWorkspaces(prev => prev.filter(w => w.id !== workspaceId));
-            if (activeWorkspaceId === workspaceId) handleWorkspaceSwitch(null);
-            setSettingsWorkspaceId(null);
-          }}
-        />
-      )}
-
       {/* Tabs + search + sort */}
       <div className="moodboards-toolbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, borderBottom: '1px solid var(--color-border)', marginBottom: 32, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex' }}>
+        <div className="segmented" style={{ marginBottom: 10 }}>
           {([['mine', 'My Boards'], ['shared', 'Shared Boards'], ...(studentSession ? [['archived', 'Archived']] : [])] as [Tab, string][]).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setTab(key)}
               aria-pressed={tab === key}
-              style={{
-                padding: '10px 16px',
-                background: 'none',
-                border: 'none',
-                borderBottom: tab === key ? '2px solid var(--color-brand)' : '2px solid transparent',
-                marginBottom: -1,
-                color: tab === key ? 'var(--color-brand)' : 'var(--color-ink-muted)',
-                fontSize: 14,
-                fontWeight: tab === key ? 600 : 400,
-                fontFamily: 'var(--font-body)',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
+              className="segmented-item touch-target"
             >
               {label}
             </button>
@@ -785,9 +524,8 @@ export default function MoodboardsPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 10, flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', flex: '1 1 auto' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-              style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-ink-muted)', pointerEvents: 'none' }}>
+          <div className="search-field" style={{ flex: '1 1 auto' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <input
@@ -798,7 +536,7 @@ export default function MoodboardsPage() {
               aria-label="Search boards"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{ width: 200, paddingLeft: 30, fontSize: 13 }}
+              style={{ width: 200 }}
             />
             {search && (
               <button
@@ -835,12 +573,12 @@ export default function MoodboardsPage() {
       {/* Content */}
       {tab === 'mine' && !studentSession ? (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', padding: '80px 0' }}>
-          <p style={{ color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', fontSize: 15, marginBottom: 20 }}>
+          <p className="type-body" style={{ color: 'var(--color-ink-muted)', marginBottom: 20 }}>
             Link your roll number to create and manage your boards.
           </p>
           <button
             onClick={openRollModal}
-            style={{ padding: '12px 24px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+            className="btn-primary"
           >
             Enter Roll Number
           </button>
@@ -849,8 +587,8 @@ export default function MoodboardsPage() {
         <>
           {/* Favorites rail */}
           {favoriteBoards.length > 0 && !search.trim() && (
-            <div style={{ marginBottom: 36 }}>
-              <h2 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ marginBottom: 'var(--space-xxl)' }}>
+              <h2 className="type-headline" style={{ margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ color: '#ffd54a' }}><StarIcon filled /></span> Favorites
               </h2>
               <div className="moodboards-card-grid" style={CARD_GRID_STYLE}>
@@ -871,8 +609,8 @@ export default function MoodboardsPage() {
 
           {/* Recent rail */}
           {showRecentRail && (
-            <div style={{ marginBottom: 36 }}>
-              <h2 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+            <div style={{ marginBottom: 'var(--space-xxl)' }}>
+              <h2 className="type-headline" style={{ margin: '0 0 14px' }}>
                 Recent
               </h2>
               <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 4 }}>
@@ -893,7 +631,7 @@ export default function MoodboardsPage() {
           )}
 
           {(showRecentRail || (favoriteBoards.length > 0 && !search.trim())) && (
-            <h2 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+            <h2 className="type-headline" style={{ margin: '0 0 14px' }}>
               {tab === 'mine' ? 'All Boards' : tab === 'shared' ? 'Shared Boards' : 'Archived'}
             </h2>
           )}
@@ -904,7 +642,7 @@ export default function MoodboardsPage() {
             </div>
           ) : filteredSortedBoards.length === 0 ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', padding: '80px 0' }}>
-              <p style={{ color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', fontSize: 15, marginBottom: 20 }}>
+              <p className="type-body" style={{ color: 'var(--color-ink-muted)', marginBottom: 20 }}>
                 {search.trim()
                   ? `No boards match "${search.trim()}".`
                   : tab === 'mine'
@@ -916,7 +654,7 @@ export default function MoodboardsPage() {
               {tab === 'mine' && !search.trim() && (
                 <button
                   onClick={() => setShowCreate(true)}
-                  style={{ padding: '12px 24px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  className="btn-primary"
                 >
                   + New Board
                 </button>
@@ -960,9 +698,9 @@ export default function MoodboardsPage() {
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
+              style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', boxShadow: 'var(--shadow-level-2)', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.3px' }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 New Moodboard
               </h3>
 
@@ -971,59 +709,76 @@ export default function MoodboardsPage() {
                 { label: 'Description (optional)', key: 'description', placeholder: 'What is this board about?' },
               ] as const).map(({ label, key, placeholder }) => (
                 <div key={key}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                  <label htmlFor={`new-board-${key}`} className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                     {label}
                   </label>
                   <input
+                    id={`new-board-${key}`}
                     className="input-base"
                     type="text"
                     placeholder={placeholder}
                     value={form[key]}
                     onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
                     style={{ width: '100%', boxSizing: 'border-box' }}
-                    autoFocus={key === 'name'}
                   />
                 </div>
               ))}
 
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                <p className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                   Visibility
-                </label>
-                <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                </p>
+                <div className="segmented is-block" role="group" aria-label="Visibility">
                   {(['private', 'shared'] as const).map(v => (
                     <button
                       key={v}
+                      type="button"
                       onClick={() => setForm(prev => ({ ...prev, visibility: v }))}
-                      style={{
-                        flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer',
-                        background: form.visibility === v ? 'rgba(233,30,140,0.1)' : 'none',
-                        color: form.visibility === v ? 'var(--color-brand)' : 'var(--color-ink-muted)',
-                        fontSize: 13, fontWeight: form.visibility === v ? 600 : 400, fontFamily: 'var(--font-body)',
-                      }}
+                      aria-pressed={form.visibility === v}
+                      className="segmented-item"
                     >
                       {v === 'private' ? 'Private' : 'Shared'}
                     </button>
                   ))}
                 </div>
-                <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                <p className="type-micro" style={{ margin: '6px 0 0' }}>
                   {form.visibility === 'private' ? 'Only you and collaborators can see this board.' : 'Anyone with the link can view this board.'}
                 </p>
               </div>
 
-              {error && <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>{error}</p>}
+              {projectOptions.length > 0 && (
+                <div>
+                  <label htmlFor="new-board-project" className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
+                    Project (optional)
+                  </label>
+                  <select
+                    id="new-board-project"
+                    className="input-base"
+                    value={form.projectId}
+                    onChange={e => setForm(prev => ({ ...prev, projectId: e.target.value }))}
+                    style={{ width: '100%', boxSizing: 'border-box' }}
+                  >
+                    <option value="">No project — ungrouped</option>
+                    {projectOptions.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {error && <p className="type-micro" style={{ margin: 0, color: 'var(--color-error)' }}>{error}</p>}
 
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={handleCreate}
                   disabled={creating || !form.name.trim()}
-                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: creating || !form.name.trim() ? 'not-allowed' : 'pointer', opacity: creating || !form.name.trim() ? 0.6 : 1 }}
+                  className="btn-primary" style={{ flex: 1 }}
                 >
                   {creating ? 'Creating...' : 'Create Board'}
                 </button>
                 <button
                   onClick={() => setShowCreate(false)}
-                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  className="btn-translucent" style={{ flex: 1 }}
                 >
                   Cancel
                 </button>
@@ -1123,25 +878,25 @@ export default function MoodboardsPage() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
+              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', boxShadow: 'var(--shadow-level-2)', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 Delete "{confirmDeleteBoard.name}"?
               </h3>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', lineHeight: 1.5 }}>
+              <p className="type-body" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>
                 This will permanently delete the board and all its contents. This cannot be undone.
               </p>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={() => handleCardDelete(confirmDeleteBoard)}
                   disabled={deleting}
-                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-error)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: deleting ? 'not-allowed' : 'pointer' }}
+                  className="btn-primary btn-danger" style={{ flex: 1 }}
                 >
                   {deleting ? 'Deleting...' : 'Delete'}
                 </button>
                 <button
                   onClick={() => setConfirmDeleteBoard(null)}
-                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  className="btn-translucent" style={{ flex: 1 }}
                 >
                   Cancel
                 </button>
@@ -1169,9 +924,9 @@ export default function MoodboardsPage() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
+              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', boxShadow: 'var(--shadow-level-2)', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 Rename Board
               </h3>
               <input
@@ -1182,20 +937,19 @@ export default function MoodboardsPage() {
                 onChange={e => setRenameValue(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') handleRenameSubmit(); }}
                 style={{ width: '100%', boxSizing: 'border-box' }}
-                autoFocus
                 maxLength={100}
               />
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={handleRenameSubmit}
                   disabled={renaming || !renameValue.trim()}
-                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: renaming || !renameValue.trim() ? 'not-allowed' : 'pointer', opacity: renaming || !renameValue.trim() ? 0.6 : 1 }}
+                  className="btn-primary" style={{ flex: 1 }}
                 >
                   {renaming ? 'Saving...' : 'Save'}
                 </button>
                 <button
                   onClick={() => setRenameBoard(null)}
-                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  className="btn-translucent" style={{ flex: 1 }}
                 >
                   Cancel
                 </button>

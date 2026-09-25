@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import request from 'supertest';
+import { localRequest } from './localServer';
 import { createApp } from '../src/app';
 import { query } from '../src/db/client';
 import { signStudentToken } from '../src/middleware/studentAuth';
@@ -14,6 +14,8 @@ import { signStudentToken } from '../src/middleware/studentAuth';
 // ─────────────────────────────────────────────────────────────────────────
 
 const app = createApp();
+// One loopback (127.0.0.1) server for this file — see tests/localServer.ts.
+const request = localRequest(app);
 
 async function registerStudent(roll: string): Promise<void> {
   await query(

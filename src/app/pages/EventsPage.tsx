@@ -33,6 +33,25 @@ function CountUnit({ value, label }: { value: number; label: string }) {
   );
 }
 
+// Owns the 1s ticking state so only this subtree re-renders every second —
+// not the EventCard's `layout` motion.div, where each re-render re-snapshots
+// the layout and restarts an in-flight view-switch animation.
+function Countdown({ event }: { event: ReturnType<typeof useAppData>['events'][number] }) {
+  const countdown = useCountdown(event.date, event.time, event.startsAt);
+  if (countdown.expired) return null;
+  return (
+    <div className="flex gap-3 pt-1">
+      <CountUnit value={countdown.days} label="d" />
+      <span className="type-headline self-start mt-0.5" style={{ color: 'var(--color-surface-2)' }}>:</span>
+      <CountUnit value={countdown.hrs} label="h" />
+      <span className="type-headline self-start mt-0.5" style={{ color: 'var(--color-surface-2)' }}>:</span>
+      <CountUnit value={countdown.mins} label="m" />
+      <span className="type-headline self-start mt-0.5" style={{ color: 'var(--color-surface-2)' }}>:</span>
+      <CountUnit value={countdown.secs} label="s" />
+    </div>
+  );
+}
+
 function EventCard({ event, view, delay, onRSVP, rsvpPending }: {
   event: ReturnType<typeof useAppData>['events'][number];
   view: 'grid' | 'list';
@@ -41,17 +60,26 @@ function EventCard({ event, view, delay, onRSVP, rsvpPending }: {
   rsvpPending: boolean;
 }) {
   const status = getEventStatus(event);
-  const countdown = useCountdown(event.date, event.time, event.startsAt);
-
+  // Re-check every second, but only re-render when the status actually flips
+  // (upcoming → live → past); an unchanged value bails out of the update.
+  const [, setLiveStatus] = useState(status);
+  useEffect(() => {
+    const id = setInterval(() => setLiveStatus(getEventStatus(event)), 1000);
+    return () => clearInterval(id);
+  }, [event]);
 
   return (
+    // Position-only layout animation: animating size would scale-distort the
+    // card's text mid-switch. The entrance stagger `delay` is kept off the
+    // layout transition so all cards move together on a view switch. No CSS
+    // `transition-all` here — it would tween the transforms Motion writes.
     <motion.div
-      layout
+      layout="position"
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 16 }}
-      transition={{ delay }}
-      className={`card flex gap-5 transition-all ${view === 'list' ? 'flex-col md:flex-row p-5' : 'flex-col p-5'} ${status === 'past' ? 'opacity-50' : ''}`}
+      transition={{ delay, layout: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } }}
+      className={`card flex gap-5 ${view === 'list' ? 'flex-col md:flex-row p-5' : 'flex-col p-5'} ${status === 'past' ? 'opacity-50' : ''}`}
     >
       {/* Date badge */}
       <div
@@ -98,17 +126,7 @@ function EventCard({ event, view, delay, onRSVP, rsvpPending }: {
 
 
         {/* Countdown */}
-        {status === 'upcoming' && !countdown.expired && view === 'grid' && (
-          <div className="flex gap-3 pt-1">
-            <CountUnit value={countdown.days} label="d" />
-            <span className="type-headline self-start mt-0.5" style={{ color: 'var(--color-surface-2)' }}>:</span>
-            <CountUnit value={countdown.hrs} label="h" />
-            <span className="type-headline self-start mt-0.5" style={{ color: 'var(--color-surface-2)' }}>:</span>
-            <CountUnit value={countdown.mins} label="m" />
-            <span className="type-headline self-start mt-0.5" style={{ color: 'var(--color-surface-2)' }}>:</span>
-            <CountUnit value={countdown.secs} label="s" />
-          </div>
-        )}
+        {status === 'upcoming' && view === 'grid' && <Countdown event={event} />}
 
         {/* RSVP */}
         {(status !== 'past' || event.isRegistered) && (
@@ -240,7 +258,7 @@ export function EventsPage() {
           <div style={{ marginBottom: 40 }}>
             <h2 style={{
               fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
-              textTransform: 'uppercase', color: 'var(--color-brand)',
+              textTransform: 'uppercase', color: 'var(--color-brand-text)',
               fontFamily: 'var(--font-body)', marginBottom: 16,
             }}>
               Live & Upcoming Sessions
@@ -257,7 +275,7 @@ export function EventsPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       {s.status === 'live' && (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-brand)', fontFamily: 'var(--font-body)' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-brand-text)', fontFamily: 'var(--font-body)' }}>
                           ● LIVE
                         </span>
                       )}
@@ -345,7 +363,7 @@ export function EventsPage() {
         </h2>
 
         <AnimatePresence mode="popLayout">
-          <motion.div layout className={view === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-4'}>
+          <motion.div className={view === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-4'}>
             {filtered.map((evt, i) => (
               <EventCard key={evt.id} event={evt} view={view} delay={i * 0.06} rsvpPending={rsvpPendingId === evt.id} onRSVP={() => handleRSVP(evt.id)} />
             ))}

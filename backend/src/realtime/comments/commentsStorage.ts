@@ -27,7 +27,16 @@ export interface BoardComment {
   anchorShapeId: string | null;
   anchorX: number;
   anchorY: number;
+  // Which tldraw page this anchor lives on (V2.6 Phase B). NULL for
+  // comments created before pages were tracked — see schema.ts's own
+  // comment on why those are deliberately not backfilled, and
+  // CommentsOverlay for the "legacy comments show on every page"
+  // compatibility rule that NULL implies.
+  anchorPageId: string | null;
   content: string;
+  // Normalized roll numbers of users mentioned in this comment (V2.6
+  // Phase D). Always server-validated — see routes/comments.ts.
+  mentions: string[];
 }
 
 export interface CreateCommentInput {
@@ -39,7 +48,19 @@ export interface CreateCommentInput {
   anchorShapeId?: string | null;
   anchorX: number;
   anchorY: number;
+  anchorPageId?: string | null;
   content: string;
+}
+
+// Hoisted so rowToComment (declared above parseMentions) can use it.
+function parseMentionsInline(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 function rowToComment(row: Record<string, unknown>): BoardComment {
@@ -58,6 +79,8 @@ function rowToComment(row: Record<string, unknown>): BoardComment {
     anchorShapeId: (row.anchor_shape_id as string | null) ?? null,
     anchorX: Number(row.anchor_x),
     anchorY: Number(row.anchor_y),
+    anchorPageId: (row.anchor_page_id as string | null) ?? null,
+    mentions: parseMentionsInline((row.mentions as string | null) ?? null),
     content: row.content as string,
   };
 }
@@ -65,7 +88,7 @@ function rowToComment(row: Record<string, unknown>): BoardComment {
 const SELECT_COLUMNS = `
   id, board_id, parent_comment_id, author_roll, author_name,
   created_at, updated_at, resolved_at, resolved_by_roll, deleted_at,
-  anchor_type, anchor_shape_id, anchor_x, anchor_y, content
+  anchor_type, anchor_shape_id, anchor_x, anchor_y, anchor_page_id, content, mentions
 `;
 
 export async function createComment(input: CreateCommentInput): Promise<BoardComment> {
@@ -74,12 +97,13 @@ export async function createComment(input: CreateCommentInput): Promise<BoardCom
   const result = await pool.query(
     `INSERT INTO board_comments
        (id, board_id, parent_comment_id, author_roll, author_name,
-        created_at, updated_at, anchor_type, anchor_shape_id, anchor_x, anchor_y, content)
-     VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, $11)
+        created_at, updated_at, anchor_type, anchor_shape_id, anchor_x, anchor_y, anchor_page_id, content)
+     VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, $11, $12)
      RETURNING ${SELECT_COLUMNS}`,
     [
       id, input.boardId, input.parentCommentId ?? null, input.authorRoll, input.authorName,
-      now, input.anchorType, input.anchorShapeId ?? null, input.anchorX, input.anchorY, input.content,
+      now, input.anchorType, input.anchorShapeId ?? null, input.anchorX, input.anchorY,
+      input.anchorPageId ?? null, input.content,
     ]
   );
   return rowToComment(result.rows[0] as Record<string, unknown>);
@@ -184,4 +208,69 @@ export async function countComments(boardId: string): Promise<number> {
     [boardId]
   );
   return (result.rows[0] as { count: number }).count;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// READ STATE (V2.6 Phase E) — a per-(board, user) watermark, not a row per
+// comment. See schema.ts's board_comment_reads comment for why. Same
+// division of responsibility as the rest of this module: no authorization
+// here, callers (routes/comments.ts) enforce board access first.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Returns null when the user has never opened this board's comments —
+// which the caller renders as "everything is unread", the correct
+// first-visit behaviour.
+export async function getLastSeenAt(boardId: string, roll: string): Promise<string | null> {
+  const result = await pool.query(
+    'SELECT last_seen_at FROM board_comment_reads WHERE board_id = $1 AND roll_number = $2',
+    [boardId, roll]
+  );
+  return (result.rows[0] as { last_seen_at: string } | undefined)?.last_seen_at ?? null;
+}
+
+// Upsert. Deliberately monotonic — GREATEST() means a late-arriving or
+// out-of-order request can never move a user's watermark BACKWARDS and
+// resurrect threads they have already read.
+export async function markSeen(boardId: string, roll: string, seenAt: string): Promise<string> {
+  const result = await pool.query(
+    `INSERT INTO board_comment_reads (board_id, roll_number, last_seen_at)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (board_id, roll_number)
+     DO UPDATE SET last_seen_at = GREATEST(board_comment_reads.last_seen_at, EXCLUDED.last_seen_at)
+     RETURNING last_seen_at`,
+    [boardId, roll, seenAt]
+  );
+  return (result.rows[0] as { last_seen_at: string }).last_seen_at;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MENTIONS (V2.6 Phase D) — stored as a JSON array of roll numbers in the
+// long-reserved `mentions` TEXT column (see schema.ts, which set it aside
+// for exactly this and left it unused until now). No new column, no new
+// table.
+// ─────────────────────────────────────────────────────────────────────────
+
+export function parseMentions(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getCommentMentions(boardId: string, commentId: string): Promise<string[]> {
+  const result = await pool.query(
+    'SELECT mentions FROM board_comments WHERE id = $1 AND board_id = $2',
+    [commentId, boardId]
+  );
+  return parseMentions((result.rows[0] as { mentions: string | null } | undefined)?.mentions ?? null);
+}
+
+export async function setCommentMentions(boardId: string, commentId: string, rolls: string[]): Promise<void> {
+  await pool.query(
+    'UPDATE board_comments SET mentions = $1 WHERE id = $2 AND board_id = $3',
+    [JSON.stringify(rolls), commentId, boardId]
+  );
 }

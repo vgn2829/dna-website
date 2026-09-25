@@ -277,14 +277,18 @@ const ITEM_GRID_GAP = 40;
 // endpoint that predates this tldraw-based canvas — that table was the
 // content model before the canvas rewrite, and nothing here ever read it
 // back, so a saved item vanished with no error (see PR discussion / Phase 0
-// audit). This materializes any not-yet-placed board_items as real image
-// shapes on load. Shape/asset ids are deterministic (derived from the
-// item id), so a re-run on a later visit is a no-op for items already
-// placed — editor.getShape(id) is the dedup check. Once placed, the item
-// is a normal canvas shape: it moves/deletes/persists like anything else,
-// and board_items is never consulted again for it.
+// audit). This materializes never-placed board_items as real image shapes
+// on load. "Never placed" is the persisted lifecycle state, placed_at ===
+// null — the backend sets placed_at the first time a saved canvas contains
+// the item's shape and never clears it (lib/boardRows.ts), and the board
+// endpoints already return only pending rows. Shape existence is NOT the
+// lifecycle test (a shape the user deleted is gone too, and must not come
+// back); editor.getShape(id) stays only as a duplicate guard for a
+// placement that hasn't been saved yet. Shape/asset ids are deterministic
+// (derived from the item id). Once placed, the item is a normal canvas
+// shape: it moves/deletes/persists like anything else.
 export async function injectPendingBoardItems(editor: Editor, items: BoardItem[]): Promise<void> {
-  const toPlace = items.filter(item => !editor.getShape(createShapeId(item.id)));
+  const toPlace = items.filter(item => item.placed_at == null && !editor.getShape(createShapeId(item.id)));
   if (toPlace.length === 0) return;
 
   const viewport = editor.getViewportPageBounds();
@@ -353,12 +357,30 @@ export async function injectPendingBoardItems(editor: Editor, items: BoardItem[]
 // twice creates two independent shape instances, not a dedup no-op —
 // that's the correct behavior for a reusable library (Figma/Canva both
 // let you drop the same asset multiple times).
+//
+// ASSET PROVENANCE (V2.4 Phase 6, architecture-audit recommendation) —
+// sourceAssetId, when provided, is stamped onto the CREATED TLAsset
+// record's own `meta` field (meta: JsonObject, a first-class part of
+// every tldraw record's schema — see @tldraw/tlschema's TLBaseAsset,
+// confirmed by reading its .d.ts directly before writing this). This is
+// NOT a new persistence mechanism: meta rides inside the same
+// canvas_data snapshot every other shape/asset property already does,
+// serialized by tldraw's own getSnapshot/useSync exactly like `props` or
+// `x`/`y` — no new table, no new column, no asset-to-board join table,
+// no file duplication. It survives local editing, refresh, and realtime
+// sync for the same reason `props.src` does: tldraw treats `meta` as
+// ordinary record data, not something this app has to shepherd through
+// persistence by hand. Optional (defaults to undefined) so every
+// EXISTING call site (and every asset inserted before this phase) keeps
+// working with no meta at all — this is purely additive metadata on
+// newly-inserted assets, never a required/breaking parameter.
 export async function insertImageAsset(
   editor: Editor,
   url: string,
   name: string,
   knownWidth: number | null,
-  knownHeight: number | null
+  knownHeight: number | null,
+  sourceAssetId?: string
 ): Promise<void> {
   const { w, h } = knownWidth && knownHeight
     ? { w: knownWidth, h: knownHeight }
@@ -381,6 +403,7 @@ export async function insertImageAsset(
       id: assetId,
       type: 'image',
       props: { w, h, name, src: url, mimeType: null, isAnimated: false },
+      ...(sourceAssetId ? { meta: { sourceAssetId } } : {}),
     }),
   ]);
   editor.createShapes([

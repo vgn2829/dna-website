@@ -21,7 +21,7 @@ export function markGuestDismissed(): void {
 }
 
 export default function JoinPrompt() {
-  const { openRollModal } = useStudent();
+  const { openRollModal, isRollModalOpen } = useStudent();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -43,7 +43,9 @@ export default function JoinPrompt() {
 
   return (
     <AnimatePresence>
-      {visible && (
+      {/* Stand aside while the sign-in dialog is open (e.g. opened from the
+          navbar's Join) instead of stacking a second overlay above it. */}
+      {visible && !isRollModalOpen && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -84,7 +86,7 @@ export default function JoinPrompt() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <p style={{
                   margin: 0, fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
-                  textTransform: 'uppercase', color: 'var(--color-brand)', fontFamily: 'var(--font-body)',
+                  textTransform: 'uppercase', color: 'var(--color-brand-text)', fontFamily: 'var(--font-body)',
                 }}>
                   Design & Animation Club
                 </p>

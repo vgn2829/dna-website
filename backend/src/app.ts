@@ -14,6 +14,9 @@ import liveSessionsRouter from './routes/liveSessions';
 import boardsRouter from './routes/boards';
 import workspacesRouter from './routes/workspaces';
 import assetsRouter from './routes/assets';
+import assetCollectionsRouter from './routes/assetCollections';
+import projectsRouter from './routes/projects';
+import templatesRouter from './routes/templates';
 import notificationsRouter from './routes/notifications';
 import settingsRouter from './routes/settings';
 import coordinatorsRouter from './routes/coordinators';
@@ -24,6 +27,7 @@ import { createCommentsRouter } from './routes/comments';
 import type { VersionHistoryService } from './realtime/history/versionHistoryService';
 import type { RestoreService } from './realtime/history/restoreService';
 import type { CommentBroadcaster } from './realtime/comments/commentBroadcaster';
+import { DERIVED_ROOT, DERIVATIVE_CACHE_CONTROL } from './storage/derivatives';
 
 // Generic over SessionMeta so this accepts whatever concrete
 // RoomManager<SessionMeta>-backed services server.ts actually constructed
@@ -70,15 +74,25 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    // Access-Control-Max-Age on preflight responses: lets the browser reuse
+    // a granted preflight for 10 minutes instead of re-sending OPTIONS
+    // before every authorized request (without it Chrome caches for ~5s).
+    // Conservative on purpose — a CORS config change still takes effect
+    // within 10 minutes. Affects preflight caching only, not what's allowed.
+    maxAge: 600,
   }));
 
   // Serve uploaded files for local dev storage.
   // Content-Disposition: attachment forces a download so uploaded PDFs / HTML
   // cannot execute script in this origin.
   app.use('/uploads',
-    (_req, res, next) => {
+    (req, res, next) => {
       res.setHeader('Content-Disposition', 'attachment');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      // Image derivatives never change under a given key (storage/
+      // derivatives.ts), so they cache for a year. express.static keeps a
+      // Cache-Control that is already set; originals are untouched.
+      if (req.path.startsWith(`/${DERIVED_ROOT}/`)) res.setHeader('Cache-Control', DERIVATIVE_CACHE_CONTROL);
       next();
     },
     express.static(path.join(__dirname, '../uploads'))
@@ -132,6 +146,9 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
   app.use('/api/boards',        boardsRouter);
   app.use('/api/workspaces',    workspacesRouter);
   app.use('/api/assets',        assetsRouter);
+  app.use('/api/asset-collections', assetCollectionsRouter);
+  app.use('/api/projects',      projectsRouter);
+  app.use('/api/templates',     templatesRouter);
   app.use('/api/notifications', notificationsRouter);
   if (realtime) {
     app.use('/api/boards', createVersionsRouter(realtime));

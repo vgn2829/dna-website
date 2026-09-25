@@ -107,6 +107,9 @@ export interface BoardItem {
   added_by_roll: string;
   added_by_name: string | null;
   created_at: string;
+  // Set once the item has been placed on the saved canvas; the board
+  // endpoints only return rows where this is still null (pending).
+  placed_at?: string | null;
 }
 
 export interface Board {
@@ -118,7 +121,16 @@ export interface Board {
   visibility: 'private' | 'shared';
   room_id: string | null;
   edit_mode: 'members_only' | 'anyone';
+  // Visible canvas items (+ not-yet-placed gallery items) — see
+  // backend lib/boardRows.ts BOARD_ITEM_COUNT_SQL.
   item_count: number;
+  // Card preview primitives derived server-side from the persisted canvas
+  // (backend lib/canvasSummary.ts); null for an empty board. Optional:
+  // not every endpoint returning a Board includes it.
+  canvas_preview?: CanvasPreview | null;
+  // Board LIST responses only (read-time, never stored): original preview
+  // image src → its ready t512 thumbnail URL. Absent src = use the original.
+  preview_thumbnails?: Record<string, string>;
   member_count: number;
   created_at: string;
   updated_at: string;
@@ -127,6 +139,17 @@ export interface Board {
   thumbnail_url: string | null;
   realtime_enabled: boolean;
   workspace_id: string;
+  // V2.2 Projects layer — null means "ungrouped, workspace-level board",
+  // a permanent valid state, not a migration placeholder. Every V1/V2.0
+  // board stays null unless explicitly moved into a project.
+  project_id: string | null;
+  // Display-only, joined server-side (GET /api/boards only, for the
+  // MoodboardsPage card grid) — not present on every board response
+  // (e.g. GET /api/boards/:id detail doesn't join it, since BoardPage's
+  // canvas UI has no project-association display today); optional so
+  // TypeScript reflects that honestly rather than claiming it's always
+  // populated.
+  project_name?: string | null;
 }
 
 export interface BoardDetail extends Board {
@@ -160,22 +183,98 @@ export interface WorkspaceDetail extends Workspace {
   members: WorkspaceMember[];
 }
 
+// Projects (V2.2) — mirrors backend/src/routes/projects.ts. A pure
+// organizational grouping between a workspace and its boards; no
+// project-level role — access is entirely derived from the caller's
+// workspace_members row (see api.workspaces above), never stored here.
+export interface Project {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  owner_roll: string;
+  owner_name: string | null;
+  created_at: string;
+  is_archived: boolean;
+  board_count: number;
+}
+
+// Templates (V2.3) — mirrors backend/src/routes/templates.ts's
+// toPublicTemplate(). No canvas_data here (never sent to the list/detail
+// response — only POST /:id/use reads it, server-side); no template-level
+// role — access is entirely derived from workspace_members, same as
+// Project above. source_board_id is provenance only (the board a
+// template was originally saved from), never a live dependency — it may
+// be null if that board was later deleted.
+export interface Template {
+  id: string;
+  workspace_id: string;
+  source_board_id: string | null;
+  name: string;
+  description: string | null;
+  thumbnail_url: string | null;
+  owner_roll: string;
+  owner_name: string | null;
+  created_at: string;
+  is_archived: boolean;
+}
+
 // Mirrors backend/src/routes/assets.ts's toPublicAsset() — note there is
 // no storage_key here (an internal StorageProvider path, never sent to
 // the frontend); `url` is the derived public URL the backend already
 // resolved via getStorage().getPublicUrl().
+// Mirrors backend/src/lib/canvasSummary.ts's CanvasPreview.
+export interface CanvasPreviewItem {
+  k: 'geo' | 'frame' | 'image' | 'note' | 'text' | 'path' | 'box';
+  x: number; y: number; r: number; w: number; h: number;
+  c?: string; g?: string; f?: string; src?: string; t?: string; fs?: number;
+  p?: number[]; hl?: boolean; sw?: number;
+}
+export interface CanvasPreview {
+  v: 1;
+  x: number; y: number; w: number; h: number;
+  items: CanvasPreviewItem[];
+}
+
+// Mirrors backend/src/routes/assets.ts's toPublicAsset(). kind 'image' is
+// the only kind that can be inserted onto a board; 'file' is any other
+// library resource (PSD/AI/PDF/ZIP/...), whose url is a download URL;
+// 'link' is an external http(s) URL (link_url) with no stored object
+// (url is null).
+export type AssetKind = 'image' | 'file' | 'link';
+
 export interface Asset {
   id: string;
   workspace_id: string;
   owner_roll: string;
   owner_name: string | null;
+  kind: AssetKind;
+  collection_id: string | null;
+  extension: string | null;
   filename: string;
-  mime_type: string;
-  size_bytes: number;
+  link_url: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
   width: number | null;
   height: number | null;
   created_at: string;
-  url: string;
+  url: string | null;
+  // Read-time t512 WebP derivative of an image asset, set only when one is
+  // ready (null otherwise). For card/preview rendering ONLY — `url` stays
+  // the original for opening, downloading and placing on a board.
+  thumb_url?: string | null;
+}
+
+// Mirrors backend/src/routes/assetCollections.ts.
+export interface AssetCollection {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  created_by_roll: string;
+  created_at: string;
+  updated_at: string;
+  asset_count: number;
 }
 
 // Mirrors backend/src/routes/notifications.ts's toPublicNotification().
@@ -185,7 +284,7 @@ export interface Asset {
 // whichever of these is present, never assumes all three.
 export type NotificationType =
   | 'board_shared' | 'workspace_added' | 'workspace_role_changed'
-  | 'comment_created' | 'comment_replied';
+  | 'comment_created' | 'comment_replied' | 'comment_mentioned';
 
 export interface Notification {
   id: string;
@@ -244,6 +343,10 @@ export interface BoardComment {
   anchorShapeId: string | null;
   anchorX: number;
   anchorY: number;
+  // Which tldraw page this anchor lives on (V2.6 Phase B). null for
+  // comments created before pages were tracked — those render on every
+  // page, preserving their pre-Phase-B behaviour. See CommentsOverlay.
+  anchorPageId: string | null;
   content: string;
 }
 
@@ -571,23 +674,26 @@ export const api = {
   },
   boards: {
     // workspaceId is optional and purely additive (workspace/organization
-    // layer): omitted, these three list calls keep their exact pre-
+    // layer). Omitted, getMyBoards/getArchived keep their exact pre-
     // existing unscoped meaning ("every board I own or am a member of /
-    // my own archived boards / every shared board app-wide, across ALL
-    // workspaces"). Passed, they narrow to that one workspace — see
-    // backend/src/routes/boards.ts's own comment on why GET / and
-    // GET /archived stay unscoped-by-default while GET /shared's
-    // unscoped path is a deprecated fallback (Commit 9 removes it once
-    // every caller here always sends workspace_id for /shared).
+    // my own archived boards, across ALL of MY workspaces") — always
+    // bounded by the caller's own ownership/membership, never global.
+    // getShared, omitted, is scoped the same way (every shared board
+    // across every workspace the caller is a MEMBER of) — see
+    // backend/src/routes/boards.ts's own comment: as of V2.0 Phase 0
+    // there is no unscoped-across-the-whole-app fallback for /shared
+    // anymore (that was a cross-tenant leak once multiple workspaces
+    // exist); passing workspaceId narrows to exactly that one workspace
+    // and 403s a signed-in caller who isn't a member of it.
     getMyBoards: (roll: string, workspaceId?: string) =>
       request<Board[]>('GET', `/boards${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, { roll }),
     getArchived: (roll: string, workspaceId?: string) =>
       request<Board[]>('GET', `/boards/archived${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, { roll }),
     getShared: (roll?: string, workspaceId?: string) =>
       request<Board[]>('GET', `/boards/shared${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, roll ? { roll } : {}),
-    create: (roll: string, data: { name: string; description?: string; visibility?: 'private' | 'shared'; workspace_id?: string }) =>
+    create: (roll: string, data: { name: string; description?: string; visibility?: 'private' | 'shared'; workspace_id?: string; project_id?: string }) =>
       request<Board>('POST', '/boards', { body: data, roll }),
-    update: (id: string, roll: string, data: { name?: string; description?: string; visibility?: 'private' | 'shared'; edit_mode?: 'members_only' | 'anyone'; is_archived?: boolean }) =>
+    update: (id: string, roll: string, data: { name?: string; description?: string; visibility?: 'private' | 'shared'; edit_mode?: 'members_only' | 'anyone'; is_archived?: boolean; project_id?: string | null }) =>
       request<Board>('PUT', `/boards/${id}`, { body: data, roll }),
     getBoard: (id: string, roll?: string) =>
       request<BoardDetail>('GET', `/boards/${id}`, { roll }),
@@ -695,8 +801,18 @@ export const api = {
       anchorShapeId?: string;
       anchorX?: number;
       anchorY?: number;
+      anchorPageId?: string;
     }) =>
       request<BoardComment>('POST', `/boards/${boardId}/comments`, { body: data, roll }),
+    // Persistent per-(board, user) unread watermark (V2.6 Phase E).
+    // lastSeenAt is null when this user has never opened the board's
+    // comments, which the UI renders as "everything unread".
+    getCommentReadState: (boardId: string, roll: string) =>
+      request<{ lastSeenAt: string | null }>('GET', `/boards/${boardId}/comments/read-state`, { roll }),
+    // The server stamps the time, so a client cannot mark itself read into
+    // the future and permanently suppress real activity.
+    markCommentsSeen: (boardId: string, roll: string) =>
+      request<{ lastSeenAt: string }>('POST', `/boards/${boardId}/comments/read-state`, { roll }),
     editComment: (boardId: string, roll: string, commentId: string, content: string) =>
       request<BoardComment>('PUT', `/boards/${boardId}/comments/${commentId}`, { body: { content }, roll }),
     deleteComment: (boardId: string, roll: string, commentId: string) =>
@@ -749,27 +865,92 @@ export const api = {
     setMemberRole: (id: string, roll: string, memberRoll: string, role: 'admin' | 'member') =>
       request<{ success: boolean; role: string }>('PUT', `/workspaces/${id}/members/${memberRoll}/role`, { body: { role }, roll }),
   },
+  // Projects (V2.2) — mirrors backend/src/routes/projects.ts. workspace_id
+  // is required on list (unlike boards.getMyBoards/getArchived, which
+  // default to "across all my workspaces" when omitted) — a project has
+  // no meaningful cross-workspace view, so this namespace never offers an
+  // unscoped call shape to begin with.
+  projects: {
+    list: (roll: string, workspaceId: string) =>
+      request<Project[]>('GET', `/projects?workspace_id=${encodeURIComponent(workspaceId)}`, { roll }),
+    create: (roll: string, data: { workspace_id: string; name: string; description?: string }) =>
+      request<Project>('POST', '/projects', { body: data, roll }),
+    get: (id: string, roll: string) =>
+      request<Project>('GET', `/projects/${id}`, { roll }),
+    getBoards: (id: string, roll: string) =>
+      request<Board[]>('GET', `/projects/${id}/boards`, { roll }),
+    update: (id: string, roll: string, data: { name?: string; description?: string | null; is_archived?: boolean }) =>
+      request<Project>('PATCH', `/projects/${id}`, { body: data, roll }),
+    delete: (id: string, roll: string) =>
+      request<{ success: boolean }>('DELETE', `/projects/${id}`, { roll }),
+  },
+  // Templates (V2.3) — mirrors backend/src/routes/templates.ts.
+  // workspace_id is required on list, same reasoning as api.projects.list
+  // above. create() takes source_board_id (never workspace_id — the
+  // backend always derives it from the board, ignoring anything else
+  // sent). use() creates a new, fully independent board from the
+  // template's snapshot; project_id is optional and must belong to the
+  // template's own workspace (enforced server-side).
+  templates: {
+    list: (roll: string, workspaceId: string) =>
+      request<Template[]>('GET', `/templates?workspace_id=${encodeURIComponent(workspaceId)}`, { roll }),
+    create: (roll: string, data: { name: string; description?: string; source_board_id: string }) =>
+      request<Template>('POST', '/templates', { body: data, roll }),
+    get: (id: string, roll: string) =>
+      request<Template>('GET', `/templates/${id}`, { roll }),
+    update: (id: string, roll: string, data: { name?: string; description?: string | null; is_archived?: boolean }) =>
+      request<Template>('PATCH', `/templates/${id}`, { body: data, roll }),
+    delete: (id: string, roll: string) =>
+      request<{ success: boolean }>('DELETE', `/templates/${id}`, { roll }),
+    use: (id: string, roll: string, data: { name?: string; project_id?: string }) =>
+      request<Board>('POST', `/templates/${id}/use`, { body: data, roll }),
+  },
   // Asset Manager (Phase B) — mirrors backend/src/routes/assets.ts. A
   // persistent, workspace-scoped file library, distinct from
   // boards.uploadCanvasFile (which stores objects the same way but keeps
   // no reusable/listable record — see that route's own comment).
   assets: {
-    upload: (workspaceId: string, file: File) => {
+    // opts.kind 'file' opts in to general (non-image) library files; an
+    // allowlisted image is always stored as an image regardless.
+    upload: (workspaceId: string, file: File, opts?: { kind?: 'file'; collectionId?: string | null }) => {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('workspace_id', workspaceId);
       formData.append('filename', file.name);
+      if (opts?.kind) formData.append('kind', opts.kind);
+      if (opts?.collectionId) formData.append('collection_id', opts.collectionId);
       return studentUploadRequest<Asset>('/assets', formData);
     },
-    list: (roll: string, workspaceId: string, cursor?: string) =>
-      request<{ assets: Asset[]; nextCursor: string | null }>(
-        'GET', `/assets?workspace_id=${encodeURIComponent(workspaceId)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
-        { roll }
-      ),
+    createLink: (roll: string, body: { workspace_id: string; name: string; url: string; collection_id?: string | null }) =>
+      request<Asset>('POST', '/assets/links', { roll, body }),
+    // collection_id: an id, or null to ungroup. filename: rename.
+    update: (roll: string, id: string, body: { filename?: string; collection_id?: string | null }) =>
+      request<Asset>('PATCH', `/assets/${id}`, { roll, body }),
+    // filters.collectionId: an id, or 'none' for ungrouped assets.
+    list: (roll: string, workspaceId: string, cursor?: string, filters?: { kind?: AssetKind; q?: string; collectionId?: string; limit?: number }) => {
+      const params = new URLSearchParams({ workspace_id: workspaceId });
+      if (cursor) params.set('cursor', cursor);
+      if (filters?.kind) params.set('kind', filters.kind);
+      if (filters?.collectionId) params.set('collection_id', filters.collectionId);
+      if (filters?.q?.trim()) params.set('q', filters.q.trim());
+      if (filters?.limit) params.set('limit', String(filters.limit));
+      return request<{ assets: Asset[]; nextCursor: string | null }>('GET', `/assets?${params}`, { roll });
+    },
     get: (roll: string, id: string) =>
       request<Asset>('GET', `/assets/${id}`, { roll }),
     delete: (roll: string, id: string) =>
       request<{ success: boolean; storageWarning?: string }>('DELETE', `/assets/${id}`, { roll }),
+  },
+  // Asset collections ("asset packs") — mirrors backend/src/routes/assetCollections.ts.
+  assetCollections: {
+    list: (roll: string, workspaceId: string) =>
+      request<{ collections: AssetCollection[] }>('GET', `/asset-collections?workspace_id=${encodeURIComponent(workspaceId)}`, { roll }),
+    create: (roll: string, body: { workspace_id: string; name: string; description?: string | null }) =>
+      request<AssetCollection>('POST', '/asset-collections', { roll, body }),
+    update: (roll: string, id: string, body: { name?: string; description?: string | null }) =>
+      request<AssetCollection>('PATCH', `/asset-collections/${id}`, { roll, body }),
+    delete: (roll: string, id: string) =>
+      request<{ success: boolean; ungroupedAssets: number }>('DELETE', `/asset-collections/${id}`, { roll }),
   },
   // Basic Notifications (Phase C) — mirrors backend/src/routes/notifications.ts.
   // No realtime channel: the panel refetches on open (see NotificationBell.tsx).

@@ -49,7 +49,7 @@ export interface UseBoardCommentsResult {
   loading: boolean;
   error: string | null;
   connected: boolean;
-  createThread: (content: string, anchor: { anchorType: 'canvas' | 'shape'; anchorShapeId?: string; anchorX: number; anchorY: number }) => Promise<BoardComment | null>;
+  createThread: (content: string, anchor: { anchorType: 'canvas' | 'shape'; anchorShapeId?: string; anchorX: number; anchorY: number; anchorPageId?: string }) => Promise<BoardComment | null>;
   reply: (content: string, parentCommentId: string) => Promise<BoardComment | null>;
   editComment: (commentId: string, content: string) => Promise<boolean>;
   deleteComment: (commentId: string) => Promise<boolean>;
@@ -176,7 +176,7 @@ export function useBoardComments({ boardId, roll, live, roomId }: UseBoardCommen
 
   const createThread = useCallback(async (
     content: string,
-    anchor: { anchorType: 'canvas' | 'shape'; anchorShapeId?: string; anchorX: number; anchorY: number }
+    anchor: { anchorType: 'canvas' | 'shape'; anchorShapeId?: string; anchorX: number; anchorY: number; anchorPageId?: string }
   ): Promise<BoardComment | null> => {
     if (!rollRef.current) return null;
     try {

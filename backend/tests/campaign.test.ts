@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import request from 'supertest';
+import { localRequest } from './localServer';
 import { createApp } from '../src/app';
 import { query } from '../src/db/client';
 
 const app = createApp();
+// One loopback (127.0.0.1) server for this file — see tests/localServer.ts.
+const request = localRequest(app);
 
 let adminToken: string;
 

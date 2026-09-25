@@ -260,4 +260,110 @@ describe('createRoomSocketGate', () => {
     expect(real.readyState).toBe(3);
     expect(gate.readyState).toBe(3);
   });
+
+  // ───────────────────────────────────────────────────────────────────
+  // LIVE RE-AUTHORIZATION (V2.5 Phase 3). `revalidateWrite` is the
+  // optional async confirmation that closes the stale-access window
+  // described in rooms.ts's WRITE_DECISION_TTL_MS comment. See
+  // tests/live-revocation.test.ts for the database-backed half; these
+  // cover the gate's own mechanics, including that ordering survives the
+  // async boundary.
+  // ───────────────────────────────────────────────────────────────────
+
+  it('drops a push when the live re-check denies it, even though the cached flag allows it', async () => {
+    const real = new FakeRealSocket();
+    const received: unknown[] = [];
+    const gate = createRoomSocketGate(real as any, {
+      canWriteCanvas: () => true,            // stale cached decision
+      revalidateWrite: async () => false,    // current truth: revoked
+    });
+    gate.addEventListener!('message', (e) => received.push(e));
+
+    real.emitMessage(pushMessage());
+    await vi.waitFor(() => expect(received).toHaveLength(0));
+    // Still empty after the chain has definitely drained.
+    await new Promise(r => setTimeout(r, 20));
+    expect(received).toHaveLength(0);
+  });
+
+  it('forwards a push when the live re-check confirms it', async () => {
+    const real = new FakeRealSocket();
+    const received: unknown[] = [];
+    const gate = createRoomSocketGate(real as any, {
+      canWriteCanvas: () => true,
+      revalidateWrite: async () => true,
+    });
+    gate.addEventListener!('message', (e) => received.push(e));
+
+    real.emitMessage(pushMessage());
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+  });
+
+  it('fails closed when the live re-check rejects', async () => {
+    const real = new FakeRealSocket();
+    const received: unknown[] = [];
+    const gate = createRoomSocketGate(real as any, {
+      canWriteCanvas: () => true,
+      revalidateWrite: async () => { throw new Error('db down'); },
+    });
+    gate.addEventListener!('message', (e) => received.push(e));
+
+    real.emitMessage(pushMessage());
+    await new Promise(r => setTimeout(r, 30));
+    // A transient failure must never be an implicit grant.
+    expect(received).toHaveLength(0);
+  });
+
+  it('never calls the live re-check when the cached decision already denies (no wasted query)', async () => {
+    const real = new FakeRealSocket();
+    const revalidate = vi.fn(async () => true);
+    const gate = createRoomSocketGate(real as any, {
+      canWriteCanvas: () => false,
+      revalidateWrite: revalidate,
+    });
+    gate.addEventListener!('message', () => {});
+
+    real.emitMessage(pushMessage());
+    await new Promise(r => setTimeout(r, 20));
+    expect(revalidate).not.toHaveBeenCalled();
+  });
+
+  it('preserves message order across an awaited re-check — a later ping cannot overtake a pending push', async () => {
+    const real = new FakeRealSocket();
+    const received: string[] = [];
+    let release: (v: boolean) => void = () => {};
+    const gate = createRoomSocketGate(real as any, {
+      canWriteCanvas: () => true,
+      revalidateWrite: () => new Promise<boolean>(r => { release = r; }),
+    });
+    gate.addEventListener!('message', (e: any) => {
+      received.push(JSON.parse(e.data).type);
+    });
+
+    real.emitMessage(pushMessage());   // blocks on the pending re-check
+    real.emitMessage(pingMessage());   // must NOT jump ahead
+    expect(received).toEqual([]);
+
+    release(true);
+    await vi.waitFor(() => expect(received).toHaveLength(2));
+    expect(received).toEqual(['push', 'ping']);
+  });
+
+  it('returns to synchronous delivery once the chain drains', async () => {
+    const real = new FakeRealSocket();
+    const received: unknown[] = [];
+    const gate = createRoomSocketGate(real as any, {
+      canWriteCanvas: () => true,
+      revalidateWrite: async () => true,
+    });
+    gate.addEventListener!('message', (e) => received.push(e));
+
+    real.emitMessage(pushMessage());
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+
+    // ping needs no re-check, so with an empty chain it is delivered
+    // synchronously — the hot path is not permanently deferred.
+    real.emitMessage(pingMessage());
+    expect(received).toHaveLength(2);
+  });
 });

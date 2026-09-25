@@ -1,10 +1,30 @@
 import { LocalStorageProvider } from './local';
 import { SupabaseStorageProvider } from './supabase';
 
+export interface StoredObject {
+  path: string;
+  size: number;
+}
+
 export interface StorageProvider {
-  upload(path: string, buffer: Buffer, mimeType: string): Promise<void>;
-  getPublicUrl(path: string): string;
+  // opts.cacheControl: max-age in seconds for providers that store it with
+  // the object (Supabase). The local provider serves /uploads through
+  // express.static, where app.ts sets headers instead. Only image
+  // derivatives (storage/derivatives.ts) pass it; originals never do.
+  upload(path: string, buffer: Buffer, mimeType: string, opts?: { cacheControl?: string }): Promise<void>;
+  // Read one object's bytes. Used by the derivative backfill to read an
+  // original (never to modify it).
+  download(path: string): Promise<Buffer>;
+  // opts.download: serve the object as an attachment (Content-Disposition)
+  // under the given filename rather than inline — used for non-image
+  // library files so an uploaded HTML/PDF/etc. can never render as a page
+  // on the storage origin.
+  getPublicUrl(path: string, opts?: { download?: string }): string;
   delete(path: string): Promise<void>;
+  // Read-only enumeration of every object whose path starts with `prefix`
+  // ('' = everything), recursively, sorted by path. Used by the storage
+  // inventory (storage/inventory.ts); never deletes.
+  list(prefix: string): Promise<StoredObject[]>;
 }
 
 let _provider: StorageProvider | null = null;

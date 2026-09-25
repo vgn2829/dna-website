@@ -5,9 +5,23 @@
   --color-ink:             #ffffff;
   --color-ink-muted:       #999999;
   --color-accent-blue:     #0099ff;
+  /* Semantic colors have two roles that no single value can serve in both
+     themes (WCAG AA 4.5:1): a FILL behind white text, and TEXT/icons placed
+     directly on theme surfaces. Each keeps its existing name for its
+     dominant role and gets an explicit variant for the other:
+       --color-brand          fill / border / accent (white text on it)
+       --color-brand-text     brand-colored text and icons on surfaces
+       --color-error          error text on surfaces
+       --color-error-fill     filled destructive controls (white text)
+       --color-success        success text / status indicators
+       --color-success-fill   filled success controls (white text)
+     Text values differ per theme; fills are shared. */
   --color-success:         #22c55e;
-  --color-brand:           #E91E8C;
-  --color-error:           #ef4444;
+  --color-success-fill:    #15803d;
+  --color-brand:           #D81B7F;
+  --color-brand-text:      #F25CA8;
+  --color-error:           #f87171;
+  --color-error-fill:      #dc2626;
 
   /* ── Surface / Canvas ── */
   --color-canvas:          #111110;
@@ -57,7 +71,11 @@
   --shadow-level-1: 0 1px 3px rgba(0,0,0,0.3);
   --shadow-level-2: 0 0.5px 0 0 rgba(255,255,255,0.10) inset,
                     0 10px 30px rgba(0,0,0,0.35);
-  --shadow-focus:   0 0 0 1px rgba(0,153,255,0.50);
+  /* Keyboard focus: a 2px canvas-colored gap, then a 2px solid ring. The
+     gap keeps the ring from being judged against a brand-filled control;
+     box-shadow, so no layout shift and existing border-radius is followed.
+     var(--color-canvas) resolves per theme (data-theme is on <html>). */
+  --shadow-focus:   0 0 0 2px var(--color-canvas), 0 0 0 4px #0080d6;
 
   /* ── Font ── */
   --font-display:  'Mona Sans', 'Inter', system-ui, sans-serif;
@@ -104,9 +122,12 @@
   --nav-bg:     rgba(255, 255, 255, 0.72);
   --nav-border: rgba(0, 0, 0, 0.08);
   --nav-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.04);
-  --color-brand:           #E91E8C;
-  --color-error:           #ef4444;
-  --color-success:         #22c55e;
+  --color-brand:           #D81B7F;
+  --color-brand-text:      #BB1758;
+  --color-error:           #b91c1c;
+  --color-error-fill:      #dc2626;
+  --color-success:         #166534;
+  --color-success-fill:    #15803d;
   --shadow-level-1: 0 1px 3px rgba(0,0,0,0.10);
   --shadow-level-2: 0 0.5px 0 0 rgba(0,0,0,0.06) inset,
                     0 10px 30px rgba(0,0,0,0.12);
@@ -191,13 +212,18 @@
 
 /* ── Typography Utilities ───────────────────────────────────────────────────── */
 @layer utilities {
-  /* Display scale — Mona Sans (GT Walsheim substitute), weight 500 */
+  /* Display scale — Mona Sans (GT Walsheim substitute), weight 500.
+     Tracking is a fixed PERCENTAGE of the size (em), per the spec: "reduce
+     the SIZE if needed, but keep the percentage". At the max sizes these
+     equal the spec's -5.5 / -4.25 / -3.1 / -1.0px exactly; a fixed px value
+     here doubled the compression at the clamp minimums (-10% at 52/40/30px
+     on mobile), running words together ("Designand"). */
   .type-display-xxl {
     font-family: var(--font-display);
     font-size: clamp(52px, 8vw, 110px);
     font-weight: 500;
     line-height: 0.85;
-    letter-spacing: -5.5px;
+    letter-spacing: -0.05em;
     color: var(--color-ink);
   }
   .type-display-xl {
@@ -205,7 +231,7 @@
     font-size: clamp(40px, 6vw, 85px);
     font-weight: 500;
     line-height: 0.95;
-    letter-spacing: -4.25px;
+    letter-spacing: -0.05em;
     color: var(--color-ink);
   }
   .type-display-lg {
@@ -213,7 +239,7 @@
     font-size: clamp(30px, 4.5vw, 62px);
     font-weight: 500;
     line-height: 1.00;
-    letter-spacing: -3.1px;
+    letter-spacing: -0.05em;
     color: var(--color-ink);
   }
   .type-display-md {
@@ -221,7 +247,7 @@
     font-size: clamp(22px, 2.5vw, 32px);
     font-weight: 500;
     line-height: 1.13;
-    letter-spacing: -1.0px;
+    letter-spacing: -0.03125em;
     color: var(--color-ink);
   }
   .type-headline {
@@ -377,6 +403,120 @@
   }
   .btn-icon:hover { background: var(--color-surface-2); }
 
+  /* ── Button modifiers (compose with the primitives above) ──
+     .btn-sm   compact VISUAL size for dense contexts (board header, dialog
+               rows, list rows). The hit area is .touch-target's job, so a
+               compact button stays small without being hard to tap.
+     .btn-danger / .is-danger  destructive emphasis from the existing
+               semantic tokens only: a filled confirm (--color-error-fill,
+               the pattern the confirm dialogs already used) and a
+               destructive trigger that keeps its button shape but takes
+               --color-error text.
+     [aria-pressed="true"]  an active toggle/mode (comment mode, fullscreen)
+               takes the brand fill — the accent as a selected indicator. */
+  .btn-sm {
+    min-height: 32px;
+    padding: 7px 14px;
+    font-size: 13px;
+    letter-spacing: -0.13px;
+  }
+  .btn-icon.btn-sm {
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+  }
+  /* Translucent = the lifted secondary for controls sitting on surface-1
+     (dialogs, panels, the board header): one surface step up, per the
+     spec's surface-lift hierarchy. .btn-icon is declared after it, so the
+     combination restates the lifted background. */
+  .btn-translucent:hover,
+  .btn-translucent.btn-icon:hover { background: color-mix(in srgb, var(--color-surface-2) 85%, var(--color-ink)); }
+  .btn-translucent.btn-icon { background: var(--color-surface-2); }
+  .btn-danger { background: var(--color-error-fill); color: #fff; }
+  .btn-secondary.is-danger,
+  .btn-translucent.is-danger,
+  .btn-icon.is-danger { color: var(--color-error); }
+  .btn-secondary[aria-pressed="true"],
+  .btn-translucent[aria-pressed="true"],
+  .btn-icon[aria-pressed="true"] { background: var(--color-brand); color: #fff; }
+  .btn-primary:disabled,
+  .btn-secondary:disabled,
+  .btn-translucent:disabled,
+  .btn-icon:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .btn-secondary:disabled:hover,
+  .btn-icon:disabled:hover { background: var(--color-surface-1); }
+
+  /* ── Segmented control ──
+     Tabs and 2–4-way toggles (asset type, board lists, Private/Shared).
+     Selected = surface lift, not colour (spec: pricing-tab-selected).
+     Items are marked selected with aria-selected (role="tab") or
+     aria-pressed (toggle buttons). .is-block stretches to full width with
+     equal items, for dialog choices. */
+  .segmented {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    max-width: 100%;
+    overflow-x: auto;
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-1);
+    border: 1px solid var(--color-hairline);
+  }
+  .segmented.is-block { display: flex; width: 100%; }
+  .segmented.is-block > .segmented-item { flex: 1; }
+  .segmented-item {
+    padding: 7px 14px;
+    border: none;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-ink-muted);
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: -0.13px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .segmented-item:hover { color: var(--color-ink); }
+  @media (pointer: coarse) {
+    /* .segmented scrolls horizontally, which clips .touch-target's growth;
+       37px item + the container's 4px inset = a 44px-tall control. */
+    .segmented-item { padding-top: 10px; padding-bottom: 10px; }
+  }
+  .segmented-item[aria-selected="true"],
+  .segmented-item[aria-pressed="true"] { background: var(--color-surface-2); color: var(--color-ink); }
+
+  /* ── Touch target ──
+     Enlarges a control's HIT AREA to the spec minimum (Responsive
+     Behavior › Touch Targets: 40px on desktop, 44px on touch) without
+     changing how it looks: an invisible, centred ::after at least that
+     size. Only grows an axis that is smaller than the minimum, so wide pill
+     buttons gain height, not width. Use on compact controls that have room
+     around them — two neighbours closer than the growth would overlap.
+     A scroll container (overflow: auto/hidden) clips the growth. */
+  .touch-target {
+    position: relative;
+    --touch-min: 40px;
+  }
+  @media (pointer: coarse) {
+    .touch-target { --touch-min: 44px; }
+  }
+  .touch-target::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--touch-min));
+    height: max(100%, var(--touch-min));
+    transform: translate(-50%, -50%);
+  }
+
   .admin-action-btn:hover { filter: brightness(1.15); }
   .admin-action-label { display: inline; }
   @media (max-width: 640px) {
@@ -431,6 +571,17 @@
   }
   .input-base::placeholder { color: var(--color-ink-muted); }
   .input-base:focus { box-shadow: var(--shadow-focus); border-color: transparent; }
+
+  /* Search field: .input-base plus a leading icon. One shape for every
+     search box (Moodboards, Assets) — radius md, caption-size text. The
+     metrics are Moodboards' existing ones: its toolbar sizes to the search
+     input's intrinsic width on mobile, so they must not grow. */
+  .search-field { position: relative; display: block; }
+  .search-field > svg {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    color: var(--color-ink-muted); pointer-events: none;
+  }
+  .search-field > .input-base { padding-left: 30px; font-size: 13px; }
 
   /* ── Hairline dividers ── */
   .divider       { border-top: 1px solid var(--color-hairline); }
@@ -529,6 +680,91 @@
     /* Touch devices have no hover — keep the star reachable without a tap-to-reveal step. */
     .board-card-star { opacity: 1; }
   }
+
+  /* ── Workspace shell (WorkspaceShell / Sidebar) ──
+     Same pill-link language as the public site's floating nav: 13px/500,
+     pill radius, muted → ink on hover, a filled surface for the active
+     item. Pink stays an accent (active icon only). */
+  .ws-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 38px;
+    padding: 8px 12px;
+    border-radius: var(--radius-pill);
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: -0.13px;
+    text-decoration: none;
+    color: var(--color-ink-muted);
+    transition: background 0.15s, color 0.15s;
+  }
+  .ws-nav-link:hover { color: var(--color-ink); background: var(--color-surface-1); }
+  .ws-nav-link[aria-current="page"] { color: var(--color-ink); background: var(--color-surface-2); }
+  .ws-nav-link[aria-current="page"] svg { color: var(--color-brand-text); }
+  .ws-nav-link:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
+  .ws-switcher { transition: background 0.15s, border-color 0.15s; }
+  .ws-switcher:hover { background: var(--color-surface-2); }
+
+  .ws-main { padding: var(--space-xl) var(--space-xl) var(--space-xxl); }
+  @media (max-width: 640px) {
+    .ws-main { padding: var(--space-lg) var(--space-md) var(--space-xxl); }
+  }
+
+  /* Board header "← Moodboards" exit (BoardPage). */
+  .board-back-link { transition: background 0.15s, border-color 0.15s; }
+  .board-back-link:hover { background: rgba(127,127,127,0.14); }
+  .board-back-link:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
+  /* ── Workspace menus (Radix DropdownMenu content) ──
+     Asset card actions + the board header's overflow menu. Radix exposes
+     keyboard/pointer highlight as [data-highlighted], which inline styles
+     can't target. */
+  .dna-menu {
+    min-width: 188px;
+    padding: 4px;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-md);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+    font-family: var(--font-body);
+    z-index: 10050;
+  }
+  .dna-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: -0.13px;
+    color: var(--color-ink);
+    cursor: pointer;
+    outline: none;
+    user-select: none;
+    text-decoration: none;
+  }
+  .dna-menu-item[data-highlighted] { background: var(--color-surface-1); }
+  .dna-menu-item[data-disabled] { opacity: 0.45; cursor: default; }
+  .dna-menu-item[data-danger="true"] { color: var(--color-error); }
+  .dna-menu-sep { height: 1px; margin: 4px 2px; background: var(--color-hairline); }
+
+  /* Asset card: the actions trigger reveals on hover/focus, always visible
+     on touch — same affordance rule as .board-card-star above. */
+  .asset-card-actions { opacity: 0; transition: opacity 0.15s; }
+  .asset-card:hover .asset-card-actions,
+  .asset-card:focus-within .asset-card-actions,
+  .asset-card-actions[data-state="open"] { opacity: 1; }
+  @media (hover: none) {
+    .asset-card-actions { opacity: 1; }
+  }
+  .asset-card { transition: border-color 0.15s; }
+  .asset-card:hover { border-color: rgba(255,255,255,0.18); }
+  [data-theme="light"] .asset-card:hover { border-color: rgba(0,0,0,0.18); }
 }
 
 @media (max-width: 768px) {

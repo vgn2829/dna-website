@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import request from 'supertest';
+import { localRequest } from './localServer';
 import { createApp } from '../src/app';
 import { pool, query } from '../src/db/client';
 import { signStudentToken } from '../src/middleware/studentAuth';
@@ -18,6 +18,8 @@ import * as storageModule from '../src/storage';
 // ─────────────────────────────────────────────────────────────────────────
 
 const app = createApp();
+// One loopback (127.0.0.1) server for this file — see tests/localServer.ts.
+const request = localRequest(app);
 
 const PNG_1PX = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',

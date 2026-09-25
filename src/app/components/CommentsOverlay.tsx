@@ -40,6 +40,9 @@ interface CommentsOverlayProps {
   currentRoll: string | undefined;
   canModerate: boolean;
   lastSeenAt: number;
+  // Board members available to @mention (V2.6 Phase D) — threaded through
+  // from BoardPage, which already has them. No new endpoint.
+  mentionables?: Array<{ roll: string; name: string | null }>;
 }
 
 interface DraftPin {
@@ -47,6 +50,9 @@ interface DraftPin {
   anchorShapeId?: string;
   pageX: number;
   pageY: number;
+  // The tldraw PAGE this pin was placed on (not to be confused with
+  // pageX/pageY, which are page-SPACE coordinates). V2.6 Phase B.
+  anchorPageId: string;
 }
 
 function groupByThread(comments: BoardComment[]): Map<string, { root: BoardComment; replies: BoardComment[] }> {
@@ -64,7 +70,7 @@ function groupByThread(comments: BoardComment[]): Map<string, { root: BoardComme
 }
 
 export function CommentsOverlay({
-  commentsApi, commentMode, onExitCommentMode, currentRoll, canModerate, lastSeenAt,
+  commentsApi, commentMode, onExitCommentMode, currentRoll, canModerate, lastSeenAt, mentionables,
 }: CommentsOverlayProps) {
   const editor = useEditor();
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
@@ -77,6 +83,10 @@ export function CommentsOverlay({
   // editor.getCamera() directly in render (that would read a non-reactive
   // snapshot once and never update as the user pans).
   const camera = useValue('comments-overlay-camera', () => editor.getCamera(), [editor]);
+  // Reactive current page — pins must re-filter the instant the user
+  // switches pages, so this is read through useValue rather than a
+  // one-shot editor.getCurrentPageId() in render.
+  const currentPageId = useValue('comments-overlay-page', () => editor.getCurrentPageId(), [editor]);
   // Referenced only to keep `camera` recomputing on viewport resize too
   // (screenBounds affects pageToViewport indirectly through the container,
   // not the math itself, but keeps this overlay correctly positioned if
@@ -84,6 +94,29 @@ export function CommentsOverlay({
   void useValue('comments-overlay-screen-bounds', () => editor.getViewportScreenBounds(), [editor]);
 
   const threads = useMemo(() => groupByThread(commentsApi.comments), [commentsApi.comments]);
+
+  // PAGE FILTERING (V2.6 Phase B) — a thread renders on the current page
+  // when its root's anchorPageId matches, OR when that root has no page at
+  // all.
+  //
+  // THE COMPATIBILITY RULE, stated once here because it is the whole
+  // reason anchor_page_id is nullable: a NULL page means "created before
+  // pages were tracked". Those legacy comments keep rendering on every
+  // page — exactly what they did before this change — rather than being
+  // guessed onto one page and silently disappearing from the others. Every
+  // comment created from now on carries a real page, so the set of
+  // ambiguous rows is fixed and shrinks as boards are re-commented.
+  //
+  // Before this, NOTHING was filtered: a comment pinned on Page A rendered
+  // at the same coordinates on every other page of the board.
+  const visibleThreads = useMemo(() => {
+    const out = new Map<string, { root: BoardComment; replies: BoardComment[] }>();
+    for (const [id, thread] of threads) {
+      const anchorPage = thread.root.anchorPageId;
+      if (anchorPage === null || anchorPage === currentPageId) out.set(id, thread);
+    }
+    return out;
+  }, [threads, currentPageId]);
 
   // Comment-mode click handling — capture phase on the editor's own
   // container, mirroring ClipboardOverride's approach of listening in
@@ -106,10 +139,14 @@ export function CommentsOverlay({
       const pagePoint = editor.screenToPage(screenPoint);
       const hitShape = editor.getShapeAtPoint(pagePoint, { hitInside: true, margin: 0 });
 
+      // The page is captured at PLACEMENT time, not at submit time, so a
+      // draft cannot silently change pages if the user navigates before
+      // sending it.
+      const placedOnPageId = editor.getCurrentPageId();
       if (hitShape) {
-        setDraftPin({ anchorType: 'shape', anchorShapeId: hitShape.id, pageX: pagePoint.x, pageY: pagePoint.y });
+        setDraftPin({ anchorType: 'shape', anchorShapeId: hitShape.id, pageX: pagePoint.x, pageY: pagePoint.y, anchorPageId: placedOnPageId });
       } else {
-        setDraftPin({ anchorType: 'canvas', pageX: pagePoint.x, pageY: pagePoint.y });
+        setDraftPin({ anchorType: 'canvas', pageX: pagePoint.x, pageY: pagePoint.y, anchorPageId: placedOnPageId });
       }
       setOpenThreadId(null);
     };
@@ -141,6 +178,7 @@ export function CommentsOverlay({
       anchorShapeId: draftPin.anchorShapeId,
       anchorX: draftPin.pageX,
       anchorY: draftPin.pageY,
+      anchorPageId: draftPin.anchorPageId,
     });
     setDraftPin(null);
     if (created) {
@@ -149,7 +187,15 @@ export function CommentsOverlay({
     }
   }, [draftPin, commentsApi, onExitCommentMode]);
 
-  const pinPageXY = useCallback((comment: BoardComment): { x: number; y: number } => {
+  // Resolves a pin's page-space position AND whether its shape anchor is
+  // still attached. `orphaned` is true only for a SHAPE-anchored comment
+  // whose shape no longer exists on this page — a canvas-anchored comment
+  // is never orphaned, it has no shape to lose.
+  //
+  // Before this, a deleted shape silently fell back to the stored
+  // coordinates and the pin looked exactly like a normally-attached one,
+  // with no way for the reader to tell the difference.
+  const pinPageXY = useCallback((comment: BoardComment): { x: number; y: number; orphaned: boolean } => {
     // A shape-anchored pin follows its shape if the shape has moved since
     // the comment was created (reads the shape's current page-space
     // bounds' top-left corner); falls back to the stored anchor if the
@@ -161,10 +207,14 @@ export function CommentsOverlay({
       const shape = editor.getShape(comment.anchorShapeId as TLShapeId);
       if (shape) {
         const bounds = editor.getShapePageBounds(shape);
-        if (bounds) return { x: bounds.x, y: bounds.y };
+        // Live bounds, so move/resize/rotate all keep the pin attached.
+        if (bounds) return { x: bounds.x, y: bounds.y, orphaned: false };
       }
+      // The shape is gone. Keep the comment and its last known location,
+      // but report it as orphaned so the pin can say so.
+      return { x: comment.anchorX, y: comment.anchorY, orphaned: true };
     }
-    return { x: comment.anchorX, y: comment.anchorY };
+    return { x: comment.anchorX, y: comment.anchorY, orphaned: false };
   }, [editor]);
 
   const openThread = openThreadId ? threads.get(openThreadId) : null;
@@ -175,8 +225,8 @@ export function CommentsOverlay({
         onPointerDown={stopEventPropagation}
         style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 440 }}
       >
-        {Array.from(threads.values()).map(({ root, replies }) => {
-          const { x: pageX, y: pageY } = pinPageXY(root);
+        {Array.from(visibleThreads.values()).map(({ root, replies }) => {
+          const { x: pageX, y: pageY, orphaned } = pinPageXY(root);
           const viewport = editor.pageToViewport({ x: pageX, y: pageY });
           const lastActivityAt = Math.max(
             new Date(root.updatedAt).getTime(),
@@ -192,6 +242,7 @@ export function CommentsOverlay({
                 replyCount={replies.length}
                 isOpen={openThreadId === root.id}
                 isUnread={isUnread}
+                isOrphaned={orphaned}
                 onClick={() => setOpenThreadId(id => id === root.id ? null : root.id)}
               />
             </div>
@@ -207,7 +258,8 @@ export function CommentsOverlay({
                 createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
                 resolvedAt: null, resolvedByRoll: null, deletedAt: null,
                 anchorType: draftPin.anchorType, anchorShapeId: draftPin.anchorShapeId ?? null,
-                anchorX: draftPin.pageX, anchorY: draftPin.pageY, content: '',
+                anchorX: draftPin.pageX, anchorY: draftPin.pageY,
+                anchorPageId: draftPin.anchorPageId, content: '',
               }}
               x={editor.pageToViewport({ x: draftPin.pageX, y: draftPin.pageY }).x}
               y={editor.pageToViewport({ x: draftPin.pageX, y: draftPin.pageY }).y}
@@ -222,6 +274,7 @@ export function CommentsOverlay({
 
       {draftPin && (
         <CommentThreadPanel
+          mentionables={mentionables}
           mode="draft"
           root={null}
           replies={[]}
@@ -234,6 +287,7 @@ export function CommentsOverlay({
 
       {!draftPin && openThread && (
         <CommentThreadPanel
+          mentionables={mentionables}
           mode="thread"
           root={openThread.root}
           replies={openThread.replies}

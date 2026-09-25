@@ -219,6 +219,7 @@ export function TldrawCanvas({
             currentRoll={comments.currentRoll}
             canModerate={comments.canModerate}
             lastSeenAt={comments.lastSeenAt}
+              mentionables={comments.mentionables}
           />
         )}
       </Tldraw>

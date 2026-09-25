@@ -1,6 +1,17 @@
 import { pool } from './client';
+import { canvasSummaryColumns } from '../lib/canvasSummary';
+import { MARK_PLACED_BOARD_ITEMS_SQL } from '../lib/boardRows';
+import { checkSchemaInitAllowed } from './dbTarget';
 
 export async function initSchema(): Promise<void> {
+  // Refuse to run DDL/backfills against a database this process shouldn't
+  // be migrating (e.g. a dev server whose .env points at the hosted DB) —
+  // see db/dbTarget.ts for the exact rules and the explicit override.
+  const check = checkSchemaInitAllowed(process.env);
+  console.log(`Schema initialization target: ${check.target ? `${check.target.host} / ${check.target.database}` : '(none)'} — env ${process.env.NODE_ENV || 'development'} — ${check.allowed ? 'allowed' : 'REFUSED'} (${check.reason})`);
+  if (!check.allowed) {
+    throw new Error(check.reason);
+  }
   // Tracks one-time migrations so destructive/backfill steps can't silently re-run.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -1046,6 +1057,55 @@ export async function initSchema(): Promise<void> {
     ON board_comments (parent_comment_id)
   `);
 
+  // PAGE-AWARE ANCHORS (V2.6 Phase B) — which tldraw page a comment's
+  // anchor lives on.
+  //
+  // THE BUG THIS FIXES: nothing recorded a page, so every comment rendered
+  // on every page of a multi-page board. A comment pinned on Page A showed
+  // up at the same coordinates on Page B, C, ... — reproduced against the
+  // real router (the create endpoint silently dropped an anchorPageId and
+  // the list endpoint had no page dimension to filter on). tldraw's page
+  // menu is available to users, so this is reachable in normal use.
+  //
+  // DELIBERATELY NULLABLE, with NO backfill. A NULL here means "legacy
+  // comment, created before pages were tracked", and the renderer treats
+  // those as belonging to whichever page is being viewed — i.e. exactly
+  // the pre-existing behaviour, preserved. Backfilling every existing row
+  // to the board's first page would be a guess (the comment may genuinely
+  // have been made on another page) and would silently HIDE comments that
+  // are visible today, which is strictly worse than leaving them global.
+  // New comments always carry a page, so the ambiguity does not grow.
+  await pool.query(`ALTER TABLE board_comments ADD COLUMN IF NOT EXISTS anchor_page_id TEXT`);
+
+  // PERSISTENT COMMENT READ STATE (V2.6 Phase E) — one row per
+  // (board, user), NOT one per comment.
+  //
+  // THE BUG THIS FIXES: "unread" lived only in BoardPage's
+  // useState(() => Date.now()), so it reset on every mount. Refreshing the
+  // page marked every thread read, and the state was per-tab rather than
+  // per-user. There was no server-side read surface at all — no table, no
+  // endpoint (verified: GET .../comments/read-state returned 404).
+  //
+  // WHY A WATERMARK, NOT A ROW PER COMMENT: a single last_seen_at per
+  // (board, roll) answers the only question the UI actually asks — "has
+  // this thread had activity since I last looked?" — by comparing against
+  // the thread's newest updated_at. A row per comment would be orders of
+  // magnitude more storage and writes for the same answer, which the phase
+  // brief explicitly warned against. Per-thread granularity still works,
+  // because each thread is compared against the same watermark
+  // independently.
+  //
+  // No backfill: a missing row means "never looked", which correctly shows
+  // existing activity as unread the first time a user opens a board.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS board_comment_reads (
+      board_id     TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+      roll_number  TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      PRIMARY KEY (board_id, roll_number)
+    )
+  `);
+
   console.log('board_comments migration done');
 
   // Workspaces (Commit 1 of the workspace/organization layer) — the
@@ -1250,6 +1310,73 @@ export async function initSchema(): Promise<void> {
     ON assets (workspace_id)
   `);
 
+  // Workspace Asset Library — assets are no longer image-only. kind is
+  // 'image' (inline-previewable, insertable onto a board — the original
+  // and still the only kind the board picker inserts), or 'file' (any
+  // other design/document resource — PSD/AI/PDF/ZIP/... — stored and
+  // served download-only, never parsed server-side). Additive and
+  // idempotent: every pre-existing row was uploaded through the image
+  // MIME allowlist, so the DEFAULT 'image' is exactly right for them with
+  // no backfill. Plain TEXT validated at the route layer, same convention
+  // as every other enum-shaped column in this file.
+  await pool.query(`
+    ALTER TABLE assets ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'image'
+  `);
+
+  // Asset collections ("asset packs") — a flat, workspace-scoped grouping
+  // (Branding Pack, UI References, Mockups, ...), NOT a folder hierarchy:
+  // an asset belongs to at most one collection (assets.collection_id),
+  // and deleting a collection only un-groups its assets (ON DELETE SET
+  // NULL), never deletes them. Workspace scoping mirrors assets exactly
+  // (NOT NULL + ON DELETE CASCADE). created_by_roll follows the raw-roll,
+  // no-FK convention of assets.owner_roll; it gates rename/delete the
+  // same way owner_roll gates asset delete (routes/assetCollections.ts).
+  // Names are unique per workspace, case-insensitively.
+  //
+  // That an asset's collection belongs to the SAME workspace as the asset
+  // is enforced at the route layer (assets.ts's collectionInWorkspace) on
+  // every write that sets collection_id.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS asset_collections (
+      id              TEXT PRIMARY KEY,
+      workspace_id    TEXT NOT NULL REFERENCES workspaces(id)
+                      ON DELETE CASCADE,
+      name            TEXT NOT NULL,
+      description     TEXT,
+      created_by_roll TEXT NOT NULL,
+      created_at      TEXT NOT NULL,
+      updated_at      TEXT NOT NULL
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_asset_collections_workspace_id
+    ON asset_collections (workspace_id)
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_asset_collections_workspace_name
+    ON asset_collections (workspace_id, lower(name))
+  `);
+
+  // Collection membership + external link assets. Additive/idempotent:
+  //   collection_id — nullable; existing assets start ungrouped.
+  //   link_url      — only set for kind='link' (an external http(s) URL,
+  //                   stored as-is and NEVER fetched server-side).
+  // A link has no stored object, so storage_key/mime_type/size_bytes
+  // become nullable. DROP NOT NULL is a metadata-only change, a no-op on
+  // re-run, and every existing row keeps its values.
+  await pool.query(`
+    ALTER TABLE assets ADD COLUMN IF NOT EXISTS collection_id TEXT
+      REFERENCES asset_collections(id) ON DELETE SET NULL
+  `);
+  await pool.query(`ALTER TABLE assets ADD COLUMN IF NOT EXISTS link_url TEXT`);
+  await pool.query(`ALTER TABLE assets ALTER COLUMN storage_key DROP NOT NULL`);
+  await pool.query(`ALTER TABLE assets ALTER COLUMN mime_type DROP NOT NULL`);
+  await pool.query(`ALTER TABLE assets ALTER COLUMN size_bytes DROP NOT NULL`);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_assets_collection_id
+    ON assets (collection_id)
+  `);
+
   console.log('assets migration done');
 
   // Notifications (Phase C) — deliberately minimal: no read receipts
@@ -1301,4 +1428,266 @@ export async function initSchema(): Promise<void> {
   `);
 
   console.log('notifications migration done');
+
+  // Projects (V2.2 — Workspace → Project → Moodboard organization layer).
+  // A project is a pure organizational grouping ONE LEVEL BELOW a
+  // workspace, ABOVE boards — it introduces no new identity/ownership
+  // system: owner_roll is the same raw-string, no-FK convention
+  // boards.owner_roll and workspaces.owner_roll already use throughout
+  // this file (who created it, not the source of truth for permission —
+  // see routes/projects.ts's own comment on why project authorization is
+  // derived entirely from workspace_members, never a project-level role
+  // table).
+  //
+  // workspace_id is NOT NULL + ON DELETE RESTRICT, matching
+  // boards.workspace_id's own FK exactly (see that column's comment,
+  // above in this file) — a workspace cannot be deleted while it still
+  // has projects, same "no orphaned child" guarantee boards already get.
+  // This is a deliberate DEVIATION from the V2 Foundation Architecture
+  // Audit's draft (which proposed CASCADE here) — the V2.2 brief
+  // explicitly calls for RESTRICT/explicit-protection over cascading
+  // deletes, and matching boards.workspace_id's existing RESTRICT is more
+  // consistent with this file's own precedent than introducing the only
+  // CASCADE workspace-child relationship in the schema.
+  //
+  // is_archived mirrors boards.is_archived's own boolean-flag convention
+  // (not a soft-delete/deleted_at column) — an archived project is a
+  // normal, listable row with its boards still fully intact and
+  // accessible, exactly like an archived board's canvas remains readable.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id           TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+      name         TEXT NOT NULL,
+      description  TEXT,
+      owner_roll   TEXT NOT NULL,
+      owner_name   TEXT,
+      created_at   TEXT NOT NULL,
+      is_archived  BOOLEAN NOT NULL DEFAULT false
+    )
+  `);
+
+  // Every project list/lookup (routes/projects.ts) filters on
+  // workspace_id — without this index that degrades to a sequential scan
+  // as the table grows, same reasoning as idx_boards_workspace_id below.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_projects_workspace_id
+    ON projects (workspace_id)
+  `);
+
+  console.log('projects migration done');
+
+  // boards.project_id — nullable from day one, no backfill (unlike
+  // boards.workspace_id's nullable -> backfill -> NOT NULL rollout,
+  // earlier in this file): NULL is a PERMANENT, valid state here
+  // ("ungrouped, workspace-level board"), not a migration-in-progress
+  // placeholder waiting to be forced NOT NULL later. Every existing V1/
+  // V2.0 board stays NULL forever unless a user explicitly assigns it to
+  // a project — this migration does not, and must never, backfill boards
+  // into arbitrary projects (see the V2.2 brief's own explicit
+  // requirement on this point).
+  //
+  // ON DELETE SET NULL (not RESTRICT, and NOT a cascading delete of the
+  // board) — deleting a project un-groups its boards rather than
+  // orphaning or destroying them. In practice routes/projects.ts's DELETE
+  // handler pre-checks for attached boards and 409s before this
+  // constraint would ever fire in normal operation (same
+  // pre-check-then-clean-constraint pattern workspaces.ts's own DELETE
+  // handler already uses for boards) — SET NULL here is defense-in-depth
+  // ("a board can never be silently destroyed by a project delete") on
+  // top of that route-level protection, not the primary mechanism.
+  await pool.query(`
+    ALTER TABLE boards
+    ADD COLUMN IF NOT EXISTS project_id TEXT REFERENCES projects(id) ON DELETE SET NULL
+  `);
+
+  // Every project-scoped board list (routes/projects.ts's board list,
+  // and any future project_id filter on routes/boards.ts) filters on
+  // this column — same reasoning as idx_boards_workspace_id.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_boards_project_id
+    ON boards (project_id)
+  `);
+
+  console.log('boards.project_id migration done');
+
+  // Templates (V2.3) — a reusable, frozen canvas snapshot a user can
+  // instantiate into a new board. Deliberately workspace-scoped only, no
+  // global/system-template concept: this codebase has no precedent for a
+  // cross-workspace-visible content type anywhere (boards, assets, and
+  // projects are all strictly workspace-scoped with zero exceptions —
+  // confirmed by auditing every one of their schema/route definitions
+  // before writing this table), and the V2.3 brief's own guidance is to
+  // introduce a nullable/global workspace_id ONLY if a concrete existing
+  // mechanism already justifies it. None does, so workspace_id here is
+  // NOT NULL, same as assets.workspace_id (the most structurally similar
+  // existing table — also a workspace-scoped, owner-tagged, reusable
+  // content item with no member/role system of its own).
+  //
+  // canvas_data is a plain TEXT column holding the EXACT SAME raw JSON
+  // string representation boards.canvas_data already uses — no second
+  // snapshot schema. Confirmed by reading POST /:id/duplicate
+  // (routes/boards.ts): it already copies a board's canvas_data into a
+  // new board's canvas_data as an opaque string, no parsing, no shape
+  // validation beyond what PUT /:id/canvas already requires (valid
+  // JSON). Templates reuse that exact copy-as-opaque-string approach in
+  // both directions (board -> template, template -> new board) — see
+  // routes/templates.ts. Whatever shape a given board's canvas_data
+  // happens to be in (legacy TLEditorSnapshot wrapper vs. flat
+  // RoomSnapshot — see roomPersistence.ts's own extensive comment on why
+  // both exist) is preserved as-is; the existing load-time unwrap logic
+  // in roomPersistence.ts already handles both when a template-created
+  // board is later opened, so nothing new needs to understand either
+  // shape here.
+  //
+  // source_board_id is PROVENANCE ONLY (which board this template was
+  // originally saved from) — never a live dependency. ON DELETE SET NULL
+  // (not RESTRICT, not CASCADE): a template must survive its source
+  // board being deleted, exactly the same reasoning
+  // board_versions.restored_from_version_id already established for the
+  // same kind of "this points at where it came from, not something it
+  // depends on" relationship.
+  //
+  // owner_roll/owner_name follow the same denormalized-pair, no-FK
+  // convention every other owner-tagged table in this file uses
+  // (boards.owner_roll, workspaces.owner_roll, projects.owner_roll,
+  // assets.owner_roll).
+  //
+  // No template_members/template_roles/template_permissions table — per
+  // the V2.3 brief, template authorization is entirely derived from
+  // workspace_members (see routes/templates.ts), identical to how
+  // routes/projects.ts already has no project-level role system.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS templates (
+      id              TEXT PRIMARY KEY,
+      workspace_id    TEXT NOT NULL REFERENCES workspaces(id),
+      source_board_id TEXT REFERENCES boards(id) ON DELETE SET NULL,
+      name            TEXT NOT NULL,
+      description     TEXT,
+      canvas_data     TEXT,
+      thumbnail_url   TEXT,
+      owner_roll      TEXT NOT NULL,
+      owner_name      TEXT,
+      created_at      TEXT NOT NULL,
+      is_archived     BOOLEAN NOT NULL DEFAULT false
+    )
+  `);
+
+  // Every template list/lookup (routes/templates.ts) filters on
+  // workspace_id — same reasoning as idx_projects_workspace_id/
+  // idx_assets_workspace_id above.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_templates_workspace_id
+    ON templates (workspace_id)
+  `);
+
+  console.log('templates migration done');
+
+  // Moodboard card item count + preview (lib/canvasSummary.ts). Derived
+  // from canvas_data at WRITE time — every path that sets canvas_data
+  // (realtime save, manual PUT /:id/canvas, duplicate, board-from-
+  // template) also sets these — so board list endpoints never have to
+  // ship or parse whole tldraw documents to render a card. Additive:
+  //   canvas_item_count      — visible shapes (NULL = not yet summarized)
+  //   canvas_preview         — small JSON preview primitives, or NULL
+  //   canvas_placed_item_ids — shape ids of legacy board_items already
+  //                            placed on the canvas (see canvasSummary.ts)
+  await pool.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS canvas_item_count INTEGER`);
+  await pool.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS canvas_preview TEXT`);
+  await pool.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS canvas_placed_item_ids TEXT[] NOT NULL DEFAULT '{}'`);
+  await backfillCanvasSummaries();
+
+  console.log('boards canvas summary migration done');
+
+  // Gallery item lifecycle (lib/boardRows.ts MARK_PLACED_BOARD_ITEMS_SQL):
+  // placed_at NULL = never placed on the canvas, so still pending injection;
+  // set once, never cleared. Additive and nullable — existing rows stay,
+  // unplaced by default. Backfilled AFTER the canvas summary backfill above,
+  // since it reads canvas_placed_item_ids.
+  await pool.query(`ALTER TABLE board_items ADD COLUMN IF NOT EXISTS placed_at TIMESTAMPTZ`);
+  await backfillBoardItemPlacement();
+
+  console.log('board_items placement migration done');
+
+  // Image derivatives (V3.2.3, storage/derivatives.ts): one row per
+  // (source storage key, variant) — DERIVED data about an existing stored
+  // image, never an asset, owner or reference in its own right. Keyed by
+  // the source's storage key (the identity assets/, canvas-files/,
+  // references and inventory already use), so canvas files — which have
+  // no row of their own — are covered too. status is 'ready' (derivative
+  // object written; width/height/bytes describe it), 'failed' (error says
+  // why; the backfill retries it) or 'skipped' (the source is deliberately
+  // served as-is, e.g. an animated GIF; error says why — recorded so the
+  // backfill never re-examines it). Additive: nothing reads it until
+  // V3.2.4/V3.2.5, and a missing row just means "use the original".
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS storage_derivatives (
+      source_key      TEXT NOT NULL,
+      variant         TEXT NOT NULL,
+      derivative_key  TEXT NOT NULL,
+      status          TEXT NOT NULL CHECK (status IN ('ready', 'failed', 'skipped')),
+      width           INTEGER,
+      height          INTEGER,
+      bytes           INTEGER,
+      error           TEXT,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (source_key, variant)
+    )
+  `);
+
+  console.log('storage_derivatives migration done');
+
+  // Lookup indexes for columns real queries filter on without a leading
+  // index (measured with EXPLAIN ANALYZE on a 10× dataset, V3.2.7):
+  //   board_items(board_id)          — board detail's pending items, the
+  //     project boards list's item join, and MARK_PLACED_BOARD_ITEMS_SQL on
+  //     every canvas save (REST and realtime persistence).
+  //   workspace_members(roll_number) — GET /workspaces and the all-
+  //     workspaces shared-boards list; the PRIMARY KEY leads with
+  //     workspace_id, so it can't serve a roll_number-only lookup.
+  //   boards(owner_roll)             — the archived boards list.
+  // board_members(roll_number) is deliberately absent: GET /boards' cost is
+  // the owner/member OR over boards, which that index doesn't change.
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_board_items_board_id ON board_items (board_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_workspace_members_roll_number ON workspace_members (roll_number)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_boards_owner_roll ON boards (owner_roll)`);
+
+  console.log('lookup indexes migration done');
+}
+
+// Idempotent backfill for board_items saved before placed_at existed: marks
+// only rows whose shape is on the board's saved canvas right now (any page).
+// A row whose shape the user already deleted can't be told apart from a
+// never-placed one here, so it stays NULL — it is re-injected once, marked
+// on that save, and a later delete then sticks. Never touches canvas_data,
+// never deletes rows; already-marked rows are skipped.
+export async function backfillBoardItemPlacement(): Promise<number> {
+  const result = await pool.query(`
+    WITH saved AS (SELECT id, canvas_placed_item_ids FROM boards)
+    ${MARK_PLACED_BOARD_ITEMS_SQL}
+  `);
+  return result.rowCount ?? 0;
+}
+
+// One-time (idempotent) backfill for boards written before the summary
+// columns existed: only rows whose canvas_item_count is still NULL are
+// touched, a few at a time so a legacy board with multi-MB base64 images
+// in canvas_data is never loaded alongside many others.
+export async function backfillCanvasSummaries(): Promise<number> {
+  let done = 0;
+  for (;;) {
+    const batch = await pool.query(
+      'SELECT id, canvas_data FROM boards WHERE canvas_item_count IS NULL ORDER BY id LIMIT 10'
+    );
+    const rows = batch.rows as Array<{ id: string; canvas_data: string | null }>;
+    if (rows.length === 0) return done;
+    for (const row of rows) {
+      const cols = canvasSummaryColumns(row.canvas_data);
+      await pool.query(
+        `UPDATE boards SET canvas_item_count = $2, canvas_preview = $3, canvas_placed_item_ids = $4 WHERE id = $1`,
+        [row.id, cols.canvas_item_count, cols.canvas_preview, cols.canvas_placed_item_ids]
+      );
+      done++;
+    }
+  }
 }

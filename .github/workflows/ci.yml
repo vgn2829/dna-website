@@ -1,0 +1,147 @@
+# V2 release certification.
+#
+# Exists because the local dev machine could not certify the release gate:
+# it hit 100% disk (a background run was killed with exit 137) and produced
+# low-frequency failures that moved between unrelated pre-existing suites
+# while every suite passed in isolation. This runs the same gate on a fresh
+# runner with real disk headroom and a fresh PostgreSQL service.
+#
+# The backend gate is deliberately FIVE consecutive full-suite runs, not
+# one: the defects this release chased were all non-deterministic, and a
+# single green run would not have caught any of them.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  backend:
+    name: Backend (5 consecutive full-suite runs)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dna_club_test
+        ports: ['5432:5432']
+        # Without this the job can start querying before the server accepts
+        # connections; the retries are the service's own readiness probe,
+        # not a sleep in the test path.
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Set at the RUNNER level on purpose. src/db/client.ts builds its Pool
+      # at module load, which under ESM happens BEFORE tests/setup.ts can
+      # assign process.env.DATABASE_URL — so setting it only there leaves pg
+      # falling back to libpq defaults and silently using the wrong database.
+      # sslmode=disable because the service container speaks plain TCP while
+      # sslConfig() otherwise turns SSL on whenever DATABASE_URL is present.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dna_club_test?sslmode=disable
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dna_club_test?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Report disk headroom
+        run: df -h /
+
+      - name: Install backend dependencies
+        working-directory: backend
+        # sharp ships prebuilt per-platform binaries. This lockfile was
+        # generated on macOS, so `npm ci` alone leaves the linux-x64 variant
+        # absent and importing routes/artworks.ts throws "Could not load the
+        # sharp module using the linux-x64 runtime". Installing the matching
+        # optional binary afterwards is the documented cross-platform fix and
+        # touches nothing in the application.
+        run: |
+          npm ci
+          npm install --no-save --os=linux --cpu=x64 sharp
+
+      - name: Backend typecheck
+        working-directory: backend
+        run: npm run typecheck
+
+      # Migrations are applied by the repository's own initSchema(), which
+      # tests/setup.ts already calls in beforeAll — no separate migration
+      # tool and no hand-written DDL. This step proves the schema lands on a
+      # genuinely empty database before the gate runs.
+      # Migrations are applied by the repository's own initSchema(), which
+      # tests/setup.ts already calls in beforeAll — no separate migration
+      # tool and no hand-written DDL. This step proves the schema lands on a
+      # genuinely empty database, and that the V2/V2.6 objects are present,
+      # before the gate runs.
+      - name: Verify migrations apply to a fresh database
+        working-directory: backend
+        run: npx tsx scripts/ci-verify-schema.ts
+
+      # THE GATE. No retries, no exclusions, no --bail, no reruns: five
+      # independent full-suite runs, every one of which must pass.
+      - name: Backend suite — 5 consecutive runs
+        working-directory: backend
+        run: |
+          for i in 1 2 3 4 5; do
+            echo "::group::Backend run $i"
+            npm test
+            echo "::endgroup::"
+          done
+
+      - name: Report disk headroom (after)
+        if: always()
+        run: df -h /
+
+  frontend:
+    name: Frontend (tests, typecheck, production build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No `version:` here on purpose — package.json already declares
+      # packageManager: pnpm@11.6.0, and specifying both makes the action
+      # fail with "Multiple versions of pnpm specified".
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Frontend tests
+        run: pnpm vitest run
+
+      # The repository has a documented baseline of 16 pre-existing
+      # typecheck errors. The gate is "no NEW errors", so this asserts the
+      # count rather than requiring a clean exit that has never been true.
+      - name: Frontend typecheck (baseline 16 pre-existing, 0 new)
+        run: |
+          set +e
+          pnpm tsc --noEmit -p tsconfig.json > tsc.log 2>&1
+          set -e
+          COUNT=$(grep -c "error TS" tsc.log || true)
+          echo "typecheck errors: $COUNT (documented baseline: 16)"
+          cat tsc.log
+          if [ "$COUNT" -gt 16 ]; then
+            echo "::error::$COUNT typecheck errors exceeds the documented baseline of 16"
+            exit 1
+          fi
+
+      - name: Production build
+        run: pnpm vite build

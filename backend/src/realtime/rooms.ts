@@ -45,7 +45,34 @@ interface ManagedSession<SessionMeta> {
   // the periodic re-validator without RoomManager needing a new
   // TLSocketRoom API that doesn't exist.
   meta: SessionMeta;
+  // When canWriteCanvas was last confirmed against the database, for the
+  // per-push freshness check (V2.5 Phase 3 — see WRITE_DECISION_TTL_MS).
+  writeCheckedAt: number;
+  // De-duplicates concurrent re-checks: a burst of pushes must not each
+  // fire their own query for the same session.
+  inFlightRecheck?: Promise<boolean>;
 }
+
+// How stale a write authorization may be before a push forces a fresh
+// database check (V2.5 Phase 3).
+//
+// THE BUG THIS CLOSES: before this, a push was authorized purely against
+// ManagedSession.canWriteCanvas, a cached boolean refreshed ONLY by the
+// 15s background re-validator (REVALIDATION_INTERVAL_MS). Revoking a
+// user's board access therefore left them able to mutate the board for up
+// to 15 seconds on their already-open socket. Reproduced directly over
+// the wire against a real board: the push was accepted and persisted to
+// Postgres. The periodic re-validator is still what eventually
+// DISCONNECTS such a session; this is the per-mutation guard that makes
+// the window between ticks safe.
+//
+// 1s is the balance point: it bounds worst-case stale write access to ~1s
+// while costing at most ONE extra query per second per actively-drawing
+// session (a drag emits many pushes per second and they share a single
+// check, see inFlightRecheck). Idle sessions, cursor/presence traffic and
+// connect/ping cost nothing — only pushes are ever re-checked, and only
+// when the cached decision has aged past this.
+export const WRITE_DECISION_TTL_MS = 1000;
 
 interface ManagedRoom<SessionMeta> {
   room: TLSocketRoom<TLRecord, SessionMeta>;
@@ -74,7 +101,17 @@ export class RoomManager<SessionMeta = void> {
   private persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private snapshotChangedListeners = new Set<SnapshotChangedListener>();
 
-  constructor(private persistence: RoomPersistence) {}
+  // `checkWriteAccess` is OPTIONAL and injected, not imported (V2.5
+  // Phase 3). RoomManager stays authorization-agnostic exactly as its
+  // header comment requires — it never learns what a role is, only asks
+  // the composition root "may this session still write?" and caches the
+  // answer for WRITE_DECISION_TTL_MS. Omitting it (as every existing test
+  // and any non-board room does) simply disables the per-push re-check
+  // and leaves the pre-existing cached-flag behaviour untouched.
+  constructor(
+    private persistence: RoomPersistence,
+    private checkWriteAccess?: (roomId: string, meta: SessionMeta) => Promise<boolean>
+  ) {}
 
   // Registered by the composition root (server.ts), not by RoomManager's
   // own constructor options — keeps this class usable with zero listeners
@@ -199,7 +236,10 @@ export class RoomManager<SessionMeta = void> {
   // later without needing a new socket/connection.
   async join(roomId: string, sessionId: string, socket: WebSocket, meta: SessionMeta, canWriteCanvas: boolean): Promise<void> {
     const managed = await this.getOrCreateRoom(roomId);
-    managed.sessions.set(sessionId, { canWriteCanvas, meta });
+    // writeCheckedAt starts at "now" because canWriteCanvas was just
+    // computed from a live checkRoomAccess in connectionHandler — the
+    // decision is genuinely fresh at join time.
+    managed.sessions.set(sessionId, { canWriteCanvas, meta, writeCheckedAt: Date.now() });
 
     // TLSocketRoom tracks its own session count internally (see
     // getActiveSessionCount below) and is what drives onSessionRemoved's
@@ -231,6 +271,12 @@ export class RoomManager<SessionMeta = void> {
     // roomSocketGate.ts's own header comment for the full mechanism.
     const gatedSocket = createRoomSocketGate(socket, {
       canWriteCanvas: () => managed.sessions.get(sessionId)?.canWriteCanvas ?? false,
+      // Per-push freshness guard (V2.5 Phase 3) — only installed when the
+      // composition root supplied a checker. See WRITE_DECISION_TTL_MS for
+      // the vulnerability this closes and why 1s.
+      ...(this.checkWriteAccess
+        ? { revalidateWrite: () => this.revalidateWriteAccess(roomId, sessionId) }
+        : {}),
       onWriteRejected: () => {
         console.warn(`Realtime: dropped an unauthorized write from session ${sessionId} in room ${roomId}`);
       },
@@ -239,6 +285,51 @@ export class RoomManager<SessionMeta = void> {
     managed.room.handleSocketConnect(
       { sessionId, socket: gatedSocket, meta } as Parameters<typeof managed.room.handleSocketConnect>[0]
     );
+  }
+
+  // Confirms a session may STILL write, re-querying current board access
+  // when the cached decision has aged past WRITE_DECISION_TTL_MS (V2.5
+  // Phase 3). Called from the room socket gate on a push, never on
+  // cursor/presence traffic, connect or ping.
+  //
+  // Three things keep this cheap:
+  //   - TTL: a decision younger than WRITE_DECISION_TTL_MS is reused
+  //     outright, so a fast drag (many pushes/second) costs at most one
+  //     query per second.
+  //   - inFlightRecheck: concurrent pushes share the SAME promise rather
+  //     than each firing their own query.
+  //   - It only runs for sessions the cached flag already allows — a
+  //     session already known to be read-only is rejected by the gate's
+  //     own fast path before reaching here.
+  //
+  // Fails CLOSED: a throw propagates to the gate, which treats it as a
+  // denial. A transient DB error must never become an implicit grant.
+  private async revalidateWriteAccess(roomId: string, sessionId: string): Promise<boolean> {
+    const session = this.rooms.get(roomId)?.sessions.get(sessionId);
+    if (!session) return false;
+    if (!this.checkWriteAccess) return session.canWriteCanvas;
+
+    if (Date.now() - session.writeCheckedAt < WRITE_DECISION_TTL_MS) {
+      return session.canWriteCanvas;
+    }
+    if (session.inFlightRecheck) return session.inFlightRecheck;
+
+    const check = (async (): Promise<boolean> => {
+      try {
+        const allowed = await this.checkWriteAccess!(roomId, session.meta);
+        // Write the result back into the same field the periodic
+        // re-validator and the gate's fast path both read, so there is
+        // exactly one source of truth per session, not two caches.
+        session.canWriteCanvas = allowed;
+        session.writeCheckedAt = Date.now();
+        return allowed;
+      } finally {
+        session.inFlightRecheck = undefined;
+      }
+    })();
+
+    session.inFlightRecheck = check;
+    return check;
   }
 
   // Updates an already-connected session's write permission without
@@ -251,6 +342,10 @@ export class RoomManager<SessionMeta = void> {
     const session = this.rooms.get(roomId)?.sessions.get(sessionId);
     if (!session) return false;
     session.canWriteCanvas = canWriteCanvas;
+    // The periodic re-validator just confirmed this against the database,
+    // so it refreshes the TTL too — otherwise a push arriving moments
+    // later would redundantly re-query what was just checked.
+    session.writeCheckedAt = Date.now();
     return true;
   }
 

@@ -219,7 +219,7 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
 
         {/* Info */}
         <div style={{ padding: 16, borderBottom: '1px solid var(--color-hairline-soft)' }}>
-          <span className="type-micro inline-block mb-2 px-2 py-0.5 rounded-full" style={{ background: `${domainColor}18`, color: domainColor }}>{artwork.domain}</span>
+          <span className="type-micro inline-block mb-2 px-2 py-0.5 rounded-full" style={{ background: `${domainColor}18`, color: 'var(--color-ink)' }}>{artwork.domain}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
             <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-ink)', margin: 0, lineHeight: 1.3, textTransform: forceUpper ? 'uppercase' : 'none' }}>{artwork.title}</h2>
             <span className="type-micro px-2 py-0.5 rounded-full uppercase" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)', flexShrink: 0 }}>{artwork.mediaType}</span>
@@ -304,7 +304,7 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
           <div className="p-6" style={{ borderBottom: '1px solid var(--color-hairline-soft)' }}>
             <div className="flex items-start justify-between gap-3 mb-4">
               <div className="flex-1 min-w-0">
-                <span className="type-micro inline-block mb-2 px-2 py-0.5 rounded-full" style={{ background: `${domainColor}18`, color: domainColor }}>{artwork.domain}</span>
+                <span className="type-micro inline-block mb-2 px-2 py-0.5 rounded-full" style={{ background: `${domainColor}18`, color: 'var(--color-ink)' }}>{artwork.domain}</span>
                 <div className="flex items-center gap-2 mb-1">
                   <h2 className="type-headline leading-tight" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>{artwork.title}</h2>
                   <span className="type-micro px-2 py-0.5 rounded-full uppercase" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)' }}>{artwork.mediaType}</span>
@@ -530,17 +530,24 @@ export function GalleryPage() {
           ))}
         </div>
 
-        <motion.div layout className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 space-y-0">
-          <AnimatePresence>
+        {/* No layout animation here: a filter change rebalances every CSS
+            column, so FLIP-ing cards across that reflow sends them flying
+            thousands of px (and the old container `layout` scale-corrected
+            every card each frame). popLayout pops exiting cards out of the
+            column flow at once (needs the relative parent) so the grid reflows
+            immediately instead of waiting for every staggered exit to finish. */}
+        <div className="relative columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 space-y-0">
+          <AnimatePresence mode="popLayout">
             {filtered.map((art, i) => {
               const hasBurst = burstIds.has(art.id);
               const aspects = ['aspect-[3/4]', 'aspect-square', 'aspect-[4/5]', 'aspect-[2/3]'];
               const aspect = aspects[i % aspects.length];
               return (
                 <motion.div
-                  key={art.id} layout
-                  initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.94 }}
-                  transition={{ delay: i * 0.04 }}
+                  key={art.id}
+                  initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.15 } }}
+                  transition={{ delay: Math.min(i * 0.04, 0.3) }}
                   className="break-inside-avoid mb-4 cursor-pointer group"
                   onClick={() => openArtwork(art.id)}
                 >
@@ -579,7 +586,7 @@ export function GalleryPage() {
                     </div>
                     {/* Text area below image — always visible, never overlapped */}
                     <div style={{ padding: '20px 20px 24px' }}>
-                      <h3 className="type-display-md" style={{ marginBottom: 4, fontSize: 20, textTransform: forceUpper ? 'uppercase' : 'none' }}>{art.title}</h3>
+                      <h2 className="type-display-md" style={{ marginBottom: 4, fontSize: 20, textTransform: forceUpper ? 'uppercase' : 'none' }}>{art.title}</h2>
                       {art.artist?.trim() && <p className="type-caption" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>by {art.artist}</p>}
                     </div>
                   </div>
@@ -587,7 +594,7 @@ export function GalleryPage() {
               );
             })}
           </AnimatePresence>
-        </motion.div>
+        </div>
 
         {filtered.length === 0 && (
           <p className="text-center py-24 type-body" style={{ color: 'var(--color-ink-muted)' }}>No artworks in this category.</p>
@@ -613,9 +620,9 @@ export function GalleryPage() {
               onClick={e => e.stopPropagation()}
               style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '80vh', overflowY: 'auto' }}
             >
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
+              <h2 className="type-headline" style={{ margin: 0 }}>
                 Save to Moodboard
-              </h3>
+              </h2>
 
               {myBoards.length === 0 ? (
                 <div>

@@ -1,0 +1,312 @@
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { api, type Board, type Asset, type Project, type Template } from '../lib/api';
+import { AssetPreview } from '../components/assets/AssetPreview';
+import { useStudent } from '../context/StudentContext';
+import { useWorkspace } from '../context/WorkspaceContext';
+import { workspaceContext, personalFallbackNote } from '../lib/workspaceSearch';
+
+// ─────────────────────────────────────────────────────────────────────────
+// HomeShellPage (V2.0 Phase 3; V2.2 adds Recent Projects; V2.3 Phase 10
+// adds Recent Templates) — the signed-in Home landing page for the
+// workspace app shell. Deliberately small per the V2.0 brief ("do not
+// overbuild Home... do NOT introduce a new activity-log database"):
+// recent Moodboards, favorite Moodboards, recent Assets, recent Projects,
+// recent Templates (each only when a concrete workspace is resolvable),
+// and quick-create actions.
+//
+// Reuses existing, already-shipped endpoints only — api.boards.getMyBoards,
+// api.assets.list, api.projects.list, and (V2.3) api.templates.list, each
+// already used elsewhere (MoodboardsPage/AssetLibrary/ProjectsPage/
+// TemplatesPage) — filtered/sliced client-side for "recent"/"favorite".
+// No new backend aggregate endpoint. Clicking a template card here
+// navigates to /templates rather than duplicating that page's own
+// name+project "Use Template" modal — same "don't duplicate existing UI"
+// choice the "+ New Project" button below already makes for project
+// creation, keeping this page a dashboard, not a second templates
+// management surface.
+// ─────────────────────────────────────────────────────────────────────────
+
+function timeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}d ago`;
+  return `${Math.floor(day / 7)}w ago`;
+}
+
+function BoardCard({ board }: { board: Board }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      onClick={() => navigate(`/moodboards/${board.id}`)}
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'left',
+        padding: 14, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)',
+        background: 'var(--color-surface-1)', cursor: 'pointer', minWidth: 0,
+      }}
+    >
+      <span className="type-body-sm" style={{ color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {board.name}
+      </span>
+      <span className="type-caption">
+        Edited {timeAgo(board.updated_at)}
+      </span>
+    </button>
+  );
+}
+
+function ProjectCard({ project }: { project: Project }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      onClick={() => navigate(`/projects/${project.id}`)}
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'left',
+        padding: 14, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)',
+        background: 'var(--color-surface-1)', cursor: 'pointer', minWidth: 0,
+      }}
+    >
+      <span className="type-body-sm" style={{ color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {project.name}
+      </span>
+      <span className="type-caption">
+        {project.board_count} board{project.board_count === 1 ? '' : 's'}
+      </span>
+    </button>
+  );
+}
+
+function TemplateCard({ template }: { template: Template }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      onClick={() => navigate('/templates')}
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'left',
+        padding: 14, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)',
+        background: 'var(--color-surface-1)', cursor: 'pointer', minWidth: 0,
+      }}
+    >
+      <span className="type-body-sm" style={{ color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {template.name}
+      </span>
+      <span className="type-caption">
+        Use Template →
+      </span>
+    </button>
+  );
+}
+
+function SectionHeading({ title, action }: { title: string; action?: { label: string; onClick: () => void } }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+      <h2 className="type-headline" style={{ margin: 0 }}>
+        {title}
+      </h2>
+      {action && (
+        <button
+          onClick={action.onClick}
+          className="type-body-sm" style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-brand-text)', cursor: 'pointer' }}
+        >
+          {action.label}
+        </button>
+      )}
+    </div>
+  );
+}
+
+export default function HomeShellPage() {
+  const { studentSession, openRollModal } = useStudent();
+  const { activeWorkspaceId, personalWorkspace, workspaces } = useWorkspace();
+  const homeContext = workspaceContext(activeWorkspaceId ? workspaces.find(w => w.id === activeWorkspaceId) ?? null : null, { spansAllWorkspaces: true });
+  const navigate = useNavigate();
+
+  const [myBoards, setMyBoards] = useState<Board[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!studentSession?.rollNumber) { setLoading(false); return; }
+    let cancelled = false;
+    setLoading(true);
+    api.boards.getMyBoards(studentSession.rollNumber, activeWorkspaceId ?? undefined)
+      .then(data => { if (!cancelled) setMyBoards(data); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [studentSession?.rollNumber, activeWorkspaceId]);
+
+  // Assets are always workspace-scoped (no cross-workspace list) — same
+  // constraint AssetsPage.tsx/AssetLibrary already have. Falls back to the
+  // personal workspace in "All Workspaces" view, same fallback AssetsPage
+  // uses, so Home never needs a concrete workspace selected to show
+  // something here.
+  useEffect(() => {
+    if (!studentSession?.rollNumber) return;
+    const targetWorkspaceId = activeWorkspaceId ?? personalWorkspace?.id;
+    if (!targetWorkspaceId) return;
+    let cancelled = false;
+    api.assets.list(studentSession.rollNumber, targetWorkspaceId)
+      .then(res => { if (!cancelled) setAssets(res.assets.slice(0, 6)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [studentSession?.rollNumber, activeWorkspaceId, personalWorkspace?.id]);
+
+  // Projects — same workspace-scoping/personal-fallback shape as Assets
+  // above (V2.2 Phase 8); a project has no cross-workspace view (see
+  // api.ts's own comment on why api.projects.list requires a concrete
+  // workspace_id).
+  useEffect(() => {
+    if (!studentSession?.rollNumber) return;
+    const targetWorkspaceId = activeWorkspaceId ?? personalWorkspace?.id;
+    if (!targetWorkspaceId) return;
+    let cancelled = false;
+    api.projects.list(studentSession.rollNumber, targetWorkspaceId)
+      .then(list => {
+        if (cancelled) return;
+        const active = list.filter(p => !p.is_archived).sort((a, b) => b.created_at.localeCompare(a.created_at));
+        setProjects(active.slice(0, 6));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [studentSession?.rollNumber, activeWorkspaceId, personalWorkspace?.id]);
+
+  // Templates — same workspace-scoping/personal-fallback shape as
+  // Projects/Assets above (V2.3 Phase 10); a template has no cross-
+  // workspace view (see api.ts's own comment on api.templates.list).
+  useEffect(() => {
+    if (!studentSession?.rollNumber) return;
+    const targetWorkspaceId = activeWorkspaceId ?? personalWorkspace?.id;
+    if (!targetWorkspaceId) return;
+    let cancelled = false;
+    api.templates.list(studentSession.rollNumber, targetWorkspaceId)
+      .then(list => {
+        if (cancelled) return;
+        const active = list.filter(t => !t.is_archived).sort((a, b) => b.created_at.localeCompare(a.created_at));
+        setTemplates(active.slice(0, 6));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [studentSession?.rollNumber, activeWorkspaceId, personalWorkspace?.id]);
+
+  if (!studentSession) {
+    return (
+      <div style={{ padding: '80px 0', textAlign: 'center' }}>
+        <p className="type-body" style={{ color: 'var(--color-ink-muted)', marginBottom: 16 }}>
+          Sign in to see your recent work.
+        </p>
+        <button onClick={openRollModal} className="btn-primary">
+          Sign in
+        </button>
+      </div>
+    );
+  }
+
+  const favoriteBoards = myBoards.filter(b => b.is_favorite).slice(0, 6);
+  const recentBoards = [...myBoards].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 6);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', marginBottom: 'var(--space-xl)' }}>
+        <div>
+          <p className="type-caption" style={{ marginBottom: 8 }}>{homeContext.label}</p>
+          <h1 className="type-display-md" style={{ margin: 0 }}>
+            {studentSession.name ? `Welcome back, ${studentSession.name.split(' ')[0]}` : 'Overview'}
+          </h1>
+          {activeWorkspaceId === null && (
+            <p className="type-micro" style={{ margin: 'var(--space-xs) 0 0' }}>{personalFallbackNote('projects, templates or assets')}</p>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={() => navigate('/projects')} className="btn-secondary">
+            + New Project
+          </button>
+          <button onClick={() => navigate('/moodboards')} className="btn-primary">
+            + New Board
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="type-body" style={{ color: 'var(--color-ink-muted)' }}>Loading…</p>
+      ) : (
+        <>
+          {favoriteBoards.length > 0 && (
+            <div style={{ marginBottom: 'var(--space-xxl)' }}>
+              <SectionHeading title="Favorites" />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                {favoriteBoards.map(b => <BoardCard key={b.id} board={b} />)}
+              </div>
+            </div>
+          )}
+
+          <div style={{ marginBottom: 'var(--space-xxl)' }}>
+            <SectionHeading title="Recent Moodboards" action={{ label: 'View all', onClick: () => navigate('/moodboards') }} />
+            {recentBoards.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                {recentBoards.map(b => <BoardCard key={b.id} board={b} />)}
+              </div>
+            ) : (
+              <p className="type-body" style={{ color: 'var(--color-ink-muted)' }}>
+                No boards yet — create one to get started.
+              </p>
+            )}
+          </div>
+
+          {projects.length > 0 && (
+            <div style={{ marginBottom: 'var(--space-xxl)' }}>
+              <SectionHeading title="Recent Projects" action={{ label: 'View all', onClick: () => navigate('/projects') }} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                {projects.map(p => <ProjectCard key={p.id} project={p} />)}
+              </div>
+            </div>
+          )}
+
+          {templates.length > 0 && (
+            <div style={{ marginBottom: 'var(--space-xxl)' }}>
+              <SectionHeading title="Recent Templates" action={{ label: 'View all', onClick: () => navigate('/templates') }} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                {templates.map(t => <TemplateCard key={t.id} template={t} />)}
+              </div>
+            </div>
+          )}
+
+          {assets.length > 0 && (
+            <div style={{ marginBottom: 'var(--space-xxl)' }}>
+              <SectionHeading title="Recent Assets" action={{ label: 'View all', onClick: () => navigate('/assets') }} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
+                {assets.map(a => (
+                  <div
+                    key={a.id}
+                    title={a.filename}
+                    role="img"
+                    aria-label={a.filename}
+                    style={{
+                      aspectRatio: '1', borderRadius: 'var(--radius-md)', overflow: 'hidden',
+                      border: '1px solid var(--color-border)', background: 'var(--color-surface-1)',
+                    }}
+                  >
+                    <AssetPreview asset={a} compact />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {workspaces.length === 0 && (
+            <p className="type-body" style={{ color: 'var(--color-ink-muted)' }}>
+              Setting up your workspace…
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
