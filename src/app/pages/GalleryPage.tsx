@@ -530,17 +530,24 @@ export function GalleryPage() {
           ))}
         </div>
 
-        <motion.div layout className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 space-y-0">
-          <AnimatePresence>
+        {/* No layout animation here: a filter change rebalances every CSS
+            column, so FLIP-ing cards across that reflow sends them flying
+            thousands of px (and the old container `layout` scale-corrected
+            every card each frame). popLayout pops exiting cards out of the
+            column flow at once (needs the relative parent) so the grid reflows
+            immediately instead of waiting for every staggered exit to finish. */}
+        <div className="relative columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 space-y-0">
+          <AnimatePresence mode="popLayout">
             {filtered.map((art, i) => {
               const hasBurst = burstIds.has(art.id);
               const aspects = ['aspect-[3/4]', 'aspect-square', 'aspect-[4/5]', 'aspect-[2/3]'];
               const aspect = aspects[i % aspects.length];
               return (
                 <motion.div
-                  key={art.id} layout
-                  initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.94 }}
-                  transition={{ delay: i * 0.04 }}
+                  key={art.id}
+                  initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.15 } }}
+                  transition={{ delay: Math.min(i * 0.04, 0.3) }}
                   className="break-inside-avoid mb-4 cursor-pointer group"
                   onClick={() => openArtwork(art.id)}
                 >
@@ -587,7 +594,7 @@ export function GalleryPage() {
               );
             })}
           </AnimatePresence>
-        </motion.div>
+        </div>
 
         {filtered.length === 0 && (
           <p className="text-center py-24 type-body" style={{ color: 'var(--color-ink-muted)' }}>No artworks in this category.</p>
