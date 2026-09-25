@@ -40,7 +40,13 @@ async function main(): Promise<void> {
     const readOnly = (await client.query('SHOW transaction_read_only')).rows[0].transaction_read_only;
     if (readOnly !== 'on') throw new Error(`Refusing to run: session is not read-only (transaction_read_only=${readOnly})`);
     const objects = await getStorage().list(prefix);
-    items = await classifyStorageObjects(objects, client);
+    // A derivative (derived/...) is LIVE while its source object exists. A
+    // full listing already contains every source; a narrower --prefix does
+    // not, so list the source namespaces separately (still read-only).
+    const sourcePaths = prefix === ''
+      ? undefined
+      : new Set([...await getStorage().list('assets/'), ...await getStorage().list('canvas-files/')].map(o => o.path));
+    items = await classifyStorageObjects(objects, client, sourcePaths);
   } finally {
     await client.query('ROLLBACK').catch(() => {});
     client.release();

@@ -7,6 +7,7 @@ import { requireStudent, optionalStudent } from '../middleware/studentAuth';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import { getStorage } from '../storage';
+import { scheduleDerivative } from '../storage/derivatives';
 import { param } from '../routeParams';
 import { ensurePersonalWorkspace } from './workspaces';
 import { getBoardRole, roleCanWriteCanvas } from '../realtime/roomAccess';
@@ -1115,6 +1116,10 @@ router.post('/:id/canvas-files', requireStudent, upload.single('file'), async (r
 
     await getStorage().upload(storagePath, req.file.buffer, req.file.mimetype);
     const url = getStorage().getPublicUrl(storagePath);
+
+    // Original stored — best-effort thumbnail derivative, off the response
+    // path; the canvas keeps using `url` (storage/derivatives.ts).
+    scheduleDerivative(storagePath, req.file.buffer);
 
     res.json({ fileId, url });
   } catch (err) {

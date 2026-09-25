@@ -9,6 +9,7 @@ import { requireStudent } from '../middleware/studentAuth';
 import { param } from '../routeParams';
 import { getStorage } from '../storage';
 import { findStorageReferences } from '../storage/references';
+import { deleteDerivatives, scheduleDerivative } from '../storage/derivatives';
 
 const router = Router();
 
@@ -303,6 +304,11 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
       }
       throw dbErr;
     }
+
+    // Original stored and its row persisted — now (best-effort, off the
+    // response path) make its thumbnail derivative. Its outcome never
+    // affects this upload; see storage/derivatives.ts.
+    if (kind === 'image') scheduleDerivative(storageKey, req.file.buffer);
 
     res.status(201).json(toPublicAsset(row));
   } catch (err) {
@@ -600,6 +606,16 @@ router.delete('/:id', requireStudent, async (req: Request, res: Response) => {
         success: true,
         storageWarning: 'Asset removed, but the underlying file could not be deleted from storage.',
       });
+    }
+
+    // The original is gone, so its derivatives go too. (A RETAINED
+    // original — returned above — keeps them: previews may still render
+    // it.) Best-effort: a leftover derivative object is classified as an
+    // ORPHAN by the storage inventory, and never affects this response.
+    try {
+      await deleteDerivatives(row.storage_key);
+    } catch (derivErr) {
+      console.error('Asset deleted but its derivatives could not be cleaned up:', row.storage_key, derivErr);
     }
 
     res.json({ success: true });

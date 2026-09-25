@@ -1,6 +1,7 @@
 import { pool } from '../db/client';
 import type { StoredObject } from './index';
 import { findStorageReferences, type DbExecutor } from './references';
+import { SAFE_ID, SAFE_FILE, DERIVED_ROOT, parseDerivativeKey } from './derivatives';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Storage inventory (V3.0) — READ-ONLY classification of stored objects.
@@ -17,11 +18,18 @@ import { findStorageReferences, type DbExecutor } from './references';
 //       storage_key is exactly this path. Since 3e8fba3 an asset row may be
 //       deleted while its file is kept because saved content references it.
 //
+//   derived/<source key>/<variant>.webp   image derivative (V3.2.3,
+//       storage/derivatives.ts). Owned by nothing: it is DERIVED from its
+//       source object and lives exactly as long as that object exists in
+//       storage. It never owns its source, never counts as a reference, and
+//       never keeps an asset alive.
+//
 // Everything else (gallery/, thumbs/, covers/ — artworks; team/ — team
 // members; anything unexpected) is UNKNOWN: retained, never a candidate.
 //
 // Classification:
-//   LIVE_OWNER                owner record exists
+//   LIVE_OWNER                owner record exists (a derivative: its source
+//                             object exists)
 //   REFERENCED_WITHOUT_OWNER  owner gone, but saved content references it
 //   ORPHAN                    owner gone AND nothing references it — the
 //                             ONLY class that may ever be a deletion
@@ -34,7 +42,7 @@ import { findStorageReferences, type DbExecutor } from './references';
 // ─────────────────────────────────────────────────────────────────────────
 
 export type StorageClass = 'LIVE_OWNER' | 'REFERENCED_WITHOUT_OWNER' | 'ORPHAN' | 'UNKNOWN';
-export type Namespace = 'canvas-files' | 'assets' | 'other';
+export type Namespace = 'canvas-files' | 'assets' | 'derived' | 'other';
 
 export interface ClassifiedObject extends StoredObject {
   namespace: Namespace;
@@ -50,8 +58,6 @@ export interface ClassifiedObject extends StoredObject {
 
 export const REFERENCE_LIMIT = 50;
 
-const SAFE_ID = /^[A-Za-z0-9_-]{1,128}$/;
-const SAFE_FILE = /^[A-Za-z0-9_-]{1,128}\.[A-Za-z0-9]{1,12}$/;
 
 function unknown(obj: StoredObject, namespace: Namespace, reason: string): ClassifiedObject {
   return { ...obj, namespace, classification: 'UNKNOWN', owner: null, ownerExists: null, referenceCount: 0, referenceCountCapped: false, referenceTypes: [], reason };
@@ -59,7 +65,14 @@ function unknown(obj: StoredObject, namespace: Namespace, reason: string): Class
 
 // `db` defaults to the shared pool; the inventory command passes a single
 // client inside a verified BEGIN READ ONLY transaction.
-export async function classifyStorageObjects(objects: StoredObject[], db: DbExecutor = pool): Promise<ClassifiedObject[]> {
+//
+// `sourcePaths`: every existing assets/ and canvas-files/ object path, used
+// to decide whether a derivative's source still exists. Defaults to the
+// paths in `objects`, which is only complete when `objects` is a full
+// listing — a caller classifying a narrower prefix (e.g. derived/ alone)
+// must pass the source listing, or live derivatives would look orphaned.
+export async function classifyStorageObjects(objects: StoredObject[], db: DbExecutor = pool, sourcePaths?: Set<string>): Promise<ClassifiedObject[]> {
+  const existingSources = sourcePaths ?? new Set(objects.map(o => o.path));
   const boardIds = new Set(((await db.query('SELECT id FROM boards')).rows as Array<{ id: string }>).map(r => r.id));
   const assetKeys = new Set(((await db.query('SELECT storage_key FROM assets WHERE storage_key IS NOT NULL')).rows as Array<{ storage_key: string }>).map(r => r.storage_key));
 
@@ -68,6 +81,10 @@ export async function classifyStorageObjects(objects: StoredObject[], db: DbExec
   for (const obj of sorted) {
     const parts = obj.path.split('/');
     const root = parts[0];
+    if (root === DERIVED_ROOT) {
+      out.push(await classifyDerivative(obj, existingSources, db));
+      continue;
+    }
     if (root !== 'canvas-files' && root !== 'assets') {
       out.push(unknown(obj, 'other', `namespace "${root || '(root)'}" is not managed by storage cleanup`));
       continue;
@@ -96,6 +113,26 @@ export async function classifyStorageObjects(objects: StoredObject[], db: DbExec
     }
   }
   return out;
+}
+
+async function classifyDerivative(obj: StoredObject, existingSources: Set<string>, db: DbExecutor): Promise<ClassifiedObject> {
+  const parsed = parseDerivativeKey(obj.path);
+  if (!parsed) return unknown(obj, 'derived', 'malformed derived path — source cannot be proven');
+  const owner = `source object ${parsed.sourceKey}`;
+  const ownerExists = existingSources.has(parsed.sourceKey);
+  // Derivative URLs are never persisted, so this is expected to be empty;
+  // checked anyway so that a derivative which somehow IS referenced is
+  // never offered as a deletion candidate.
+  const refs = await findStorageReferences(obj.path, REFERENCE_LIMIT, db);
+  const base = {
+    ...obj, namespace: 'derived' as const, owner, ownerExists,
+    referenceCount: refs.length,
+    referenceCountCapped: refs.length >= REFERENCE_LIMIT,
+    referenceTypes: [...new Set(refs.map(r => r.surface))].sort(),
+  };
+  if (ownerExists) return { ...base, classification: 'LIVE_OWNER', reason: `derivative of ${owner}, which exists` };
+  if (refs.length > 0) return { ...base, classification: 'REFERENCED_WITHOUT_OWNER', reason: `${owner} is gone but saved content references this derivative` };
+  return { ...base, classification: 'ORPHAN', reason: `derivative of ${owner}, which is gone` };
 }
 
 export interface InventorySummary {

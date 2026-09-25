@@ -1608,6 +1608,34 @@ export async function initSchema(): Promise<void> {
   await backfillBoardItemPlacement();
 
   console.log('board_items placement migration done');
+
+  // Image derivatives (V3.2.3, storage/derivatives.ts): one row per
+  // (source storage key, variant) — DERIVED data about an existing stored
+  // image, never an asset, owner or reference in its own right. Keyed by
+  // the source's storage key (the identity assets/, canvas-files/,
+  // references and inventory already use), so canvas files — which have
+  // no row of their own — are covered too. status is 'ready' (derivative
+  // object written; width/height/bytes describe it), 'failed' (error says
+  // why; the backfill retries it) or 'skipped' (the source is deliberately
+  // served as-is, e.g. an animated GIF; error says why — recorded so the
+  // backfill never re-examines it). Additive: nothing reads it until
+  // V3.2.4/V3.2.5, and a missing row just means "use the original".
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS storage_derivatives (
+      source_key      TEXT NOT NULL,
+      variant         TEXT NOT NULL,
+      derivative_key  TEXT NOT NULL,
+      status          TEXT NOT NULL CHECK (status IN ('ready', 'failed', 'skipped')),
+      width           INTEGER,
+      height          INTEGER,
+      bytes           INTEGER,
+      error           TEXT,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (source_key, variant)
+    )
+  `);
+
+  console.log('storage_derivatives migration done');
 }
 
 // Idempotent backfill for board_items saved before placed_at existed: marks

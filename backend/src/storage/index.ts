@@ -7,7 +7,14 @@ export interface StoredObject {
 }
 
 export interface StorageProvider {
-  upload(path: string, buffer: Buffer, mimeType: string): Promise<void>;
+  // opts.cacheControl: max-age in seconds for providers that store it with
+  // the object (Supabase). The local provider serves /uploads through
+  // express.static, where app.ts sets headers instead. Only image
+  // derivatives (storage/derivatives.ts) pass it; originals never do.
+  upload(path: string, buffer: Buffer, mimeType: string, opts?: { cacheControl?: string }): Promise<void>;
+  // Read one object's bytes. Used by the derivative backfill to read an
+  // original (never to modify it).
+  download(path: string): Promise<Buffer>;
   // opts.download: serve the object as an attachment (Content-Disposition)
   // under the given filename rather than inline — used for non-image
   // library files so an uploaded HTML/PDF/etc. can never render as a page

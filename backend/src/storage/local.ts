@@ -22,6 +22,10 @@ export class LocalStorageProvider implements StorageProvider {
     fs.writeFileSync(full, buffer);
   }
 
+  async download(filePath: string): Promise<Buffer> {
+    return fs.readFileSync(resolveWithin(filePath));
+  }
+
   // opts is accepted for interface parity only: app.ts already serves every
   // /uploads object with Content-Disposition: attachment.
   getPublicUrl(filePath: string, _opts?: { download?: string }): string {

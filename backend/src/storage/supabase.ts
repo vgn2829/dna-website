@@ -11,14 +11,20 @@ function client() {
 const bucket = () => process.env.SUPABASE_STORAGE_BUCKET ?? 'dna-media';
 
 export class SupabaseStorageProvider implements StorageProvider {
-  async upload(path: string, buffer: Buffer, mimeType: string): Promise<void> {
+  async upload(path: string, buffer: Buffer, mimeType: string, opts?: { cacheControl?: string }): Promise<void> {
     const { error } = await client().storage
       .from(bucket())
-      .upload(path, buffer, { contentType: mimeType, upsert: true });
+      .upload(path, buffer, { contentType: mimeType, upsert: true, ...(opts?.cacheControl ? { cacheControl: opts.cacheControl } : {}) });
     if (error) {
       console.error('Supabase storage upload error:', error);
       throw new Error(`Storage upload failed: ${error.message}`);
     }
+  }
+
+  async download(path: string): Promise<Buffer> {
+    const { data, error } = await client().storage.from(bucket()).download(path);
+    if (error || !data) throw new Error(`Storage download failed: ${error?.message ?? 'no data'}`);
+    return Buffer.from(await data.arrayBuffer());
   }
 
   getPublicUrl(path: string, opts?: { download?: string }): string {

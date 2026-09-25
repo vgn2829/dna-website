@@ -10,6 +10,7 @@ import { getStorage } from '../src/storage';
 import * as storageModule from '../src/storage';
 import { createVersion } from '../src/realtime/history/versionStorage';
 import { classifyStorageObjects, summarizeInventory, type ClassifiedObject } from '../src/storage/inventory';
+import { settleDerivativeJobs } from '../src/storage/derivatives';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Storage inventory (dry run) — classification of real local-storage
@@ -81,6 +82,10 @@ async function classifyKeys(keys: string[]): Promise<Record<string, ClassifiedOb
   const objects = listed.filter(o => keys.includes(o.path));
   expect(objects.map(o => o.path).sort()).toEqual([...keys].sort());
   const before = keys.map(k => fs.readFileSync(path.join(UPLOADS_DIR, k)));
+  // Image uploads schedule a background thumbnail derivative (V3.2.3,
+  // storage/derivatives.ts). Let those finish first, so the spies below
+  // observe only what CLASSIFICATION does — which must still be nothing.
+  await settleDerivativeJobs();
   const deleteSpy = vi.spyOn(getStorage(), 'delete');
   const uploadSpy = vi.spyOn(getStorage(), 'upload');
   const result = await classifyStorageObjects(objects);
