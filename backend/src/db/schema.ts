@@ -1636,6 +1636,23 @@ export async function initSchema(): Promise<void> {
   `);
 
   console.log('storage_derivatives migration done');
+
+  // Lookup indexes for columns real queries filter on without a leading
+  // index (measured with EXPLAIN ANALYZE on a 10× dataset, V3.2.7):
+  //   board_items(board_id)          — board detail's pending items, the
+  //     project boards list's item join, and MARK_PLACED_BOARD_ITEMS_SQL on
+  //     every canvas save (REST and realtime persistence).
+  //   workspace_members(roll_number) — GET /workspaces and the all-
+  //     workspaces shared-boards list; the PRIMARY KEY leads with
+  //     workspace_id, so it can't serve a roll_number-only lookup.
+  //   boards(owner_roll)             — the archived boards list.
+  // board_members(roll_number) is deliberately absent: GET /boards' cost is
+  // the owner/member OR over boards, which that index doesn't change.
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_board_items_board_id ON board_items (board_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_workspace_members_roll_number ON workspace_members (roll_number)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_boards_owner_roll ON boards (owner_roll)`);
+
+  console.log('lookup indexes migration done');
 }
 
 // Idempotent backfill for board_items saved before placed_at existed: marks
