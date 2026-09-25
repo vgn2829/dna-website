@@ -1,5 +1,6 @@
 // Shared by every route that returns board rows (boards.ts, projects.ts,
-// templates.ts). Board queries select `b.*`, which includes canvas_data —
+// templates.ts). Single-board queries select `b.*` (list queries use
+// BOARD_LIST_COLUMNS below), which includes canvas_data —
 // the full tldraw document (can be MBs for legacy boards). Board lists and
 // detail responses must never ship it (the canvas is loaded separately via
 // GET /api/boards/:id/canvas), so it's stripped here, along with the
@@ -19,6 +20,22 @@ export function toPublicBoard(row: Record<string, unknown>): Record<string, unkn
   }
   return { ...rest, canvas_preview: canvasPreview };
 }
+
+// Board LIST queries (boards.ts GET /, /archived, /shared; projects.ts
+// GET /:id/boards) select these columns instead of `b.*`. `b.*` pulled
+// canvas_data — the whole tldraw document, MBs for legacy boards — out of
+// Postgres into Node for every board on every list request, only for
+// toPublicBoard to throw it away. This is exactly the set toPublicBoard
+// returns (plus canvas_preview, which it parses), so responses are
+// unchanged; canvas_item_count / canvas_placed_item_ids are only read by
+// BOARD_ITEM_COUNT_SQL inside the query. A new boards column that list
+// responses should expose must be added here (board-list-columns.test.ts
+// fails until it is). Requires `b` = boards.
+export const BOARD_LIST_COLUMNS = `
+  b.id, b.name, b.description, b.owner_roll, b.owner_name, b.visibility,
+  b.created_at, b.updated_at, b.room_id, b.edit_mode, b.is_archived,
+  b.thumbnail_url, b.realtime_enabled, b.workspace_id, b.project_id,
+  b.canvas_preview`;
 
 // Card item count: visible canvas shapes (canvas_item_count, kept in sync
 // on every canvas write) plus legacy board_items ("Save to Moodboard")

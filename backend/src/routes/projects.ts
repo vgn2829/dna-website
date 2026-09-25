@@ -5,7 +5,7 @@ import { pool } from '../db/client';
 import { requireStudent } from '../middleware/studentAuth';
 import { param } from '../routeParams';
 import { getWorkspaceMembership } from './assets';
-import { toPublicBoard, BOARD_ITEM_COUNT_SQL } from '../lib/boardRows';
+import { toPublicBoard, BOARD_ITEM_COUNT_SQL, BOARD_LIST_COLUMNS } from '../lib/boardRows';
 
 const router = Router();
 
@@ -194,7 +194,7 @@ router.get('/:id/boards', requireStudent, async (req: Request, res: Response) =>
 
     const result = await pool.query(`
       SELECT
-        b.*,
+        ${BOARD_LIST_COLUMNS},
         ${BOARD_ITEM_COUNT_SQL},
         COUNT(DISTINCT bm.roll_number)::int as member_count,
         (bf.roll_number IS NOT NULL) as is_favorite

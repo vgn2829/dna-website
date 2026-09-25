@@ -12,7 +12,7 @@ import { ensurePersonalWorkspace } from './workspaces';
 import { getBoardRole, roleCanWriteCanvas } from '../realtime/roomAccess';
 import { notifyBoardShared } from '../services/notificationService';
 import { canvasSummaryColumns } from '../lib/canvasSummary';
-import { toPublicBoard, BOARD_ITEM_COUNT_SQL, MARK_PLACED_BOARD_ITEMS_SQL } from '../lib/boardRows';
+import { toPublicBoard, BOARD_ITEM_COUNT_SQL, BOARD_LIST_COLUMNS, MARK_PLACED_BOARD_ITEMS_SQL } from '../lib/boardRows';
 
 const router = Router();
 
@@ -127,7 +127,7 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
     // b.id, bf.roll_number.
     const result = await pool.query(`
       SELECT DISTINCT
-        b.*,
+        ${BOARD_LIST_COLUMNS},
         p.name as project_name,
         ${BOARD_ITEM_COUNT_SQL},
         COUNT(DISTINCT bm.roll_number)::int as member_count,
@@ -168,7 +168,7 @@ router.get('/archived', requireStudent, async (req: Request, res: Response) => {
 
     const result = await pool.query(`
       SELECT
-        b.*,
+        ${BOARD_LIST_COLUMNS},
         ${BOARD_ITEM_COUNT_SQL},
         COUNT(DISTINCT bm.roll_number)::int as member_count,
         (bf.roll_number IS NOT NULL) as is_favorite
@@ -241,7 +241,7 @@ router.get('/shared', optionalStudent, async (req: Request, res: Response) => {
 
       const result = await pool.query(`
         SELECT
-          b.*,
+          ${BOARD_LIST_COLUMNS},
           ${BOARD_ITEM_COUNT_SQL},
           COUNT(DISTINCT bm.roll_number)::int as member_count,
           (bf.roll_number IS NOT NULL) as is_favorite
@@ -266,7 +266,7 @@ router.get('/shared', optionalStudent, async (req: Request, res: Response) => {
     // actually a member of — an authorized set, not the whole app.
     const result = await pool.query(`
       SELECT
-        b.*,
+        ${BOARD_LIST_COLUMNS},
         ${BOARD_ITEM_COUNT_SQL},
         COUNT(DISTINCT bm.roll_number)::int as member_count,
         (bf.roll_number IS NOT NULL) as is_favorite
