@@ -9,7 +9,7 @@ import { requireStudent } from '../middleware/studentAuth';
 import { param } from '../routeParams';
 import { getStorage } from '../storage';
 import { findStorageReferences } from '../storage/references';
-import { deleteDerivatives, scheduleDerivative } from '../storage/derivatives';
+import { deleteDerivatives, derivativeKey, isDerivableSourceKey, resolveDerivativeUrls, scheduleDerivative } from '../storage/derivatives';
 
 const router = Router();
 
@@ -170,6 +170,33 @@ function toPublicAsset(row: AssetRow) {
   return { ...rest, extension, url };
 }
 
+// Every asset response goes through here (list AND single-asset routes),
+// adding the read-time `thumb_url`: the public URL of the image's t512
+// derivative when — and only when — its storage_derivatives row is
+// 'ready' (storage/derivatives.ts). Missing, failed, skipped, SVG, file
+// and link assets get null, and consumers fall back to `url`, which is
+// unchanged and stays the canonical original. Computed from the row's own
+// storage_key (trusted, server-generated); never stored anywhere. One
+// batched lookup for the whole response, never one per asset.
+async function toPublicAssets(rows: AssetRow[]) {
+  const imageKeys = rows
+    .filter(r => r.kind === 'image' && r.storage_key && isDerivableSourceKey(r.storage_key))
+    .map(r => r.storage_key as string);
+  const resolved = imageKeys.length > 0 ? await resolveDerivativeUrls(imageKeys) : new Map<string, string>();
+  return rows.map(row => {
+    const key = row.kind === 'image' ? row.storage_key : null;
+    const mapped = key ? resolved.get(key) : undefined;
+    const thumbUrl = key && mapped && isDerivableSourceKey(key) && mapped === getStorage().getPublicUrl(derivativeKey(key))
+      ? mapped
+      : null;
+    return { ...toPublicAsset(row), thumb_url: thumbUrl };
+  });
+}
+
+async function toPublicAssetOne(row: AssetRow) {
+  return (await toPublicAssets([row]))[0];
+}
+
 async function getWorkspaceMembership(workspaceId: string, roll: string): Promise<'owner' | 'admin' | 'member' | null> {
   const result = await pool.query(
     'SELECT role FROM workspace_members WHERE workspace_id = $1 AND roll_number = $2',
@@ -310,7 +337,7 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
     // affects this upload; see storage/derivatives.ts.
     if (kind === 'image') scheduleDerivative(storageKey, req.file.buffer);
 
-    res.status(201).json(toPublicAsset(row));
+    res.status(201).json(await toPublicAssetOne(row));
   } catch (err) {
     console.error('Asset upload error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -391,7 +418,7 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
     const rows = result.rows as AssetRow[];
     const nextCursor = rows.length === limit ? rows[rows.length - 1].id : null;
 
-    res.json({ assets: rows.map(toPublicAsset), nextCursor });
+    res.json({ assets: await toPublicAssets(rows), nextCursor });
   } catch (err) {
     console.error('List assets error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -450,7 +477,7 @@ router.post('/links', requireStudent, createLinkLimiter, async (req: Request, re
       RETURNING *
     `, [uuidv4(), workspaceId, roll, ownerName, collection.id, name, linkUrl, new Date().toISOString()]);
 
-    res.status(201).json(toPublicAsset(result.rows[0] as AssetRow));
+    res.status(201).json(await toPublicAssetOne(result.rows[0] as AssetRow));
   } catch (err) {
     console.error('Create link asset error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -510,7 +537,7 @@ router.patch('/:id', requireStudent, async (req: Request, res: Response) => {
       RETURNING *
     `, [id, filename ?? null, collectionId !== undefined, collectionId ?? null]);
 
-    res.json(toPublicAsset(result.rows[0] as AssetRow));
+    res.json(await toPublicAssetOne(result.rows[0] as AssetRow));
   } catch (err) {
     console.error('Update asset error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -532,7 +559,7 @@ router.get('/:id', requireStudent, async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    res.json(toPublicAsset(row));
+    res.json(await toPublicAssetOne(row));
   } catch (err) {
     console.error('Get asset error:', err);
     res.status(500).json({ error: 'Internal server error' });

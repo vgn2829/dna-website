@@ -1,9 +1,10 @@
 import { FileText, FileArchive, FileImage, FileVideo, FileAudio, Presentation, PenTool, Type, File as FileIcon, Link2 } from 'lucide-react';
 import type { Asset } from '../../lib/api';
-import { fileFamily, linkDomain, linkSource, type FileFamily } from '../../lib/assetLibrary';
+import { assetPreviewFallback, assetPreviewSrc, fileFamily, linkDomain, linkSource, type FileFamily } from '../../lib/assetLibrary';
 
 // ─────────────────────────────────────────────────────────────────────────
-// The visual block of an asset — a real preview for images, a file-type
+// The visual block of an asset — a real preview for images (its t512
+// thumbnail when the server has one ready, else the original), a file-type
 // tile for files (PSD/AI/PDF/ZIP/... are never parsed or rendered; the
 // tile is built purely from the stored extension), and a link tile for
 // external links (source + domain from the URL itself — no remote
@@ -17,10 +18,17 @@ const FAMILY_ICON: Record<FileFamily, typeof FileIcon> = {
 };
 
 export function AssetPreview({ asset, compact = false }: { asset: Asset; compact?: boolean }) {
-  if (asset.kind === 'image' && asset.url) {
+  const previewSrc = assetPreviewSrc(asset);
+  if (asset.kind === 'image' && previewSrc) {
     return (
       <img
-        src={asset.url}
+        src={previewSrc}
+        // A ready thumbnail that fails to load (e.g. its object went
+        // missing) falls back to the original, once.
+        onError={e => {
+          const fallback = assetPreviewFallback(asset, e.currentTarget.getAttribute('src') ?? '');
+          if (fallback) e.currentTarget.src = fallback;
+        }}
         alt=""
         loading="lazy"
         draggable={false}

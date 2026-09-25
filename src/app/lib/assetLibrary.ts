@@ -133,3 +133,19 @@ export function assetMetaLine(asset: Pick<Asset, 'kind' | 'extension' | 'size_by
   if (size) parts.push(size);
   return parts.join(' · ');
 }
+
+// What an image asset's card/preview <img> loads: the server's t512
+// thumbnail when it has a ready one, otherwise the original. Only for
+// thumbnail-sized rendering — opening, downloading and board insertion
+// keep using asset.url (the original).
+export function assetPreviewSrc(asset: Pick<Asset, 'kind' | 'url' | 'thumb_url'>): string | null {
+  if (asset.kind !== 'image') return null;
+  return asset.thumb_url || asset.url || null;
+}
+
+// When the preview <img> fails: if it was showing the thumbnail, the
+// original to retry with; otherwise null (don't loop on a broken original).
+export function assetPreviewFallback(asset: Pick<Asset, 'url' | 'thumb_url'>, failedSrc: string): string | null {
+  if (!asset.thumb_url || !asset.url || asset.url === asset.thumb_url) return null;
+  return failedSrc === asset.thumb_url ? asset.url : null;
+}

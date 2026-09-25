@@ -256,6 +256,10 @@ export interface Asset {
   height: number | null;
   created_at: string;
   url: string | null;
+  // Read-time t512 WebP derivative of an image asset, set only when one is
+  // ready (null otherwise). For card/preview rendering ONLY — `url` stays
+  // the original for opening, downloading and placing on a board.
+  thumb_url?: string | null;
 }
 
 // Mirrors backend/src/routes/assetCollections.ts.

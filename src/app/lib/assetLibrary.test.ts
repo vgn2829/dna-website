@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { assetMetaLine, classifyUpload, fileExtension, fileFamily, formatSize, displayUrl, isAcceptableLinkUrl, linkDomain, linkSource, FILE_MAX_BYTES, IMAGE_MAX_BYTES } from './assetLibrary';
+import { assetPreviewFallback, assetPreviewSrc, assetMetaLine, classifyUpload, fileExtension, fileFamily, formatSize, displayUrl, isAcceptableLinkUrl, linkDomain, linkSource, FILE_MAX_BYTES, IMAGE_MAX_BYTES } from './assetLibrary';
 
 describe('classifyUpload', () => {
   it('routes allowlisted images through the image path', () => {
@@ -78,5 +78,32 @@ describe('link helpers', () => {
     expect(isAcceptableLinkUrl('javascript:alert(1)')).toBe(false);
     expect(isAcceptableLinkUrl('figma.com/file')).toBe(false);
     expect(isAcceptableLinkUrl('https://a:b@x.com')).toBe(false);
+  });
+});
+
+// V3.2.4 — AssetPreview (Assets cards AND Home's Recent Assets, which
+// render the same component) loads assetPreviewSrc(asset) and, on error,
+// assetPreviewFallback(asset, failedSrc).
+describe('asset preview thumbnails', () => {
+  const ORIGINAL = 'https://cdn.test/assets/ws/a.jpg';
+  const THUMB = 'https://cdn.test/derived/assets/ws/a.jpg/t512.webp';
+  it('uses the thumbnail when the server provides one', () => {
+    expect(assetPreviewSrc({ kind: 'image', url: ORIGINAL, thumb_url: THUMB })).toBe(THUMB);
+  });
+  it('falls back to the original when there is no ready thumbnail (null, missing field, empty)', () => {
+    expect(assetPreviewSrc({ kind: 'image', url: ORIGINAL, thumb_url: null })).toBe(ORIGINAL);
+    expect(assetPreviewSrc({ kind: 'image', url: ORIGINAL })).toBe(ORIGINAL);
+    expect(assetPreviewSrc({ kind: 'image', url: ORIGINAL, thumb_url: '' })).toBe(ORIGINAL);
+  });
+  it('never renders a preview image for files and links, or an image with no url', () => {
+    expect(assetPreviewSrc({ kind: 'file', url: 'https://cdn.test/assets/ws/d.pdf', thumb_url: null })).toBeNull();
+    expect(assetPreviewSrc({ kind: 'link', url: null, thumb_url: null })).toBeNull();
+    expect(assetPreviewSrc({ kind: 'image', url: null, thumb_url: null })).toBeNull();
+  });
+  it('a failed thumbnail load retries with the original, once; a failed original does not loop', () => {
+    expect(assetPreviewFallback({ url: ORIGINAL, thumb_url: THUMB }, THUMB)).toBe(ORIGINAL);
+    expect(assetPreviewFallback({ url: ORIGINAL, thumb_url: THUMB }, ORIGINAL)).toBeNull();
+    expect(assetPreviewFallback({ url: ORIGINAL, thumb_url: null }, ORIGINAL)).toBeNull();
+    expect(assetPreviewFallback({ url: ORIGINAL, thumb_url: ORIGINAL }, ORIGINAL)).toBeNull();
   });
 });

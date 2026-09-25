@@ -446,7 +446,14 @@ describe('read-time URL mapping', () => {
     await settleDerivativeJobs();
     const persisted = await query(`SELECT canvas_data, canvas_preview FROM boards UNION ALL SELECT canvas_data, NULL FROM templates UNION ALL SELECT snapshot, NULL FROM board_versions`);
     expect(JSON.stringify(persisted)).not.toContain('derived/');
-    expect(JSON.stringify((await request(app).get(`/api/assets?workspace_id=${ws}`).set(auth('DP1'))).body)).not.toContain('derived/');
+    // Since V3.2.4 the asset API exposes a READ-TIME thumb_url; the
+    // canonical url stays the original and no other field carries a
+    // derivative URL.
+    for (const a of (await request(app).get(`/api/assets?workspace_id=${ws}`).set(auth('DP1'))).body.assets as Array<Record<string, unknown>>) {
+      expect(a.url as string).not.toContain('derived/');
+      const { thumb_url: _thumb, ...rest } = a;
+      expect(JSON.stringify(rest)).not.toContain('derived/');
+    }
     expect(res.body.url).not.toContain('derived/');
   });
 });
