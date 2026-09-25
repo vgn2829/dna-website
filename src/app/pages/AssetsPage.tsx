@@ -1,5 +1,6 @@
 import { useStudent } from '../context/StudentContext';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { workspaceContext, personalFallbackNote } from '../lib/workspaceSearch';
 import { AssetBrowser } from '../components/assets/AssetBrowser';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -48,6 +49,7 @@ export default function AssetsPage() {
 
   const activeWorkspace = activeWorkspaceId ? workspaces.find(w => w.id === activeWorkspaceId) ?? null : null;
   const targetWorkspace = activeWorkspace ?? personalWorkspace;
+  const context = workspaceContext(activeWorkspaceId ? targetWorkspace : null, { spansAllWorkspaces: false });
 
   if (!targetWorkspace) {
     return (
@@ -59,9 +61,9 @@ export default function AssetsPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 28 }}>
+      <div style={{ marginBottom: 'var(--space-xl)' }}>
         <p className="type-caption" style={{ marginBottom: 8 }}>
-          {targetWorkspace.is_personal ? 'Personal' : targetWorkspace.name}
+          {context.label}
         </p>
         <h1 className="type-display-md" style={{ margin: 0 }}>
           Assets
@@ -69,6 +71,9 @@ export default function AssetsPage() {
         <p className="type-body" style={{ margin: '10px 0 0', color: 'var(--color-ink-muted)' }}>
           Workspace asset library
         </p>
+        {context.fallbackToPersonal && (
+          <p className="type-micro" style={{ margin: 'var(--space-xs) 0 0' }}>{personalFallbackNote('assets')}</p>
+        )}
       </div>
 
       <AssetBrowser

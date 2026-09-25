@@ -99,12 +99,12 @@ function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
         </div>
         <form onSubmit={handle} className="space-y-3">
           <div className="relative">
-            <input type={show ? 'text' : 'password'} value={pw} onChange={e => { setPw(e.target.value); setError(''); }} placeholder="Admin password" className="input-base pr-11" autoFocus />
-            <button type="button" onClick={() => setShow(s => !s)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-ink-muted)' }}>
+            <input type={show ? 'text' : 'password'} value={pw} onChange={e => { setPw(e.target.value); setError(''); }} placeholder="Admin password" aria-label="Admin password" aria-invalid={error ? true : undefined} aria-describedby={error ? 'admin-login-error' : undefined} className="input-base pr-11" autoFocus />
+            <button type="button" onClick={() => setShow(s => !s)} aria-label={show ? 'Hide password' : 'Show password'} aria-pressed={show} className="absolute right-3 top-1/2 -translate-y-1/2 touch-target" style={{ color: 'var(--color-ink-muted)' }}>
               {show ? <EyeOff size={15} /> : <Eye size={15} />}
             </button>
           </div>
-          {error && <p className="type-micro" style={{ color: '#e5484d' }}>{error}</p>}
+          {error && <p id="admin-login-error" role="alert" className="type-micro" style={{ color: '#e5484d' }}>{error}</p>}
           <button type="submit" disabled={loading} className="btn-primary w-full justify-center" style={{ opacity: loading ? 0.6 : 1 }}>
             {loading ? 'Verifying…' : 'Unlock Dashboard'}
           </button>

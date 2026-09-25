@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useWorkspace } from '../../context/WorkspaceContext';
+import { workspaceContext } from '../../lib/workspaceSearch';
 import { WorkspacesPanel } from '../WorkspacesPanel';
 import { WorkspaceSettingsModal } from '../WorkspaceSettingsModal';
 import { useStudent } from '../../context/StudentContext';
@@ -37,7 +38,7 @@ export function WorkspaceSwitcher() {
   if (!studentSession) return null;
 
   const activeWorkspace = activeWorkspaceId ? workspaces.find(w => w.id === activeWorkspaceId) ?? null : null;
-  const activeLabel = activeWorkspace ? (activeWorkspace.is_personal ? 'Personal' : activeWorkspace.name) : 'All Workspaces';
+  const activeLabel = workspaceContext(activeWorkspace ?? null, { spansAllWorkspaces: true }).label;
 
   return (
     <>

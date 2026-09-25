@@ -20,3 +20,26 @@ export function filterWorkspaces<T extends Pick<Workspace, 'is_personal' | 'name
   if (!q) return workspaces;
   return workspaces.filter(ws => workspaceLabel(ws).toLowerCase().includes(q));
 }
+
+export const ALL_WORKSPACES_LABEL = 'All Workspaces';
+
+// The one source for "which workspace is this page showing?" — used by the
+// sidebar switcher and every workspace page's context caption, so they can
+// never disagree. Pages that can span every workspace (Moodboards, Home's
+// boards) show "All Workspaces" when none is selected. Per-workspace pages
+// (Assets, Projects, Templates) can't: with "All Workspaces" selected they
+// show the Personal workspace, and say so (`fallbackToPersonal`) instead of
+// silently labelling it "Personal" next to a switcher that says "All".
+export function workspaceContext(
+  activeWorkspace: Pick<Workspace, 'is_personal' | 'name'> | null,
+  opts: { spansAllWorkspaces: boolean },
+): { label: string; fallbackToPersonal: boolean } {
+  if (activeWorkspace) return { label: workspaceLabel(activeWorkspace), fallbackToPersonal: false };
+  if (opts.spansAllWorkspaces) return { label: ALL_WORKSPACES_LABEL, fallbackToPersonal: false };
+  return { label: 'Personal', fallbackToPersonal: true };
+}
+
+// Shown under a per-workspace page's title while "All Workspaces" is selected.
+export function personalFallbackNote(what: string): string {
+  return `${ALL_WORKSPACES_LABEL} doesn't apply to ${what} — showing your Personal workspace.`;
+}

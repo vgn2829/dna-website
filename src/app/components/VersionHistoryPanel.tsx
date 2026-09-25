@@ -198,7 +198,7 @@ export function VersionHistoryPanel({ boardId, actorRoll, isOwnerOrMember, onClo
               </p>
               <button
                 onClick={loadInitial}
-                className="btn-translucent btn-sm"
+                className="btn-translucent btn-sm touch-target"
                 style={{ alignSelf: 'center' }}
               >
                 Retry
@@ -265,7 +265,7 @@ export function VersionHistoryPanel({ boardId, actorRoll, isOwnerOrMember, onClo
                     {!isCurrent && isOwnerOrMember && (
                       <button
                         onClick={() => setConfirmRestore(version)}
-                        className="btn-translucent btn-sm"
+                        className="btn-translucent btn-sm touch-target"
                         style={{ alignSelf: 'flex-start', marginTop: 2 }}
                       >
                         Restore this version
@@ -279,7 +279,7 @@ export function VersionHistoryPanel({ boardId, actorRoll, isOwnerOrMember, onClo
                 <button
                   onClick={handleLoadMore}
                   disabled={loadingMore}
-                  className="btn-translucent btn-sm"
+                  className="btn-translucent btn-sm touch-target"
                   style={{ alignSelf: 'center' }}
                 >
                   {loadingMore ? 'Loading…' : 'Load more'}
@@ -312,7 +312,7 @@ export function VersionHistoryPanel({ boardId, actorRoll, isOwnerOrMember, onClo
               style={{
                 width: '100%', maxWidth: 380,
                 background: 'var(--color-surface-1)', border: '1px solid var(--color-hairline)',
-                borderRadius: 'var(--radius-xl)', padding: '28px 24px',
+                borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)',
                 display: 'flex', flexDirection: 'column', gap: 16,
               }}
             >

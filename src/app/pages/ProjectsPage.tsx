@@ -6,6 +6,7 @@ import { FolderKanban } from 'lucide-react';
 import { api, type Project } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { workspaceContext, personalFallbackNote } from '../lib/workspaceSearch';
 import { useModalA11y } from '../components/hooks/useModalA11y';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -46,6 +47,7 @@ export default function ProjectsPage() {
   const targetWorkspace = activeWorkspaceId
     ? workspaces.find(w => w.id === activeWorkspaceId) ?? null
     : personalWorkspace;
+  const context = workspaceContext(activeWorkspaceId ? targetWorkspace : null, { spansAllWorkspaces: false });
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,8 +67,10 @@ export default function ProjectsPage() {
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
   const [archivingId, setArchivingId] = useState<string | null>(null);
 
-  const createDialogRef = useModalA11y(showCreate, () => setShowCreate(false));
-  const renameDialogRef = useModalA11y(!!renameProject, () => setRenameProject(null));
+  // initialFocus, not autoFocus on the field: autoFocus runs before the hook
+  // records the opener, so focus could not return to it on close.
+  const createDialogRef = useModalA11y(showCreate, () => setShowCreate(false), { initialFocus: () => document.getElementById('new-project-name') });
+  const renameDialogRef = useModalA11y(!!renameProject, () => setRenameProject(null), { initialFocus: () => renameDialogRef.current?.querySelector<HTMLElement>('input') ?? null });
 
   const fetchProjects = useCallback(() => {
     if (!studentSession?.rollNumber || !targetWorkspace) return;
@@ -182,21 +186,24 @@ export default function ProjectsPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', marginBottom: 28 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', marginBottom: 'var(--space-xl)' }}>
         <div>
           <p className="type-caption" style={{ marginBottom: 8 }}>
-            {targetWorkspace.is_personal ? 'Personal' : targetWorkspace.name}
+            {context.label}
           </p>
           <h1 className="type-display-md" style={{ margin: 0 }}>
             Projects
           </h1>
+        {context.fallbackToPersonal && (
+          <p className="type-micro" style={{ margin: 'var(--space-xs) 0 0' }}>{personalFallbackNote('projects')}</p>
+        )}
         </div>
         <button onClick={() => setShowCreate(true)} className="btn-primary">
           + New Project
         </button>
       </div>
 
-      <div className="segmented" style={{ marginBottom: 28 }}>
+      <div className="segmented" style={{ marginBottom: 'var(--space-xl)' }}>
         {([['active', 'Active'], ['archived', 'Archived']] as const).map(([key, label]) => (
           <button
             key={key}
@@ -327,7 +334,7 @@ export default function ProjectsPage() {
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
+              style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
               <h3 className="type-headline" style={{ margin: 0 }}>
                 New Project
@@ -338,17 +345,17 @@ export default function ProjectsPage() {
                 { label: 'Description (optional)', key: 'description', placeholder: 'What is this project about?' },
               ] as const).map(({ label, key, placeholder }) => (
                 <div key={key}>
-                  <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
+                  <label htmlFor={`new-project-${key}`} className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                     {label}
                   </label>
                   <input
+                    id={`new-project-${key}`}
                     className="input-base"
                     type="text"
                     placeholder={placeholder}
                     value={form[key]}
                     onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
                     style={{ width: '100%', boxSizing: 'border-box' }}
-                    autoFocus={key === 'name'}
                   />
                 </div>
               ))}
@@ -394,7 +401,7 @@ export default function ProjectsPage() {
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 400, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
+              style={{ width: '100%', maxWidth: 400, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
               <h3 className="type-headline" style={{ margin: 0 }}>
                 Rename Project
@@ -406,7 +413,6 @@ export default function ProjectsPage() {
                 onChange={e => setRenameValue(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') handleRename(); }}
                 style={{ width: '100%', boxSizing: 'border-box' }}
-                autoFocus
               />
               <div style={{ display: 'flex', gap: 10 }}>
                 <button

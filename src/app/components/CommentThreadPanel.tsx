@@ -91,11 +91,13 @@ function CommentRow({ comment, currentRoll, canModerate, onEdit, onDelete }: Com
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <CommentAuthorRow roll={comment.authorRoll} name={comment.authorName} timestamp={comment.createdAt} />
         {canManage && !editing && (
-          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 'var(--space-lg)', flexShrink: 0 }}>
+            {/* gap 20 = room for both 24px glyphs' touch-target growth (up to 10px each side at 44px) */}
             <button
               onClick={() => { setDraft(comment.content); setEditing(true); }}
               aria-label="Edit comment"
               style={iconButtonStyle}
+              className="touch-target"
             >
               ✎
             </button>
@@ -103,6 +105,7 @@ function CommentRow({ comment, currentRoll, canModerate, onEdit, onDelete }: Com
               onClick={() => setConfirmDelete(true)}
               aria-label="Delete comment"
               style={iconButtonStyle}
+              className="touch-target"
             >
               🗑
             </button>
@@ -126,10 +129,10 @@ function CommentRow({ comment, currentRoll, canModerate, onEdit, onDelete }: Com
             rows={2}
           />
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={handleSaveEdit} disabled={busy} className="btn-primary btn-sm">
+            <button onClick={handleSaveEdit} disabled={busy} className="btn-primary btn-sm touch-target">
               {busy ? 'Saving…' : 'Save'}
             </button>
-            <button onClick={() => setEditing(false)} disabled={busy} className="btn-translucent btn-sm">
+            <button onClick={() => setEditing(false)} disabled={busy} className="btn-translucent btn-sm touch-target">
               Cancel
             </button>
           </div>
@@ -162,11 +165,11 @@ function CommentRow({ comment, currentRoll, canModerate, onEdit, onDelete }: Com
             <button
               onClick={async () => { setBusy(true); await onDelete(); setBusy(false); setConfirmDelete(false); }}
               disabled={busy}
-              className="btn-primary btn-danger btn-sm"
+              className="btn-primary btn-danger btn-sm touch-target"
             >
               Delete
             </button>
-            <button onClick={() => setConfirmDelete(false)} disabled={busy} className="btn-translucent btn-sm">
+            <button onClick={() => setConfirmDelete(false)} disabled={busy} className="btn-translucent btn-sm touch-target">
               Cancel
             </button>
           </div>
@@ -408,7 +411,7 @@ export function CommentThreadPanel(props: CommentThreadPanelProps) {
         <div style={{ padding: '10px 16px', borderTop: '1px solid var(--color-hairline)', flexShrink: 0 }}>
           <button
             onClick={isResolved ? props.onReopen : props.onResolve}
-            className={isResolved ? 'btn-translucent btn-sm' : 'btn-primary btn-sm'}
+            className={isResolved ? 'btn-translucent btn-sm touch-target' : 'btn-primary btn-sm touch-target'}
             style={{ width: '100%', ...(isResolved ? null : { background: 'var(--color-success-fill)', color: '#fff' }) }}
           >
             {isResolved ? 'Reopen thread' : 'Resolve thread'}

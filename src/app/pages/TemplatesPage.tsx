@@ -6,6 +6,7 @@ import { LayoutTemplate } from 'lucide-react';
 import { api, type Template, type Project } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { workspaceContext, personalFallbackNote } from '../lib/workspaceSearch';
 import { useModalA11y } from '../components/hooks/useModalA11y';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -48,6 +49,7 @@ export default function TemplatesPage() {
   const targetWorkspace = activeWorkspaceId
     ? workspaces.find(w => w.id === activeWorkspaceId) ?? null
     : personalWorkspace;
+  const context = workspaceContext(activeWorkspaceId ? targetWorkspace : null, { spansAllWorkspaces: false });
 
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,8 +78,10 @@ export default function TemplatesPage() {
   const [using, setUsing] = useState(false);
   const [useError, setUseError] = useState('');
 
-  const renameDialogRef = useModalA11y(!!renameTemplate, () => setRenameTemplate(null));
-  const useDialogRef = useModalA11y(!!useTemplate, () => setUseTemplate(null));
+  // initialFocus, not autoFocus on the field: autoFocus runs before the hook
+  // records the opener, so focus could not return to it on close.
+  const renameDialogRef = useModalA11y(!!renameTemplate, () => setRenameTemplate(null), { initialFocus: () => document.getElementById('template-name') });
+  const useDialogRef = useModalA11y(!!useTemplate, () => setUseTemplate(null), { initialFocus: () => document.getElementById('template-board-name') });
   const deleteDialogRef = useModalA11y(!!confirmDelete, () => setConfirmDelete(null));
 
   const fetchTemplates = useCallback(() => {
@@ -229,9 +233,9 @@ export default function TemplatesPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 28 }}>
+      <div style={{ marginBottom: 'var(--space-xl)' }}>
         <p className="type-caption" style={{ marginBottom: 8 }}>
-          {targetWorkspace.is_personal ? 'Personal' : targetWorkspace.name}
+          {context.label}
         </p>
         <h1 className="type-display-md" style={{ margin: 0 }}>
           Templates
@@ -239,9 +243,12 @@ export default function TemplatesPage() {
         <p className="type-body" style={{ margin: '10px 0 0', color: 'var(--color-ink-muted)' }}>
           Save any Moodboard as a template from its canvas page, then reuse it here.
         </p>
+        {context.fallbackToPersonal && (
+          <p className="type-micro" style={{ margin: 'var(--space-xs) 0 0' }}>{personalFallbackNote('templates')}</p>
+        )}
       </div>
 
-      <div className="segmented" style={{ marginBottom: 28 }}>
+      <div className="segmented" style={{ marginBottom: 'var(--space-xl)' }}>
         {([['active', 'Active'], ['archived', 'Archived']] as const).map(([key, label]) => (
           <button
             key={key}
@@ -410,29 +417,30 @@ export default function TemplatesPage() {
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
+              style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
               <h3 className="type-headline" style={{ margin: 0 }}>
                 Edit Template
               </h3>
               <div>
-                <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
+                <label htmlFor="template-name" className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                   Name
                 </label>
                 <input
+                  id="template-name"
                   className="input-base"
                   type="text"
                   value={renameForm.name}
                   onChange={e => setRenameForm(prev => ({ ...prev, name: e.target.value }))}
                   style={{ width: '100%', boxSizing: 'border-box' }}
-                  autoFocus
                 />
               </div>
               <div>
-                <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
+                <label htmlFor="template-description" className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                   Description (optional)
                 </label>
                 <input
+                  id="template-description"
                   className="input-base"
                   type="text"
                   value={renameForm.description}
@@ -479,33 +487,34 @@ export default function TemplatesPage() {
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
+              style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
               <h3 className="type-headline" style={{ margin: 0 }}>
                 New Moodboard from "{useTemplate.name}"
               </h3>
 
               <div>
-                <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
+                <label htmlFor="template-board-name" className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                   Board Name
                 </label>
                 <input
+                  id="template-board-name"
                   className="input-base"
                   type="text"
                   placeholder={useTemplate.name}
                   value={useForm.name}
                   onChange={e => setUseForm(prev => ({ ...prev, name: e.target.value }))}
                   style={{ width: '100%', boxSizing: 'border-box' }}
-                  autoFocus
                 />
               </div>
 
               {useProjectOptions.length > 0 && (
                 <div>
-                  <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
+                  <label htmlFor="template-project" className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                     Project (optional)
                   </label>
                   <select
+                    id="template-project"
                     className="input-base"
                     value={useForm.projectId}
                     onChange={e => setUseForm(prev => ({ ...prev, projectId: e.target.value }))}
@@ -560,7 +569,7 @@ export default function TemplatesPage() {
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 400, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
+              style={{ width: '100%', maxWidth: 400, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
               <h3 className="type-headline" style={{ margin: 0 }}>
                 Delete "{confirmDelete.name}"?

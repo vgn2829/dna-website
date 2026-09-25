@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { api, type Board, type Project } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { workspaceContext } from '../lib/workspaceSearch';
 import { ShareBoardDialog } from '../components/ShareBoardDialog';
 import { AssetLibrary } from '../components/AssetLibrary';
 import { BoardCard, StarIcon, timeAgo } from '../components/BoardCard';
@@ -155,9 +156,11 @@ export default function MoodboardsPage() {
   // modals (Dashboard Polish phase) — same hook ShareBoardDialog already
   // uses, applied here since these three (create/delete/rename) are
   // simple enough to stay inline rather than becoming shared components.
-  const createDialogRef = useModalA11y(showCreate, () => setShowCreate(false));
+  // initialFocus, not autoFocus on the field: autoFocus runs before the hook
+  // records the opener, so focus could not return to it on close.
+  const createDialogRef = useModalA11y(showCreate, () => setShowCreate(false), { initialFocus: () => document.getElementById('new-board-name') });
   const deleteDialogRef = useModalA11y(!!confirmDeleteBoard, () => setConfirmDeleteBoard(null));
-  const renameDialogRef = useModalA11y(!!renameBoard, () => setRenameBoard(null));
+  const renameDialogRef = useModalA11y(!!renameBoard, () => setRenameBoard(null), { initialFocus: () => renameDialogRef.current?.querySelector<HTMLElement>('input') ?? null });
 
   useEffect(() => {
     const cacheKey = CACHE_KEY_SHARED(activeWorkspaceId);
@@ -458,11 +461,11 @@ export default function MoodboardsPage() {
   const showRecentRail = tab === 'mine' && !search.trim() && recentBoards.length > 0;
 
   return (
-    <div className="page-container" style={{ paddingTop: 80, paddingBottom: 80, minHeight: '100vh' }}>
+    <div>
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 40 }}>
-        <p className="type-caption" style={{ marginBottom: 12 }}>
-          Creative Workspace
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 'var(--space-xl)' }}>
+        <p className="type-caption" style={{ marginBottom: 8 }}>
+          {workspaceContext(activeWorkspaceId ? workspaces.find(w => w.id === activeWorkspaceId) ?? null : null, { spansAllWorkspaces: true }).label}
         </p>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
           <h1 className="type-display-md" style={{ margin: 0 }}>Moodboards</h1>
@@ -585,7 +588,7 @@ export default function MoodboardsPage() {
         <>
           {/* Favorites rail */}
           {favoriteBoards.length > 0 && !search.trim() && (
-            <div style={{ marginBottom: 36 }}>
+            <div style={{ marginBottom: 'var(--space-xxl)' }}>
               <h2 className="type-headline" style={{ margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ color: '#ffd54a' }}><StarIcon filled /></span> Favorites
               </h2>
@@ -607,7 +610,7 @@ export default function MoodboardsPage() {
 
           {/* Recent rail */}
           {showRecentRail && (
-            <div style={{ marginBottom: 36 }}>
+            <div style={{ marginBottom: 'var(--space-xxl)' }}>
               <h2 className="type-headline" style={{ margin: '0 0 14px' }}>
                 Recent
               </h2>
@@ -696,7 +699,7 @@ export default function MoodboardsPage() {
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
+              style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
               <h3 className="type-headline" style={{ margin: 0 }}>
                 New Moodboard
@@ -707,25 +710,25 @@ export default function MoodboardsPage() {
                 { label: 'Description (optional)', key: 'description', placeholder: 'What is this board about?' },
               ] as const).map(({ label, key, placeholder }) => (
                 <div key={key}>
-                  <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
+                  <label htmlFor={`new-board-${key}`} className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                     {label}
                   </label>
                   <input
+                    id={`new-board-${key}`}
                     className="input-base"
                     type="text"
                     placeholder={placeholder}
                     value={form[key]}
                     onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
                     style={{ width: '100%', boxSizing: 'border-box' }}
-                    autoFocus={key === 'name'}
                   />
                 </div>
               ))}
 
               <div>
-                <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
+                <p className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                   Visibility
-                </label>
+                </p>
                 <div className="segmented is-block" role="group" aria-label="Visibility">
                   {(['private', 'shared'] as const).map(v => (
                     <button
@@ -746,10 +749,11 @@ export default function MoodboardsPage() {
 
               {projectOptions.length > 0 && (
                 <div>
-                  <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
+                  <label htmlFor="new-board-project" className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                     Project (optional)
                   </label>
                   <select
+                    id="new-board-project"
                     className="input-base"
                     value={form.projectId}
                     onChange={e => setForm(prev => ({ ...prev, projectId: e.target.value }))}
@@ -875,7 +879,7 @@ export default function MoodboardsPage() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
+              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
               <h3 className="type-headline" style={{ margin: 0 }}>
                 Delete "{confirmDeleteBoard.name}"?
@@ -921,7 +925,7 @@ export default function MoodboardsPage() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
+              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
               <h3 className="type-headline" style={{ margin: 0 }}>
                 Rename Board
@@ -934,7 +938,6 @@ export default function MoodboardsPage() {
                 onChange={e => setRenameValue(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') handleRenameSubmit(); }}
                 style={{ width: '100%', boxSizing: 'border-box' }}
-                autoFocus
                 maxLength={100}
               />
               <div style={{ display: 'flex', gap: 10 }}>

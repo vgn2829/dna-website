@@ -212,7 +212,7 @@ export function WorkspaceSettingsModal({
             width: '100%', maxWidth: 460,
             background: 'var(--color-surface-1)',
             border: '1px solid var(--color-hairline)',
-            borderRadius: 'var(--radius-xl)', padding: '28px 24px',
+            borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)',
             display: 'flex', flexDirection: 'column', gap: 20,
             maxHeight: '85vh', overflowY: 'auto',
             outline: 'none',
@@ -328,7 +328,7 @@ export function WorkspaceSettingsModal({
                               onClick={() => handleRoleChange(m.roll_number, m.role === 'admin' ? 'member' : 'admin')}
                               disabled={busy}
                               aria-label={m.role === 'admin' ? `Demote ${m.name ?? m.roll_number} to Member` : `Promote ${m.name ?? m.roll_number} to Admin`}
-                              className="btn-translucent btn-sm"
+                              className="btn-translucent btn-sm touch-target"
                             >
                               {m.role === 'admin' ? 'Demote' : 'Promote'}
                             </button>
@@ -338,7 +338,7 @@ export function WorkspaceSettingsModal({
                               onClick={() => setConfirmAction({ removeRoll: m.roll_number })}
                               disabled={busy}
                               aria-label={`Remove ${m.name ?? m.roll_number} from workspace`}
-                              className="btn-translucent btn-sm is-danger"
+                              className="btn-translucent btn-sm is-danger touch-target"
                             >
                               Remove
                             </button>
@@ -433,7 +433,7 @@ export function WorkspaceSettingsModal({
               width: '100%', maxWidth: 360,
               background: 'var(--color-surface-1)',
               border: '1px solid var(--color-hairline)',
-              borderRadius: 'var(--radius-xl)', padding: '28px 24px',
+              borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)',
               display: 'flex', flexDirection: 'column', gap: 16,
             }}
           >

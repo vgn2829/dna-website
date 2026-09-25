@@ -484,6 +484,11 @@
     transition: background 0.15s, color 0.15s;
   }
   .segmented-item:hover { color: var(--color-ink); }
+  @media (pointer: coarse) {
+    /* .segmented scrolls horizontally, which clips .touch-target's growth;
+       37px item + the container's 4px inset = a 44px-tall control. */
+    .segmented-item { padding-top: 10px; padding-bottom: 10px; }
+  }
   .segmented-item[aria-selected="true"],
   .segmented-item[aria-pressed="true"] { background: var(--color-surface-2); color: var(--color-ink); }
 
@@ -692,9 +697,9 @@
   .ws-switcher { transition: background 0.15s, border-color 0.15s; }
   .ws-switcher:hover { background: var(--color-surface-2); }
 
-  .ws-main { padding: 32px 36px 56px; }
+  .ws-main { padding: var(--space-xl) var(--space-xl) var(--space-xxl); }
   @media (max-width: 640px) {
-    .ws-main { padding: 20px 16px 48px; }
+    .ws-main { padding: var(--space-lg) var(--space-md) var(--space-xxl); }
   }
 
   /* Board header "← Moodboards" exit (BoardPage). */

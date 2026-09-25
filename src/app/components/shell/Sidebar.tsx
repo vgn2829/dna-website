@@ -17,7 +17,7 @@ import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 // ─────────────────────────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
-  { to: '/home', label: 'Home', icon: Home },
+  { to: '/home', label: 'Overview', icon: Home },
   { to: '/moodboards', label: 'Moodboards', icon: LayoutGrid },
   { to: '/assets', label: 'Assets', icon: Image },
   { to: '/projects', label: 'Projects', icon: FolderKanban },

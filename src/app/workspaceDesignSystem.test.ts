@@ -105,3 +105,59 @@ describe('workspace typography uses the type scale (H5)', () => {
     }
   });
 });
+
+describe('workspace forms and context (Batch 3: M6 / M5 / M13 / H3)', () => {
+  const DIALOG_FILES = ['pages/MoodboardsPage.tsx', 'pages/ProjectsPage.tsx', 'pages/ProjectDetailPage.tsx', 'pages/TemplatesPage.tsx', 'pages/BoardPage.tsx', 'components/WorkspacesPanel.tsx'];
+
+  it('every visible field label in the workspace dialogs is associated with its control', () => {
+    for (const f of DIALOG_FILES) {
+      const src = read(f);
+      const labels = src.match(/<label\b[^>]*>/g) ?? [];
+      for (const l of labels) expect(l, `${f}: ${l}`).toMatch(/htmlFor=/);
+      for (const m of src.matchAll(/htmlFor=(\{`[^`]+`\}|"[^"]+")/g)) expect(src, `${f}: no control with id ${m[1]}`).toContain(`id=${m[1]}`);
+    }
+  });
+
+  it('New Board keeps Escape-to-close / focus handling via the shared dialog hook', () => {
+    const src = read('pages/MoodboardsPage.tsx');
+    expect(src).toMatch(/const createDialogRef = useModalA11y\(showCreate, \(\) => setShowCreate\(false\), \{ initialFocus: \(\) => document\.getElementById\('new-board-name'\) \}\);/);
+    expect(src).toMatch(/ref=\{createDialogRef\}\n\s*role="dialog"\n\s*aria-modal="true"/);
+  });
+
+  it('hook-based workspace dialogs focus their first field via initialFocus, not autoFocus (focus must return to the opener)', () => {
+    for (const f of ['pages/MoodboardsPage.tsx', 'pages/ProjectsPage.tsx', 'pages/ProjectDetailPage.tsx', 'pages/TemplatesPage.tsx']) {
+      const src = read(f);
+      expect(src, f).not.toMatch(/^\s*autoFocus(=|\s*$)/m);
+      expect(src, f).toMatch(/useModalA11y\([^\n]*initialFocus/);
+    }
+  });
+
+  it('page context captions come from workspaceContext (one source), never an inline Personal/name guess', () => {
+    for (const f of ['pages/AssetsPage.tsx', 'pages/ProjectsPage.tsx', 'pages/TemplatesPage.tsx', 'pages/MoodboardsPage.tsx', 'pages/HomeShellPage.tsx', 'components/shell/WorkspaceSwitcher.tsx']) {
+      const src = read(f);
+      expect(src, f).toMatch(/workspaceContext\(/);
+      expect(src, f).not.toMatch(/<p className="type-caption"[^>]*>\s*\{targetWorkspace\.is_personal \? 'Personal'/);
+    }
+    expect(read('pages/MoodboardsPage.tsx')).not.toContain('Creative Workspace');
+  });
+
+  it('the sidebar has no second "Home" (the public navbar owns that word)', () => {
+    expect(read('components/shell/Sidebar.tsx')).toMatch(/\{ to: '\/home', label: 'Overview'/);
+  });
+
+  it('Moodboards no longer double-pads inside the workspace shell', () => {
+    expect(read('pages/MoodboardsPage.tsx')).not.toMatch(/className="page-container" style=\{\{ paddingTop: 80/);
+  });
+
+  it('workspace dialogs use spacing tokens, not the old 28px/24px card padding', () => {
+    for (const f of [...DIALOG_FILES, 'components/ShareBoardDialog.tsx', 'components/VersionHistoryPanel.tsx', 'components/WorkspaceSettingsModal.tsx']) {
+      expect(read(f), f).not.toContain("padding: '28px 24px'");
+    }
+  });
+
+  it('comment edit/delete glyph buttons are far enough apart to each carry a touch target', () => {
+    const src = read('components/CommentThreadPanel.tsx');
+    expect(src).toMatch(/<div style=\{\{ display: 'flex', gap: 'var\(--space-lg\)', flexShrink: 0 \}\}>/);
+    expect(src.match(/aria-label="(?:Edit|Delete) comment"\n\s*style=\{iconButtonStyle\}\n\s*className="touch-target"/g)?.length).toBe(2);
+  });
+});

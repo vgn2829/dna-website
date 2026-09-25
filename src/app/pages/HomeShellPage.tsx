@@ -4,6 +4,7 @@ import { api, type Board, type Asset, type Project, type Template } from '../lib
 import { AssetPreview } from '../components/assets/AssetPreview';
 import { useStudent } from '../context/StudentContext';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { workspaceContext, personalFallbackNote } from '../lib/workspaceSearch';
 
 // ─────────────────────────────────────────────────────────────────────────
 // HomeShellPage (V2.0 Phase 3; V2.2 adds Recent Projects; V2.3 Phase 10
@@ -122,6 +123,7 @@ function SectionHeading({ title, action }: { title: string; action?: { label: st
 export default function HomeShellPage() {
   const { studentSession, openRollModal } = useStudent();
   const { activeWorkspaceId, personalWorkspace, workspaces } = useWorkspace();
+  const homeContext = workspaceContext(activeWorkspaceId ? workspaces.find(w => w.id === activeWorkspaceId) ?? null : null, { spansAllWorkspaces: true });
   const navigate = useNavigate();
 
   const [myBoards, setMyBoards] = useState<Board[]>([]);
@@ -212,10 +214,16 @@ export default function HomeShellPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', marginBottom: 32 }}>
-        <h1 className="type-display-md" style={{ margin: 0 }}>
-          {studentSession.name ? `Welcome back, ${studentSession.name.split(' ')[0]}` : 'Home'}
-        </h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', marginBottom: 'var(--space-xl)' }}>
+        <div>
+          <p className="type-caption" style={{ marginBottom: 8 }}>{homeContext.label}</p>
+          <h1 className="type-display-md" style={{ margin: 0 }}>
+            {studentSession.name ? `Welcome back, ${studentSession.name.split(' ')[0]}` : 'Overview'}
+          </h1>
+          {activeWorkspaceId === null && (
+            <p className="type-micro" style={{ margin: 'var(--space-xs) 0 0' }}>{personalFallbackNote('projects, templates or assets')}</p>
+          )}
+        </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={() => navigate('/projects')} className="btn-secondary">
             + New Project
@@ -231,7 +239,7 @@ export default function HomeShellPage() {
       ) : (
         <>
           {favoriteBoards.length > 0 && (
-            <div style={{ marginBottom: 36 }}>
+            <div style={{ marginBottom: 'var(--space-xxl)' }}>
               <SectionHeading title="Favorites" />
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
                 {favoriteBoards.map(b => <BoardCard key={b.id} board={b} />)}
@@ -239,7 +247,7 @@ export default function HomeShellPage() {
             </div>
           )}
 
-          <div style={{ marginBottom: 36 }}>
+          <div style={{ marginBottom: 'var(--space-xxl)' }}>
             <SectionHeading title="Recent Moodboards" action={{ label: 'View all', onClick: () => navigate('/moodboards') }} />
             {recentBoards.length > 0 ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
@@ -253,7 +261,7 @@ export default function HomeShellPage() {
           </div>
 
           {projects.length > 0 && (
-            <div style={{ marginBottom: 36 }}>
+            <div style={{ marginBottom: 'var(--space-xxl)' }}>
               <SectionHeading title="Recent Projects" action={{ label: 'View all', onClick: () => navigate('/projects') }} />
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
                 {projects.map(p => <ProjectCard key={p.id} project={p} />)}
@@ -262,7 +270,7 @@ export default function HomeShellPage() {
           )}
 
           {templates.length > 0 && (
-            <div style={{ marginBottom: 36 }}>
+            <div style={{ marginBottom: 'var(--space-xxl)' }}>
               <SectionHeading title="Recent Templates" action={{ label: 'View all', onClick: () => navigate('/templates') }} />
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
                 {templates.map(t => <TemplateCard key={t.id} template={t} />)}
@@ -271,7 +279,7 @@ export default function HomeShellPage() {
           )}
 
           {assets.length > 0 && (
-            <div style={{ marginBottom: 36 }}>
+            <div style={{ marginBottom: 'var(--space-xxl)' }}>
               <SectionHeading title="Recent Assets" action={{ label: 'View all', onClick: () => navigate('/assets') }} />
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
                 {assets.map(a => (

@@ -129,14 +129,14 @@ export function WorkspacesPanel({
                 padding: 16, borderRadius: 'var(--radius-lg)',
                 border: '1px solid var(--color-hairline)', background: 'var(--color-surface-2)',
               }}>
-                <label className="type-caption">
+                <label htmlFor="new-workspace-new-workspace-name" className="type-caption">
                   New Workspace Name
                 </label>
                 <input
+                  id="new-workspace-new-workspace-name"
                   className="input-base"
                   type="text"
                   placeholder="e.g. Design Team"
-                  aria-label="New workspace name"
                   value={name}
                   onChange={e => setName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setShowCreate(false); }}
@@ -240,7 +240,7 @@ export function WorkspacesPanel({
                       <button
                         onClick={() => onSwitch(null)}
                         aria-label="Switch to All Workspaces"
-                          className="btn-translucent btn-sm"
+                          className="btn-translucent btn-sm touch-target"
                       >
                         Switch
                       </button>
@@ -313,7 +313,7 @@ export function WorkspacesPanel({
                         <button
                           onClick={() => onSwitch(ws.id)}
                           aria-label={`Switch to ${ws.is_personal ? 'Personal' : ws.name}`}
-                          className="btn-translucent btn-sm"
+                          className="btn-translucent btn-sm touch-target"
                         >
                           Switch
                         </button>
@@ -322,7 +322,7 @@ export function WorkspacesPanel({
                         <button
                           onClick={() => onOpenSettings(ws.id)}
                           aria-label={`Settings for ${ws.name}`}
-                          className="btn-translucent btn-sm"
+                          className="btn-translucent btn-sm touch-target"
                         >
                           Settings
                         </button>

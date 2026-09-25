@@ -193,7 +193,7 @@ export function ShareBoardDialog({
             background: 'var(--color-surface-1)',
             border: '1px solid var(--color-hairline)',
             borderRadius: 'var(--radius-xl)',
-            padding: '28px 24px',
+            padding: 'var(--space-xl) var(--space-lg)',
             display: 'flex', flexDirection: 'column', gap: 20,
             maxHeight: '90vh', overflowY: 'auto',
             outline: 'none',

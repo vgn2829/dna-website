@@ -95,6 +95,20 @@ describe('.segmented control (H4)', () => {
   });
 });
 
+describe('spacing + touch tokens (Batch 3)', () => {
+  it('.ws-main padding is built from spacing tokens (was 32/36/56px and 20/16/48px)', () => {
+    expect(css).toContain('.ws-main { padding: var(--space-xl) var(--space-xl) var(--space-xxl); }');
+    expect(css).toContain('.ws-main { padding: var(--space-lg) var(--space-md) var(--space-xxl); }');
+  });
+
+  it('on touch, segmented items pad themselves to a 44px control (their scroll container clips ::after growth)', () => {
+    const m = css.match(/@media \(pointer: coarse\) \{[^{}]*\.segmented-item \{([^}]*)\}/);
+    expect(m, 'coarse .segmented-item rule missing').not.toBeNull();
+    expect(prop(m![1], 'padding-top')).toBe('10px');
+    expect(prop(m![1], 'padding-bottom')).toBe('10px');
+  });
+});
+
 describe('.touch-target', () => {
   it('grows the hit area with a centred ::after of at least --touch-min', () => {
     const after = rule('.touch-target::after');

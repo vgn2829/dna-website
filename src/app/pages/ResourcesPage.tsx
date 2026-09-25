@@ -103,23 +103,23 @@ export function ResourcesPage() {
               <input
                 type="text"
                 placeholder="Search resources, authors, tags…"
+                aria-label="Search resources"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full rounded-2xl pl-12 pr-4 py-3 focus:outline-none focus:border-blue-400/50 transition-colors"
                 style={{ background: 'var(--color-surface-1)', border: '1px solid var(--color-hairline)', color: 'var(--color-ink)' }}
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {['All', 'video', 'article', 'course'].map((t) => (
                 <button
                   key={t}
                   onClick={() => setSelectedType(t)}
-                  className={`px-4 py-2 rounded-xl text-sm font-semibold capitalize transition-all ${
-                    selectedType === t
-                      ? 'bg-blue-500/20 text-blue-400 border border-blue-400/30'
-                      : 'glass glass-hover'
-                  }`}
-                  style={selectedType === t ? undefined : { color: 'var(--color-ink-muted)' }}
+                  aria-pressed={selectedType === t}
+                  className="type-body-sm px-4 py-2 rounded-full capitalize transition-all"
+                  style={selectedType === t
+                    ? { background: 'var(--color-inverse-canvas)', color: 'var(--color-canvas)', borderRadius: 'var(--radius-pill)' }
+                    : { background: 'var(--color-surface-1)', color: 'var(--color-ink-muted)', borderRadius: 'var(--radius-pill)' }}
                 >
                   {t}
                 </button>

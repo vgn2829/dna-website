@@ -1003,7 +1003,7 @@ export default function BoardPage() {
                 width: '100%', maxWidth: 400,
                 background: 'var(--color-surface-1)',
                 border: '1px solid var(--color-hairline)',
-                borderRadius: 'var(--radius-xl)', padding: '28px 24px',
+                borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)',
                 display: 'flex', flexDirection: 'column', gap: 16,
               }}
             >
@@ -1011,10 +1011,11 @@ export default function BoardPage() {
                 Save as Template
               </h3>
               <div>
-                <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
+                <label htmlFor="save-template-template-name" className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                   Template Name
                 </label>
                 <input
+                  id="save-template-template-name"
                   className="input-base"
                   type="text"
                   value={templateForm.name}
@@ -1024,10 +1025,11 @@ export default function BoardPage() {
                 />
               </div>
               <div>
-                <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
+                <label htmlFor="save-template-description" className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                   Description (optional)
                 </label>
                 <input
+                  id="save-template-description"
                   className="input-base"
                   type="text"
                   placeholder="What is this template for?"
@@ -1083,7 +1085,7 @@ export default function BoardPage() {
                 width: '100%', maxWidth: 360,
                 background: 'var(--color-surface-1)',
                 border: '1px solid var(--color-hairline)',
-                borderRadius: 'var(--radius-xl)', padding: '28px 24px',
+                borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)',
                 display: 'flex', flexDirection: 'column', gap: 16,
               }}
             >

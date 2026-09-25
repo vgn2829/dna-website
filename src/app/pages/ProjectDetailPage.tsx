@@ -42,7 +42,9 @@ export default function ProjectDetailPage() {
   const [form, setForm] = useState({ name: '', description: '', visibility: 'private' as 'private' | 'shared' });
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
-  const createDialogRef = useModalA11y(showCreate, () => setShowCreate(false));
+  // initialFocus, not autoFocus on the field: autoFocus runs before the hook
+  // records the opener, so focus could not return to it on close.
+  const createDialogRef = useModalA11y(showCreate, () => setShowCreate(false), { initialFocus: () => document.getElementById('project-new-board-name') });
 
   const [ungroupingId, setUngroupingId] = useState<string | null>(null);
   const [favoriteBusyId, setFavoriteBusyId] = useState<string | null>(null);
@@ -267,7 +269,7 @@ export default function ProjectDetailPage() {
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
+              style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
               <h3 className="type-headline" style={{ margin: 0 }}>
                 New Moodboard in {project.name}
@@ -278,25 +280,25 @@ export default function ProjectDetailPage() {
                 { label: 'Description (optional)', key: 'description', placeholder: 'What is this board about?' },
               ] as const).map(({ label, key, placeholder }) => (
                 <div key={key}>
-                  <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
+                  <label htmlFor={`project-new-board-${key}`} className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                     {label}
                   </label>
                   <input
+                    id={`project-new-board-${key}`}
                     className="input-base"
                     type="text"
                     placeholder={placeholder}
                     value={form[key]}
                     onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
                     style={{ width: '100%', boxSizing: 'border-box' }}
-                    autoFocus={key === 'name'}
                   />
                 </div>
               ))}
 
               <div>
-                <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
+                <p className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                   Visibility
-                </label>
+                </p>
                 <div className="segmented is-block" role="group" aria-label="Visibility">
                   {(['private', 'shared'] as const).map(v => (
                     <button
