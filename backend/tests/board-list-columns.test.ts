@@ -20,7 +20,10 @@ const auth = (roll: string) => ({ Authorization: `Bearer ${signStudentToken(roll
 
 // Columns toPublicBoard never returns (see lib/boardRows.ts).
 const STRIPPED = ['canvas_data', 'canvas_item_count', 'canvas_placed_item_ids'];
-const COMPUTED = ['item_count', 'member_count', 'is_favorite'];
+// Read-time fields computed per response (not columns). preview_thumbnails
+// (V3.2.5, lib/boardPreviewThumbnails.ts) maps preview image srcs to ready
+// thumbnail URLs; it is never stored.
+const COMPUTED = ['item_count', 'member_count', 'is_favorite', 'preview_thumbnails'];
 // A legacy-sized canvas: ~1 MB that a list must never load.
 const BIG_CANVAS = JSON.stringify({ document: { store: {}, schema: {} }, session: {}, legacy: 'x'.repeat(1_000_000) });
 

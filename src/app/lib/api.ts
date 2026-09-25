@@ -128,6 +128,9 @@ export interface Board {
   // (backend lib/canvasSummary.ts); null for an empty board. Optional:
   // not every endpoint returning a Board includes it.
   canvas_preview?: CanvasPreview | null;
+  // Board LIST responses only (read-time, never stored): original preview
+  // image src → its ready t512 thumbnail URL. Absent src = use the original.
+  preview_thumbnails?: Record<string, string>;
   member_count: number;
   created_at: string;
   updated_at: string;

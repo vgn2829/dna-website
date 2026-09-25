@@ -14,6 +14,7 @@ import { getBoardRole, roleCanWriteCanvas } from '../realtime/roomAccess';
 import { notifyBoardShared } from '../services/notificationService';
 import { canvasSummaryColumns } from '../lib/canvasSummary';
 import { toPublicBoard, BOARD_ITEM_COUNT_SQL, BOARD_LIST_COLUMNS, MARK_PLACED_BOARD_ITEMS_SQL } from '../lib/boardRows';
+import { withPreviewThumbnails } from '../lib/boardPreviewThumbnails';
 
 const router = Router();
 
@@ -151,7 +152,7 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
       ORDER BY b.created_at DESC
     `, [roll, workspaceId ?? null]);
 
-    res.json(result.rows.map(toPublicBoard));
+    res.json(await withPreviewThumbnails(result.rows.map(toPublicBoard)));
   } catch (err) {
     console.error('Get boards error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -183,7 +184,7 @@ router.get('/archived', requireStudent, async (req: Request, res: Response) => {
       ORDER BY b.updated_at DESC
     `, [roll, workspaceId ?? null]);
 
-    res.json(result.rows.map(toPublicBoard));
+    res.json(await withPreviewThumbnails(result.rows.map(toPublicBoard)));
   } catch (err) {
     console.error('Get archived boards error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -254,7 +255,7 @@ router.get('/shared', optionalStudent, async (req: Request, res: Response) => {
         GROUP BY b.id, bf.roll_number
         ORDER BY b.created_at DESC
       `, [roll ?? null, workspaceId]);
-      return res.json(result.rows.map(toPublicBoard));
+      return res.json(await withPreviewThumbnails(result.rows.map(toPublicBoard)));
     }
 
     if (!roll) {
@@ -282,7 +283,7 @@ router.get('/shared', optionalStudent, async (req: Request, res: Response) => {
       GROUP BY b.id, bf.roll_number
       ORDER BY b.created_at DESC
     `, [roll]);
-    res.json(result.rows.map(toPublicBoard));
+    res.json(await withPreviewThumbnails(result.rows.map(toPublicBoard)));
   } catch (err) {
     console.error('Get shared boards error:', err);
     res.status(500).json({ error: 'Internal server error' });

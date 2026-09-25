@@ -1,4 +1,6 @@
+import { useEffect, useRef, useState } from 'react';
 import type { Board } from '../lib/api';
+import { PREVIEW_ROOT_MARGIN, shouldLoadPreviewImages } from '../lib/boardPreview';
 import { BoardPreview } from './BoardPreview';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -35,6 +37,17 @@ export function StarIcon({ filled }: { filled: boolean }) {
   );
 }
 
+// Nearest ancestor that actually scrolls vertically, or null (= the
+// viewport). Skips ancestors that are merely overflow-clipping (e.g. the
+// horizontal "Recent" strip), whose clipping should still gate cards.
+function verticalScrollRoot(el: Element): Element | null {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const { overflowY } = getComputedStyle(p);
+    if ((overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') && p.scrollHeight > p.clientHeight) return p;
+  }
+  return null;
+}
+
 export function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerRoll, favoriteBusy }: {
   board: Board;
   onClick: () => void;
@@ -44,6 +57,28 @@ export function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerR
   favoriteBusy?: boolean;
 }) {
   const isOwner = ownerRoll === board.owner_roll;
+
+  // Viewport gating (V3.2.5): the card and its preview always render, but
+  // preview IMAGES only load once the cover is within PREVIEW_ROOT_MARGIN
+  // of the visible area — a long Moodboards list no longer fetches every
+  // card's images up front. Latches on (never unloads after scrolling
+  // away). Without IntersectionObserver, images load immediately as before.
+  // The observer's root is the card's scrolling ancestor (this app scrolls
+  // inside #root, not the window): with the implicit viewport root, that
+  // ancestor would clip the card and rootMargin's lookahead would never
+  // apply.
+  const coverRef = useRef<HTMLDivElement | null>(null);
+  const [nearViewport, setNearViewport] = useState(false);
+  const observerSupported = typeof IntersectionObserver !== 'undefined';
+  useEffect(() => {
+    const el = coverRef.current;
+    if (!observerSupported || nearViewport || !el) return;
+    const io = new IntersectionObserver(entries => {
+      if (entries.some(e => e.isIntersecting)) { setNearViewport(true); io.disconnect(); }
+    }, { root: verticalScrollRoot(el), rootMargin: PREVIEW_ROOT_MARGIN });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [observerSupported, nearViewport]);
 
   return (
     <div
@@ -75,7 +110,7 @@ export function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerR
       {/* Cover — a real preview of the board's content (BoardPreview, from
           the server-derived canvas_preview; no board document is loaded),
           or the original placeholder for a board with nothing to show. */}
-      <div style={{
+      <div ref={coverRef} style={{
         width: '100%',
         aspectRatio: '16 / 9',
         position: 'relative',
@@ -87,7 +122,12 @@ export function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerR
         background: board.canvas_preview ? 'var(--color-canvas)' : 'var(--color-surface-2)',
       }}>
         {board.canvas_preview ? (
-          <BoardPreview preview={board.canvas_preview} label={`Preview of ${board.name}`} />
+          <BoardPreview
+            preview={board.canvas_preview}
+            label={`Preview of ${board.name}`}
+            thumbnails={board.preview_thumbnails}
+            loadImages={shouldLoadPreviewImages(observerSupported, nearViewport)}
+          />
         ) : (
           <>
             {[0.04, 0.06, 0.08, 0.10].map((alpha, i) => (

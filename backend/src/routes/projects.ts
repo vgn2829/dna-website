@@ -6,6 +6,7 @@ import { requireStudent } from '../middleware/studentAuth';
 import { param } from '../routeParams';
 import { getWorkspaceMembership } from './assets';
 import { toPublicBoard, BOARD_ITEM_COUNT_SQL, BOARD_LIST_COLUMNS } from '../lib/boardRows';
+import { withPreviewThumbnails } from '../lib/boardPreviewThumbnails';
 
 const router = Router();
 
@@ -213,7 +214,7 @@ router.get('/:id/boards', requireStudent, async (req: Request, res: Response) =>
       ORDER BY b.updated_at DESC
     `, [roll, id]);
 
-    res.json(result.rows.map(toPublicBoard));
+    res.json(await withPreviewThumbnails(result.rows.map(toPublicBoard)));
   } catch (err) {
     console.error('List project boards error:', err);
     res.status(500).json({ error: 'Internal server error' });

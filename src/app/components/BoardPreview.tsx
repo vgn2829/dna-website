@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import type { CanvasPreview, CanvasPreviewItem } from '../lib/api';
+import { planPreviewImages, previewImageFallback, type PreviewImage } from '../lib/boardPreview';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Moodboard card preview. Draws the small list of primitives the backend
@@ -27,11 +29,29 @@ const COLORS: Record<string, string> = {
 };
 const color = (c?: string) => COLORS[c ?? ''] ?? COLORS.black;
 
-// Only the first few images load real pixels (each is a full-size asset
-// URL); the rest render as tiles so a card never pulls dozens of images.
-const MAX_IMAGES = 8;
+// Which images draw real pixels (the first MAX_PREVIEW_IMAGES), and from
+// which URL (the server's t512 thumbnail when ready, else the original):
+// see lib/boardPreview.ts. The rest render as tiles.
 
-function Item({ it, showImage }: { it: CanvasPreviewItem; showImage: boolean }) {
+// A preview image that falls back to its original, once, if the
+// thumbnail fails to load (keyed by href in Item, so a new href remounts).
+function PreviewImageEl({ image, w, h }: { image: PreviewImage; w: number; h: number }) {
+  const [href, setHref] = useState(image.href);
+  return (
+    <image
+      href={href}
+      width={w}
+      height={h}
+      preserveAspectRatio="xMidYMid slice"
+      onError={() => {
+        const fallback = previewImageFallback(image, href);
+        if (fallback) setHref(fallback);
+      }}
+    />
+  );
+}
+
+function Item({ it, image, loadImages }: { it: CanvasPreviewItem; image: PreviewImage | null; loadImages: boolean }) {
   const deg = (it.r * 180) / Math.PI;
   const transform = `translate(${it.x} ${it.y})${deg ? ` rotate(${deg})` : ''}`;
   const stroke = color(it.c);
@@ -65,8 +85,8 @@ function Item({ it, showImage }: { it: CanvasPreviewItem; showImage: boolean }) 
     case 'image':
       return (
         <g transform={transform}>
-          {it.src && showImage
-            ? <image href={it.src} width={it.w} height={it.h} preserveAspectRatio="xMidYMid slice" />
+          {image && loadImages
+            ? <PreviewImageEl key={image.href} image={image} w={it.w} h={it.h} />
             : <rect width={it.w} height={it.h} fill="var(--color-surface-1)" stroke="var(--color-hairline)" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
         </g>
       );
@@ -110,7 +130,15 @@ function Item({ it, showImage }: { it: CanvasPreviewItem; showImage: boolean }) 
   }
 }
 
-export function BoardPreview({ preview, label }: { preview: CanvasPreview; label: string }) {
+// `thumbnails`: the board's read-time preview_thumbnails (original src →
+// t512 URL). `loadImages`: false while the card is far off-screen
+// (BoardCard) — image items then draw as tiles, so nothing is fetched.
+export function BoardPreview({ preview, label, thumbnails, loadImages = true }: {
+  preview: CanvasPreview;
+  label: string;
+  thumbnails?: Record<string, string>;
+  loadImages?: boolean;
+}) {
   // Pad the content bounds a little and never zoom in past 1:1 on a tiny
   // board (a single small shape shouldn't fill the whole card).
   const minW = 480, minH = 270;
@@ -118,7 +146,7 @@ export function BoardPreview({ preview, label }: { preview: CanvasPreview; label
   const pad = Math.max(w, h) * 0.06;
   const vx = preview.x - (w - preview.w) / 2 - pad;
   const vy = preview.y - (h - preview.h) / 2 - pad;
-  let images = 0;
+  const images = planPreviewImages(preview.items, thumbnails);
   return (
     <svg
       role="img"
@@ -127,10 +155,7 @@ export function BoardPreview({ preview, label }: { preview: CanvasPreview; label
       preserveAspectRatio="xMidYMid meet"
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}
     >
-      {preview.items.map((it, i) => {
-        const showImage = it.k === 'image' && !!it.src && /^https?:\/\//i.test(it.src) && images++ < MAX_IMAGES;
-        return <Item key={i} it={it} showImage={showImage} />;
-      })}
+      {preview.items.map((it, i) => <Item key={i} it={it} image={images[i]} loadImages={loadImages} />)}
     </svg>
   );
 }
