@@ -161,7 +161,7 @@ function CommentRow({ comment, currentRoll, canModerate, onEdit, onDelete }: Com
             <button
               onClick={async () => { setBusy(true); await onDelete(); setBusy(false); setConfirmDelete(false); }}
               disabled={busy}
-              style={{ ...primaryPillStyle, background: 'var(--color-error)' }}
+              style={{ ...primaryPillStyle, background: 'var(--color-error-fill)' }}
             >
               Delete
             </button>
@@ -373,7 +373,7 @@ export function CommentThreadPanel(props: CommentThreadPanelProps) {
             <span style={{
               fontSize: 9, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
               padding: '2px 6px', borderRadius: 'var(--radius-pill)',
-              background: 'var(--color-success)', color: '#fff',
+              background: 'var(--color-success-fill)', color: '#fff',
             }}>
               Resolved
             </span>
@@ -424,7 +424,7 @@ export function CommentThreadPanel(props: CommentThreadPanelProps) {
             onClick={isResolved ? props.onReopen : props.onResolve}
             style={{
               width: '100%', padding: '8px 0',
-              background: isResolved ? 'none' : 'var(--color-success)',
+              background: isResolved ? 'none' : 'var(--color-success-fill)',
               color: isResolved ? 'var(--color-ink)' : '#fff',
               border: isResolved ? '1px solid var(--color-hairline)' : 'none',
               borderRadius: 'var(--radius-pill)', fontSize: 12, fontWeight: 600,

@@ -219,7 +219,7 @@ export default function ProjectsPage() {
         <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)' }}>Loading…</p>
       ) : loadError ? (
         <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-error)' }}>
-          Could not load projects. <button onClick={fetchProjects} style={{ background: 'none', border: 'none', color: 'var(--color-brand)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 14 }}>Retry</button>
+          Could not load projects. <button onClick={fetchProjects} style={{ background: 'none', border: 'none', color: 'var(--color-brand-text)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 14 }}>Retry</button>
         </p>
       ) : visibleProjects.length === 0 ? (
         <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)' }}>

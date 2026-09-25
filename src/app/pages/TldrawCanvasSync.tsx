@@ -187,7 +187,7 @@ const TLDRAW_COMPONENTS: TLComponents = {
 
 function ConnectionBanner({ state, onRetry }: { state: Exclude<ConnectionState, 'connected'>; onRetry?: () => void }) {
   const { label, tone } = STATUS_COPY[state];
-  const bg = tone === 'error' ? 'var(--color-error)' : tone === 'warning' ? '#b45309' : 'var(--color-surface-2)';
+  const bg = tone === 'error' ? 'var(--color-error-fill)' : tone === 'warning' ? '#b45309' : 'var(--color-surface-2)';
   const color = tone === 'neutral' ? 'var(--color-ink)' : '#fff';
   return (
     <div style={{

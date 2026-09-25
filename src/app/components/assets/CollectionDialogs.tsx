@@ -157,7 +157,7 @@ export function MoveAssetDialog({
               <Layers size={15} style={{ flexShrink: 0, color: 'var(--color-ink-muted)' }} />
               <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: opt.id ? 'var(--color-ink)' : 'var(--color-ink-muted)' }}>{opt.name}</span>
               {opt.count !== undefined && <span style={{ fontSize: 12, color: 'var(--color-ink-muted)' }}>{opt.count}</span>}
-              {selected && <Check size={15} style={{ color: 'var(--color-brand)', flexShrink: 0 }} />}
+              {selected && <Check size={15} style={{ color: 'var(--color-brand-text)', flexShrink: 0 }} />}
             </button>
           );
         })}

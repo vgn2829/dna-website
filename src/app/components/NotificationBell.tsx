@@ -187,7 +187,7 @@ export function NotificationBell({ roll, isDark }: { roll: string; isDark: boole
                     onClick={handleMarkAllRead}
                     style={{
                       padding: 0, background: 'none', border: 'none',
-                      color: 'var(--color-brand)', fontSize: 11, fontWeight: 600,
+                      color: 'var(--color-brand-text)', fontSize: 11, fontWeight: 600,
                       fontFamily: 'var(--font-body)', cursor: 'pointer',
                     }}
                   >

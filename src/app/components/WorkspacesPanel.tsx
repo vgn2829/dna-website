@@ -184,7 +184,7 @@ export function WorkspacesPanel({
               <button
                 onClick={() => setShowCreate(true)}
                 style={{
-                  padding: '10px 16px', background: 'none', color: 'var(--color-brand)', flexShrink: 0,
+                  padding: '10px 16px', background: 'none', color: 'var(--color-brand-text)', flexShrink: 0,
                   border: '1px dashed var(--color-brand)', borderRadius: 'var(--radius-lg)',
                   fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
                   textAlign: 'left',

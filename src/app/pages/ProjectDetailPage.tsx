@@ -307,7 +307,7 @@ export default function ProjectDetailPage() {
                       style={{
                         flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer',
                         background: form.visibility === v ? 'rgba(233,30,140,0.1)' : 'none',
-                        color: form.visibility === v ? 'var(--color-brand)' : 'var(--color-ink-muted)',
+                        color: form.visibility === v ? 'var(--color-brand-text)' : 'var(--color-ink-muted)',
                         fontSize: 13, fontWeight: form.visibility === v ? 600 : 400, fontFamily: 'var(--font-body)',
                       }}
                     >

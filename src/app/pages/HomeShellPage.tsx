@@ -110,7 +110,7 @@ function SectionHeading({ title, action }: { title: string; action?: { label: st
       {action && (
         <button
           onClick={action.onClick}
-          style={{ background: 'none', border: 'none', color: 'var(--color-brand)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+          style={{ background: 'none', border: 'none', color: 'var(--color-brand-text)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
         >
           {action.label}
         </button>

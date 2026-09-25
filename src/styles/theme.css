@@ -5,9 +5,23 @@
   --color-ink:             #ffffff;
   --color-ink-muted:       #999999;
   --color-accent-blue:     #0099ff;
+  /* Semantic colors have two roles that no single value can serve in both
+     themes (WCAG AA 4.5:1): a FILL behind white text, and TEXT/icons placed
+     directly on theme surfaces. Each keeps its existing name for its
+     dominant role and gets an explicit variant for the other:
+       --color-brand          fill / border / accent (white text on it)
+       --color-brand-text     brand-colored text and icons on surfaces
+       --color-error          error text on surfaces
+       --color-error-fill     filled destructive controls (white text)
+       --color-success        success text / status indicators
+       --color-success-fill   filled success controls (white text)
+     Text values differ per theme; fills are shared. */
   --color-success:         #22c55e;
-  --color-brand:           #E91E8C;
-  --color-error:           #ef4444;
+  --color-success-fill:    #15803d;
+  --color-brand:           #D81B7F;
+  --color-brand-text:      #F25CA8;
+  --color-error:           #f87171;
+  --color-error-fill:      #dc2626;
 
   /* ── Surface / Canvas ── */
   --color-canvas:          #111110;
@@ -57,7 +71,11 @@
   --shadow-level-1: 0 1px 3px rgba(0,0,0,0.3);
   --shadow-level-2: 0 0.5px 0 0 rgba(255,255,255,0.10) inset,
                     0 10px 30px rgba(0,0,0,0.35);
-  --shadow-focus:   0 0 0 1px rgba(0,153,255,0.50);
+  /* Keyboard focus: a 2px canvas-colored gap, then a 2px solid ring. The
+     gap keeps the ring from being judged against a brand-filled control;
+     box-shadow, so no layout shift and existing border-radius is followed.
+     var(--color-canvas) resolves per theme (data-theme is on <html>). */
+  --shadow-focus:   0 0 0 2px var(--color-canvas), 0 0 0 4px #0080d6;
 
   /* ── Font ── */
   --font-display:  'Mona Sans', 'Inter', system-ui, sans-serif;
@@ -104,9 +122,12 @@
   --nav-bg:     rgba(255, 255, 255, 0.72);
   --nav-border: rgba(0, 0, 0, 0.08);
   --nav-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.04);
-  --color-brand:           #E91E8C;
-  --color-error:           #ef4444;
-  --color-success:         #22c55e;
+  --color-brand:           #D81B7F;
+  --color-brand-text:      #BB1758;
+  --color-error:           #b91c1c;
+  --color-error-fill:      #dc2626;
+  --color-success:         #166534;
+  --color-success-fill:    #15803d;
   --shadow-level-1: 0 1px 3px rgba(0,0,0,0.10);
   --shadow-level-2: 0 0.5px 0 0 rgba(0,0,0,0.06) inset,
                     0 10px 30px rgba(0,0,0,0.12);
@@ -551,7 +572,7 @@
   }
   .ws-nav-link:hover { color: var(--color-ink); background: var(--color-surface-1); }
   .ws-nav-link[aria-current="page"] { color: var(--color-ink); background: var(--color-surface-2); }
-  .ws-nav-link[aria-current="page"] svg { color: var(--color-brand); }
+  .ws-nav-link[aria-current="page"] svg { color: var(--color-brand-text); }
   .ws-nav-link:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
 
   .ws-switcher { transition: background 0.15s, border-color 0.15s; }

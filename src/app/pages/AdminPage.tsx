@@ -2731,7 +2731,7 @@ function SettingsTab() {
             <code style={{
               padding: '8px 16px', background: 'var(--color-canvas)',
               border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
-              fontSize: 16, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-brand)',
+              fontSize: 16, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-brand-text)',
               fontFamily: 'var(--font-mono, monospace)',
             }}>
               {showPasscode ? (settings.public_meet_passcode ?? 'DNA2025') : '••••••••'}
@@ -2798,7 +2798,7 @@ function SettingsTab() {
             disabled={saving}
             style={{
               width: 48, height: 26, borderRadius: 'var(--radius-pill)',
-              background: isOtpBypassEnabled ? 'var(--color-error)' : 'var(--color-border)',
+              background: isOtpBypassEnabled ? 'var(--color-error-fill)' : 'var(--color-border)',
               border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
               position: 'relative', transition: 'background 0.2s ease', flexShrink: 0,
             }}
@@ -2853,7 +2853,7 @@ function SettingsTab() {
               Approved coordinators see
               &quot;Schedule a Meet&quot; in the footer.
               {' '}
-              <span style={{ color: 'var(--color-brand)' }}>
+              <span style={{ color: 'var(--color-brand-text)' }}>
                 {coordinators.filter(c => c.approved).length}
               </span>
               {' of '}
@@ -3153,7 +3153,7 @@ function SettingsTab() {
             }}>
               Automatically capitalise artwork titles and artist names when uploading.
               Currently{' '}
-              <strong style={{ color: forceUppercase ? 'var(--color-brand)' : 'var(--color-ink-muted)' }}>
+              <strong style={{ color: forceUppercase ? 'var(--color-brand-text)' : 'var(--color-ink-muted)' }}>
                 {forceUppercase ? 'ON' : 'OFF'}
               </strong>.
             </p>
@@ -3279,7 +3279,7 @@ function TemplateEditor({ templateId }: TemplateEditorProps) {
             <code
               key={v}
               onClick={() => setBody(prev => prev + v)}
-              style={{ padding: '3px 10px', borderRadius: 'var(--radius-pill)', background: 'rgba(233,30,140,0.12)', color: 'var(--color-brand)', fontSize: 12, fontFamily: 'var(--font-mono, monospace)', border: '1px solid rgba(233,30,140,0.2)', cursor: 'pointer' }}
+              style={{ padding: '3px 10px', borderRadius: 'var(--radius-pill)', background: 'rgba(233,30,140,0.12)', color: 'var(--color-brand-text)', fontSize: 12, fontFamily: 'var(--font-mono, monospace)', border: '1px solid rgba(233,30,140,0.2)', cursor: 'pointer' }}
             >
               {v}
             </code>
@@ -3528,7 +3528,7 @@ function AnnouncementsTab() {
             style={{
               padding: '8px 16px', background: 'none', border: 'none',
               borderBottom: subTab === t.id ? '2px solid var(--color-brand)' : '2px solid transparent',
-              color: subTab === t.id ? 'var(--color-brand)' : 'var(--color-ink-muted)',
+              color: subTab === t.id ? 'var(--color-brand-text)' : 'var(--color-ink-muted)',
               fontSize: 13, fontWeight: subTab === t.id ? 600 : 400,
               fontFamily: 'var(--font-body)', cursor: 'pointer',
               marginBottom: -1, transition: 'all 0.15s ease',
@@ -3661,7 +3661,7 @@ function SessionsTab() {
 
   const statusColor = (status: string) => {
     if (status === 'live') return 'var(--color-success)';
-    if (status === 'upcoming') return 'var(--color-brand)';
+    if (status === 'upcoming') return 'var(--color-brand-text)';
     return 'var(--color-ink-muted)';
   };
 
@@ -3721,7 +3721,7 @@ function SessionsTab() {
               background: 'none',
               border: 'none',
               borderBottom: subTab === t ? '2px solid var(--color-brand)' : '2px solid transparent',
-              color: subTab === t ? 'var(--color-brand)' : 'var(--color-ink-muted)',
+              color: subTab === t ? 'var(--color-brand-text)' : 'var(--color-ink-muted)',
               fontSize: 13,
               fontWeight: subTab === t ? 600 : 400,
               fontFamily: 'var(--font-body)',
@@ -3883,7 +3883,7 @@ function SessionsTab() {
                         <span style={{
                           fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
                           textTransform: 'uppercase', padding: '2px 8px', borderRadius: 'var(--radius-pill)',
-                          background: 'rgba(233,30,140,0.1)', color: 'var(--color-brand)',
+                          background: 'rgba(233,30,140,0.1)', color: 'var(--color-brand-text)',
                           fontFamily: 'var(--font-body)',
                         }}>
                           {s.audience_name}
@@ -3904,7 +3904,7 @@ function SessionsTab() {
                       href={s.meet_link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={{ fontSize: 12, color: 'var(--color-brand)', fontFamily: 'var(--font-body)', textDecoration: 'none', wordBreak: 'break-all' }}
+                      style={{ fontSize: 12, color: 'var(--color-brand-text)', fontFamily: 'var(--font-body)', textDecoration: 'none', wordBreak: 'break-all' }}
                     >
                       {s.meet_link}
                     </a>
@@ -3988,7 +3988,7 @@ function SessionsTab() {
                 </span>
                 <span style={{
                   fontSize: 11,
-                  color: s.join_count > 0 ? 'var(--color-brand)' : 'var(--color-ink-muted)',
+                  color: s.join_count > 0 ? 'var(--color-brand-text)' : 'var(--color-ink-muted)',
                   fontFamily: 'var(--font-body)',
                   fontWeight: s.join_count > 0 ? 600 : 400,
                 }}>
@@ -4213,7 +4213,7 @@ function MoodboardsAdminTab() {
                     fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
                     padding: '2px 8px', borderRadius: 'var(--radius-pill)',
                     background: board.visibility === 'shared' ? 'rgba(233,30,140,0.1)' : 'var(--color-surface-2)',
-                    color: board.visibility === 'shared' ? 'var(--color-brand)' : 'var(--color-ink-muted)',
+                    color: board.visibility === 'shared' ? 'var(--color-brand-text)' : 'var(--color-ink-muted)',
                     fontFamily: 'var(--font-body)',
                   }}>
                     {board.visibility}

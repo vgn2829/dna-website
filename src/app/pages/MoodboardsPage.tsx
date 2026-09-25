@@ -526,7 +526,7 @@ export default function MoodboardsPage() {
                 border: 'none',
                 borderBottom: tab === key ? '2px solid var(--color-brand)' : '2px solid transparent',
                 marginBottom: -1,
-                color: tab === key ? 'var(--color-brand)' : 'var(--color-ink-muted)',
+                color: tab === key ? 'var(--color-brand-text)' : 'var(--color-ink-muted)',
                 fontSize: 14,
                 fontWeight: tab === key ? 600 : 400,
                 fontFamily: 'var(--font-body)',
@@ -753,7 +753,7 @@ export default function MoodboardsPage() {
                       style={{
                         flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer',
                         background: form.visibility === v ? 'rgba(233,30,140,0.1)' : 'none',
-                        color: form.visibility === v ? 'var(--color-brand)' : 'var(--color-ink-muted)',
+                        color: form.visibility === v ? 'var(--color-brand-text)' : 'var(--color-ink-muted)',
                         fontSize: 13, fontWeight: form.visibility === v ? 600 : 400, fontFamily: 'var(--font-body)',
                       }}
                     >
@@ -909,7 +909,7 @@ export default function MoodboardsPage() {
                 <button
                   onClick={() => handleCardDelete(confirmDeleteBoard)}
                   disabled={deleting}
-                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-error)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: deleting ? 'not-allowed' : 'pointer' }}
+                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-error-fill)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: deleting ? 'not-allowed' : 'pointer' }}
                 >
                   {deleting ? 'Deleting...' : 'Delete'}
                 </button>

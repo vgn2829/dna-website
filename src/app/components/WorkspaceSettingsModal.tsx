@@ -494,7 +494,7 @@ export function WorkspaceSettingsModal({
                 }}
                 disabled={confirmBusy}
                 style={{
-                  flex: 1, padding: '12px 20px', background: 'var(--color-error)', color: '#fff',
+                  flex: 1, padding: '12px 20px', background: 'var(--color-error-fill)', color: '#fff',
                   border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600,
                   fontFamily: 'var(--font-body)', cursor: confirmBusy ? 'not-allowed' : 'pointer',
                 }}

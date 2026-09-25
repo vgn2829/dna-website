@@ -240,7 +240,7 @@ export function EventsPage() {
           <div style={{ marginBottom: 40 }}>
             <h2 style={{
               fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
-              textTransform: 'uppercase', color: 'var(--color-brand)',
+              textTransform: 'uppercase', color: 'var(--color-brand-text)',
               fontFamily: 'var(--font-body)', marginBottom: 16,
             }}>
               Live & Upcoming Sessions
@@ -257,7 +257,7 @@ export function EventsPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       {s.status === 'live' && (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-brand)', fontFamily: 'var(--font-body)' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-brand-text)', fontFamily: 'var(--font-body)' }}>
                           ● LIVE
                         </span>
                       )}

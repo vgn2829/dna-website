@@ -605,7 +605,7 @@ export default function BoardPage() {
                 background: board.visibility === 'shared'
                   ? 'rgba(233,30,140,0.15)'
                   : theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-                color: board.visibility === 'shared' ? 'var(--color-brand)' : textMuted,
+                color: board.visibility === 'shared' ? 'var(--color-brand-text)' : textMuted,
               }}>
                 {board.visibility}
               </span>
@@ -861,7 +861,7 @@ export default function BoardPage() {
             position: 'absolute', top: 48, left: 0, right: 0,
             padding: '8px 16px',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
-            background: 'var(--color-error)', color: '#fff',
+            background: 'var(--color-error-fill)', color: '#fff',
             fontSize: 12, fontFamily: 'var(--font-body)', fontWeight: 500,
             zIndex: 20,
           }}>
@@ -1168,7 +1168,7 @@ export default function BoardPage() {
                   disabled={deleting}
                   style={{
                     flex: 1, padding: '12px 20px',
-                    background: 'var(--color-error)', color: '#fff',
+                    background: 'var(--color-error-fill)', color: '#fff',
                     border: 'none', borderRadius: 'var(--radius-pill)',
                     fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)',
                     cursor: deleting ? 'not-allowed' : 'pointer',

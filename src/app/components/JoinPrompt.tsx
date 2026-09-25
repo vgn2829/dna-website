@@ -84,7 +84,7 @@ export default function JoinPrompt() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <p style={{
                   margin: 0, fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
-                  textTransform: 'uppercase', color: 'var(--color-brand)', fontFamily: 'var(--font-body)',
+                  textTransform: 'uppercase', color: 'var(--color-brand-text)', fontFamily: 'var(--font-body)',
                 }}>
                   Design & Animation Club
                 </p>

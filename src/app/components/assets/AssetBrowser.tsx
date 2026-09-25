@@ -413,7 +413,7 @@ export function AssetBrowser({
           onClose={() => { if (!deleting) setConfirmDelete(null); }}
           footer={<>
             <button type="button" className="btn-secondary" onClick={() => setConfirmDelete(null)} disabled={deleting} style={{ minHeight: 40 }}>Cancel</button>
-            <button type="button" className="btn-primary" onClick={() => handleDelete(confirmDelete)} disabled={deleting} style={{ minHeight: 40, background: 'var(--color-error)', color: '#fff' }}>
+            <button type="button" className="btn-primary" onClick={() => handleDelete(confirmDelete)} disabled={deleting} style={{ minHeight: 40, background: 'var(--color-error-fill)', color: '#fff' }}>
               {deleting ? 'Deleting…' : 'Delete'}
             </button>
           </>}
@@ -434,7 +434,7 @@ export function AssetBrowser({
           onClose={() => { if (!deletingCollection) setConfirmDeleteCollection(null); }}
           footer={<>
             <button type="button" className="btn-secondary" onClick={() => setConfirmDeleteCollection(null)} disabled={deletingCollection} style={{ minHeight: 40 }}>Cancel</button>
-            <button type="button" className="btn-primary" onClick={() => handleDeleteCollection(confirmDeleteCollection)} disabled={deletingCollection} style={{ minHeight: 40, background: 'var(--color-error)', color: '#fff' }}>
+            <button type="button" className="btn-primary" onClick={() => handleDeleteCollection(confirmDeleteCollection)} disabled={deletingCollection} style={{ minHeight: 40, background: 'var(--color-error-fill)', color: '#fff' }}>
               {deletingCollection ? 'Deleting…' : 'Delete collection'}
             </button>
           </>}

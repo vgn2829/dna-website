@@ -264,7 +264,7 @@ export default function TemplatesPage() {
         <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)' }}>Loading…</p>
       ) : loadError ? (
         <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-error)' }}>
-          Could not load templates. <button onClick={fetchTemplates} style={{ background: 'none', border: 'none', color: 'var(--color-brand)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 14 }}>Retry</button>
+          Could not load templates. <button onClick={fetchTemplates} style={{ background: 'none', border: 'none', color: 'var(--color-brand-text)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 14 }}>Retry</button>
         </p>
       ) : visibleTemplates.length === 0 ? (
         <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)' }}>
@@ -580,7 +580,7 @@ export default function TemplatesPage() {
                 <button
                   onClick={handleDelete}
                   disabled={deleting}
-                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-error)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.6 : 1 }}
+                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-error-fill)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.6 : 1 }}
                 >
                   {deleting ? 'Deleting...' : 'Delete'}
                 </button>

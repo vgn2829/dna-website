@@ -498,7 +498,7 @@ export function ShareBoardDialog({
                     aria-label="Copy board link"
                     style={{
                       padding: '10px 16px',
-                      background: copied ? 'var(--color-success)' : 'var(--color-brand)',
+                      background: copied ? 'var(--color-success-fill)' : 'var(--color-brand)',
                       color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)',
                       fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)',
                       cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
