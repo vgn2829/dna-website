@@ -503,16 +503,12 @@ export default function BoardPage() {
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       gap: 16, background: 'var(--color-canvas)',
     }}>
-      <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)', margin: 0 }}>
+      <p className="type-body" style={{ color: 'var(--color-ink-muted)', margin: 0 }}>
         {error || 'Board not found.'}
       </p>
       <button
         onClick={() => navigate('/moodboards')}
-        style={{
-          padding: '10px 20px', background: 'var(--color-brand)', color: '#fff',
-          border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13,
-          fontFamily: 'var(--font-body)', cursor: 'pointer',
-        }}
+        className="btn-primary"
       >
         Back to Moodboards
       </button>
@@ -668,16 +664,7 @@ export default function BoardPage() {
                 title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Enter fullscreen'}
                 aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
                 aria-pressed={isFullscreen}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  height: 28, minWidth: 28, padding: isFullscreen ? '0 10px' : 0,
-                  background: isFullscreen ? 'var(--color-brand)' : 'none',
-                  border: isFullscreen ? 'none' : `1px solid ${borderColor}`,
-                  borderRadius: 'var(--radius-pill)',
-                  color: isFullscreen ? '#fff' : textMuted, cursor: 'pointer',
-                  fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
-                }}
-                className="touch-target"
+                className={`${isFullscreen ? 'btn-translucent' : 'btn-translucent btn-icon'} btn-sm touch-target`}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
                   {isFullscreen ? (
@@ -708,18 +695,7 @@ export default function BoardPage() {
               title={commentMode ? 'Exit comment mode' : 'Comment mode — click the canvas to leave a comment'}
               aria-label={compactHeader ? (commentMode ? 'Exit comment mode' : 'Comment') : undefined}
               aria-pressed={commentMode}
-              style={{
-                position: 'relative',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                height: 28, minWidth: 28,
-                padding: compactHeader ? 0 : '0 12px',
-                background: commentMode ? 'var(--color-brand)' : 'none',
-                border: commentMode ? 'none' : `1px solid ${borderColor}`,
-                borderRadius: 'var(--radius-pill)',
-                color: commentMode ? '#fff' : textMuted, fontSize: 12,
-                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}
-              className="touch-target"
+              className={`btn-translucent ${compactHeader ? 'btn-icon ' : ''}btn-sm touch-target`}
             >
               {compactHeader ? <MessageCircle size={14} /> : 'Comment'}
               {!commentMode && commentsApi.comments.some(
@@ -742,13 +718,7 @@ export default function BoardPage() {
                 <button
                   onClick={() => setShowAssetLibrary(true)}
                   title="Asset Library"
-                  style={{
-                    padding: '5px 12px', background: 'none',
-                    border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
-                    color: textMuted, fontSize: 12,
-                    fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-                  }}
-                  className="touch-target"
+                  className="btn-translucent btn-sm touch-target"
                 >
                   Assets
                 </button>
@@ -756,13 +726,7 @@ export default function BoardPage() {
                 <button
                   onClick={() => setShowVersionHistory(true)}
                   title="Version History"
-                  style={{
-                    padding: '5px 12px', background: 'none',
-                    border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
-                    color: textMuted, fontSize: 12,
-                    fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-                  }}
-                  className="touch-target"
+                  className="btn-translucent btn-sm touch-target"
                 >
                   History
                 </button>
@@ -771,13 +735,7 @@ export default function BoardPage() {
                   <button
                     onClick={openSaveAsTemplate}
                     title="Save as Template"
-                    style={{
-                      padding: '5px 12px', background: 'none',
-                      border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
-                      color: textMuted, fontSize: 12,
-                      fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-                    }}
-                    className="touch-target"
+                    className="btn-translucent btn-sm touch-target"
                   >
                     Save as Template
                   </button>
@@ -787,13 +745,7 @@ export default function BoardPage() {
 
             <button
               onClick={() => setShowShare(true)}
-              style={{
-                padding: '5px 12px', background: 'var(--color-brand)',
-                border: 'none', borderRadius: 'var(--radius-pill)',
-                color: '#fff', fontSize: 12, fontWeight: 600,
-                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}
-              className="touch-target"
+              className="btn-primary btn-sm touch-target"
             >
               Share
             </button>
@@ -801,15 +753,12 @@ export default function BoardPage() {
             {!compactHeader && isOwner && (
               <button
                 onClick={() => setConfirmDelete(true)}
-                style={{
-                  padding: '5px 10px', background: 'none',
-                  border: '1px solid rgba(239,68,68,0.3)', borderRadius: 'var(--radius-pill)',
-                  color: 'var(--color-error)', fontSize: 11,
-                  fontFamily: 'var(--font-body)', cursor: 'pointer',
-                }}
-                className="touch-target"
+                aria-label="Delete board"
+                title="Delete board"
+                className="btn-translucent btn-icon btn-sm is-danger touch-target"
+                style={{ marginLeft: 8 }}
               >
-                Delete
+                <Trash2 size={14} />
               </button>
             )}
 
@@ -818,13 +767,7 @@ export default function BoardPage() {
                 <DropdownMenu.Trigger
                   aria-label="More board actions"
                   title="More"
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    width: 28, height: 28, padding: 0, background: 'none',
-                    border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
-                    color: textMuted, cursor: 'pointer',
-                  }}
-                  className="touch-target"
+                  className="btn-translucent btn-icon btn-sm touch-target"
                 >
                   <MoreHorizontal size={15} />
                 </DropdownMenu.Trigger>
@@ -1064,14 +1007,11 @@ export default function BoardPage() {
                 display: 'flex', flexDirection: 'column', gap: 16,
               }}
             >
-              <h3 style={{
-                margin: 0, fontSize: 18, fontWeight: 700,
-                color: 'var(--color-ink)', fontFamily: 'var(--font-display)',
-              }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 Save as Template
               </h3>
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                   Template Name
                 </label>
                 <input
@@ -1084,7 +1024,7 @@ export default function BoardPage() {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                   Description (optional)
                 </label>
                 <input
@@ -1096,34 +1036,23 @@ export default function BoardPage() {
                   style={{ width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
-              <p style={{ margin: 0, fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', lineHeight: 1.5 }}>
+              <p className="type-micro" style={{ margin: 0 }}>
                 Saves this board's current canvas as a reusable template in this workspace. Editing this board later won't change the template.
               </p>
-              {templateError && <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>{templateError}</p>}
+              {templateError && <p className="type-micro" style={{ margin: 0, color: 'var(--color-error)' }}>{templateError}</p>}
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={handleSaveAsTemplate}
                   disabled={savingTemplate || !templateForm.name.trim()}
-                  style={{
-                    flex: 1, padding: '12px 20px',
-                    background: 'var(--color-brand)', color: '#fff',
-                    border: 'none', borderRadius: 'var(--radius-pill)',
-                    fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)',
-                    cursor: savingTemplate || !templateForm.name.trim() ? 'not-allowed' : 'pointer',
-                    opacity: savingTemplate || !templateForm.name.trim() ? 0.6 : 1,
-                  }}
+                  className="btn-primary"
+                  style={{ flex: 1 }}
                 >
                   {savingTemplate ? 'Saving...' : 'Save Template'}
                 </button>
                 <button
                   onClick={() => setShowSaveAsTemplate(false)}
-                  style={{
-                    flex: 1, padding: '12px 20px',
-                    background: 'none', color: 'var(--color-ink-muted)',
-                    border: '1px solid var(--color-hairline)',
-                    borderRadius: 'var(--radius-pill)', fontSize: 13,
-                    fontFamily: 'var(--font-body)', cursor: 'pointer',
-                  }}
+                  className="btn-translucent"
+                  style={{ flex: 1 }}
                 >
                   Cancel
                 </button>
@@ -1158,41 +1087,25 @@ export default function BoardPage() {
                 display: 'flex', flexDirection: 'column', gap: 16,
               }}
             >
-              <h3 style={{
-                margin: 0, fontSize: 18, fontWeight: 700,
-                color: 'var(--color-ink)', fontFamily: 'var(--font-display)',
-              }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 Delete "{board.name}"?
               </h3>
-              <p style={{
-                margin: 0, fontSize: 13, color: 'var(--color-ink-muted)',
-                fontFamily: 'var(--font-body)', lineHeight: 1.5,
-              }}>
+              <p className="type-body" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>
                 This will permanently delete the board and all its contents. Cannot be undone.
               </p>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={handleDeleteBoard}
                   disabled={deleting}
-                  style={{
-                    flex: 1, padding: '12px 20px',
-                    background: 'var(--color-error-fill)', color: '#fff',
-                    border: 'none', borderRadius: 'var(--radius-pill)',
-                    fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)',
-                    cursor: deleting ? 'not-allowed' : 'pointer',
-                  }}
+                  className="btn-primary btn-danger"
+                  style={{ flex: 1 }}
                 >
                   {deleting ? 'Deleting...' : 'Delete'}
                 </button>
                 <button
                   onClick={() => setConfirmDelete(false)}
-                  style={{
-                    flex: 1, padding: '12px 20px',
-                    background: 'none', color: 'var(--color-ink-muted)',
-                    border: '1px solid var(--color-hairline)',
-                    borderRadius: 'var(--radius-pill)', fontSize: 13,
-                    fontFamily: 'var(--font-body)', cursor: 'pointer',
-                  }}
+                  className="btn-translucent"
+                  style={{ flex: 1 }}
                 >
                   Cancel
                 </button>

@@ -51,10 +51,10 @@ function CommentAuthorRow({ roll, name, timestamp }: CommentAuthorRowProps) {
         {(name ?? roll)[0].toUpperCase()}
       </span>
       <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+        <span className="type-body-sm" style={{ color: 'var(--color-ink)' }}>
           {name ?? roll}
         </span>
-        <span style={{ fontSize: 10, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+        <span className="type-micro">
           {formatTimestamp(timestamp)}
         </span>
       </div>
@@ -121,26 +121,27 @@ function CommentRow({ comment, currentRoll, canModerate, onEdit, onDelete }: Com
               if (e.key === 'Escape') { e.preventDefault(); setEditing(false); }
             }}
             aria-label="Edit comment content"
+            className="type-body"
             style={textareaStyle}
             rows={2}
           />
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={handleSaveEdit} disabled={busy} style={primaryPillStyle}>
+            <button onClick={handleSaveEdit} disabled={busy} className="btn-primary btn-sm">
               {busy ? 'Saving…' : 'Save'}
             </button>
-            <button onClick={() => setEditing(false)} disabled={busy} style={secondaryPillStyle}>
+            <button onClick={() => setEditing(false)} disabled={busy} className="btn-translucent btn-sm">
               Cancel
             </button>
           </div>
         </div>
       ) : (
-        <p style={{
-          margin: 0, paddingLeft: 30, fontSize: 12.5, lineHeight: 1.5,
-          color: 'var(--color-ink)', fontFamily: 'var(--font-body)', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+        <p className="type-body" style={{
+          margin: 0, paddingLeft: 30,
+          color: 'var(--color-ink)', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
         }}>
           {comment.content}
           {comment.updatedAt !== comment.createdAt && (
-            <span style={{ color: 'var(--color-ink-muted)', fontSize: 10 }}> (edited)</span>
+            <span className="type-micro"> (edited)</span>
           )}
         </p>
       )}
@@ -154,18 +155,18 @@ function CommentRow({ comment, currentRoll, canModerate, onEdit, onDelete }: Com
             background: 'var(--color-surface-2)', display: 'flex', flexDirection: 'column', gap: 8,
           }}
         >
-          <p style={{ margin: 0, fontSize: 11.5, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+          <p className="type-body" style={{ margin: 0, color: 'var(--color-ink)' }}>
             Delete this comment? This can't be undone.
           </p>
           <div style={{ display: 'flex', gap: 6 }}>
             <button
               onClick={async () => { setBusy(true); await onDelete(); setBusy(false); setConfirmDelete(false); }}
               disabled={busy}
-              style={{ ...primaryPillStyle, background: 'var(--color-error-fill)' }}
+              className="btn-primary btn-danger btn-sm"
             >
               Delete
             </button>
-            <button onClick={() => setConfirmDelete(false)} disabled={busy} style={secondaryPillStyle}>
+            <button onClick={() => setConfirmDelete(false)} disabled={busy} className="btn-translucent btn-sm">
               Cancel
             </button>
           </div>
@@ -184,19 +185,9 @@ const iconButtonStyle: CSSProperties = {
 const textareaStyle: CSSProperties = {
   width: '100%', resize: 'none', padding: '8px 10px', borderRadius: 'var(--radius-md)',
   border: '1px solid var(--color-hairline)', background: 'var(--color-canvas)',
-  color: 'var(--color-ink)', fontSize: 12.5, fontFamily: 'var(--font-body)', lineHeight: 1.5,
+  color: 'var(--color-ink)',
 };
 
-const primaryPillStyle: CSSProperties = {
-  padding: '5px 12px', background: 'var(--color-brand)', color: '#fff', border: 'none',
-  borderRadius: 'var(--radius-pill)', fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
-};
-
-const secondaryPillStyle: CSSProperties = {
-  padding: '5px 12px', background: 'none', color: 'var(--color-ink-muted)',
-  border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-pill)',
-  fontSize: 11, fontFamily: 'var(--font-body)', cursor: 'pointer',
-};
 
 type CommentThreadPanelProps =
   | {
@@ -366,13 +357,12 @@ export function CommentThreadPanel(props: CommentThreadPanelProps) {
         padding: '14px 16px', borderBottom: '1px solid var(--color-hairline)', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
+          <h3 className="type-headline" style={{ margin: 0 }}>
             {mode === 'draft' ? 'New comment' : 'Comment thread'}
           </h3>
           {isResolved && (
-            <span style={{
-              fontSize: 9, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
-              padding: '2px 6px', borderRadius: 'var(--radius-pill)',
+            <span className="type-micro" style={{
+                            padding: '2px 6px', borderRadius: 'var(--radius-pill)',
               background: 'var(--color-success-fill)', color: '#fff',
             }}>
               Resolved
@@ -382,13 +372,8 @@ export function CommentThreadPanel(props: CommentThreadPanelProps) {
         <button
           onClick={onClose}
           aria-label="Close comment panel"
-          style={{
-            width: 24, height: 24, borderRadius: 'var(--radius-full)',
-            border: '1px solid var(--color-hairline)', background: 'none',
-            color: 'var(--color-ink-muted)', fontSize: 14, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-          className="touch-target"
+          className="btn-translucent btn-icon btn-sm touch-target"
+          style={{ fontSize: 14 }}
         >
           ×
         </button>
@@ -423,14 +408,8 @@ export function CommentThreadPanel(props: CommentThreadPanelProps) {
         <div style={{ padding: '10px 16px', borderTop: '1px solid var(--color-hairline)', flexShrink: 0 }}>
           <button
             onClick={isResolved ? props.onReopen : props.onResolve}
-            style={{
-              width: '100%', padding: '8px 0',
-              background: isResolved ? 'none' : 'var(--color-success-fill)',
-              color: isResolved ? 'var(--color-ink)' : '#fff',
-              border: isResolved ? '1px solid var(--color-hairline)' : 'none',
-              borderRadius: 'var(--radius-pill)', fontSize: 12, fontWeight: 600,
-              fontFamily: 'var(--font-body)', cursor: 'pointer',
-            }}
+            className={isResolved ? 'btn-translucent btn-sm' : 'btn-primary btn-sm'}
+            style={{ width: '100%', ...(isResolved ? null : { background: 'var(--color-success-fill)', color: '#fff' }) }}
           >
             {isResolved ? 'Reopen thread' : 'Resolve thread'}
           </button>
@@ -468,10 +447,10 @@ export function CommentThreadPanel(props: CommentThreadPanelProps) {
                       minHeight: 40,
                     }}
                   >
-                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink)' }}>
+                    <span className="type-body-sm" style={{ color: 'var(--color-ink)' }}>
                       {m.name ?? m.roll}
                     </span>
-                    <span style={{ fontSize: 10, color: 'var(--color-ink-muted)' }}>@{m.roll}</span>
+                    <span className="type-micro">@{m.roll}</span>
                   </button>
                 </li>
               ))}
@@ -485,20 +464,16 @@ export function CommentThreadPanel(props: CommentThreadPanelProps) {
             placeholder={mode === 'draft' ? 'Add a comment…' : 'Reply…'}
             aria-label={mode === 'draft' ? 'New comment content' : 'Reply content'}
             rows={mode === 'draft' ? 3 : 2}
+            className="type-body"
             style={textareaStyle}
           />
-          {/* marginTop 10 = the submit button's touch-target growth at 44px
-              ((44 − 24) / 2), so its hit area stops at the textarea edge. */}
+          {/* marginTop 10 ≥ the submit button's touch-target growth at 44px
+              ((44 − 32) / 2 = 6), so its hit area stops short of the textarea. */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 10 }}>
             <button
               onClick={handleSubmit}
               disabled={submitting || !composerValue.trim()}
-              style={{
-                ...primaryPillStyle,
-                cursor: submitting || !composerValue.trim() ? 'not-allowed' : 'pointer',
-                opacity: submitting || !composerValue.trim() ? 0.6 : 1,
-              }}
-              className="touch-target"
+              className="btn-primary btn-sm touch-target"
             >
               {submitting ? 'Posting…' : mode === 'draft' ? 'Comment' : 'Reply'}
             </button>

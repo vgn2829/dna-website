@@ -153,7 +153,7 @@ export default function ProjectsPage() {
   if (!studentSession) {
     return (
       <div style={{ padding: '80px 0', textAlign: 'center' }}>
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--color-ink-muted)', marginBottom: 16 }}>
+        <p className="type-body" style={{ color: 'var(--color-ink-muted)', marginBottom: 16 }}>
           Sign in to view and manage projects.
         </p>
         <button onClick={openRollModal} className="btn-primary">
@@ -164,14 +164,14 @@ export default function ProjectsPage() {
   }
 
   if (workspaceLoading && workspaces.length === 0) {
-    return <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)', padding: '40px 0' }}>Loading…</p>;
+    return <p className="type-body" style={{ color: 'var(--color-ink-muted)', padding: '40px 0' }}>Loading…</p>;
   }
 
   if (!targetWorkspace) {
     return (
       <div style={{ padding: '80px 0', textAlign: 'center' }}>
         <FolderKanban size={28} strokeWidth={1.5} style={{ color: 'var(--color-ink-muted)', marginBottom: 14 }} />
-        <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)' }}>
+        <p className="type-body" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>
           Select a workspace to view its projects.
         </p>
       </div>
@@ -184,10 +184,10 @@ export default function ProjectsPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', marginBottom: 28 }}>
         <div>
-          <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-muted)', letterSpacing: '-0.13px', fontFamily: 'var(--font-body)', marginBottom: 8 }}>
+          <p className="type-caption" style={{ marginBottom: 8 }}>
             {targetWorkspace.is_personal ? 'Personal' : targetWorkspace.name}
           </p>
-          <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(32px,4.5vw,52px)', fontWeight: 500, lineHeight: 0.95, letterSpacing: '-2px', color: 'var(--color-ink)' }}>
+          <h1 className="type-display-md" style={{ margin: 0 }}>
             Projects
           </h1>
         </div>
@@ -196,19 +196,13 @@ export default function ProjectsPage() {
         </button>
       </div>
 
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', marginBottom: 28 }}>
+      <div className="segmented" style={{ marginBottom: 28 }}>
         {([['active', 'Active'], ['archived', 'Archived']] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setShowArchived(key === 'archived')}
             aria-pressed={(key === 'archived') === showArchived}
-            style={{
-              padding: '10px 16px', background: 'none', border: 'none',
-              borderBottom: (key === 'archived') === showArchived ? '2px solid var(--color-brand)' : '2px solid transparent',
-              marginBottom: -1, fontSize: 14, fontFamily: 'var(--font-body)',
-              color: (key === 'archived') === showArchived ? 'var(--color-ink)' : 'var(--color-ink-muted)',
-              fontWeight: (key === 'archived') === showArchived ? 600 : 400, cursor: 'pointer',
-            }}
+            className="segmented-item touch-target"
           >
             {label}
           </button>
@@ -216,13 +210,13 @@ export default function ProjectsPage() {
       </div>
 
       {loading ? (
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)' }}>Loading…</p>
+        <p className="type-body" style={{ color: 'var(--color-ink-muted)' }}>Loading…</p>
       ) : loadError ? (
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-error)' }}>
-          Could not load projects. <button onClick={fetchProjects} style={{ background: 'none', border: 'none', color: 'var(--color-brand-text)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 14 }}>Retry</button>
+        <p className="type-body" style={{ color: 'var(--color-error)' }}>
+          Could not load projects. <button onClick={fetchProjects} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-brand-text)', cursor: 'pointer', font: 'inherit' }}>Retry</button>
         </p>
       ) : visibleProjects.length === 0 ? (
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)' }}>
+        <p className="type-body" style={{ color: 'var(--color-ink-muted)' }}>
           {showArchived ? 'No archived projects.' : 'No projects yet. Create one to start organizing your boards.'}
         </p>
       ) : (
@@ -254,15 +248,15 @@ export default function ProjectsPage() {
                   ⋮
                 </button>
               </div>
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: 15, fontWeight: 600, color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span className="type-body-sm" style={{ color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {project.name}
               </span>
               {project.description && (
-                <span style={{ fontFamily: 'var(--font-body)', fontSize: 12.5, color: 'var(--color-ink-muted)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                <span className="type-caption" style={{ overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                   {project.description}
                 </span>
               )}
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--color-ink-muted)', marginTop: 4 }}>
+              <span className="type-caption" style={{ marginTop: 4 }}>
                 {project.board_count} board{project.board_count === 1 ? '' : 's'} · {timeAgo(project.created_at)}
               </span>
             </div>
@@ -335,7 +329,7 @@ export default function ProjectsPage() {
               onClick={e => e.stopPropagation()}
               style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.3px' }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 New Project
               </h3>
 
@@ -344,7 +338,7 @@ export default function ProjectsPage() {
                 { label: 'Description (optional)', key: 'description', placeholder: 'What is this project about?' },
               ] as const).map(({ label, key, placeholder }) => (
                 <div key={key}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                  <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                     {label}
                   </label>
                   <input
@@ -359,19 +353,19 @@ export default function ProjectsPage() {
                 </div>
               ))}
 
-              {createError && <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>{createError}</p>}
+              {createError && <p className="type-micro" style={{ margin: 0, color: 'var(--color-error)' }}>{createError}</p>}
 
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={handleCreate}
                   disabled={creating || !form.name.trim()}
-                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: creating || !form.name.trim() ? 'not-allowed' : 'pointer', opacity: creating || !form.name.trim() ? 0.6 : 1 }}
+                  className="btn-primary" style={{ flex: 1 }}
                 >
                   {creating ? 'Creating...' : 'Create Project'}
                 </button>
                 <button
                   onClick={() => setShowCreate(false)}
-                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  className="btn-translucent" style={{ flex: 1 }}
                 >
                   Cancel
                 </button>
@@ -402,7 +396,7 @@ export default function ProjectsPage() {
               onClick={e => e.stopPropagation()}
               style={{ width: '100%', maxWidth: 400, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.3px' }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 Rename Project
               </h3>
               <input
@@ -418,13 +412,13 @@ export default function ProjectsPage() {
                 <button
                   onClick={handleRename}
                   disabled={renaming || !renameValue.trim()}
-                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: renaming || !renameValue.trim() ? 'not-allowed' : 'pointer', opacity: renaming || !renameValue.trim() ? 0.6 : 1 }}
+                  className="btn-primary" style={{ flex: 1 }}
                 >
                   {renaming ? 'Saving...' : 'Save'}
                 </button>
                 <button
                   onClick={() => setRenameProject(null)}
-                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  className="btn-translucent" style={{ flex: 1 }}
                 >
                   Cancel
                 </button>

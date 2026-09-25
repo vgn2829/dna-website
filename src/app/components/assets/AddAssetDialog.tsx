@@ -19,10 +19,8 @@ import { LibraryDialog } from './LibraryDialog';
 // default is the collection currently being browsed.
 // ─────────────────────────────────────────────────────────────────────────
 
-const FIELD_LABEL: React.CSSProperties = {
-  display: 'block', marginBottom: 6, fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
-  textTransform: 'uppercase', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)',
-};
+// Layout only — type comes from .type-caption on each label.
+const FIELD_LABEL: React.CSSProperties = { display: 'block', marginBottom: 6 };
 
 type QueueItem = { key: string; name: string; status: 'waiting' | 'uploading' | 'done' | 'error'; message?: string };
 
@@ -123,22 +121,16 @@ export function AddAssetDialog({
           </button>
       </>)}
     >
-      <div role="tablist" aria-label="Add asset type" style={{ display: 'flex', gap: 4, padding: 4, marginBottom: 16, borderRadius: 'var(--radius-pill)', background: 'var(--color-canvas)', border: '1px solid var(--color-hairline)' }}>
+      <div role="tablist" aria-label="Add asset type" className="segmented is-block" style={{ marginBottom: 16 }}>
         {([['upload', 'Upload file', UploadCloud], ['link', 'Add link', Link2]] as const).map(([id, label, Icon]) => (
-          <button className="touch-target"
+          <button className="segmented-item touch-target"
             key={id}
             type="button"
             role="tab"
             aria-selected={mode === id}
             disabled={busy}
             onClick={() => setMode(id)}
-            style={{
-              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              padding: '8px 12px', borderRadius: 'var(--radius-pill)', border: 'none', cursor: 'pointer',
-              background: mode === id ? 'var(--color-surface-2)' : 'transparent',
-              color: mode === id ? 'var(--color-ink)' : 'var(--color-ink-muted)',
-              fontSize: 13, fontWeight: 500, fontFamily: 'var(--font-body)',
-            }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
           >
             <Icon size={14} /> {label}
           </button>
@@ -147,7 +139,7 @@ export function AddAssetDialog({
 
       {collections.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <label htmlFor="add-asset-collection" style={FIELD_LABEL}>Collection</label>
+          <label htmlFor="add-asset-collection" className="type-caption" style={FIELD_LABEL}>Collection</label>
           <select
             id="add-asset-collection"
             className="input-base"
@@ -163,7 +155,7 @@ export function AddAssetDialog({
 
       {mode === 'link' ? (
         <form onSubmit={e => { e.preventDefault(); saveLink(); }}>
-          <label htmlFor="link-name" style={FIELD_LABEL}>Name</label>
+          <label htmlFor="link-name" className="type-caption" style={FIELD_LABEL}>Name</label>
           <input
             id="link-name"
             className="input-base"
@@ -173,7 +165,7 @@ export function AddAssetDialog({
             placeholder="Envato T-Shirt Mockup"
             autoFocus
           />
-          <label htmlFor="link-url" style={{ ...FIELD_LABEL, marginTop: 14 }}>URL</label>
+          <label htmlFor="link-url" className="type-caption" style={{ ...FIELD_LABEL, marginTop: 14 }}>URL</label>
           <input
             id="link-url"
             className="input-base"
@@ -214,7 +206,7 @@ export function AddAssetDialog({
         }}
       >
         <UploadCloud size={26} strokeWidth={1.6} style={{ color: 'var(--color-ink-muted)' }} />
-        <span style={{ fontSize: 14, fontWeight: 600 }}>Drop files here or browse</span>
+        <span className="type-body-sm">Drop files here or browse</span>
         <span style={{ fontSize: 12, color: 'var(--color-ink-muted)', lineHeight: 1.5, maxWidth: 380 }}>
           Images (PNG, JPG, WEBP, GIF, SVG) up to {formatSize(IMAGE_MAX_BYTES)} — insertable on boards.<br />
           Design files, documents and archives (PSD, AI, FIG, PDF, PPTX, ZIP…) up to {formatSize(FILE_MAX_BYTES)}.

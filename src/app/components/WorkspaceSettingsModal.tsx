@@ -238,16 +238,12 @@ export function WorkspaceSettingsModal({
             </div>
           ) : loadError || !workspace ? (
             <>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--color-error)', fontFamily: 'var(--font-body)', textAlign: 'center', padding: '20px 0' }}>
+              <p className="type-body-sm" style={{ margin: 0, color: 'var(--color-error)', textAlign: 'center', padding: '20px 0' }}>
                 Failed to load workspace settings.
               </p>
               <button
                 onClick={onClose}
-                style={{
-                  padding: '10px 16px', background: 'none', color: 'var(--color-ink-muted)',
-                  border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-sm)',
-                  fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer',
-                }}
+                className="btn-translucent"
               >
                 Close
               </button>
@@ -256,6 +252,7 @@ export function WorkspaceSettingsModal({
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 {editingName ? (
+                  <div className="type-headline" style={{ flex: 1, marginRight: 12 }}>
                   <input
                     className="input-base"
                     autoFocus
@@ -266,38 +263,31 @@ export function WorkspaceSettingsModal({
                     onBlur={handleRename}
                     maxLength={100}
                     disabled={renaming}
-                    style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-display)', flex: 1, marginRight: 12 }}
+                    style={{ width: '100%', font: 'inherit', letterSpacing: 'inherit' }}
                   />
+                  </div>
                 ) : canManage ? (
                   <button
                     onClick={() => { setNameDraft(workspace.name); setEditingName(true); }}
                     aria-label={`${workspace.name}, click to rename`}
                     title="Click to rename"
+                    className="type-headline"
                     style={{
-                      margin: 0, padding: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)',
-                      fontFamily: 'var(--font-display)', letterSpacing: '-0.3px',
-                      background: 'none', border: 'none', cursor: 'text', textAlign: 'left',
+                      margin: 0, padding: 0, background: 'none', border: 'none', cursor: 'text', textAlign: 'left',
                     }}
                   >
                     {workspace.name}
                   </button>
                 ) : (
-                  <h3 style={{
-                    margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)',
-                    fontFamily: 'var(--font-display)', letterSpacing: '-0.3px',
-                  }}>
+                  <h3 className="type-headline" style={{ margin: 0 }}>
                     {workspace.name}
                   </h3>
                 )}
                 <button
                   onClick={onClose}
                   aria-label="Close workspace settings"
-                  style={{
-                    width: 32, height: 32, borderRadius: 'var(--radius-full)', flexShrink: 0,
-                    border: '1px solid var(--color-hairline)', background: 'none',
-                    color: 'var(--color-ink-muted)', fontSize: 18, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
+                  className="btn-translucent btn-icon btn-sm touch-target"
+                  style={{ flexShrink: 0, fontSize: 18 }}
                 >
                   ×
                 </button>
@@ -322,10 +312,10 @@ export function WorkspaceSettingsModal({
                           {(m.name ?? m.roll_number)[0].toUpperCase()}
                         </div>
                         <div style={{ minWidth: 0 }}>
-                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <p className="type-body-sm" style={{ margin: 0, color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {m.name ?? m.roll_number}
                           </p>
-                          <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                          <p className="type-micro" style={{ margin: 0 }}>
                             {m.roll_number} · {isTargetOwner ? 'Owner' : m.role === 'admin' ? 'Admin' : 'Member'} · Joined {formatDate(m.added_at)}
                           </p>
                         </div>
@@ -338,12 +328,7 @@ export function WorkspaceSettingsModal({
                               onClick={() => handleRoleChange(m.roll_number, m.role === 'admin' ? 'member' : 'admin')}
                               disabled={busy}
                               aria-label={m.role === 'admin' ? `Demote ${m.name ?? m.roll_number} to Member` : `Promote ${m.name ?? m.roll_number} to Admin`}
-                              style={{
-                                fontSize: 11, color: 'var(--color-ink-muted)', background: 'none',
-                                border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-sm)',
-                                fontFamily: 'var(--font-body)', cursor: busy ? 'not-allowed' : 'pointer', padding: '4px 8px',
-                                opacity: busy ? 0.5 : 1,
-                              }}
+                              className="btn-translucent btn-sm"
                             >
                               {m.role === 'admin' ? 'Demote' : 'Promote'}
                             </button>
@@ -353,11 +338,7 @@ export function WorkspaceSettingsModal({
                               onClick={() => setConfirmAction({ removeRoll: m.roll_number })}
                               disabled={busy}
                               aria-label={`Remove ${m.name ?? m.roll_number} from workspace`}
-                              style={{
-                                fontSize: 12, color: 'var(--color-error)', background: 'none', border: 'none',
-                                fontFamily: 'var(--font-body)', cursor: busy ? 'not-allowed' : 'pointer', padding: '4px 8px',
-                                opacity: busy ? 0.5 : 1,
-                              }}
+                              className="btn-translucent btn-sm is-danger"
                             >
                               Remove
                             </button>
@@ -371,10 +352,7 @@ export function WorkspaceSettingsModal({
 
               {canManage && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <label htmlFor="workspace-invite-roll" style={{
-                    fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)',
-                    letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                  }}>
+                  <label htmlFor="workspace-invite-roll" className="type-caption">
                     Invite by Roll Number
                   </label>
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -392,19 +370,13 @@ export function WorkspaceSettingsModal({
                     <button
                       onClick={handleInvite}
                       disabled={inviting || !inviteRoll.trim()}
-                      style={{
-                        padding: '0 16px', background: 'var(--color-brand)', color: '#fff',
-                        border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 13, fontWeight: 600,
-                        fontFamily: 'var(--font-body)',
-                        cursor: inviting ? 'not-allowed' : 'pointer',
-                        opacity: inviting ? 0.6 : 1,
-                      }}
+                      className="btn-primary"
                     >
                       {inviting ? '...' : 'Invite'}
                     </button>
                   </div>
                   {inviteError && (
-                    <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>
+                    <p className="type-micro" style={{ margin: 0, color: 'var(--color-error)' }}>
                       {inviteError}
                     </p>
                   )}
@@ -415,24 +387,16 @@ export function WorkspaceSettingsModal({
                 {isOwner ? (
                   <button
                     onClick={() => setConfirmAction('delete')}
-                    style={{
-                      flex: 1, padding: '10px 16px', background: 'none', color: 'var(--color-error)',
-                      border: '1px solid var(--color-error)', borderRadius: 'var(--radius-sm)',
-                      fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
-                      marginTop: 12,
-                    }}
+                    className="btn-translucent is-danger"
+                    style={{ flex: 1, marginTop: 12 }}
                   >
                     Delete Workspace
                   </button>
                 ) : (
                   <button
                     onClick={() => setConfirmAction('leave')}
-                    style={{
-                      flex: 1, padding: '10px 16px', background: 'none', color: 'var(--color-error)',
-                      border: '1px solid var(--color-error)', borderRadius: 'var(--radius-sm)',
-                      fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
-                      marginTop: 12,
-                    }}
+                    className="btn-translucent is-danger"
+                    style={{ flex: 1, marginTop: 12 }}
                   >
                     Leave Workspace
                   </button>
@@ -473,12 +437,12 @@ export function WorkspaceSettingsModal({
               display: 'flex', flexDirection: 'column', gap: 16,
             }}
           >
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
+            <h3 className="type-headline" style={{ margin: 0 }}>
               {confirmAction === 'delete' ? `Delete "${workspace.name}"?`
                 : confirmAction === 'leave' ? `Leave "${workspace.name}"?`
                 : `Remove this member?`}
             </h3>
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', lineHeight: 1.5 }}>
+            <p className="type-body" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>
               {confirmAction === 'delete'
                 ? 'This will permanently delete the workspace. Every board must already be moved or deleted first. Cannot be undone.'
                 : confirmAction === 'leave'
@@ -493,22 +457,16 @@ export function WorkspaceSettingsModal({
                   else handleRemoveMember(confirmAction.removeRoll);
                 }}
                 disabled={confirmBusy}
-                style={{
-                  flex: 1, padding: '12px 20px', background: 'var(--color-error-fill)', color: '#fff',
-                  border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600,
-                  fontFamily: 'var(--font-body)', cursor: confirmBusy ? 'not-allowed' : 'pointer',
-                }}
+                className="btn-primary btn-danger"
+                style={{ flex: 1 }}
               >
                 {confirmBusy ? 'Working...' : confirmAction === 'delete' ? 'Delete' : confirmAction === 'leave' ? 'Leave' : 'Remove'}
               </button>
               <button
                 onClick={() => setConfirmAction(null)}
                 disabled={confirmBusy}
-                style={{
-                  flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)',
-                  border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-pill)',
-                  fontSize: 13, fontFamily: 'var(--font-body)', cursor: confirmBusy ? 'not-allowed' : 'pointer',
-                }}
+                className="btn-translucent"
+                style={{ flex: 1 }}
               >
                 Cancel
               </button>

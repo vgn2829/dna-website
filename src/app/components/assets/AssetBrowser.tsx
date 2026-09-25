@@ -238,22 +238,16 @@ export function AssetBrowser({
       </div>
 
       {/* Type tabs */}
-      <div role="tablist" aria-label="Asset type" style={{ alignSelf: 'flex-start', display: 'flex', gap: 4, padding: 4, borderRadius: 'var(--radius-pill)', background: 'var(--color-surface-1)', border: '1px solid var(--color-hairline)', maxWidth: '100%', overflowX: 'auto' }}>
+      <div role="tablist" aria-label="Asset type" className="segmented" style={{ alignSelf: 'flex-start' }}>
         {TABS.map(t => {
           const active = tab === t.id;
           return (
-            <button className="touch-target"
+            <button className="segmented-item touch-target"
               key={t.id}
               type="button"
               role="tab"
               aria-selected={active}
               onClick={() => setTab(t.id)}
-              style={{
-                padding: '6px 14px', borderRadius: 'var(--radius-pill)', border: 'none', whiteSpace: 'nowrap',
-                background: active ? 'var(--color-surface-2)' : 'transparent',
-                color: active ? 'var(--color-ink)' : 'var(--color-ink-muted)',
-                fontSize: 13, fontWeight: 500, letterSpacing: '-0.13px', fontFamily: 'var(--font-body)', cursor: 'pointer',
-              }}
             >
               {t.label}
             </button>
@@ -278,12 +272,8 @@ export function AssetBrowser({
         <button
           type="button"
           onClick={() => setCollectionForm({ editing: null })}
-          style={{
-            flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5,
-            padding: '6px 12px', borderRadius: 'var(--radius-pill)', cursor: 'pointer',
-            border: '1px dashed var(--color-hairline)', background: 'none',
-            color: 'var(--color-ink-muted)', fontSize: 13, fontWeight: 500, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
-          }}
+          className="btn-secondary btn-sm touch-target"
+          style={{ flexShrink: 0 }}
         >
           <Plus size={13} /> New collection
         </button>
@@ -297,10 +287,10 @@ export function AssetBrowser({
           border: '1px solid var(--color-hairline)', background: 'var(--color-surface-1)',
         }}>
           <div style={{ minWidth: 0 }}>
-            <p style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, letterSpacing: '-0.4px', color: 'var(--color-ink)', overflowWrap: 'anywhere' }}>
+            <p className="type-headline" style={{ margin: 0, overflowWrap: 'anywhere' }}>
               {activeCollection.name}
             </p>
-            <p style={{ margin: '4px 0 0', fontFamily: 'var(--font-body)', fontSize: 13, lineHeight: 1.45, color: 'var(--color-ink-muted)', overflowWrap: 'anywhere' }}>
+            <p className="type-caption" style={{ margin: '4px 0 0', overflowWrap: 'anywhere' }}>
               {activeCollection.asset_count} {activeCollection.asset_count === 1 ? 'asset' : 'assets'}
               {activeCollection.description ? ` · ${activeCollection.description}` : ''}
             </p>
@@ -412,13 +402,13 @@ export function AssetBrowser({
           maxWidth={400}
           onClose={() => { if (!deleting) setConfirmDelete(null); }}
           footer={<>
-            <button type="button" className="btn-secondary" onClick={() => setConfirmDelete(null)} disabled={deleting} style={{ minHeight: 40 }}>Cancel</button>
-            <button type="button" className="btn-primary" onClick={() => handleDelete(confirmDelete)} disabled={deleting} style={{ minHeight: 40, background: 'var(--color-error-fill)', color: '#fff' }}>
+            <button type="button" className="btn-translucent" onClick={() => setConfirmDelete(null)} disabled={deleting} style={{ minHeight: 40 }}>Cancel</button>
+            <button type="button" className="btn-primary btn-danger" onClick={() => handleDelete(confirmDelete)} disabled={deleting} style={{ minHeight: 40 }}>
               {deleting ? 'Deleting…' : 'Delete'}
             </button>
           </>}
         >
-          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+          <p className="type-body" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>
             {confirmDelete.kind === 'link'
               ? 'This removes the link from the asset library.'
               : 'This removes it from the asset library. Copies already placed on boards are unaffected.'}
@@ -433,13 +423,13 @@ export function AssetBrowser({
           maxWidth={420}
           onClose={() => { if (!deletingCollection) setConfirmDeleteCollection(null); }}
           footer={<>
-            <button type="button" className="btn-secondary" onClick={() => setConfirmDeleteCollection(null)} disabled={deletingCollection} style={{ minHeight: 40 }}>Cancel</button>
-            <button type="button" className="btn-primary" onClick={() => handleDeleteCollection(confirmDeleteCollection)} disabled={deletingCollection} style={{ minHeight: 40, background: 'var(--color-error-fill)', color: '#fff' }}>
+            <button type="button" className="btn-translucent" onClick={() => setConfirmDeleteCollection(null)} disabled={deletingCollection} style={{ minHeight: 40 }}>Cancel</button>
+            <button type="button" className="btn-primary btn-danger" onClick={() => handleDeleteCollection(confirmDeleteCollection)} disabled={deletingCollection} style={{ minHeight: 40 }}>
               {deletingCollection ? 'Deleting…' : 'Delete collection'}
             </button>
           </>}
         >
-          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+          <p className="type-body" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>
             The {confirmDeleteCollection.asset_count} {confirmDeleteCollection.asset_count === 1 ? 'asset' : 'assets'} in it stay in the library — they just won’t be grouped anymore.
           </p>
         </LibraryDialog>
@@ -481,8 +471,8 @@ function EmptyState({ title, body, action }: { title: string; body: string; acti
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, textAlign: 'center',
       padding: '56px 20px', borderRadius: 'var(--radius-xl)', border: '1px dashed var(--color-hairline)',
     }}>
-      <p style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, letterSpacing: '-0.4px', color: 'var(--color-ink)' }}>{title}</p>
-      <p style={{ margin: 0, maxWidth: 440, fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.5, color: 'var(--color-ink-muted)' }}>{body}</p>
+      <p className="type-headline" style={{ margin: 0 }}>{title}</p>
+      <p className="type-body" style={{ margin: 0, maxWidth: 440, color: 'var(--color-ink-muted)' }}>{body}</p>
       {action && <div style={{ marginTop: 8 }}>{action}</div>}
     </div>
   );

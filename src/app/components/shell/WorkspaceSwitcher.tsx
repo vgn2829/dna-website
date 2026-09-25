@@ -43,14 +43,13 @@ export function WorkspaceSwitcher() {
     <>
       <button
         onClick={() => setShowPanel(true)}
-        className="ws-switcher"
+        className="ws-switcher type-body-sm"
         aria-label={`Workspace: ${activeLabel}. Switch or manage workspaces`}
         style={{
           display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 44,
           padding: '8px 12px 8px 8px', borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--color-hairline)', background: 'var(--color-surface-1)',
-          color: 'var(--color-ink)', fontSize: 13, fontWeight: 600,
-          fontFamily: 'var(--font-body)', cursor: 'pointer', textAlign: 'left',
+          color: 'var(--color-ink)', cursor: 'pointer', textAlign: 'left',
         }}
       >
         <span

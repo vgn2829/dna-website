@@ -63,11 +63,11 @@ export function LibraryDialog({
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '20px 20px 0', flexShrink: 0 }}>
           <div style={{ minWidth: 0 }}>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.3px' }}>
+            <h3 className="type-headline" style={{ margin: 0 }}>
               {title}
             </h3>
             {subtitle && (
-              <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <p className="type-caption" style={{ margin: '3px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {subtitle}
               </p>
             )}
@@ -76,12 +76,8 @@ export function LibraryDialog({
             type="button"
             onClick={onClose}
             aria-label={`Close ${title}`}
-            style={{
-              width: 32, height: 32, borderRadius: 'var(--radius-full)', flexShrink: 0,
-              border: '1px solid var(--color-hairline)', background: 'none',
-              color: 'var(--color-ink-muted)', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
+            className="btn-translucent btn-icon btn-sm touch-target"
+            style={{ flexShrink: 0 }}
           >
             <X size={16} />
           </button>

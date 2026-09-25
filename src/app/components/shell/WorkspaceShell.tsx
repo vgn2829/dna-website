@@ -118,13 +118,8 @@ export function WorkspaceShell() {
               <button
                 onClick={() => setDrawerOpen(true)}
                 aria-label="Open workspace navigation"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  height: 36, padding: '0 12px 0 8px', background: 'none',
-                  border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-pill)',
-                  color: 'var(--color-ink)', cursor: 'pointer',
-                  fontSize: 13, fontWeight: 500, fontFamily: 'var(--font-body)',
-                }}
+                className="btn-secondary btn-sm touch-target"
+                style={{ gap: 8, paddingLeft: 8 }}
               >
                 <Menu size={17} /> Workspace
               </button>

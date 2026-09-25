@@ -139,12 +139,12 @@ export default function ProjectDetailPage() {
   if (!studentSession) {
     return (
       <div style={{ padding: '80px 0', textAlign: 'center' }}>
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--color-ink-muted)', marginBottom: 16 }}>
+        <p className="type-body" style={{ color: 'var(--color-ink-muted)', marginBottom: 16 }}>
           Sign in to view this project.
         </p>
         <button
           onClick={openRollModal}
-          style={{ padding: '10px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+          className="btn-primary"
         >
           Sign in
         </button>
@@ -153,7 +153,7 @@ export default function ProjectDetailPage() {
   }
 
   if (loading) {
-    return <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)', padding: '40px 0' }}>Loading…</p>;
+    return <p className="type-body" style={{ color: 'var(--color-ink-muted)', padding: '40px 0' }}>Loading…</p>;
   }
 
   if (error || !project) {
@@ -162,10 +162,10 @@ export default function ProjectDetailPage() {
       : 'Could not load this project.';
     return (
       <div style={{ padding: '80px 0', textAlign: 'center' }}>
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)', marginBottom: 16 }}>{message}</p>
+        <p className="type-body" style={{ color: 'var(--color-ink-muted)', marginBottom: 16 }}>{message}</p>
         <button
           onClick={() => navigate('/projects')}
-          style={{ padding: '10px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+          className="btn-primary"
         >
           Back to Projects
         </button>
@@ -177,7 +177,7 @@ export default function ProjectDetailPage() {
     <div>
       <button
         onClick={() => navigate('/projects')}
-        style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: 'var(--color-ink-muted)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer', marginBottom: 20, padding: 0 }}
+        className="type-body-sm" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: 'var(--color-ink-muted)', cursor: 'pointer', marginBottom: 20, padding: 0 }}
       >
         <ArrowLeft size={14} /> Projects
       </button>
@@ -187,21 +187,21 @@ export default function ProjectDetailPage() {
           <FolderKanban size={26} strokeWidth={1.5} style={{ color: 'var(--color-ink-muted)', marginTop: 6, flexShrink: 0 }} />
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(28px,4vw,42px)', fontWeight: 500, lineHeight: 1.05, letterSpacing: '-1.5px', color: 'var(--color-ink)' }}>
+              <h1 className="type-display-md" style={{ margin: 0 }}>
                 {project.name}
               </h1>
               {project.is_archived && (
-                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 'var(--radius-pill)', background: 'rgba(128,128,128,0.15)', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                <span className="type-micro" style={{ padding: '3px 9px', borderRadius: 'var(--radius-pill)', background: 'rgba(128,128,128,0.15)', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
                   Archived
                 </span>
               )}
             </div>
             {project.description && (
-              <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)', maxWidth: 560 }}>
+              <p className="type-body" style={{ margin: '8px 0 0', color: 'var(--color-ink-muted)', maxWidth: 560 }}>
                 {project.description}
               </p>
             )}
-            <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--color-ink-muted)' }}>
+            <p className="type-caption" style={{ margin: '8px 0 0' }}>
               {projectWorkspace ? (projectWorkspace.is_personal ? 'Personal' : projectWorkspace.name) : 'Workspace'} · {boards.length} board{boards.length === 1 ? '' : 's'}
             </p>
           </div>
@@ -209,7 +209,7 @@ export default function ProjectDetailPage() {
         {!project.is_archived && (
           <button
             onClick={() => setShowCreate(true)}
-            style={{ padding: '10px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer', flexShrink: 0 }}
+            className="btn-primary"
           >
             + New Board
           </button>
@@ -218,7 +218,7 @@ export default function ProjectDetailPage() {
 
       <div style={{ marginTop: 32 }}>
         {boards.length === 0 ? (
-          <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)' }}>
+          <p className="type-body" style={{ color: 'var(--color-ink-muted)' }}>
             No boards in this project yet.
           </p>
         ) : (
@@ -236,10 +236,8 @@ export default function ProjectDetailPage() {
                   <button
                     onClick={e => { e.stopPropagation(); handleUngroup(board); }}
                     disabled={ungroupingId === board.id}
-                    style={{
-                      marginTop: 6, background: 'none', border: 'none', color: 'var(--color-ink-muted)',
-                      fontSize: 11.5, fontFamily: 'var(--font-body)', cursor: 'pointer', padding: 0,
-                    }}
+                    className="btn-secondary btn-sm touch-target"
+                    style={{ marginTop: 8 }}
                   >
                     Remove from project
                   </button>
@@ -271,7 +269,7 @@ export default function ProjectDetailPage() {
               onClick={e => e.stopPropagation()}
               style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.3px' }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 New Moodboard in {project.name}
               </h3>
 
@@ -280,7 +278,7 @@ export default function ProjectDetailPage() {
                 { label: 'Description (optional)', key: 'description', placeholder: 'What is this board about?' },
               ] as const).map(({ label, key, placeholder }) => (
                 <div key={key}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                  <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                     {label}
                   </label>
                   <input
@@ -296,20 +294,17 @@ export default function ProjectDetailPage() {
               ))}
 
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                   Visibility
                 </label>
-                <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                <div className="segmented is-block" role="group" aria-label="Visibility">
                   {(['private', 'shared'] as const).map(v => (
                     <button
                       key={v}
+                      type="button"
                       onClick={() => setForm(prev => ({ ...prev, visibility: v }))}
-                      style={{
-                        flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer',
-                        background: form.visibility === v ? 'rgba(233,30,140,0.1)' : 'none',
-                        color: form.visibility === v ? 'var(--color-brand-text)' : 'var(--color-ink-muted)',
-                        fontSize: 13, fontWeight: form.visibility === v ? 600 : 400, fontFamily: 'var(--font-body)',
-                      }}
+                      aria-pressed={form.visibility === v}
+                      className="segmented-item"
                     >
                       {v === 'private' ? 'Private' : 'Shared'}
                     </button>
@@ -317,19 +312,19 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
 
-              {createError && <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>{createError}</p>}
+              {createError && <p className="type-micro" style={{ margin: 0, color: 'var(--color-error)' }}>{createError}</p>}
 
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={handleCreate}
                   disabled={creating || !form.name.trim()}
-                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: creating || !form.name.trim() ? 'not-allowed' : 'pointer', opacity: creating || !form.name.trim() ? 0.6 : 1 }}
+                  className="btn-primary" style={{ flex: 1 }}
                 >
                   {creating ? 'Creating...' : 'Create Board'}
                 </button>
                 <button
                   onClick={() => setShowCreate(false)}
-                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  className="btn-translucent" style={{ flex: 1 }}
                 >
                   Cancel
                 </button>

@@ -49,10 +49,10 @@ function BoardCard({ board }: { board: Board }) {
         background: 'var(--color-surface-1)', cursor: 'pointer', minWidth: 0,
       }}
     >
-      <span style={{ fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 600, color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span className="type-body-sm" style={{ color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {board.name}
       </span>
-      <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--color-ink-muted)' }}>
+      <span className="type-caption">
         Edited {timeAgo(board.updated_at)}
       </span>
     </button>
@@ -70,10 +70,10 @@ function ProjectCard({ project }: { project: Project }) {
         background: 'var(--color-surface-1)', cursor: 'pointer', minWidth: 0,
       }}
     >
-      <span style={{ fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 600, color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span className="type-body-sm" style={{ color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {project.name}
       </span>
-      <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--color-ink-muted)' }}>
+      <span className="type-caption">
         {project.board_count} board{project.board_count === 1 ? '' : 's'}
       </span>
     </button>
@@ -91,10 +91,10 @@ function TemplateCard({ template }: { template: Template }) {
         background: 'var(--color-surface-1)', cursor: 'pointer', minWidth: 0,
       }}
     >
-      <span style={{ fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 600, color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span className="type-body-sm" style={{ color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {template.name}
       </span>
-      <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--color-ink-muted)' }}>
+      <span className="type-caption">
         Use Template →
       </span>
     </button>
@@ -104,13 +104,13 @@ function TemplateCard({ template }: { template: Template }) {
 function SectionHeading({ title, action }: { title: string; action?: { label: string; onClick: () => void } }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
-      <h2 style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 16, fontWeight: 700, color: 'var(--color-ink)' }}>
+      <h2 className="type-headline" style={{ margin: 0 }}>
         {title}
       </h2>
       {action && (
         <button
           onClick={action.onClick}
-          style={{ background: 'none', border: 'none', color: 'var(--color-brand-text)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+          className="type-body-sm" style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-brand-text)', cursor: 'pointer' }}
         >
           {action.label}
         </button>
@@ -197,7 +197,7 @@ export default function HomeShellPage() {
   if (!studentSession) {
     return (
       <div style={{ padding: '80px 0', textAlign: 'center' }}>
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--color-ink-muted)', marginBottom: 16 }}>
+        <p className="type-body" style={{ color: 'var(--color-ink-muted)', marginBottom: 16 }}>
           Sign in to see your recent work.
         </p>
         <button onClick={openRollModal} className="btn-primary">
@@ -213,7 +213,7 @@ export default function HomeShellPage() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', marginBottom: 32 }}>
-        <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(32px,4.5vw,52px)', fontWeight: 500, lineHeight: 0.95, letterSpacing: '-2px', color: 'var(--color-ink)' }}>
+        <h1 className="type-display-md" style={{ margin: 0 }}>
           {studentSession.name ? `Welcome back, ${studentSession.name.split(' ')[0]}` : 'Home'}
         </h1>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -227,7 +227,7 @@ export default function HomeShellPage() {
       </div>
 
       {loading ? (
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)' }}>Loading…</p>
+        <p className="type-body" style={{ color: 'var(--color-ink-muted)' }}>Loading…</p>
       ) : (
         <>
           {favoriteBoards.length > 0 && (
@@ -246,7 +246,7 @@ export default function HomeShellPage() {
                 {recentBoards.map(b => <BoardCard key={b.id} board={b} />)}
               </div>
             ) : (
-              <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--color-ink-muted)' }}>
+              <p className="type-body" style={{ color: 'var(--color-ink-muted)' }}>
                 No boards yet — create one to get started.
               </p>
             )}
@@ -293,7 +293,7 @@ export default function HomeShellPage() {
           )}
 
           {workspaces.length === 0 && (
-            <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--color-ink-muted)' }}>
+            <p className="type-body" style={{ color: 'var(--color-ink-muted)' }}>
               Setting up your workspace…
             </p>
           )}

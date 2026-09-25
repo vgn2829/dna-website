@@ -206,17 +206,16 @@ export function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerR
       {/* Card body */}
       <div style={{ padding: '14px 16px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
-          <h3 style={{
-            margin: 0, fontSize: 15, fontWeight: 600,
-            color: 'var(--color-ink)', fontFamily: 'var(--font-body)', lineHeight: 1.3,
+          <h3 className="type-body-sm" style={{
+            margin: 0, color: 'var(--color-ink)',
             overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box',
             WebkitLineClamp: 1, WebkitBoxOrient: 'vertical',
           }}>
             {board.name}
           </h3>
-          <span style={{
-            fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-            padding: '2px 8px', borderRadius: 'var(--radius-pill)', flexShrink: 0, fontFamily: 'var(--font-body)',
+          <span className="type-micro" style={{
+            textTransform: 'capitalize',
+            padding: '2px 8px', borderRadius: 'var(--radius-pill)', flexShrink: 0,
             background: board.visibility === 'shared' ? 'rgba(233,30,140,0.1)' : 'rgba(128,128,128,0.1)',
             color: board.visibility === 'shared' ? 'var(--color-brand-text)' : 'var(--color-ink-muted)',
           }}>
@@ -224,16 +223,16 @@ export function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerR
           </span>
         </div>
         {board.owner_name && (
-          <p style={{ margin: '0 0 6px', fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+          <p className="type-caption" style={{ margin: '0 0 6px' }}>
             by {board.owner_name}
           </p>
         )}
         {board.project_name && (
-          <p style={{ margin: '0 0 6px', fontSize: 11.5, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <p className="type-caption" style={{ margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 4 }}>
             <span aria-hidden="true" style={{ opacity: 0.7 }}>📁</span> {board.project_name}
           </p>
         )}
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+        <p className="type-caption" style={{ margin: 0 }}>
           {board.item_count} item{board.item_count !== 1 ? 's' : ''}
           {board.member_count > 0 ? ` · ${board.member_count + 1} members` : ''}
           {' · '}edited {timeAgo(board.updated_at)}

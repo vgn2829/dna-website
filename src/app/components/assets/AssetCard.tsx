@@ -98,29 +98,28 @@ export function AssetCard({
       <div style={{ padding: '10px 12px 12px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
         <p
           title={asset.filename}
+          className="type-body-sm"
           style={{
-            margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', letterSpacing: '-0.13px',
-            fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            margin: 0, color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}
         >
           {asset.filename}
         </p>
         <p
           title={asset.kind === 'link' ? asset.link_url ?? undefined : undefined}
+          className="type-caption"
           style={{
-            margin: 0, fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}
         >
           {metaLine}
         </p>
         {collectionName && (
-          <span style={{
+          <span className="type-micro" style={{
             alignSelf: 'flex-start', maxWidth: '100%', marginTop: 4,
             display: 'inline-flex', alignItems: 'center', gap: 5,
             padding: '2px 8px', borderRadius: 'var(--radius-pill)',
             background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)',
-            fontSize: 11, fontWeight: 500, fontFamily: 'var(--font-body)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             <Layers size={11} style={{ flexShrink: 0 }} />

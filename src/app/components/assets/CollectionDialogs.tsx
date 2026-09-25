@@ -10,10 +10,8 @@ import { LibraryDialog } from './LibraryDialog';
 // errors visible inline.
 // ─────────────────────────────────────────────────────────────────────────
 
-const LABEL: React.CSSProperties = {
-  display: 'block', marginBottom: 6, fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
-  textTransform: 'uppercase', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)',
-};
+// Layout only — type comes from .type-caption on each label.
+const LABEL: React.CSSProperties = { display: 'block', marginBottom: 6 };
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : 'Something went wrong';
@@ -64,7 +62,7 @@ export function CollectionFormDialog({
       </>}
     >
       <form onSubmit={e => { e.preventDefault(); submit(); }}>
-        <label style={LABEL} htmlFor="collection-name">Name</label>
+        <label className="type-caption" style={LABEL} htmlFor="collection-name">Name</label>
         <input
           id="collection-name"
           className="input-base"
@@ -74,7 +72,7 @@ export function CollectionFormDialog({
           placeholder="Branding Pack"
           autoFocus
         />
-        <label style={{ ...LABEL, marginTop: 14 }} htmlFor="collection-description">Description <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>(optional)</span></label>
+        <label className="type-caption" style={{ ...LABEL, marginTop: 14 }} htmlFor="collection-description">Description <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>(optional)</span></label>
         <textarea
           id="collection-description"
           className="input-base"
@@ -211,7 +209,7 @@ export function RenameAssetDialog({
       </>}
     >
       <form onSubmit={e => { e.preventDefault(); submit(); }}>
-        <label style={LABEL} htmlFor="asset-name">Name</label>
+        <label className="type-caption" style={LABEL} htmlFor="asset-name">Name</label>
         <input id="asset-name" className="input-base" value={name} maxLength={255} onChange={e => setName(e.target.value)} autoFocus />
         <FormError message={error} />
         <button type="submit" hidden />

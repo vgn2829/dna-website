@@ -34,6 +34,67 @@ describe('display typography tracking', () => {
   });
 });
 
+describe('button primitives (H4)', () => {
+  it('primary = inverse pill, secondary = charcoal pill, both 44px pills at the spec size', () => {
+    const primary = rule('.btn-primary'), secondary = rule('.btn-secondary');
+    expect(prop(primary, 'background')).toBe('var(--color-inverse-canvas)');
+    expect(prop(secondary, 'background')).toBe('var(--color-surface-1)');
+    for (const b of [primary, secondary]) {
+      expect(prop(b, 'border-radius')).toBe('var(--radius-pill)');
+      expect(prop(b, 'min-height')).toBe('44px');
+      expect(prop(b, 'font-size')).toBe('14px');
+      expect(prop(b, 'font-weight')).toBe('500');
+      expect(prop(b, 'border')).toBe('none'); // no bordered ghost treatment
+    }
+  });
+
+  it('.btn-sm is a compact VISUAL size only (the hit area stays with .touch-target)', () => {
+    const sm = rule('.btn-sm');
+    expect(prop(sm, 'min-height')).toBe('32px');
+    expect(prop(sm, 'font-size')).toBe('13px'); // caption tier
+    expect(sm).not.toMatch(/::after|--touch-min/);
+    const iconSm = rule('.btn-icon.btn-sm');
+    expect([prop(iconSm, 'width'), prop(iconSm, 'height')]).toEqual(['32px', '32px']);
+  });
+
+  it('translucent (lifted) secondary keeps its surface-2 lift when combined with .btn-icon', () => {
+    expect(prop(rule('.btn-translucent'), 'background')).toBe('var(--color-surface-2)');
+    expect(prop(rule('.btn-translucent.btn-icon'), 'background')).toBe('var(--color-surface-2)');
+    // declared after .btn-icon so it actually wins
+    expect(css.indexOf('.btn-translucent.btn-icon {')).toBeGreaterThan(css.indexOf('.btn-icon {'));
+  });
+
+  it('destructive variants use only the existing semantic error tokens', () => {
+    expect(prop(rule('.btn-danger'), 'background')).toBe('var(--color-error-fill)');
+    expect(css).toMatch(/\.btn-secondary\.is-danger,\s*\.btn-translucent\.is-danger,\s*\.btn-icon\.is-danger \{ color: var\(--color-error\); \}/);
+  });
+
+  it('disabled buttons are dimmed and not-allowed, with no pressed transform', () => {
+    const d = css.match(/\.btn-primary:disabled,\s*\.btn-secondary:disabled,\s*\.btn-translucent:disabled,\s*\.btn-icon:disabled \{([^}]*)\}/);
+    expect(d, 'disabled rule missing').not.toBeNull();
+    expect(prop(d![1], 'opacity')).toBe('0.5');
+    expect(prop(d![1], 'cursor')).toBe('not-allowed');
+    expect(prop(d![1], 'transform')).toBe('none');
+  });
+
+  it('an active toggle (aria-pressed) takes the brand accent as a selected indicator', () => {
+    expect(css).toMatch(/\.btn-secondary\[aria-pressed="true"\],\s*\.btn-translucent\[aria-pressed="true"\],\s*\.btn-icon\[aria-pressed="true"\] \{ background: var\(--color-brand\); color: #fff; \}/);
+  });
+});
+
+describe('.segmented control (H4)', () => {
+  it('selected item is a surface lift, not a colour fill (spec: pricing-tab-selected)', () => {
+    const sel = css.match(/\.segmented-item\[aria-selected="true"\],\s*\.segmented-item\[aria-pressed="true"\] \{([^}]*)\}/);
+    expect(sel).not.toBeNull();
+    expect(prop(sel![1], 'background')).toBe('var(--color-surface-2)');
+    expect(sel![1]).not.toMatch(/--color-brand/);
+    expect(prop(rule('.segmented'), 'border-radius')).toBe('var(--radius-pill)');
+    const item = css.match(/\n\s*\.segmented-item \{([^}]*)\}/)![1]; // the standalone rule, not `.is-block > .segmented-item`
+    expect(prop(item, 'font-weight')).toBe('500');
+    expect(prop(item, 'border-radius')).toBe('var(--radius-pill)');
+  });
+});
+
 describe('.touch-target', () => {
   it('grows the hit area with a centred ::after of at least --touch-min', () => {
     const after = rule('.touch-target::after');

@@ -207,16 +207,12 @@ export function ShareBoardDialog({
             </div>
           ) : loadError || !board ? (
             <>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--color-error)', fontFamily: 'var(--font-body)', textAlign: 'center', padding: '20px 0' }}>
+              <p className="type-body-sm" style={{ margin: 0, color: 'var(--color-error)', textAlign: 'center', padding: '20px 0' }}>
                 Failed to load board details.
               </p>
               <button
                 onClick={onClose}
-                style={{
-                  padding: '10px 16px', background: 'none', color: 'var(--color-ink-muted)',
-                  border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-sm)',
-                  fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer',
-                }}
+                className="btn-translucent"
               >
                 Close
               </button>
@@ -225,26 +221,18 @@ export function ShareBoardDialog({
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <h3 style={{
-                    margin: 0, fontSize: 18, fontWeight: 700,
-                    color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.3px',
-                  }}>
+                  <h3 className="type-headline" style={{ margin: 0 }}>
                     Share Board
                   </h3>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                  <p className="type-caption" style={{ margin: '2px 0 0' }}>
                     {board.name}
                   </p>
                 </div>
                 <button
                   onClick={onClose}
                   aria-label="Close share dialog"
-                  style={{
-                    width: 32, height: 32, borderRadius: 'var(--radius-full)', flexShrink: 0,
-                    border: '1px solid var(--color-hairline)', background: 'none',
-                    color: 'var(--color-ink-muted)', fontSize: 18, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                  className="touch-target"
+                  className="btn-translucent btn-icon btn-sm touch-target"
+                  style={{ flexShrink: 0, fontSize: 18 }}
                 >
                   ×
                 </button>
@@ -254,8 +242,8 @@ export function ShareBoardDialog({
                   what right now", combining visibility + edit_mode +
                   workspace-ceiling access into one sentence. */}
               <p style={{
-                margin: 0, padding: '10px 12px', fontSize: 12, lineHeight: 1.5,
-                color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)',
+                margin: 0, padding: '10px 12px', lineHeight: 1.4,
+                color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', fontSize: 13,
                 background: 'var(--color-canvas)', border: '1px solid var(--color-hairline)',
                 borderRadius: 'var(--radius-sm)',
               }}>
@@ -268,39 +256,24 @@ export function ShareBoardDialog({
 
               {isOwner && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <p style={{
-                    margin: 0, fontSize: 11, fontWeight: 600,
-                    color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-                    textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                  }}>
+                  <p className="type-caption" style={{ margin: 0 }}>
                     Visibility
                   </p>
-                  <div role="group" aria-label="Board visibility" style={{
-                    display: 'flex', border: '1px solid var(--color-hairline)',
-                    borderRadius: 'var(--radius-md)', overflow: 'hidden',
-                  }}>
+                  <div role="group" aria-label="Board visibility" className="segmented is-block">
                     {(['private', 'shared'] as const).map(opt => (
                       <button
                         key={opt}
                         onClick={() => handleVisibilityToggle(opt)}
                         disabled={updatingVisibility}
                         aria-pressed={board.visibility === opt}
-                        style={{
-                          flex: 1, padding: '10px 0',
-                          background: board.visibility === opt ? 'var(--color-brand)' : 'none',
-                          border: 'none',
-                          color: board.visibility === opt ? '#fff' : 'var(--color-ink-muted)',
-                          fontSize: 13, fontWeight: board.visibility === opt ? 600 : 400,
-                          fontFamily: 'var(--font-body)',
-                          cursor: updatingVisibility ? 'not-allowed' : 'pointer',
-                          textTransform: 'capitalize', transition: 'all 0.15s ease',
-                        }}
+                        className="segmented-item"
+                        style={{ textTransform: 'capitalize' }}
                       >
                         {opt}
                       </button>
                     ))}
                   </div>
-                  <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                  <p className="type-micro" style={{ margin: 0 }}>
                     {board.visibility === 'private'
                       ? 'Only invited collaborators can access.'
                       : 'Anyone with the link can view. Workspace members automatically get the access below — this is what makes a board "shared" different from just handing out a link.'
@@ -311,17 +284,10 @@ export function ShareBoardDialog({
 
               {isOwner && board.visibility === 'shared' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <p style={{
-                    margin: 0, fontSize: 11, fontWeight: 600,
-                    color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-                    textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                  }}>
+                  <p className="type-caption" style={{ margin: 0 }}>
                     Who can edit?
                   </p>
-                  <div role="group" aria-label="Who can edit this board" style={{
-                    display: 'flex', border: '1px solid var(--color-hairline)',
-                    borderRadius: 'var(--radius-md)', overflow: 'hidden',
-                  }}>
+                  <div role="group" aria-label="Who can edit this board" className="segmented is-block">
                     {([
                       { value: 'members_only', label: 'Workspace + invited' },
                       { value: 'anyone', label: 'Anyone with link' },
@@ -331,22 +297,13 @@ export function ShareBoardDialog({
                         onClick={() => handleEditModeToggle(opt.value)}
                         disabled={updatingEditMode}
                         aria-pressed={board.edit_mode === opt.value}
-                        style={{
-                          flex: 1, padding: '10px 0',
-                          background: board.edit_mode === opt.value ? 'var(--color-brand)' : 'none',
-                          border: 'none',
-                          color: board.edit_mode === opt.value ? '#fff' : 'var(--color-ink-muted)',
-                          fontSize: 12, fontWeight: board.edit_mode === opt.value ? 600 : 400,
-                          fontFamily: 'var(--font-body)',
-                          cursor: updatingEditMode ? 'not-allowed' : 'pointer',
-                          transition: 'all 0.15s ease',
-                        }}
+                        className="segmented-item"
                       >
                         {opt.label}
                       </button>
                     ))}
                   </div>
-                  <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                  <p className="type-micro" style={{ margin: 0 }}>
                     "Workspace + invited" means anyone in this board's workspace can edit, on top of anyone explicitly added below — a private board opts out of that workspace-wide access entirely.
                   </p>
                 </div>
@@ -355,11 +312,7 @@ export function ShareBoardDialog({
               <div style={{ height: 1, background: 'var(--color-hairline)' }} />
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <p style={{
-                  margin: 0, fontSize: 11, fontWeight: 600,
-                  color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-                  textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                }}>
+                <p className="type-caption" style={{ margin: 0 }}>
                   Collaborators
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -377,10 +330,10 @@ export function ShareBoardDialog({
                         {(board.owner_name ?? board.owner_roll)[0].toUpperCase()}
                       </div>
                       <div>
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+                        <p className="type-body-sm" style={{ margin: 0, color: 'var(--color-ink)' }}>
                           {board.owner_name ?? board.owner_roll}
                         </p>
-                        <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                        <p className="type-micro" style={{ margin: 0 }}>
                           {board.owner_roll} · Owner
                         </p>
                       </div>
@@ -402,10 +355,10 @@ export function ShareBoardDialog({
                           {(m.name ?? m.roll_number)[0].toUpperCase()}
                         </div>
                         <div>
-                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+                          <p className="type-body-sm" style={{ margin: 0, color: 'var(--color-ink)' }}>
                             {m.name ?? m.roll_number}
                           </p>
-                          <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                          <p className="type-micro" style={{ margin: 0 }}>
                             {m.roll_number}
                           </p>
                         </div>
@@ -414,11 +367,7 @@ export function ShareBoardDialog({
                         <button
                           onClick={() => handleRemoveMember(m.roll_number)}
                           aria-label={`Remove ${m.name ?? m.roll_number} from this board`}
-                          style={{
-                            fontSize: 12, color: 'var(--color-error)',
-                            background: 'none', border: 'none',
-                            fontFamily: 'var(--font-body)', cursor: 'pointer', padding: '4px 8px',
-                          }}
+                          className="btn-translucent btn-sm is-danger touch-target"
                         >
                           Remove
                         </button>
@@ -429,10 +378,7 @@ export function ShareBoardDialog({
 
                 {isOwner && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-                    <label htmlFor="share-dialog-invite-roll" style={{
-                      fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)',
-                      letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                    }}>
+                    <label htmlFor="share-dialog-invite-roll" className="type-caption">
                       Add Collaborator by Roll Number
                     </label>
                     <div style={{ display: 'flex', gap: 8 }}>
@@ -452,19 +398,13 @@ export function ShareBoardDialog({
                       <button
                         onClick={handleAddMember}
                         disabled={addingMember || !memberRoll.trim()}
-                        style={{
-                          padding: '0 16px', background: 'var(--color-brand)', color: '#fff',
-                          border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 13, fontWeight: 600,
-                          fontFamily: 'var(--font-body)',
-                          cursor: addingMember ? 'not-allowed' : 'pointer',
-                          opacity: addingMember ? 0.6 : 1,
-                        }}
+                        className="btn-primary"
                       >
                         {addingMember ? '...' : 'Add'}
                       </button>
                     </div>
                     {memberError && (
-                      <p id="share-dialog-invite-error" role="alert" style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>
+                      <p id="share-dialog-invite-error" role="alert" className="type-micro" style={{ margin: 0, color: 'var(--color-error)' }}>
                         {memberError}
                       </p>
                     )}
@@ -475,11 +415,7 @@ export function ShareBoardDialog({
               <div style={{ height: 1, background: 'var(--color-hairline)' }} />
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <p style={{
-                  margin: 0, fontSize: 11, fontWeight: 600,
-                  color: 'var(--color-ink-muted)', letterSpacing: '0.06em',
-                  textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                }}>
+                <p className="type-caption" style={{ margin: 0 }}>
                   Board Link
                 </p>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -497,14 +433,8 @@ export function ShareBoardDialog({
                     whileTap={{ scale: 0.95 }}
                     onClick={handleCopy}
                     aria-label="Copy board link"
-                    style={{
-                      padding: '10px 16px',
-                      background: copied ? 'var(--color-success-fill)' : 'var(--color-brand)',
-                      color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)',
-                      fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)',
-                      cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                      transition: 'background 0.2s ease',
-                    }}
+                    className="btn-translucent"
+                    style={{ flexShrink: 0, ...(copied ? { background: 'var(--color-success-fill)', color: '#fff' } : null) }}
                   >
                     {copied ? 'Copied!' : 'Copy'}
                   </motion.button>

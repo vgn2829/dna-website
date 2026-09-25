@@ -197,12 +197,12 @@ export default function TemplatesPage() {
   if (!studentSession) {
     return (
       <div style={{ padding: '80px 0', textAlign: 'center' }}>
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--color-ink-muted)', marginBottom: 16 }}>
+        <p className="type-body" style={{ color: 'var(--color-ink-muted)', marginBottom: 16 }}>
           Sign in to view and manage templates.
         </p>
         <button
           onClick={openRollModal}
-          style={{ padding: '10px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+          className="btn-primary"
         >
           Sign in
         </button>
@@ -211,14 +211,14 @@ export default function TemplatesPage() {
   }
 
   if (workspaceLoading && workspaces.length === 0) {
-    return <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)', padding: '40px 0' }}>Loading…</p>;
+    return <p className="type-body" style={{ color: 'var(--color-ink-muted)', padding: '40px 0' }}>Loading…</p>;
   }
 
   if (!targetWorkspace) {
     return (
       <div style={{ padding: '80px 0', textAlign: 'center' }}>
         <LayoutTemplate size={28} strokeWidth={1.5} style={{ color: 'var(--color-ink-muted)', marginBottom: 14 }} />
-        <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)' }}>
+        <p className="type-body" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>
           Select a workspace to view its templates.
         </p>
       </div>
@@ -230,30 +230,24 @@ export default function TemplatesPage() {
   return (
     <div>
       <div style={{ marginBottom: 28 }}>
-        <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-muted)', letterSpacing: '-0.13px', fontFamily: 'var(--font-body)', marginBottom: 8 }}>
+        <p className="type-caption" style={{ marginBottom: 8 }}>
           {targetWorkspace.is_personal ? 'Personal' : targetWorkspace.name}
         </p>
-        <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(32px,4.5vw,52px)', fontWeight: 500, lineHeight: 0.95, letterSpacing: '-2px', color: 'var(--color-ink)' }}>
+        <h1 className="type-display-md" style={{ margin: 0 }}>
           Templates
         </h1>
-        <p style={{ margin: '10px 0 0', fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--color-ink-muted)' }}>
+        <p className="type-body" style={{ margin: '10px 0 0', color: 'var(--color-ink-muted)' }}>
           Save any Moodboard as a template from its canvas page, then reuse it here.
         </p>
       </div>
 
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', marginBottom: 28 }}>
+      <div className="segmented" style={{ marginBottom: 28 }}>
         {([['active', 'Active'], ['archived', 'Archived']] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setShowArchived(key === 'archived')}
             aria-pressed={(key === 'archived') === showArchived}
-            style={{
-              padding: '10px 16px', background: 'none', border: 'none',
-              borderBottom: (key === 'archived') === showArchived ? '2px solid var(--color-brand)' : '2px solid transparent',
-              marginBottom: -1, fontSize: 14, fontFamily: 'var(--font-body)',
-              color: (key === 'archived') === showArchived ? 'var(--color-ink)' : 'var(--color-ink-muted)',
-              fontWeight: (key === 'archived') === showArchived ? 600 : 400, cursor: 'pointer',
-            }}
+            className="segmented-item touch-target"
           >
             {label}
           </button>
@@ -261,13 +255,13 @@ export default function TemplatesPage() {
       </div>
 
       {loading ? (
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)' }}>Loading…</p>
+        <p className="type-body" style={{ color: 'var(--color-ink-muted)' }}>Loading…</p>
       ) : loadError ? (
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-error)' }}>
-          Could not load templates. <button onClick={fetchTemplates} style={{ background: 'none', border: 'none', color: 'var(--color-brand-text)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 14 }}>Retry</button>
+        <p className="type-body" style={{ color: 'var(--color-error)' }}>
+          Could not load templates. <button onClick={fetchTemplates} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-brand-text)', cursor: 'pointer', font: 'inherit' }}>Retry</button>
         </p>
       ) : visibleTemplates.length === 0 ? (
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)' }}>
+        <p className="type-body" style={{ color: 'var(--color-ink-muted)' }}>
           {showArchived ? 'No archived templates.' : 'No templates yet. Open a Moodboard and choose "Save as Template" to create one.'}
         </p>
       ) : (
@@ -323,28 +317,25 @@ export default function TemplatesPage() {
               </div>
 
               <div style={{ padding: '14px 16px 16px' }}>
-                <h3 style={{
-                  margin: '0 0 6px', fontSize: 15, fontWeight: 600, color: 'var(--color-ink)',
+                <h3 className="type-body-sm" style={{
+                  margin: '0 0 6px', color: 'var(--color-ink)',
                   fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>
                   {template.name}
                 </h3>
                 {template.description && (
-                  <p style={{ margin: '0 0 6px', fontSize: 12.5, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                  <p className="type-caption" style={{ margin: '0 0 6px', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                     {template.description}
                   </p>
                 )}
-                <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                <p className="type-caption" style={{ margin: '0 0 12px' }}>
                   Saved {timeAgo(template.created_at)}
                 </p>
                 {!template.is_archived && (
                   <button
                     onClick={() => openUse(template)}
-                    style={{
-                      width: '100%', padding: '8px 0', background: 'var(--color-brand)', color: '#fff',
-                      border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600,
-                      fontFamily: 'var(--font-body)', cursor: 'pointer',
-                    }}
+                    className="btn-primary btn-sm touch-target"
+                    style={{ width: '100%' }}
                   >
                     Use Template
                   </button>
@@ -421,11 +412,11 @@ export default function TemplatesPage() {
               onClick={e => e.stopPropagation()}
               style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.3px' }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 Edit Template
               </h3>
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                   Name
                 </label>
                 <input
@@ -438,7 +429,7 @@ export default function TemplatesPage() {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                   Description (optional)
                 </label>
                 <input
@@ -453,13 +444,13 @@ export default function TemplatesPage() {
                 <button
                   onClick={handleRename}
                   disabled={renaming || !renameForm.name.trim()}
-                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: renaming || !renameForm.name.trim() ? 'not-allowed' : 'pointer', opacity: renaming || !renameForm.name.trim() ? 0.6 : 1 }}
+                  className="btn-primary" style={{ flex: 1 }}
                 >
                   {renaming ? 'Saving...' : 'Save'}
                 </button>
                 <button
                   onClick={() => setRenameTemplate(null)}
-                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  className="btn-translucent" style={{ flex: 1 }}
                 >
                   Cancel
                 </button>
@@ -490,12 +481,12 @@ export default function TemplatesPage() {
               onClick={e => e.stopPropagation()}
               style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.3px' }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 New Moodboard from "{useTemplate.name}"
               </h3>
 
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                   Board Name
                 </label>
                 <input
@@ -511,7 +502,7 @@ export default function TemplatesPage() {
 
               {useProjectOptions.length > 0 && (
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                  <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                     Project (optional)
                   </label>
                   <select
@@ -528,19 +519,19 @@ export default function TemplatesPage() {
                 </div>
               )}
 
-              {useError && <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>{useError}</p>}
+              {useError && <p className="type-micro" style={{ margin: 0, color: 'var(--color-error)' }}>{useError}</p>}
 
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={handleUse}
                   disabled={using}
-                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: using ? 'not-allowed' : 'pointer', opacity: using ? 0.6 : 1 }}
+                  className="btn-primary" style={{ flex: 1 }}
                 >
                   {using ? 'Creating...' : 'Create Moodboard'}
                 </button>
                 <button
                   onClick={() => setUseTemplate(null)}
-                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  className="btn-translucent" style={{ flex: 1 }}
                 >
                   Cancel
                 </button>
@@ -571,23 +562,23 @@ export default function TemplatesPage() {
               onClick={e => e.stopPropagation()}
               style={{ width: '100%', maxWidth: 400, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.3px' }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 Delete "{confirmDelete.name}"?
               </h3>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+              <p className="type-body" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>
                 This cannot be undone. Boards already created from this template are not affected.
               </p>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={handleDelete}
                   disabled={deleting}
-                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-error-fill)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.6 : 1 }}
+                  className="btn-primary btn-danger" style={{ flex: 1 }}
                 >
                   {deleting ? 'Deleting...' : 'Delete'}
                 </button>
                 <button
                   onClick={() => setConfirmDelete(null)}
-                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  className="btn-translucent" style={{ flex: 1 }}
                 >
                   Cancel
                 </button>

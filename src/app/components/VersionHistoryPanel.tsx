@@ -156,20 +156,14 @@ export function VersionHistoryPanel({ boardId, actorRoll, isOwnerOrMember, onClo
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '16px 20px', borderBottom: '1px solid var(--color-hairline)', flexShrink: 0,
         }}>
-          <h3 style={{
-            margin: 0, fontSize: 15, fontWeight: 700,
-            color: 'var(--color-ink)', fontFamily: 'var(--font-display)',
-          }}>
+          <h3 className="type-headline" style={{ margin: 0 }}>
             Version History
           </h3>
           <button
             onClick={onClose}
-            style={{
-              width: 28, height: 28, borderRadius: 'var(--radius-full)',
-              border: '1px solid var(--color-hairline)', background: 'none',
-              color: 'var(--color-ink-muted)', fontSize: 16, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
+            aria-label="Close version history"
+            className="btn-translucent btn-icon btn-sm touch-target"
+            style={{ fontSize: 16 }}
           >
             ×
           </button>
@@ -180,12 +174,8 @@ export function VersionHistoryPanel({ boardId, actorRoll, isOwnerOrMember, onClo
             <button
               onClick={handleManualSave}
               disabled={savingManual}
-              style={{
-                width: '100%', padding: '9px 0', background: 'var(--color-brand)', color: '#fff',
-                border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 12, fontWeight: 600,
-                fontFamily: 'var(--font-body)', cursor: savingManual ? 'not-allowed' : 'pointer',
-                opacity: savingManual ? 0.6 : 1,
-              }}
+              className="btn-primary btn-sm"
+              style={{ width: '100%' }}
             >
               {savingManual ? 'Saving…' : 'Save a version now'}
             </button>
@@ -203,23 +193,20 @@ export function VersionHistoryPanel({ boardId, actorRoll, isOwnerOrMember, onClo
             </div>
           ) : error ? (
             <div style={{ textAlign: 'center', padding: '40px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+              <p className="type-body" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>
                 {error}
               </p>
               <button
                 onClick={loadInitial}
-                style={{
-                  padding: '8px 16px', background: 'var(--color-surface-2)', color: 'var(--color-ink)',
-                  border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 12,
-                  fontFamily: 'var(--font-body)', cursor: 'pointer', alignSelf: 'center',
-                }}
+                className="btn-translucent btn-sm"
+                style={{ alignSelf: 'center' }}
               >
                 Retry
               </button>
             </div>
           ) : versions.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '48px 20px' }}>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', lineHeight: 1.5 }}>
+              <p className="type-body" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>
                 No versions yet. This board will automatically save versions as you work, or you can save one manually.
               </p>
             </div>
@@ -238,12 +225,11 @@ export function VersionHistoryPanel({ boardId, actorRoll, isOwnerOrMember, onClo
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
+                      <span className="type-body-sm" style={{ color: 'var(--color-ink)' }}>
                         {formatTimestamp(version.createdAt)}
                       </span>
                       {isCurrent && (
-                        <span style={{
-                          fontSize: 9, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+                        <span className="type-micro" style={{
                           padding: '2px 6px', borderRadius: 'var(--radius-pill)',
                           background: 'var(--color-brand)', color: '#fff', flexShrink: 0,
                         }}>
@@ -264,14 +250,14 @@ export function VersionHistoryPanel({ boardId, actorRoll, isOwnerOrMember, onClo
                           {(version.createdByName ?? version.createdByRoll)[0].toUpperCase()}
                         </span>
                       )}
-                      <span style={{ fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                      <span className="type-caption">
                         {version.createdByName ?? (version.createdByRoll ? version.createdByRoll : 'System')}
                         {' · '}{TRIGGER_LABEL[version.trigger]}
                       </span>
                     </div>
 
                     {version.description && (
-                      <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', fontStyle: 'italic' }}>
+                      <p className="type-micro" style={{ margin: 0, fontStyle: 'italic' }}>
                         "{version.description}"
                       </p>
                     )}
@@ -279,12 +265,8 @@ export function VersionHistoryPanel({ boardId, actorRoll, isOwnerOrMember, onClo
                     {!isCurrent && isOwnerOrMember && (
                       <button
                         onClick={() => setConfirmRestore(version)}
-                        style={{
-                          alignSelf: 'flex-start', marginTop: 2, padding: '4px 10px',
-                          background: 'none', border: '1px solid var(--color-hairline)',
-                          borderRadius: 'var(--radius-pill)', color: 'var(--color-ink)',
-                          fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
-                        }}
+                        className="btn-translucent btn-sm"
+                        style={{ alignSelf: 'flex-start', marginTop: 2 }}
                       >
                         Restore this version
                       </button>
@@ -297,12 +279,8 @@ export function VersionHistoryPanel({ boardId, actorRoll, isOwnerOrMember, onClo
                 <button
                   onClick={handleLoadMore}
                   disabled={loadingMore}
-                  style={{
-                    margin: '8px auto 4px', padding: '8px 16px', background: 'none',
-                    border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-pill)',
-                    color: 'var(--color-ink-muted)', fontSize: 12, fontFamily: 'var(--font-body)',
-                    cursor: loadingMore ? 'not-allowed' : 'pointer',
-                  }}
+                  className="btn-translucent btn-sm"
+                  style={{ alignSelf: 'center' }}
                 >
                   {loadingMore ? 'Loading…' : 'Load more'}
                 </button>
@@ -338,16 +316,16 @@ export function VersionHistoryPanel({ boardId, actorRoll, isOwnerOrMember, onClo
                 display: 'flex', flexDirection: 'column', gap: 16,
               }}
             >
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 Restore this version?
               </h3>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', lineHeight: 1.5 }}>
+              <p className="type-body" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>
                 The board will be restored to how it looked {formatTimestamp(confirmRestore.createdAt).toLowerCase()}.
                 Nothing is deleted — this creates a new version, so you can always undo by restoring again.
                 {' '}If anyone else has this board open, they'll briefly reconnect once the restore completes.
               </p>
               {restoreError && (
-                <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>
+                <p className="type-micro" style={{ margin: 0, color: 'var(--color-error)' }}>
                   {restoreError}
                 </p>
               )}
@@ -355,22 +333,16 @@ export function VersionHistoryPanel({ boardId, actorRoll, isOwnerOrMember, onClo
                 <button
                   onClick={handleConfirmRestore}
                   disabled={restoring}
-                  style={{
-                    flex: 1, padding: '12px 20px', background: 'var(--color-brand)', color: '#fff',
-                    border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600,
-                    fontFamily: 'var(--font-body)', cursor: restoring ? 'not-allowed' : 'pointer',
-                  }}
+                  className="btn-primary"
+                  style={{ flex: 1 }}
                 >
                   {restoring ? 'Restoring…' : 'Restore'}
                 </button>
                 <button
                   onClick={() => { setConfirmRestore(null); setRestoreError(''); }}
                   disabled={restoring}
-                  style={{
-                    flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)',
-                    border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-pill)',
-                    fontSize: 13, fontFamily: 'var(--font-body)', cursor: restoring ? 'not-allowed' : 'pointer',
-                  }}
+                  className="btn-translucent"
+                  style={{ flex: 1 }}
                 >
                   Cancel
                 </button>

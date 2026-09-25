@@ -403,6 +403,90 @@
   }
   .btn-icon:hover { background: var(--color-surface-2); }
 
+  /* ── Button modifiers (compose with the primitives above) ──
+     .btn-sm   compact VISUAL size for dense contexts (board header, dialog
+               rows, list rows). The hit area is .touch-target's job, so a
+               compact button stays small without being hard to tap.
+     .btn-danger / .is-danger  destructive emphasis from the existing
+               semantic tokens only: a filled confirm (--color-error-fill,
+               the pattern the confirm dialogs already used) and a
+               destructive trigger that keeps its button shape but takes
+               --color-error text.
+     [aria-pressed="true"]  an active toggle/mode (comment mode, fullscreen)
+               takes the brand fill — the accent as a selected indicator. */
+  .btn-sm {
+    min-height: 32px;
+    padding: 7px 14px;
+    font-size: 13px;
+    letter-spacing: -0.13px;
+  }
+  .btn-icon.btn-sm {
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+  }
+  /* Translucent = the lifted secondary for controls sitting on surface-1
+     (dialogs, panels, the board header): one surface step up, per the
+     spec's surface-lift hierarchy. .btn-icon is declared after it, so the
+     combination restates the lifted background. */
+  .btn-translucent:hover,
+  .btn-translucent.btn-icon:hover { background: color-mix(in srgb, var(--color-surface-2) 85%, var(--color-ink)); }
+  .btn-translucent.btn-icon { background: var(--color-surface-2); }
+  .btn-danger { background: var(--color-error-fill); color: #fff; }
+  .btn-secondary.is-danger,
+  .btn-translucent.is-danger,
+  .btn-icon.is-danger { color: var(--color-error); }
+  .btn-secondary[aria-pressed="true"],
+  .btn-translucent[aria-pressed="true"],
+  .btn-icon[aria-pressed="true"] { background: var(--color-brand); color: #fff; }
+  .btn-primary:disabled,
+  .btn-secondary:disabled,
+  .btn-translucent:disabled,
+  .btn-icon:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .btn-secondary:disabled:hover,
+  .btn-icon:disabled:hover { background: var(--color-surface-1); }
+
+  /* ── Segmented control ──
+     Tabs and 2–4-way toggles (asset type, board lists, Private/Shared).
+     Selected = surface lift, not colour (spec: pricing-tab-selected).
+     Items are marked selected with aria-selected (role="tab") or
+     aria-pressed (toggle buttons). .is-block stretches to full width with
+     equal items, for dialog choices. */
+  .segmented {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    max-width: 100%;
+    overflow-x: auto;
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-1);
+    border: 1px solid var(--color-hairline);
+  }
+  .segmented.is-block { display: flex; width: 100%; }
+  .segmented.is-block > .segmented-item { flex: 1; }
+  .segmented-item {
+    padding: 6px 14px;
+    border: none;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-ink-muted);
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: -0.13px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .segmented-item:hover { color: var(--color-ink); }
+  .segmented-item[aria-selected="true"],
+  .segmented-item[aria-pressed="true"] { background: var(--color-surface-2); color: var(--color-ink); }
+
   /* ── Touch target ──
      Enlarges a control's HIT AREA to the spec minimum (Responsive
      Behavior › Touch Targets: 40px on desktop, 44px on touch) without

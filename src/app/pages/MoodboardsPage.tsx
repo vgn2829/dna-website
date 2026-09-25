@@ -461,13 +461,11 @@ export default function MoodboardsPage() {
     <div className="page-container" style={{ paddingTop: 80, paddingBottom: 80, minHeight: '100vh' }}>
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 40 }}>
-        <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-muted)', letterSpacing: '-0.13px', fontFamily: 'var(--font-body)', marginBottom: 12 }}>
+        <p className="type-caption" style={{ marginBottom: 12 }}>
           Creative Workspace
         </p>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
-          <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(40px,6vw,85px)', fontWeight: 500, lineHeight: 0.95, letterSpacing: '-4.25px', color: 'var(--color-ink)' }}>
-            Mood<br /><span style={{ color: 'var(--color-ink-muted)' }}>boards</span>
-          </h1>
+          <h1 className="type-display-md" style={{ margin: 0 }}>Moodboards</h1>
           {studentSession ? (
             <button onClick={() => setShowCreate(true)} className="btn-primary">
               + New Board
@@ -491,12 +489,7 @@ export default function MoodboardsPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
           <button
             onClick={() => setShowAssetLibrary(true)}
-            style={{
-              padding: '6px 14px', borderRadius: 'var(--radius-pill)',
-              border: '1px solid var(--color-border)', background: 'none',
-              color: 'var(--color-ink-muted)', fontSize: 13,
-              fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-            }}
+            className="btn-secondary btn-sm touch-target"
           >
             Assets
           </button>
@@ -514,25 +507,13 @@ export default function MoodboardsPage() {
 
       {/* Tabs + search + sort */}
       <div className="moodboards-toolbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, borderBottom: '1px solid var(--color-border)', marginBottom: 32, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex' }}>
+        <div className="segmented" style={{ marginBottom: 10 }}>
           {([['mine', 'My Boards'], ['shared', 'Shared Boards'], ...(studentSession ? [['archived', 'Archived']] : [])] as [Tab, string][]).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setTab(key)}
               aria-pressed={tab === key}
-              style={{
-                padding: '10px 16px',
-                background: 'none',
-                border: 'none',
-                borderBottom: tab === key ? '2px solid var(--color-brand)' : '2px solid transparent',
-                marginBottom: -1,
-                color: tab === key ? 'var(--color-brand-text)' : 'var(--color-ink-muted)',
-                fontSize: 14,
-                fontWeight: tab === key ? 600 : 400,
-                fontFamily: 'var(--font-body)',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
+              className="segmented-item touch-target"
             >
               {label}
             </button>
@@ -590,12 +571,12 @@ export default function MoodboardsPage() {
       {/* Content */}
       {tab === 'mine' && !studentSession ? (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', padding: '80px 0' }}>
-          <p style={{ color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', fontSize: 15, marginBottom: 20 }}>
+          <p className="type-body" style={{ color: 'var(--color-ink-muted)', marginBottom: 20 }}>
             Link your roll number to create and manage your boards.
           </p>
           <button
             onClick={openRollModal}
-            style={{ padding: '12px 24px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+            className="btn-primary"
           >
             Enter Roll Number
           </button>
@@ -605,7 +586,7 @@ export default function MoodboardsPage() {
           {/* Favorites rail */}
           {favoriteBoards.length > 0 && !search.trim() && (
             <div style={{ marginBottom: 36 }}>
-              <h2 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <h2 className="type-headline" style={{ margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ color: '#ffd54a' }}><StarIcon filled /></span> Favorites
               </h2>
               <div className="moodboards-card-grid" style={CARD_GRID_STYLE}>
@@ -627,7 +608,7 @@ export default function MoodboardsPage() {
           {/* Recent rail */}
           {showRecentRail && (
             <div style={{ marginBottom: 36 }}>
-              <h2 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+              <h2 className="type-headline" style={{ margin: '0 0 14px' }}>
                 Recent
               </h2>
               <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 4 }}>
@@ -648,7 +629,7 @@ export default function MoodboardsPage() {
           )}
 
           {(showRecentRail || (favoriteBoards.length > 0 && !search.trim())) && (
-            <h2 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+            <h2 className="type-headline" style={{ margin: '0 0 14px' }}>
               {tab === 'mine' ? 'All Boards' : tab === 'shared' ? 'Shared Boards' : 'Archived'}
             </h2>
           )}
@@ -659,7 +640,7 @@ export default function MoodboardsPage() {
             </div>
           ) : filteredSortedBoards.length === 0 ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', padding: '80px 0' }}>
-              <p style={{ color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', fontSize: 15, marginBottom: 20 }}>
+              <p className="type-body" style={{ color: 'var(--color-ink-muted)', marginBottom: 20 }}>
                 {search.trim()
                   ? `No boards match "${search.trim()}".`
                   : tab === 'mine'
@@ -671,7 +652,7 @@ export default function MoodboardsPage() {
               {tab === 'mine' && !search.trim() && (
                 <button
                   onClick={() => setShowCreate(true)}
-                  style={{ padding: '12px 24px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  className="btn-primary"
                 >
                   + New Board
                 </button>
@@ -717,7 +698,7 @@ export default function MoodboardsPage() {
               onClick={e => e.stopPropagation()}
               style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)', letterSpacing: '-0.3px' }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 New Moodboard
               </h3>
 
@@ -726,7 +707,7 @@ export default function MoodboardsPage() {
                 { label: 'Description (optional)', key: 'description', placeholder: 'What is this board about?' },
               ] as const).map(({ label, key, placeholder }) => (
                 <div key={key}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                  <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                     {label}
                   </label>
                   <input
@@ -742,33 +723,30 @@ export default function MoodboardsPage() {
               ))}
 
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                   Visibility
                 </label>
-                <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                <div className="segmented is-block" role="group" aria-label="Visibility">
                   {(['private', 'shared'] as const).map(v => (
                     <button
                       key={v}
+                      type="button"
                       onClick={() => setForm(prev => ({ ...prev, visibility: v }))}
-                      style={{
-                        flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer',
-                        background: form.visibility === v ? 'rgba(233,30,140,0.1)' : 'none',
-                        color: form.visibility === v ? 'var(--color-brand-text)' : 'var(--color-ink-muted)',
-                        fontSize: 13, fontWeight: form.visibility === v ? 600 : 400, fontFamily: 'var(--font-body)',
-                      }}
+                      aria-pressed={form.visibility === v}
+                      className="segmented-item"
                     >
                       {v === 'private' ? 'Private' : 'Shared'}
                     </button>
                   ))}
                 </div>
-                <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+                <p className="type-micro" style={{ margin: '6px 0 0' }}>
                   {form.visibility === 'private' ? 'Only you and collaborators can see this board.' : 'Anyone with the link can view this board.'}
                 </p>
               </div>
 
               {projectOptions.length > 0 && (
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
+                  <label className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
                     Project (optional)
                   </label>
                   <select
@@ -785,19 +763,19 @@ export default function MoodboardsPage() {
                 </div>
               )}
 
-              {error && <p style={{ margin: 0, fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>{error}</p>}
+              {error && <p className="type-micro" style={{ margin: 0, color: 'var(--color-error)' }}>{error}</p>}
 
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={handleCreate}
                   disabled={creating || !form.name.trim()}
-                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: creating || !form.name.trim() ? 'not-allowed' : 'pointer', opacity: creating || !form.name.trim() ? 0.6 : 1 }}
+                  className="btn-primary" style={{ flex: 1 }}
                 >
                   {creating ? 'Creating...' : 'Create Board'}
                 </button>
                 <button
                   onClick={() => setShowCreate(false)}
-                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  className="btn-translucent" style={{ flex: 1 }}
                 >
                   Cancel
                 </button>
@@ -899,23 +877,23 @@ export default function MoodboardsPage() {
               onClick={e => e.stopPropagation()}
               style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 Delete "{confirmDeleteBoard.name}"?
               </h3>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', lineHeight: 1.5 }}>
+              <p className="type-body" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>
                 This will permanently delete the board and all its contents. This cannot be undone.
               </p>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={() => handleCardDelete(confirmDeleteBoard)}
                   disabled={deleting}
-                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-error-fill)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: deleting ? 'not-allowed' : 'pointer' }}
+                  className="btn-primary btn-danger" style={{ flex: 1 }}
                 >
                   {deleting ? 'Deleting...' : 'Delete'}
                 </button>
                 <button
                   onClick={() => setConfirmDeleteBoard(null)}
-                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  className="btn-translucent" style={{ flex: 1 }}
                 >
                   Cancel
                 </button>
@@ -945,7 +923,7 @@ export default function MoodboardsPage() {
               onClick={e => e.stopPropagation()}
               style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 Rename Board
               </h3>
               <input
@@ -963,13 +941,13 @@ export default function MoodboardsPage() {
                 <button
                   onClick={handleRenameSubmit}
                   disabled={renaming || !renameValue.trim()}
-                  style={{ flex: 1, padding: '12px 20px', background: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: renaming || !renameValue.trim() ? 'not-allowed' : 'pointer', opacity: renaming || !renameValue.trim() ? 0.6 : 1 }}
+                  className="btn-primary" style={{ flex: 1 }}
                 >
                   {renaming ? 'Saving...' : 'Save'}
                 </button>
                 <button
                   onClick={() => setRenameBoard(null)}
-                  style={{ flex: 1, padding: '12px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  className="btn-translucent" style={{ flex: 1 }}
                 >
                   Cancel
                 </button>

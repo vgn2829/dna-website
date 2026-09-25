@@ -28,7 +28,7 @@ export default function AssetsPage() {
   if (!studentSession) {
     return (
       <div style={{ padding: '80px 0', textAlign: 'center' }}>
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--color-ink-muted)', marginBottom: 16 }}>
+        <p className="type-body" style={{ color: 'var(--color-ink-muted)', marginBottom: 16 }}>
           Sign in to view and manage your assets.
         </p>
         <button onClick={openRollModal} className="btn-primary">
@@ -60,13 +60,13 @@ export default function AssetsPage() {
   return (
     <div>
       <div style={{ marginBottom: 28 }}>
-        <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-muted)', letterSpacing: '-0.13px', fontFamily: 'var(--font-body)', marginBottom: 8 }}>
+        <p className="type-caption" style={{ marginBottom: 8 }}>
           {targetWorkspace.is_personal ? 'Personal' : targetWorkspace.name}
         </p>
-        <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(32px,4.5vw,52px)', fontWeight: 500, lineHeight: 0.95, letterSpacing: '-2px', color: 'var(--color-ink)' }}>
+        <h1 className="type-display-md" style={{ margin: 0 }}>
           Assets
         </h1>
-        <p style={{ margin: '10px 0 0', fontSize: 15, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+        <p className="type-body" style={{ margin: '10px 0 0', color: 'var(--color-ink-muted)' }}>
           Workspace asset library
         </p>
       </div>

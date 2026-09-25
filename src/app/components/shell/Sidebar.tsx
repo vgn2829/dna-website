@@ -53,11 +53,7 @@ export function Sidebar({ onNavigate, onCloseMobile }: { onNavigate?: () => void
         )}
       </div>
 
-      <p style={{
-        margin: '0 0 6px', padding: '0 12px',
-        fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-        color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', opacity: 0.8,
-      }}>
+      <p className="type-caption" style={{ margin: '0 0 6px', padding: '0 12px' }}>
         Workspace
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
