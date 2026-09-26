@@ -20,10 +20,12 @@ export function AssetLibrary({
   roll,
   onClose,
   onSelect,
+  isPersonalWorkspace = false,
 }: {
   workspaceId: string;
   workspaceName: string;
   roll: string;
+  isPersonalWorkspace?: boolean;
   onClose: () => void;
   onSelect?: (asset: Asset) => void;
 }) {
@@ -40,6 +42,7 @@ export function AssetLibrary({
         roll={roll}
         onInsert={onSelect}
         initialTab={onSelect ? 'image' : 'all'}
+        isPersonalWorkspace={isPersonalWorkspace}
       />
     </LibraryDialog>
   );

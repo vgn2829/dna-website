@@ -75,11 +75,11 @@ async function createBoardDirect(
   return id;
 }
 
-async function createTemplate(roll: string, name: string, sourceBoardId: string): Promise<{ id: string; workspace_id: string }> {
+async function createTemplate(roll: string, name: string, sourceBoardId: string, visibility?: 'personal' | 'community'): Promise<{ id: string; workspace_id: string }> {
   const res = await request(app)
     .post('/api/templates')
     .set('Authorization', `Bearer ${tokenFor(roll)}`)
-    .send({ name, source_board_id: sourceBoardId });
+    .send({ name, source_board_id: sourceBoardId, ...(visibility ? { visibility } : {}) });
   return res.body;
 }
 
@@ -337,7 +337,10 @@ describe('DELETE /api/templates/:id', () => {
     expect(check).toHaveLength(0);
   });
 
-  it('a plain member (not owner/admin) cannot delete a template', async () => {
+  // Shared Creative Library: deletion is the template OWNER's only — a
+  // member who can see a community template gets 403, and another member's
+  // personal template is invisible (404).
+  it('a member who does not own a template cannot delete it', async () => {
     await registerStudent('TPLDEL2-OWNER');
     await registerStudent('TPLDEL2-MEMBER');
     const ws = await createWorkspace('TPLDEL2-OWNER', 'Team');
@@ -346,13 +349,19 @@ describe('DELETE /api/templates/:id', () => {
       .set('Authorization', `Bearer ${tokenFor('TPLDEL2-OWNER')}`)
       .send({ roll_number: 'TPLDEL2-MEMBER' });
     const boardId = await createBoardDirect('TPLDEL2-OWNER', ws);
-    const template = await createTemplate('TPLDEL2-OWNER', 'Protected', boardId);
+    const template = await createTemplate('TPLDEL2-OWNER', 'Protected', boardId, 'community');
+    const personal = await createTemplate('TPLDEL2-OWNER', 'Private', boardId);
 
     const res = await request(app)
       .delete(`/api/templates/${template.id}`)
       .set('Authorization', `Bearer ${tokenFor('TPLDEL2-MEMBER')}`);
-
     expect(res.status).toBe(403);
+
+    const hidden = await request(app)
+      .delete(`/api/templates/${personal.id}`)
+      .set('Authorization', `Bearer ${tokenFor('TPLDEL2-MEMBER')}`);
+    expect(hidden.status).toBe(404);
+    expect(await query('SELECT 1 FROM templates WHERE id = ANY($1)', [[template.id, personal.id]])).toHaveLength(2);
   });
 
   // Required scenario 5

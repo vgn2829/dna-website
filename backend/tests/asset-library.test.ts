@@ -55,15 +55,15 @@ function uploadPng(roll: string, workspaceId: string, filename = 'test.png') {
 }
 
 let clock = Date.parse('2026-01-01T00:00:00Z');
-async function insertAssetDirect(roll: string, workspaceId: string, filename: string, kind: 'image' | 'file' = 'image'): Promise<string> {
+async function insertAssetDirect(roll: string, workspaceId: string, filename: string, kind: 'image' | 'file' = 'image', visibility: 'personal' | 'community' = 'personal'): Promise<string> {
   const id = uuidv4();
   const ext = filename.slice(filename.lastIndexOf('.') + 1);
   clock += 1000;
   await query(
-    `INSERT INTO assets (id, workspace_id, owner_roll, owner_name, kind, filename, storage_key, mime_type, size_bytes, width, height, created_at)
-     VALUES ($1, $2, $3, null, $4, $5, $6, $7, 10, null, null, $8)`,
+    `INSERT INTO assets (id, workspace_id, owner_roll, owner_name, kind, filename, storage_key, mime_type, size_bytes, width, height, created_at, visibility)
+     VALUES ($1, $2, $3, null, $4, $5, $6, $7, 10, null, null, $8, $9)`,
     [id, workspaceId, roll, kind, filename, `assets/${workspaceId}/${id}.${ext}`,
-     kind === 'image' ? 'image/png' : 'application/octet-stream', new Date(clock).toISOString()]
+     kind === 'image' ? 'image/png' : 'application/octet-stream', new Date(clock).toISOString(), visibility]
   );
   return id;
 }
@@ -128,7 +128,8 @@ describe('POST /api/assets — general files (kind=file)', () => {
     await registerStudent('LF3');
     const workspaceId = await createWorkspace('LF3', 'Design');
     const provider = storageModule.getStorage();
-    const uploadSpy = vi.spyOn(provider, 'upload');
+    // Stored via uploadFile (disk-streamed upload): args are (key, tempPath, mime).
+    const uploadSpy = vi.spyOn(provider, 'uploadFile');
     const urlSpy = vi.spyOn(provider, 'getPublicUrl');
 
     const res = await uploadFile('LF3', workspaceId, Buffer.from('8BPS fake psd'), 'Brand Kit.psd', 'image/vnd.adobe.photoshop', 'file');
@@ -144,7 +145,7 @@ describe('POST /api/assets — general files (kind=file)', () => {
   it('an uploaded HTML file can never render: stored as octet-stream and served as an attachment', async () => {
     await registerStudent('LF4');
     const workspaceId = await createWorkspace('LF4', 'Design');
-    const uploadSpy = vi.spyOn(storageModule.getStorage(), 'upload');
+    const uploadSpy = vi.spyOn(storageModule.getStorage(), 'uploadFile');
     const res = await uploadFile('LF4', workspaceId, Buffer.from('<script>alert(1)</script>'), 'page.html', 'text/html', 'file');
     expect(res.status).toBe(201);
     expect(res.body.kind).toBe('file');
@@ -170,15 +171,17 @@ describe('POST /api/assets — general files (kind=file)', () => {
     expect(res.status).toBe(400);
   });
 
-  it('allows general files up to 25MB but not beyond; images stay capped at 15MB', async () => {
+  // One 300 MB limit for every kind now (lib/uploadLimits.ts): files above
+  // the old 25 MB tier and images above the old 15 MB tier are accepted. The
+  // over-limit rejection is tested at the boundary in upload-limits.test.ts.
+  it('accepts files and images above the old 25 MB / 15 MB tiers', async () => {
     await registerStudent('LF7');
     const workspaceId = await createWorkspace('LF7', 'Design');
-    const ok = await uploadFile('LF7', workspaceId, Buffer.alloc(20 * 1024 * 1024, 1), 'big.zip', 'application/zip', 'file');
-    expect(ok.status).toBe(201);
-    const tooBig = await uploadFile('LF7', workspaceId, Buffer.alloc(26 * 1024 * 1024, 1), 'huge.zip', 'application/zip', 'file');
-    expect(tooBig.status).toBe(400);
+    const bigFile = await uploadFile('LF7', workspaceId, Buffer.alloc(26 * 1024 * 1024, 1), 'huge.zip', 'application/zip', 'file');
+    expect(bigFile.status).toBe(201);
+    expect(bigFile.body.kind).toBe('file');
     const bigImage = await uploadFile('LF7', workspaceId, Buffer.alloc(16 * 1024 * 1024, 1), 'huge.png', 'image/png', 'file');
-    expect(bigImage.status).toBe(400);
+    expect(bigImage.status).toBe(201);
   });
 
   it('rejects a general file upload into a workspace the caller is not a member of', async () => {
@@ -442,19 +445,24 @@ describe('asset collections', () => {
     expect(leak.body.assets).toHaveLength(0);
   });
 
-  it('PATCH: any member can move an asset; only the uploader or an admin can rename; outsiders get 403', async () => {
+  // Shared Creative Library: any member who can see an asset (their own, or
+  // a community one) can file it into a collection; only its owner renames
+  // it — no admin override; another member's personal asset is invisible.
+  it('PATCH: any member can move a community asset; only its owner can rename; outsiders get 403', async () => {
     await registerStudent('CO6');
     const ws = await createWorkspace('CO6', 'Team');
     await addMember(ws, 'CO7');
     await addMember(ws, 'CO8', 'admin');
     await registerStudent('CO9');
     const pack = (await createCollection('CO6', ws, 'Refs')).body.id as string;
-    const asset = await insertAssetDirect('CO6', ws, 'hero.png');
+    const asset = await insertAssetDirect('CO6', ws, 'hero.png', 'image', 'community');
+    const personal = await insertAssetDirect('CO6', ws, 'private.png');
 
     expect((await patchAsset('CO7', asset, { collection_id: pack })).status).toBe(200);
     expect((await patchAsset('CO7', asset, { filename: 'renamed.png' })).status).toBe(403);
-    expect((await patchAsset('CO8', asset, { filename: 'by-admin.png' })).body.filename).toBe('by-admin.png');
+    expect((await patchAsset('CO8', asset, { filename: 'by-admin.png' })).status).toBe(403);
     expect((await patchAsset('CO6', asset, { filename: 'by-owner.png' })).body.filename).toBe('by-owner.png');
+    expect((await patchAsset('CO7', personal, { collection_id: pack })).status).toBe(404);
     expect((await patchAsset('CO9', asset, { collection_id: null })).status).toBe(403);
     expect((await patchAsset('CO6', asset, {})).status).toBe(400);
     expect((await patchAsset('CO6', 'missing-id', { collection_id: null })).status).toBe(404);
@@ -468,7 +476,7 @@ describe('asset collections', () => {
     await registerStudent('CO13');
     const pack = (await createCollection('CO10', ws, 'Branding')).body.id as string;
     const mine = (await createCollection('CO11', ws, 'Member pack')).body.id as string;
-    const asset = await insertAssetDirect('CO10', ws, 'logo.png');
+    const asset = await insertAssetDirect('CO10', ws, 'logo.png', 'image', 'community');
     await patchAsset('CO10', asset, { collection_id: pack });
 
     expect((await request(app).patch(`/api/asset-collections/${pack}`).set(auth('CO11')).send({ name: 'Nope' })).status).toBe(403);

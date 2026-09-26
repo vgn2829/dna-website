@@ -1,19 +1,22 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import sharp from 'sharp';
 import { pool, query } from '../db/client';
 import { requireAdmin } from '../middleware/adminAuth';
 import { requireStudent, optionalStudent } from '../middleware/studentAuth';
-import { getStorage } from '../storage';
+import { getStorage, StorageTooLargeError } from '../storage';
+import { diskUploadFields, LIMIT_MESSAGE, readFileHead } from '../lib/diskUpload';
+import { exceedsUploadLimit } from '../lib/uploadLimits';
 
 export const artworksRouter = Router();
 
-async function generateThumb(buffer: Buffer): Promise<{ path: string; url: string } | null> {
+// source: the uploaded image's temp file on disk (lib/diskUpload.ts) — sharp
+// reads it from there, so a large upload is never held in memory.
+async function generateThumb(source: string): Promise<{ path: string; url: string } | null> {
   try {
-    const thumbBuffer = await sharp(buffer)
+    const thumbBuffer = await sharp(source)
       .resize({ width: 400, withoutEnlargement: true })
       .webp({ quality: 60 })
       .toBuffer();
@@ -29,12 +32,24 @@ async function generateThumb(buffer: Buffer): Promise<{ path: string; url: strin
 const commentLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: 'Too many requests, please slow down.' } });
 const likeLimiter    = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Too many requests, please slow down.' } });
 
-const MAX_BYTES = 52_428_800; // 50 MB
+// Uploads stream to temp files on disk, capped at MAX_UPLOAD_BYTES (300 MB,
+// lib/uploadLimits.ts — the same constant the admin Gallery form validates
+// against); a larger file gets a JSON 413. Temp files are removed when the
+// response closes.
+const upload = diskUploadFields([{ name: 'file', maxCount: 1 }, { name: 'cover', maxCount: 1 }]);
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_BYTES },
-});
+// Stores an uploaded temp file; a size refusal from the storage service
+// becomes a clear 413 instead of a 500.
+class UploadTooLarge extends Error {}
+async function storeUpload(storagePath: string, localPath: string, mime: string): Promise<void> {
+  try {
+    await getStorage().uploadFile(storagePath, localPath, mime);
+  } catch (err) {
+    if (err instanceof StorageTooLargeError) throw new UploadTooLarge(err.message);
+    throw err;
+  }
+}
+const STORAGE_TOO_LARGE = 'This file is larger than the storage service currently accepts';
 
 type ArtworkRow = {
   id: string; title: string; artist: string; domain: string;
@@ -108,7 +123,7 @@ artworksRouter.get('/', optionalStudent, async (req, res) => {
 artworksRouter.post(
   '/',
   requireAdmin,
-  upload.fields([{ name: 'file', maxCount: 1 }, { name: 'cover', maxCount: 1 }]),
+  upload,
   async (req, res) => {
     const files = req.files as Record<string, Express.Multer.File[]> | undefined;
     const mainFile = files?.['file']?.[0];
@@ -123,12 +138,12 @@ artworksRouter.post(
       res.status(400).json({ message: `Unsupported file type. Allowed: ${Object.keys(ALLOWED_EXT).join(', ')}` });
       return;
     }
-    if (file.size > MAX_BYTES) {
-      res.status(400).json({ message: 'File exceeds 50 MB limit' });
+    if (exceedsUploadLimit(file.size)) {
+      res.status(413).json({ message: LIMIT_MESSAGE, error: LIMIT_MESSAGE });
       return;
     }
     // Validate the actual bytes, not just the filename extension.
-    if (!spec.check(file.buffer)) {
+    if (!spec.check(await readFileHead(file.path))) {
       res.status(400).json({ message: 'File content does not match its extension' });
       return;
     }
@@ -145,13 +160,18 @@ artworksRouter.post(
     const safeExt = ext === 'jpeg' ? 'jpg' : ext;
     const storagePath = `gallery/${uuidv4()}.${safeExt}`;
 
-    await getStorage().upload(storagePath, file.buffer, spec.mime);
+    try {
+      await storeUpload(storagePath, file.path, spec.mime);
+    } catch (err) {
+      if (err instanceof UploadTooLarge) { res.status(413).json({ message: STORAGE_TOO_LARGE, error: STORAGE_TOO_LARGE }); return; }
+      throw err;
+    }
 
     // For image uploads, generate a 400px webp thumbnail stored in cover_url.
     // For video/PDF, cover_url comes from the frontend-captured cover blob below.
     let coverUrl: string | null = null;
     if (spec.mediaType === 'image') {
-      const thumb = await generateThumb(file.buffer);
+      const thumb = await generateThumb(file.path);
       coverUrl = thumb?.url ?? null;
     }
 
@@ -160,11 +180,11 @@ artworksRouter.post(
     if (coverFile && spec.mediaType !== 'image') {
       const coverExt = coverFile.originalname.split('.').pop()?.toLowerCase() ?? '';
       const coverSpec = ALLOWED_EXT[coverExt];
-      if (coverSpec && coverSpec.mime.startsWith('image/') && coverSpec.check(coverFile.buffer)) {
+      if (coverSpec && coverSpec.mime.startsWith('image/') && coverSpec.check(await readFileHead(coverFile.path))) {
         try {
           const coverPath = `covers/${uuidv4()}.jpg`;
           console.log('Uploading cover file:', coverFile.originalname, coverFile.size);
-          await getStorage().upload(coverPath, coverFile.buffer, 'image/jpeg');
+          await storeUpload(coverPath, coverFile.path, 'image/jpeg');
           coverUrl = getStorage().getPublicUrl(coverPath);
           console.log('Cover uploaded successfully:', coverUrl);
         } catch (e) {
@@ -214,7 +234,7 @@ artworksRouter.patch('/:id/featured', requireAdmin, async (req, res) => {
   res.json({ id: row.id, featured: row.featured });
 });
 
-artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
+artworksRouter.put('/:id', requireAdmin, upload, async (req, res) => {
   const existing = await query<ArtworkRow>('SELECT * FROM artworks WHERE id=$1', [req.params.id]);
   if (existing.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
 
@@ -245,12 +265,18 @@ artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount
     const ext = file.originalname.split('.').pop()?.toLowerCase() ?? '';
     const spec = ALLOWED_EXT[ext];
     if (!spec) { res.status(400).json({ error: 'Unsupported file type' }); return; }
-    if (!spec.check(file.buffer)) { res.status(400).json({ error: 'File content does not match its extension' }); return; }
+    if (exceedsUploadLimit(file.size)) { res.status(413).json({ error: LIMIT_MESSAGE, message: LIMIT_MESSAGE }); return; }
+    if (!spec.check(await readFileHead(file.path))) { res.status(400).json({ error: 'File content does not match its extension' }); return; }
 
     const safeExt = ext === 'jpeg' ? 'jpg' : ext;
     const storagePath = `gallery/${uuidv4()}.${safeExt}`;
     oldStoragePath = existing[0].storage_path ?? null;
-    await getStorage().upload(storagePath, file.buffer, spec.mime);
+    try {
+      await storeUpload(storagePath, file.path, spec.mime);
+    } catch (err) {
+      if (err instanceof UploadTooLarge) { res.status(413).json({ error: STORAGE_TOO_LARGE, message: STORAGE_TOO_LARGE }); return; }
+      throw err;
+    }
 
     sets.push(`storage_path = $${i++}`); vals.push(storagePath);
     sets.push(`media_type = $${i++}`); vals.push(spec.mediaType);
@@ -260,7 +286,7 @@ artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount
 
     // Regenerate thumbnail when the image file is replaced
     if (spec.mediaType === 'image') {
-      const thumb = await generateThumb(file.buffer);
+      const thumb = await generateThumb(file.path);
       if (thumb) { sets.push(`cover_url = $${i++}`); vals.push(thumb.url); }
     }
   }
@@ -269,11 +295,11 @@ artworksRouter.put('/:id', requireAdmin, upload.fields([{ name: 'file', maxCount
   if (coverFile && (existing[0].media_type !== 'image')) {
     const coverExt = coverFile.originalname.split('.').pop()?.toLowerCase() ?? '';
     const coverSpec = ALLOWED_EXT[coverExt];
-    if (coverSpec && coverSpec.mime.startsWith('image/') && coverSpec.check(coverFile.buffer)) {
+    if (coverSpec && coverSpec.mime.startsWith('image/') && coverSpec.check(await readFileHead(coverFile.path))) {
       try {
         const coverPath = `covers/${uuidv4()}.jpg`;
         console.log('Uploading cover file:', coverFile.originalname, coverFile.size);
-        await getStorage().upload(coverPath, coverFile.buffer, 'image/jpeg');
+        await storeUpload(coverPath, coverFile.path, 'image/jpeg');
         const newCoverUrl = getStorage().getPublicUrl(coverPath);
         console.log('Cover uploaded successfully:', newCoverUrl);
         sets.push(`cover_url = $${i++}`); vals.push(newCoverUrl);

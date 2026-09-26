@@ -41,6 +41,7 @@ class MemoryStorage implements StorageProvider {
     this.writes.push(p);
     this.objects.set(p, { buf: Buffer.from(buf), mime, cacheControl: opts?.cacheControl });
   }
+  async uploadFile(p: string, file: string, mime: string) { await this.upload(p, fs.readFileSync(file), mime); }
   async download(p: string) { const o = this.objects.get(p); if (!o) throw new Error(`not found: ${p}`); return Buffer.from(o.buf); }
   getPublicUrl(p: string) { return PUBLIC + p; }
   async delete(p: string) { if (this.failDeletesUnder && p.startsWith(this.failDeletesUnder)) throw new Error('simulated delete failure'); this.objects.delete(p); }

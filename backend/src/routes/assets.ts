@@ -1,15 +1,19 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import sharp from 'sharp';
+import { claimTempFile, diskUploadSingle, LIMIT_MESSAGE, removeTempFile } from '../lib/diskUpload';
+import { exceedsUploadLimit } from '../lib/uploadLimits';
 import { pool } from '../db/client';
 import { requireStudent } from '../middleware/studentAuth';
+import { requireAdmin } from '../middleware/adminAuth';
+import { adminListQuery, adminListWhere, adminUpdateSchema } from '../lib/libraryAdmin';
 import { param } from '../routeParams';
-import { getStorage } from '../storage';
+import { getStorage, StorageTooLargeError } from '../storage';
 import { findStorageReferences } from '../storage/references';
 import { deleteDerivatives, derivativeKey, isDerivableSourceKey, resolveDerivativeUrls, scheduleDerivative } from '../storage/derivatives';
+import { LIBRARY_VISIBILITIES, canSeeLibraryItem, isLibraryVisibility, libraryScopeSql, parseLibraryScope, rollBinder, type LibraryStatus, type LibraryVisibility } from '../lib/libraryVisibility';
 
 const router = Router();
 
@@ -42,18 +46,11 @@ const uploadAssetLimiter = rateLimit({
   message: { error: 'Too many uploads — please slow down' },
 });
 
-// Two size tiers: images keep their original 15MB cap; general library
-// files (PSD/AI/PDF/ZIP/...) get 25MB. multer enforces the larger tier as
-// a hard ceiling (memory storage — the whole file is buffered, so this is
-// also the per-request memory bound); the per-kind cap is checked in the
-// handler once the kind is known.
-const IMAGE_MAX_BYTES = 15 * 1024 * 1024;
-const FILE_MAX_BYTES = 25 * 1024 * 1024;
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: FILE_MAX_BYTES },
-});
+// One size limit for every uploaded library file, image or not:
+// MAX_UPLOAD_BYTES (300 MB, lib/uploadLimits.ts — shared with the frontend).
+// diskUploadSingle streams the upload to a temp file under that hard ceiling
+// (a JSON 413 beyond it) instead of buffering it in memory; the temp file is
+// removed when the response closes (lib/diskUpload.ts).
 
 export const ASSET_KINDS = ['image', 'file', 'link'] as const;
 export type AssetKind = typeof ASSET_KINDS[number];
@@ -147,6 +144,22 @@ interface AssetRow {
   width: number | null;
   height: number | null;
   created_at: string;
+  visibility: LibraryVisibility;
+  status: LibraryStatus;
+}
+
+// Shared Creative Library (lib/libraryVisibility.ts): inside the asset's
+// workspace, a personal asset is its owner's alone and a community asset is
+// visible to and usable by every member. Publishing changes only this row's
+// visibility — the stored object, its storage_key and its URL never change
+// and are never copied. Only the owner renames, publishes or deletes.
+// Another member's personal asset answers 404, as if it did not exist.
+
+// Reads the optional visibility field of a create request (multipart form
+// or JSON). Absent → personal; anything else invalid → null (400).
+function createVisibility(raw: unknown): LibraryVisibility | null {
+  if (raw === undefined || raw === '') return 'personal';
+  return isLibraryVisibility(raw) ? raw : null;
 }
 
 function toPublicAsset(row: AssetRow) {
@@ -211,7 +224,7 @@ async function getWorkspaceMembership(workspaceId: string, roll: string): Promis
 // deleted so a failed request never leaves an orphaned storage object with
 // no corresponding row (see this file's own note on the reverse case,
 // under DELETE, for the other half of this consistency story).
-router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), async (req: Request, res: Response) => {
+router.post('/', requireStudent, uploadAssetLimiter, diskUploadSingle('file'), async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
 
@@ -229,6 +242,11 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
 
     if (!req.file) {
       return res.status(400).json({ error: 'No file provided' });
+    }
+
+    const visibility = createVisibility(req.body.visibility);
+    if (!visibility) {
+      return res.status(400).json({ error: 'Invalid visibility' });
     }
 
     const collection = await resolveCreateCollection(req.body.collection_id, workspaceId);
@@ -265,8 +283,10 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
       return res.status(400).json({ error: 'Unsupported file type' });
     }
 
-    if (req.file.size > (kind === 'image' ? IMAGE_MAX_BYTES : FILE_MAX_BYTES)) {
-      return res.status(400).json({ error: 'File exceeds the size limit for this upload' });
+    // multer already refused anything larger mid-stream; this re-check keeps
+    // the rule explicit (and correct for any future upload path).
+    if (exceedsUploadLimit(req.file.size)) {
+      return res.status(413).json({ error: LIMIT_MESSAGE });
     }
 
     let width: number | null = null;
@@ -277,7 +297,7 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
     // General files are never handed to sharp (never parsed server-side).
     if (kind === 'image') {
       try {
-        const metadata = await sharp(req.file.buffer).metadata();
+        const metadata = await sharp(req.file.path).metadata();
         if (metadata.width && metadata.height) {
           width = metadata.width;
           height = metadata.height;
@@ -290,7 +310,14 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
     const id = uuidv4();
     const storageKey = `assets/${workspaceId}/${id}.${ext}`;
 
-    await getStorage().upload(storageKey, req.file.buffer, storedMime);
+    try {
+      await getStorage().uploadFile(storageKey, req.file.path, storedMime);
+    } catch (storageErr) {
+      if (storageErr instanceof StorageTooLargeError) {
+        return res.status(413).json({ error: 'This file is larger than the storage service currently accepts' });
+      }
+      throw storageErr;
+    }
 
     const studentResult = await pool.query(
       'SELECT name FROM student_sessions WHERE roll_number = $1',
@@ -310,12 +337,12 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
     try {
       const result = await pool.query(`
         INSERT INTO assets
-          (id, workspace_id, owner_roll, owner_name, kind, collection_id, filename, storage_key, mime_type, size_bytes, width, height, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          (id, workspace_id, owner_roll, owner_name, kind, collection_id, filename, storage_key, mime_type, size_bytes, width, height, created_at, visibility)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *
       `, [id, workspaceId, roll, ownerName, kind, collection.id, filename, storageKey,
           kind === 'image' ? req.file.mimetype : displayMime(req.file.mimetype),
-          req.file.size, width, height, now]);
+          req.file.size, width, height, now, visibility]);
       row = result.rows[0] as AssetRow;
     } catch (dbErr) {
       // Storage upload succeeded but the DB insert failed — delete the
@@ -335,7 +362,12 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
     // Original stored and its row persisted — now (best-effort, off the
     // response path) make its thumbnail derivative. Its outcome never
     // affects this upload; see storage/derivatives.ts.
-    if (kind === 'image') scheduleDerivative(storageKey, req.file.buffer);
+    // The job reads the temp file from disk and removes it when it settles.
+    if (kind === 'image') {
+      const tempPath = req.file.path;
+      claimTempFile(req, tempPath);
+      scheduleDerivative(storageKey, tempPath, undefined, () => removeTempFile(tempPath));
+    }
 
     res.status(201).json(await toPublicAssetOne(row));
   } catch (err) {
@@ -344,7 +376,7 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
   }
 });
 
-// GET /api/assets?workspace_id=...&limit=&cursor=&kind=&q=
+// GET /api/assets?workspace_id=...&limit=&cursor=&kind=&q=&collection_id=&scope=
 // Workspace-scoped, newest-first, cursor-paginated on created_at+id (both
 // strictly monotonic-enough for this table's insert pattern — created_at
 // alone could tie within the same millisecond under concurrent uploads).
@@ -356,6 +388,8 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
 //   collection_id — a collection id, or 'none' for ungrouped assets. A
 //          collection from another workspace simply matches nothing (the
 //          workspace_id predicate still applies).
+//   scope — all (default) | mine | community (lib/libraryVisibility.ts),
+//          applied in SQL: another member's personal asset is never listed.
 router.get('/', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
@@ -378,9 +412,14 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid kind filter' });
     }
     const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
+    const scope = parseLibraryScope(req.query.scope);
+    if (!scope) {
+      return res.status(400).json({ error: 'Invalid scope' });
+    }
 
     const params: unknown[] = [workspaceId];
-    const where = ['workspace_id = $1'];
+    const bindRoll = rollBinder(params, roll);
+    const where = ['workspace_id = $1', libraryScopeSql(scope, bindRoll)];
     if (kindFilter) {
       params.push(kindFilter);
       where.push(`kind = $${params.length}`);
@@ -398,11 +437,13 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
       where.push(`filename ILIKE $${params.length}`);
     }
     if (cursor) {
-      // The cursor row is looked up within the same workspace, so a cursor
-      // id from another workspace can't be used to probe its timestamps.
+      // The cursor row is looked up within the same workspace and among rows
+      // the caller may see, so a cursor id from another workspace — or
+      // another member's personal asset — can't be used to probe timestamps.
+      const visible = libraryScopeSql('all', bindRoll);
       params.push(cursor);
       where.push(`(created_at, id) < (
-        SELECT created_at, id FROM assets WHERE id = $${params.length} AND workspace_id = $1
+        SELECT created_at, id FROM assets WHERE id = $${params.length} AND workspace_id = $1 AND ${visible}
       )`);
     }
     params.push(limit);
@@ -436,6 +477,7 @@ const createLinkSchema = z.object({
   name: z.string().trim().min(1).max(255),
   url: z.string().max(2048),
   collection_id: z.string().min(1).nullable().optional(),
+  visibility: z.enum(LIBRARY_VISIBILITIES).optional(),
 });
 
 // POST /api/assets/links
@@ -472,10 +514,11 @@ router.post('/links', requireStudent, createLinkLimiter, async (req: Request, re
 
     const result = await pool.query(`
       INSERT INTO assets
-        (id, workspace_id, owner_roll, owner_name, kind, collection_id, filename, link_url, created_at)
-      VALUES ($1, $2, $3, $4, 'link', $5, $6, $7, $8)
+        (id, workspace_id, owner_roll, owner_name, kind, collection_id, filename, link_url, created_at, visibility)
+      VALUES ($1, $2, $3, $4, 'link', $5, $6, $7, $8, $9)
       RETURNING *
-    `, [uuidv4(), workspaceId, roll, ownerName, collection.id, name, linkUrl, new Date().toISOString()]);
+    `, [uuidv4(), workspaceId, roll, ownerName, collection.id, name, linkUrl, new Date().toISOString(),
+        parsed.data.visibility ?? 'personal']);
 
     res.status(201).json(await toPublicAssetOne(result.rows[0] as AssetRow));
   } catch (err) {
@@ -487,16 +530,18 @@ router.post('/links', requireStudent, createLinkLimiter, async (req: Request, re
 const updateAssetSchema = z.object({
   filename: z.string().trim().min(1).max(255).optional(),
   collection_id: z.string().min(1).nullable().optional(),
-}).refine(v => v.filename !== undefined || v.collection_id !== undefined, { message: 'Nothing to update' });
+  visibility: z.enum(LIBRARY_VISIBILITIES).optional(),
+}).refine(v => v.filename !== undefined || v.collection_id !== undefined || v.visibility !== undefined, { message: 'Nothing to update' });
 
 // PATCH /api/assets/:id
-// Two edits, two tiers (both reuse existing workspace roles, no new
-// permission concept):
-//   collection_id — any member of the asset's workspace: grouping is
+// Only assets the caller can see (their own, or community) — another
+// member's personal asset answers 404. Then two tiers:
+//   collection_id — any member who can see the asset: grouping is
 //     organisational and fully reversible, and collections exist so the
-//     whole team can curate packs together.
-//   filename (rename) — the uploader or a workspace owner/admin, the same
-//     tier as DELETE, since it changes how everyone sees the asset.
+//     whole team can curate packs together (a personal asset is only ever
+//     visible to its owner, so only they can group it).
+//   filename (rename) and visibility (publish/unpublish) — the owner only.
+//     Neither touches the stored object: storage_key and url never change.
 // The target collection must belong to the asset's own workspace.
 router.patch('/:id', requireStudent, async (req: Request, res: Response) => {
   try {
@@ -517,13 +562,17 @@ router.patch('/:id', requireStudent, async (req: Request, res: Response) => {
     if (!membership) {
       return res.status(403).json({ error: 'Access denied' });
     }
+    if (!canSeeLibraryItem(row, roll)) {
+      return res.status(404).json({ error: 'Asset not found' });
+    }
 
-    const { filename, collection_id: collectionId } = parsed.data;
-    if (filename !== undefined && filename !== row.filename) {
-      const canRename = row.owner_roll === roll || membership === 'owner' || membership === 'admin';
-      if (!canRename) {
-        return res.status(403).json({ error: 'Only the uploader or a workspace admin can rename this asset' });
-      }
+    const { filename, collection_id: collectionId, visibility } = parsed.data;
+    const isOwner = row.owner_roll === roll;
+    if (filename !== undefined && filename !== row.filename && !isOwner) {
+      return res.status(403).json({ error: 'Only the asset owner can rename it' });
+    }
+    if (visibility !== undefined && visibility !== row.visibility && !isOwner) {
+      return res.status(403).json({ error: 'Only the asset owner can change its visibility' });
     }
     if (collectionId && !(await collectionInWorkspace(collectionId, row.workspace_id))) {
       return res.status(400).json({ error: 'Collection not found in this workspace' });
@@ -532,10 +581,11 @@ router.patch('/:id', requireStudent, async (req: Request, res: Response) => {
     const result = await pool.query(`
       UPDATE assets SET
         filename = COALESCE($2, filename),
-        collection_id = CASE WHEN $3::boolean THEN $4 ELSE collection_id END
+        collection_id = CASE WHEN $3::boolean THEN $4 ELSE collection_id END,
+        visibility = COALESCE($5, visibility)
       WHERE id = $1
       RETURNING *
-    `, [id, filename ?? null, collectionId !== undefined, collectionId ?? null]);
+    `, [id, filename ?? null, collectionId !== undefined, collectionId ?? null, visibility ?? null]);
 
     res.json(await toPublicAssetOne(result.rows[0] as AssetRow));
   } catch (err) {
@@ -558,6 +608,9 @@ router.get('/:id', requireStudent, async (req: Request, res: Response) => {
     if (!membership) {
       return res.status(403).json({ error: 'Access denied' });
     }
+    if (!canSeeLibraryItem(row, roll)) {
+      return res.status(404).json({ error: 'Asset not found' });
+    }
 
     res.json(await toPublicAssetOne(row));
   } catch (err) {
@@ -567,9 +620,9 @@ router.get('/:id', requireStudent, async (req: Request, res: Response) => {
 });
 
 // DELETE /api/assets/:id
-// Only the uploader, or a workspace owner/admin, may delete — same
-// workspace-management tier routes/workspaces.ts's member-removal already
-// uses.
+// The asset's owner only (Shared Creative Library) — other members may use
+// a community asset, never remove it. Non-members get 403; a member who
+// can't see the asset (someone else's personal asset) gets 404.
 //
 // SHARED-FILE MODEL: inserting an image asset onto a board stores the
 // asset's own public URL in the canvas (no copy), and that URL travels into
@@ -604,12 +657,19 @@ router.delete('/:id', requireStudent, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Asset not found' });
     }
 
-    const isOwner = row.owner_roll === roll;
-    if (!isOwner) {
+    // Hidden by an admin: out of every normal flow, the owner's included.
+    if (row.status !== 'active') {
+      return res.status(404).json({ error: 'Asset not found' });
+    }
+    if (row.owner_roll !== roll) {
       const membership = await getWorkspaceMembership(row.workspace_id, roll);
-      if (membership !== 'owner' && membership !== 'admin') {
+      if (!membership) {
         return res.status(403).json({ error: 'Access denied' });
       }
+      if (!canSeeLibraryItem(row, roll)) {
+        return res.status(404).json({ error: 'Asset not found' });
+      }
+      return res.status(403).json({ error: 'Only the asset owner can delete it' });
     }
 
     await pool.query('DELETE FROM assets WHERE id = $1', [id]);
@@ -648,6 +708,62 @@ router.delete('/:id', requireStudent, async (req: Request, res: Response) => {
     res.json({ success: true });
   } catch (err) {
     console.error('Delete asset error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+
+interface AdminAssetRow extends AssetRow { workspace_name: string; workspace_is_personal: boolean }
+
+async function toAdminAssets(rows: AdminAssetRow[]) {
+  const pub = await toPublicAssets(rows);
+  return pub.map((a, i) => ({ ...a, workspace_name: rows[i].workspace_name, workspace_is_personal: rows[i].workspace_is_personal }));
+}
+
+// GET /api/assets/admin/all?q=&status=active|hidden|all&visibility=…&limit=
+router.get('/admin/all', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const parsed = adminListQuery.safeParse(req.query);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid filters' });
+    const params: unknown[] = [];
+    const where = adminListWhere(parsed.data, 'filename', params);
+    params.push(parsed.data.limit ?? 200);
+    const result = await pool.query(
+      `SELECT a.*, w.name AS workspace_name, w.is_personal AS workspace_is_personal
+       FROM assets a JOIN workspaces w ON w.id = a.workspace_id
+       ${where}
+       ORDER BY a.created_at DESC, a.id DESC
+       LIMIT $${params.length}`,
+      params
+    );
+    res.json({ assets: await toAdminAssets(result.rows as AdminAssetRow[]) });
+  } catch (err) {
+    console.error('Admin list assets error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PATCH /api/assets/admin/:id { visibility?, status? } — metadata only: the
+// stored object, storage_key, owner and workspace never change.
+router.patch('/admin/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const parsed = adminUpdateSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid update' });
+    const result = await pool.query(
+      `UPDATE assets SET visibility = COALESCE($2, visibility), status = COALESCE($3, status)
+       WHERE id = $1 RETURNING id`,
+      [param(req.params.id), parsed.data.visibility ?? null, parsed.data.status ?? null]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Asset not found' });
+    const row = await pool.query(
+      `SELECT a.*, w.name AS workspace_name, w.is_personal AS workspace_is_personal
+       FROM assets a JOIN workspaces w ON w.id = a.workspace_id WHERE a.id = $1`,
+      [param(req.params.id)]
+    );
+    res.json((await toAdminAssets(row.rows as AdminAssetRow[]))[0]);
+  } catch (err) {
+    console.error('Admin update asset error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

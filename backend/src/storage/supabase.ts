@@ -1,5 +1,16 @@
+import fs from 'fs';
 import { createClient } from '@supabase/supabase-js';
-import type { StorageProvider, StoredObject } from './index';
+import { StorageTooLargeError, type StorageProvider, type StoredObject } from './index';
+
+// Files up to this size keep the original buffered upload (the path every
+// existing upload has always used); larger ones stream from disk so a
+// 300 MB upload never has to be held in memory.
+const BUFFERED_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
+
+function isTooLarge(error: { message?: string; statusCode?: string | number } | null | undefined): boolean {
+  if (!error) return false;
+  return String(error.statusCode ?? '') === '413' || /maximum allowed size|payload too large|too large/i.test(error.message ?? '');
+}
 
 function client() {
   return createClient(
@@ -17,6 +28,24 @@ export class SupabaseStorageProvider implements StorageProvider {
       .upload(path, buffer, { contentType: mimeType, upsert: true, ...(opts?.cacheControl ? { cacheControl: opts.cacheControl } : {}) });
     if (error) {
       console.error('Supabase storage upload error:', error);
+      if (isTooLarge(error as { message?: string; statusCode?: string })) throw new StorageTooLargeError();
+      throw new Error(`Storage upload failed: ${error.message}`);
+    }
+  }
+
+  async uploadFile(path: string, localFilePath: string, mimeType: string): Promise<void> {
+    const { size } = await fs.promises.stat(localFilePath);
+    if (size <= BUFFERED_UPLOAD_MAX_BYTES) {
+      return this.upload(path, await fs.promises.readFile(localFilePath), mimeType);
+    }
+    // storage-js sends a Node stream with duplex: 'half' (chunked), so the
+    // server's memory use stays at a few stream chunks, not the file size.
+    const { error } = await client().storage
+      .from(bucket())
+      .upload(path, fs.createReadStream(localFilePath), { contentType: mimeType, upsert: true, duplex: 'half' });
+    if (error) {
+      console.error('Supabase storage streamed upload error:', error);
+      if (isTooLarge(error as { message?: string; statusCode?: string })) throw new StorageTooLargeError();
       throw new Error(`Storage upload failed: ${error.message}`);
     }
   }

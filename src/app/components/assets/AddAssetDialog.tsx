@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react';
 import { UploadCloud, Check, AlertCircle, Loader2, Link2 } from 'lucide-react';
-import { api, type Asset, type AssetCollection } from '../../lib/api';
-import { classifyUpload, FILE_MAX_BYTES, formatSize, IMAGE_MAX_BYTES, isAcceptableLinkUrl, linkSource } from '../../lib/assetLibrary';
+import { api, type Asset, type AssetCollection, type LibraryVisibility } from '../../lib/api';
+import { classifyUpload, isAcceptableLinkUrl, linkSource } from '../../lib/assetLibrary';
+import { MAX_UPLOAD_LABEL } from '../../lib/uploadLimits';
 import { LibraryDialog } from './LibraryDialog';
+import { VisibilityPicker } from '../library/LibraryVisibility';
 
 // ─────────────────────────────────────────────────────────────────────────
 // "+ Add Asset". Upload accepts images (the original image path —
@@ -16,7 +18,9 @@ import { LibraryDialog } from './LibraryDialog';
 // name + URL only; nothing is fetched to build a preview.
 //
 // Both flows can file the new asset straight into a collection; the
-// default is the collection currently being browsed.
+// default is the collection currently being browsed. Both also choose a
+// visibility — Personal by default; Community shares it with this
+// workspace's members (the file itself is stored once either way).
 // ─────────────────────────────────────────────────────────────────────────
 
 // Layout only — type comes from .type-caption on each label.
@@ -30,6 +34,7 @@ export function AddAssetDialog({
   roll,
   collections,
   defaultCollectionId,
+  isPersonalWorkspace = false,
   onClose,
   onAdded,
 }: {
@@ -38,11 +43,13 @@ export function AddAssetDialog({
   roll: string;
   collections: AssetCollection[];
   defaultCollectionId: string | null;
+  isPersonalWorkspace?: boolean;
   onClose: () => void;
   onAdded: (asset: Asset) => void;
 }) {
   const [mode, setMode] = useState<'upload' | 'link'>('upload');
   const [collectionId, setCollectionId] = useState<string | null>(defaultCollectionId);
+  const [visibility, setVisibility] = useState<LibraryVisibility>('personal');
   const [linkName, setLinkName] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [linkError, setLinkError] = useState<string | null>(null);
@@ -70,7 +77,7 @@ export function AddAssetDialog({
       }
       setItem(key, { status: 'uploading' });
       try {
-        const asset = await api.assets.upload(workspaceId, file, { kind: plan.kind === 'file' ? 'file' : undefined, collectionId });
+        const asset = await api.assets.upload(workspaceId, file, { kind: plan.kind === 'file' ? 'file' : undefined, collectionId, visibility });
         onAdded(asset);
         setItem(key, { status: 'done' });
       } catch (err) {
@@ -90,7 +97,7 @@ export function AddAssetDialog({
     setSavingLink(true);
     setLinkError(null);
     try {
-      const asset = await api.assets.createLink(roll, { workspace_id: workspaceId, name: linkName.trim(), url: linkUrl.trim(), collection_id: collectionId });
+      const asset = await api.assets.createLink(roll, { workspace_id: workspaceId, name: linkName.trim(), url: linkUrl.trim(), collection_id: collectionId, visibility });
       onAdded(asset);
       onClose();
     } catch (err) {
@@ -135,6 +142,17 @@ export function AddAssetDialog({
             <Icon size={14} /> {label}
           </button>
         ))}
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <VisibilityPicker
+          value={visibility}
+          onChange={setVisibility}
+          kind="asset"
+          workspaceName={workspaceName}
+          isPersonalWorkspace={isPersonalWorkspace}
+          disabled={busy || savingLink}
+        />
       </div>
 
       {collections.length > 0 && (
@@ -208,8 +226,9 @@ export function AddAssetDialog({
         <UploadCloud size={26} strokeWidth={1.6} style={{ color: 'var(--color-ink-muted)' }} />
         <span className="type-body-sm">Drop files here or browse</span>
         <span style={{ fontSize: 12, color: 'var(--color-ink-muted)', lineHeight: 1.5, maxWidth: 380 }}>
-          Images (PNG, JPG, WEBP, GIF, SVG) up to {formatSize(IMAGE_MAX_BYTES)} — insertable on boards.<br />
-          Design files, documents and archives (PSD, AI, FIG, PDF, PPTX, ZIP…) up to {formatSize(FILE_MAX_BYTES)}.
+          Images (PNG, JPG, WEBP, GIF, SVG) — insertable on boards.<br />
+          Design files, documents and archives (PSD, AI, FIG, PDF, PPTX, ZIP…).<br />
+          Maximum file size: {MAX_UPLOAD_LABEL}.
         </span>
       </button>
 

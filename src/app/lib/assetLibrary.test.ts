@@ -19,8 +19,12 @@ describe('classifyUpload', () => {
     expect(classifyUpload({ name: 'README', type: 'text/plain', size: 10 }).ok).toBe(false);
   });
   it('enforces 15MB for images and 25MB for files', () => {
-    expect(classifyUpload({ name: 'a.png', type: 'image/png', size: IMAGE_MAX_BYTES + 1 }).ok).toBe(false);
+    expect(IMAGE_MAX_BYTES).toBe(300 * 1024 * 1024);
+    expect(classifyUpload({ name: 'a.png', type: 'image/png', size: IMAGE_MAX_BYTES }).ok).toBe(true);
+    expect(classifyUpload({ name: 'a.png', type: 'image/png', size: IMAGE_MAX_BYTES + 1 })).toEqual({ ok: false, error: 'a.png is larger than the 300 MB maximum file size.' });
     expect(classifyUpload({ name: 'a.zip', type: 'application/zip', size: 20 * 1024 * 1024 }).ok).toBe(true);
+    expect(FILE_MAX_BYTES).toBe(300 * 1024 * 1024);
+    expect(classifyUpload({ name: 'a.zip', type: 'application/zip', size: FILE_MAX_BYTES }).ok).toBe(true);
     expect(classifyUpload({ name: 'a.zip', type: 'application/zip', size: FILE_MAX_BYTES + 1 }).ok).toBe(false);
   });
 });

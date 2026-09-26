@@ -3,11 +3,14 @@ import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../db/client';
 import { requireStudent } from '../middleware/studentAuth';
+import { requireAdmin } from '../middleware/adminAuth';
+import { adminListQuery, adminListWhere, adminUpdateSchema } from '../lib/libraryAdmin';
 import { param } from '../routeParams';
 import { getWorkspaceMembership } from './assets';
 import { canvasSummaryColumns } from '../lib/canvasSummary';
 import { toPublicBoard } from '../lib/boardRows';
 import { getBoardRole, roleCanWriteCanvas } from '../realtime/roomAccess';
+import { LIBRARY_VISIBILITIES, canSeeLibraryItem, libraryScopeSql, parseLibraryScope, rollBinder, type LibraryStatus, type LibraryVisibility } from '../lib/libraryVisibility';
 
 const router = Router();
 
@@ -24,8 +27,14 @@ const router = Router();
 //
 // NO template_members, NO template-level role column, NO second
 // authorization hierarchy — every route here verifies workspace
-// membership via workspace_members and nothing else. A template's
-// workspace_id is the ONLY thing that determines who can read/write it.
+// membership via workspace_members first.
+//
+// Shared Creative Library: inside that workspace, visibility decides who
+// else sees a template (lib/libraryVisibility.ts). A personal template is
+// the owner's alone; a community template is visible to and usable by
+// every member. Only the owner manages it (edit, archive, publish,
+// delete). Another member's personal template answers 404, as if it did
+// not exist, so ids can't be probed.
 // ─────────────────────────────────────────────────────────────────────────
 
 interface TemplateRow {
@@ -40,6 +49,8 @@ interface TemplateRow {
   owner_name: string | null;
   created_at: string;
   is_archived: boolean;
+  visibility: LibraryVisibility;
+  status: LibraryStatus;
 }
 
 // canvas_data is intentionally never included in the list/detail JSON —
@@ -54,11 +65,12 @@ function toPublicTemplate(row: TemplateRow) {
   return rest;
 }
 
-// GET /api/templates?workspace_id=
-// Required, same reasoning as routes/projects.ts's own GET / — a
-// template has no meaningful "across all my workspaces" view, and
+// GET /api/templates?workspace_id=&scope=all|mine|community
+// workspace_id required, same reasoning as routes/projects.ts's own GET / —
+// a template has no meaningful "across all my workspaces" view, and
 // defaulting to global would repeat the exact cross-tenant leak V2.0
-// Phase 0 closed on GET /api/boards/shared.
+// Phase 0 closed on GET /api/boards/shared. scope (default all) is applied
+// in SQL — another member's personal template is never returned.
 router.get('/', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
@@ -66,15 +78,21 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
     if (!workspaceId) {
       return res.status(400).json({ error: 'workspace_id is required' });
     }
+    const scope = parseLibraryScope(req.query.scope);
+    if (!scope) {
+      return res.status(400).json({ error: 'Invalid scope' });
+    }
 
     const membership = await getWorkspaceMembership(workspaceId, roll);
     if (!membership) {
       return res.status(403).json({ error: 'Not a member of that workspace' });
     }
 
+    const params: unknown[] = [workspaceId];
     const result = await pool.query(
-      `SELECT * FROM templates WHERE workspace_id = $1 ORDER BY is_archived ASC, created_at DESC`,
-      [workspaceId]
+      `SELECT * FROM templates WHERE workspace_id = $1 AND ${libraryScopeSql(scope, rollBinder(params, roll))}
+       ORDER BY is_archived ASC, created_at DESC`,
+      params
     );
 
     res.json((result.rows as TemplateRow[]).map(toPublicTemplate));
@@ -100,6 +118,7 @@ router.post('/', requireStudent, async (req: Request, res: Response) => {
       name: z.string().min(1).max(100),
       description: z.string().max(300).optional(),
       source_board_id: z.string().min(1),
+      visibility: z.enum(LIBRARY_VISIBILITIES).optional(),
     });
     const parsed = schema.parse(req.body);
 
@@ -146,12 +165,13 @@ router.post('/', requireStudent, async (req: Request, res: Response) => {
 
     const result = await pool.query(`
       INSERT INTO templates
-        (id, workspace_id, source_board_id, name, description, canvas_data, owner_roll, owner_name, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        (id, workspace_id, source_board_id, name, description, canvas_data, owner_roll, owner_name, created_at, visibility)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `, [
       id, source.workspace_id, parsed.source_board_id, parsed.name,
       parsed.description ?? null, source.canvas_data, roll, ownerName, now,
+      parsed.visibility ?? 'personal',
     ]);
 
     res.status(201).json(toPublicTemplate(result.rows[0] as TemplateRow));
@@ -163,6 +183,22 @@ router.post('/', requireStudent, async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// Loads a template for an owner-only action. Non-members get 403 (the
+// existing workspace convention); a member who can't see it (someone
+// else's personal template) gets 404; a member who can see it but doesn't
+// own it gets 403.
+async function loadOwnedTemplate(id: string, roll: string): Promise<
+  { ok: true; row: TemplateRow } | { ok: false; status: number; error: string }
+> {
+  const found = await pool.query('SELECT * FROM templates WHERE id = $1', [id]);
+  const row = found.rows[0] as TemplateRow | undefined;
+  if (!row) return { ok: false, status: 404, error: 'Template not found' };
+  if (!(await getWorkspaceMembership(row.workspace_id, roll))) return { ok: false, status: 403, error: 'Access denied' };
+  if (!canSeeLibraryItem(row, roll)) return { ok: false, status: 404, error: 'Template not found' };
+  if (row.owner_roll !== roll) return { ok: false, status: 403, error: 'Only the template owner can change it' };
+  return { ok: true, row };
+}
 
 // GET /api/templates/:id
 router.get('/:id', requireStudent, async (req: Request, res: Response) => {
@@ -180,6 +216,9 @@ router.get('/:id', requireStudent, async (req: Request, res: Response) => {
     if (!membership) {
       return res.status(403).json({ error: 'Access denied' });
     }
+    if (!canSeeLibraryItem(template, roll)) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
 
     res.json(toPublicTemplate(template));
   } catch (err) {
@@ -189,28 +228,21 @@ router.get('/:id', requireStudent, async (req: Request, res: Response) => {
 });
 
 // PATCH /api/templates/:id
-// Rename/describe/archive — any workspace member (any role), same tier
-// PATCH /api/projects/:id uses.
+// Rename/describe/archive/publish (visibility) — the template's owner only.
+// Other members may use a community template, never change the original.
 router.patch('/:id', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
     const id = param(req.params.id);
 
-    const existing = await pool.query('SELECT workspace_id FROM templates WHERE id = $1', [id]);
-    const templateWorkspace = existing.rows[0] as { workspace_id: string } | undefined;
-    if (!templateWorkspace) {
-      return res.status(404).json({ error: 'Template not found' });
-    }
-
-    const membership = await getWorkspaceMembership(templateWorkspace.workspace_id, roll);
-    if (!membership) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
+    const loaded = await loadOwnedTemplate(id, roll);
+    if (!loaded.ok) return res.status(loaded.status).json({ error: loaded.error });
 
     const schema = z.object({
       name: z.string().min(1).max(100).optional(),
       description: z.string().max(300).nullable().optional(),
       is_archived: z.boolean().optional(),
+      visibility: z.enum(LIBRARY_VISIBILITIES).optional(),
     });
     const parsed = schema.parse(req.body);
 
@@ -220,6 +252,7 @@ router.patch('/:id', requireStudent, async (req: Request, res: Response) => {
     if (parsed.name !== undefined) { fields.push(`name = $${i++}`); values.push(parsed.name); }
     if (parsed.description !== undefined) { fields.push(`description = $${i++}`); values.push(parsed.description); }
     if (parsed.is_archived !== undefined) { fields.push(`is_archived = $${i++}`); values.push(parsed.is_archived); }
+    if (parsed.visibility !== undefined) { fields.push(`visibility = $${i++}`); values.push(parsed.visibility); }
 
     if (fields.length === 0) {
       return res.status(400).json({ error: 'Nothing to update' });
@@ -242,28 +275,19 @@ router.patch('/:id', requireStudent, async (req: Request, res: Response) => {
 });
 
 // DELETE /api/templates/:id
-// Owner/admin tier, same as DELETE /api/projects/:id — deleting a
-// template has no "attached content" to protect against (unlike a
-// project, which can hold boards), so no pre-check/409 is needed here;
-// a hard delete is safe by construction because every board ever
-// created from this template already has its own independent copy of
-// canvas_data (see POST /:id/use below) with no ongoing reference back
-// to the template row.
+// The template's owner only (Shared Creative Library). Deleting a template
+// has no "attached content" to protect against (unlike a project, which
+// can hold boards), so no pre-check/409 is needed here; a hard delete is
+// safe by construction because every board ever created from this
+// template already has its own independent copy of canvas_data (see
+// POST /:id/use below) with no ongoing reference back to the template row.
 router.delete('/:id', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
     const id = param(req.params.id);
 
-    const existing = await pool.query('SELECT workspace_id FROM templates WHERE id = $1', [id]);
-    const templateWorkspace = existing.rows[0] as { workspace_id: string } | undefined;
-    if (!templateWorkspace) {
-      return res.status(404).json({ error: 'Template not found' });
-    }
-
-    const membership = await getWorkspaceMembership(templateWorkspace.workspace_id, roll);
-    if (membership !== 'owner' && membership !== 'admin') {
-      return res.status(403).json({ error: 'Only a workspace admin or owner can delete a template' });
-    }
+    const loaded = await loadOwnedTemplate(id, roll);
+    if (!loaded.ok) return res.status(loaded.status).json({ error: loaded.error });
 
     await pool.query('DELETE FROM templates WHERE id = $1', [id]);
     res.json({ success: true });
@@ -310,6 +334,12 @@ router.post('/:id/use', requireStudent, async (req: Request, res: Response) => {
     const membership = await getWorkspaceMembership(template.workspace_id, roll);
     if (!membership) {
       return res.status(403).json({ error: 'Access denied' });
+    }
+    // Any member may use a community template; a personal one only by its
+    // owner. The new board belongs to the CALLER (below), never the
+    // template's owner, and the template row is only read.
+    if (!canSeeLibraryItem(template, roll)) {
+      return res.status(404).json({ error: 'Template not found' });
     }
 
     if (!template.canvas_data) {
@@ -373,6 +403,59 @@ router.post('/:id/use', requireStudent, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid request' });
     }
     console.error('Use template error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+
+function toAdminTemplate(row: TemplateRow & { workspace_name: string; workspace_is_personal: boolean }) {
+  return toPublicTemplate(row);
+}
+
+// GET /api/templates/admin/all?q=&status=&visibility=&limit=
+router.get('/admin/all', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const parsed = adminListQuery.safeParse(req.query);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid filters' });
+    const params: unknown[] = [];
+    const where = adminListWhere(parsed.data, 'name', params);
+    params.push(parsed.data.limit ?? 200);
+    const result = await pool.query(
+      `SELECT a.*, w.name AS workspace_name, w.is_personal AS workspace_is_personal
+       FROM templates a JOIN workspaces w ON w.id = a.workspace_id
+       ${where}
+       ORDER BY a.created_at DESC, a.id DESC
+       LIMIT $${params.length}`,
+      params
+    );
+    res.json({ templates: (result.rows as Array<TemplateRow & { workspace_name: string; workspace_is_personal: boolean }>).map(toAdminTemplate) });
+  } catch (err) {
+    console.error('Admin list templates error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PATCH /api/templates/admin/:id { visibility?, status? } — never touches the
+// snapshot, owner or workspace.
+router.patch('/admin/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const parsed = adminUpdateSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid update' });
+    const result = await pool.query(
+      `UPDATE templates SET visibility = COALESCE($2, visibility), status = COALESCE($3, status)
+       WHERE id = $1 RETURNING id`,
+      [param(req.params.id), parsed.data.visibility ?? null, parsed.data.status ?? null]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Template not found' });
+    const row = await pool.query(
+      `SELECT a.*, w.name AS workspace_name, w.is_personal AS workspace_is_personal
+       FROM templates a JOIN workspaces w ON w.id = a.workspace_id WHERE a.id = $1`,
+      [param(req.params.id)]
+    );
+    res.json(toAdminTemplate(row.rows[0]));
+  } catch (err) {
+    console.error('Admin update template error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -1,4 +1,5 @@
 import type { Asset, AssetKind } from './api';
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from './uploadLimits';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Pure helpers for the Workspace Asset Library UI (components/assets/*).
@@ -9,8 +10,10 @@ import type { Asset, AssetKind } from './api';
 
 // Inline-previewable, board-insertable images — the original allowlist.
 export const IMAGE_MIME = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml'];
-export const IMAGE_MAX_BYTES = 15 * 1024 * 1024;
-export const FILE_MAX_BYTES = 25 * 1024 * 1024;
+// One limit for every kind — the shared 300 MB application limit
+// (lib/uploadLimits.ts, the same module the backend enforces).
+export const IMAGE_MAX_BYTES = MAX_UPLOAD_BYTES;
+export const FILE_MAX_BYTES = MAX_UPLOAD_BYTES;
 
 export function formatSize(bytes: number | null | undefined): string {
   if (bytes == null) return '';
@@ -37,11 +40,11 @@ export type UploadPlan =
 // boards); everything else is a general library file.
 export function classifyUpload(file: { name: string; type: string; size: number }): UploadPlan {
   if (IMAGE_MIME.includes(file.type)) {
-    if (file.size > IMAGE_MAX_BYTES) return { ok: false, error: `${file.name} is larger than the ${formatSize(IMAGE_MAX_BYTES)} image limit.` };
+    if (file.size > IMAGE_MAX_BYTES) return { ok: false, error: `${file.name} is larger than the ${MAX_UPLOAD_LABEL} maximum file size.` };
     return { ok: true, kind: 'image' };
   }
   if (!fileExtension(file.name)) return { ok: false, error: `${file.name} needs a file extension (e.g. .psd, .pdf, .zip).` };
-  if (file.size > FILE_MAX_BYTES) return { ok: false, error: `${file.name} is larger than the ${formatSize(FILE_MAX_BYTES)} file limit.` };
+  if (file.size > FILE_MAX_BYTES) return { ok: false, error: `${file.name} is larger than the ${MAX_UPLOAD_LABEL} maximum file size.` };
   return { ok: true, kind: 'file' };
 }
 
