@@ -206,6 +206,20 @@ export interface Project {
 // Project above. source_board_id is provenance only (the board a
 // template was originally saved from), never a live dependency — it may
 // be null if that board was later deleted.
+// Shared Creative Library — mirrors backend/src/lib/libraryVisibility.ts.
+// personal: only the owner sees/uses it. community: every member of the
+// item's workspace can discover and use it (never public, never another
+// workspace). Only the owner manages it either way.
+export type LibraryVisibility = 'personal' | 'community';
+// List scope: all = mine + other members' community items; mine; community.
+export type LibraryScope = 'all' | 'mine' | 'community';
+// Admin moderation: a hidden item is out of every normal flow until an admin
+// restores it (normal list/detail responses only ever contain 'active').
+export type LibraryStatus = 'active' | 'hidden';
+// Admin list filters (GET /…/admin/all) and the workspace label rows carry.
+export interface LibraryAdminFilters { q?: string; status?: LibraryStatus | 'all'; visibility?: LibraryVisibility | 'all' }
+interface LibraryAdminExtra { workspace_name: string; workspace_is_personal: boolean }
+
 export interface Template {
   id: string;
   workspace_id: string;
@@ -217,7 +231,10 @@ export interface Template {
   owner_name: string | null;
   created_at: string;
   is_archived: boolean;
+  visibility: LibraryVisibility;
+  status: LibraryStatus;
 }
+export type AdminTemplate = Template & LibraryAdminExtra;
 
 // Mirrors backend/src/routes/assets.ts's toPublicAsset() — note there is
 // no storage_key here (an internal StorageProvider path, never sent to
@@ -258,11 +275,24 @@ export interface Asset {
   width: number | null;
   height: number | null;
   created_at: string;
+  visibility: LibraryVisibility;
+  status: LibraryStatus;
   url: string | null;
   // Read-time t512 WebP derivative of an image asset, set only when one is
   // ready (null otherwise). For card/preview rendering ONLY — `url` stays
   // the original for opening, downloading and placing on a board.
   thumb_url?: string | null;
+}
+
+export type AdminAsset = Asset & LibraryAdminExtra;
+
+function libraryAdminQuery(filters: LibraryAdminFilters): string {
+  const params = new URLSearchParams();
+  if (filters.q?.trim()) params.set('q', filters.q.trim());
+  if (filters.status && filters.status !== 'all') params.set('status', filters.status);
+  if (filters.visibility && filters.visibility !== 'all') params.set('visibility', filters.visibility);
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
 }
 
 // Mirrors backend/src/routes/assetCollections.ts.
@@ -892,18 +922,23 @@ export const api = {
   // template's snapshot; project_id is optional and must belong to the
   // template's own workspace (enforced server-side).
   templates: {
-    list: (roll: string, workspaceId: string) =>
-      request<Template[]>('GET', `/templates?workspace_id=${encodeURIComponent(workspaceId)}`, { roll }),
-    create: (roll: string, data: { name: string; description?: string; source_board_id: string }) =>
+    list: (roll: string, workspaceId: string, scope: LibraryScope = 'all') =>
+      request<Template[]>('GET', `/templates?workspace_id=${encodeURIComponent(workspaceId)}&scope=${scope}`, { roll }),
+    create: (roll: string, data: { name: string; description?: string; source_board_id: string; visibility?: LibraryVisibility }) =>
       request<Template>('POST', '/templates', { body: data, roll }),
     get: (id: string, roll: string) =>
       request<Template>('GET', `/templates/${id}`, { roll }),
-    update: (id: string, roll: string, data: { name?: string; description?: string | null; is_archived?: boolean }) =>
+    update: (id: string, roll: string, data: { name?: string; description?: string | null; is_archived?: boolean; visibility?: LibraryVisibility }) =>
       request<Template>('PATCH', `/templates/${id}`, { body: data, roll }),
     delete: (id: string, roll: string) =>
       request<{ success: boolean }>('DELETE', `/templates/${id}`, { roll }),
     use: (id: string, roll: string, data: { name?: string; project_id?: string }) =>
       request<Board>('POST', `/templates/${id}/use`, { body: data, roll }),
+    // Admin moderation (admin token; requireAdmin server-side).
+    adminList: (filters: LibraryAdminFilters = {}) =>
+      request<{ templates: AdminTemplate[] }>('GET', `/templates/admin/all${libraryAdminQuery(filters)}`, { admin: true }),
+    adminUpdate: (id: string, body: { visibility?: LibraryVisibility; status?: LibraryStatus }) =>
+      request<AdminTemplate>('PATCH', `/templates/admin/${id}`, { body, admin: true }),
   },
   // Asset Manager (Phase B) — mirrors backend/src/routes/assets.ts. A
   // persistent, workspace-scoped file library, distinct from
@@ -912,23 +947,26 @@ export const api = {
   assets: {
     // opts.kind 'file' opts in to general (non-image) library files; an
     // allowlisted image is always stored as an image regardless.
-    upload: (workspaceId: string, file: File, opts?: { kind?: 'file'; collectionId?: string | null }) => {
+    upload: (workspaceId: string, file: File, opts?: { kind?: 'file'; collectionId?: string | null; visibility?: LibraryVisibility }) => {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('workspace_id', workspaceId);
       formData.append('filename', file.name);
       if (opts?.kind) formData.append('kind', opts.kind);
       if (opts?.collectionId) formData.append('collection_id', opts.collectionId);
+      if (opts?.visibility) formData.append('visibility', opts.visibility);
       return studentUploadRequest<Asset>('/assets', formData);
     },
-    createLink: (roll: string, body: { workspace_id: string; name: string; url: string; collection_id?: string | null }) =>
+    createLink: (roll: string, body: { workspace_id: string; name: string; url: string; collection_id?: string | null; visibility?: LibraryVisibility }) =>
       request<Asset>('POST', '/assets/links', { roll, body }),
-    // collection_id: an id, or null to ungroup. filename: rename.
-    update: (roll: string, id: string, body: { filename?: string; collection_id?: string | null }) =>
+    // collection_id: an id, or null to ungroup. filename: rename (owner only).
+    // visibility: publish/unpublish (owner only).
+    update: (roll: string, id: string, body: { filename?: string; collection_id?: string | null; visibility?: LibraryVisibility }) =>
       request<Asset>('PATCH', `/assets/${id}`, { roll, body }),
     // filters.collectionId: an id, or 'none' for ungrouped assets.
-    list: (roll: string, workspaceId: string, cursor?: string, filters?: { kind?: AssetKind; q?: string; collectionId?: string; limit?: number }) => {
+    list: (roll: string, workspaceId: string, cursor?: string, filters?: { kind?: AssetKind; q?: string; collectionId?: string; limit?: number; scope?: LibraryScope }) => {
       const params = new URLSearchParams({ workspace_id: workspaceId });
+      if (filters?.scope && filters.scope !== 'all') params.set('scope', filters.scope);
       if (cursor) params.set('cursor', cursor);
       if (filters?.kind) params.set('kind', filters.kind);
       if (filters?.collectionId) params.set('collection_id', filters.collectionId);
@@ -940,6 +978,11 @@ export const api = {
       request<Asset>('GET', `/assets/${id}`, { roll }),
     delete: (roll: string, id: string) =>
       request<{ success: boolean; storageWarning?: string }>('DELETE', `/assets/${id}`, { roll }),
+    // Admin moderation (admin token; requireAdmin server-side).
+    adminList: (filters: LibraryAdminFilters = {}) =>
+      request<{ assets: AdminAsset[] }>('GET', `/assets/admin/all${libraryAdminQuery(filters)}`, { admin: true }),
+    adminUpdate: (id: string, body: { visibility?: LibraryVisibility; status?: LibraryStatus }) =>
+      request<AdminAsset>('PATCH', `/assets/admin/${id}`, { body, admin: true }),
   },
   // Asset collections ("asset packs") — mirrors backend/src/routes/assetCollections.ts.
   assetCollections: {

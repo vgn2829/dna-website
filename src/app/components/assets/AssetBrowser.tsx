@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { toast } from 'sonner';
 import { Search, Plus, Layers, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
-import { api, type Asset, type AssetCollection, type AssetKind } from '../../lib/api';
+import { api, type Asset, type AssetCollection, type AssetKind, type LibraryScope, type LibraryVisibility } from '../../lib/api';
+import { matchesLibraryScope } from '../../lib/libraryVisibility';
+import { ScopeTabs } from '../library/LibraryVisibility';
 import { usePortalContainer } from '../PortalContainer';
 import { AssetCard } from './AssetCard';
 import { AddAssetDialog } from './AddAssetDialog';
@@ -17,8 +19,11 @@ import { CollectionFormDialog, MoveAssetDialog, RenameAssetDialog } from './Coll
 //   - AssetLibrary (modal): opened from a board, where onInsert inserts an
 //     image onto the canvas through BoardPage's existing, unchanged
 //     handleInsertAsset → insertImageAsset path
-// Filtering (kind / q / collection) is server-side so it composes with the
-// existing cursor pagination instead of only filtering the first page.
+// Filtering (kind / q / collection / scope) is server-side so it composes
+// with the existing cursor pagination instead of only filtering the first
+// page. Scope is the Shared Creative Library view: All Assets (yours plus
+// members' community assets), My Assets, Community — another member's
+// personal asset is never sent to this browser at all.
 // ─────────────────────────────────────────────────────────────────────────
 
 export type LibraryTab = 'all' | AssetKind;
@@ -40,16 +45,20 @@ export function AssetBrowser({
   roll,
   onInsert,
   initialTab = 'all',
+  isPersonalWorkspace = false,
 }: {
   workspaceId: string;
   workspaceName: string;
   roll: string;
   onInsert?: (asset: Asset) => void;
   initialTab?: LibraryTab;
+  // A personal workspace has no other members: nothing to publish to.
+  isPersonalWorkspace?: boolean;
 }) {
   const portalContainer = usePortalContainer();
   const [tab, setTab] = useState<LibraryTab>(initialTab);
   const [collectionFilter, setCollectionFilter] = useState<CollectionFilter>('all');
+  const [scope, setScope] = useState<LibraryScope>('all');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -97,8 +106,9 @@ export function AssetBrowser({
     kind: tab === 'all' ? undefined : tab,
     q: debouncedQuery || undefined,
     collectionId: collectionFilter === 'all' ? undefined : collectionFilter,
+    scope,
     limit: PAGE_SIZE,
-  }), [tab, debouncedQuery, collectionFilter]);
+  }), [tab, debouncedQuery, collectionFilter, scope]);
 
   useEffect(() => {
     const seq = ++requestSeq.current;
@@ -132,7 +142,8 @@ export function AssetBrowser({
 
   // Would this asset appear in the current view (tab + search + collection)?
   const matchesView = (asset: Asset) =>
-    (tab === 'all' || tab === asset.kind)
+    matchesLibraryScope(asset, scope, roll)
+    && (tab === 'all' || tab === asset.kind)
     && (!debouncedQuery || asset.filename.toLowerCase().includes(debouncedQuery.toLowerCase()))
     && (collectionFilter === 'all'
       || (collectionFilter === 'none' ? asset.collection_id === null : asset.collection_id === collectionFilter));
@@ -165,6 +176,20 @@ export function AssetBrowser({
     toast.success('Asset renamed');
   };
 
+  // Publish/unpublish — metadata only; the file and its URL never change.
+  const handleVisibility = async (asset: Asset, visibility: LibraryVisibility) => {
+    try {
+      const updated = await api.assets.update(roll, asset.id, { visibility });
+      applyUpdated(updated);
+      refreshCollections();
+      toast.success(visibility === 'community'
+        ? `Published to Community — everyone in ${workspaceName} can use it`
+        : 'Asset is now personal — only you can see it');
+    } catch {
+      toast.error(visibility === 'community' ? 'Failed to publish asset' : 'Failed to make asset personal');
+    }
+  };
+
   const handleDelete = async (asset: Asset) => {
     setDeleting(true);
     try {
@@ -175,8 +200,8 @@ export function AssetBrowser({
       if (res.storageWarning) toast.warning(res.storageWarning);
       else toast.success('Asset deleted');
     } catch (err) {
-      toast.error(err instanceof Error && err.message === 'Access denied'
-        ? 'Only the uploader or a workspace admin can delete this asset'
+      toast.error(err instanceof Error && /owner|denied/i.test(err.message)
+        ? 'Only the asset owner can delete it'
         : 'Failed to delete asset');
     } finally {
       setDeleting(false);
@@ -214,7 +239,7 @@ export function AssetBrowser({
     }
   };
 
-  const isFiltered = tab !== 'all' || !!debouncedQuery || collectionFilter !== 'all';
+  const isFiltered = tab !== 'all' || !!debouncedQuery || collectionFilter !== 'all' || scope !== 'all';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
@@ -236,7 +261,9 @@ export function AssetBrowser({
         </button>
       </div>
 
-      {/* Type tabs */}
+      {/* Scope (whose assets) + type tabs */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+      <ScopeTabs value={scope} onChange={setScope} allLabel="All Assets" mineLabel="My Assets" label="Show assets" />
       <div role="tablist" aria-label="Asset type" className="segmented" style={{ alignSelf: 'flex-start' }}>
         {TABS.map(t => {
           const active = tab === t.id;
@@ -252,6 +279,7 @@ export function AssetBrowser({
             </button>
           );
         })}
+      </div>
       </div>
 
       {/* Collections bar — scrolls horizontally inside itself, never the page */}
@@ -329,6 +357,13 @@ export function AssetBrowser({
             body="Add new assets straight into it, or use “Move to collection…” on any existing asset."
             action={<button type="button" className="btn-primary" onClick={() => setShowAdd(true)} style={{ minHeight: 40 }}><Plus size={16} /> Add to {activeCollection.name}</button>}
           />
+        ) : scope === 'community' && tab === 'all' && !debouncedQuery && collectionFilter === 'all' ? (
+          <EmptyState
+            title="No community assets yet"
+            body={isPersonalWorkspace
+              ? 'Community assets are shared inside team workspaces. Switch to a team workspace to see what your teammates have published.'
+              : `Nothing in ${workspaceName} has been published to Community yet. Publish one of your assets from its ⋯ menu to share it with the workspace.`}
+          />
         ) : isFiltered ? (
           <EmptyState
             title="No matching assets"
@@ -353,6 +388,9 @@ export function AssetBrowser({
                 onMove={setMoving}
                 onRename={setRenaming}
                 onDelete={setConfirmDelete}
+                roll={roll}
+                onVisibility={handleVisibility}
+                canPublish={!isPersonalWorkspace}
               />
             ))}
           </div>
@@ -373,6 +411,7 @@ export function AssetBrowser({
           roll={roll}
           collections={collections}
           defaultCollectionId={activeCollection?.id ?? null}
+          isPersonalWorkspace={isPersonalWorkspace}
           onClose={() => setShowAdd(false)}
           onAdded={handleAdded}
         />

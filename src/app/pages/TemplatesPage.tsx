@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { LayoutTemplate } from 'lucide-react';
-import { api, type Template, type Project } from '../lib/api';
+import { api, type Template, type Project, type LibraryScope, type LibraryVisibility } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { workspaceContext, personalFallbackNote } from '../lib/workspaceSearch';
 import { useModalA11y } from '../components/hooks/useModalA11y';
+import { ScopeTabs, VisibilityBadge, VisibilityPicker } from '../components/library/LibraryVisibility';
+import { isLibraryOwner, libraryAttribution, matchesLibraryScope } from '../lib/libraryVisibility';
 
 // ─────────────────────────────────────────────────────────────────────────
 // TemplatesPage (V2.3 Phase 7) — replaces the V2.0/V2.2 placeholder with a
@@ -23,10 +25,16 @@ import { useModalA11y } from '../components/hooks/useModalA11y';
 // manage/use, matching the brief's actual flow (Moodboard -> Save as
 // Template -> appears here), not a template-authoring surface.
 //
-// Deliberately NOT built: template marketplace, public templates,
-// ratings/likes/comments, sharing, analytics, versioning, AI generation —
-// per the V2.3 brief's explicit scope boundary. This is an internal
-// workspace productivity feature.
+// Shared Creative Library: each template is Personal (its owner's alone)
+// or Community (every member of this workspace can find and use it). The
+// All / My Templates / Community tabs are server-side scopes. Only the
+// owner gets the ⋮ management menu (edit, publish/unpublish, archive,
+// delete); everyone who can see a template can Use it, which always makes
+// the user their own independent Moodboard.
+//
+// Deliberately NOT built: public templates, ratings/likes/comments,
+// moderation, analytics, versioning, AI generation. Community never means
+// public — it is this workspace's members only.
 // ─────────────────────────────────────────────────────────────────────────
 
 function timeAgo(iso: string): string {
@@ -55,14 +63,19 @@ export default function TemplatesPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [scope, setScope] = useState<LibraryScope>('all');
+  const roll = studentSession?.rollNumber ?? '';
+  const isPersonalWorkspace = !!targetWorkspace?.is_personal;
+  const workspaceLabel = targetWorkspace ? (targetWorkspace.is_personal ? 'your personal workspace' : targetWorkspace.name) : '';
 
   const [renameTemplate, setRenameTemplate] = useState<Template | null>(null);
-  const [renameForm, setRenameForm] = useState({ name: '', description: '' });
+  const [renameForm, setRenameForm] = useState<{ name: string; description: string; visibility: LibraryVisibility }>({ name: '', description: '', visibility: 'personal' });
   const [renaming, setRenaming] = useState(false);
 
   const [menuTemplate, setMenuTemplate] = useState<Template | null>(null);
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
   const [archivingId, setArchivingId] = useState<string | null>(null);
+  const [publishingId, setPublishingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Template | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -88,11 +101,11 @@ export default function TemplatesPage() {
     if (!studentSession?.rollNumber || !targetWorkspace) return;
     setLoading(true);
     setLoadError(false);
-    api.templates.list(studentSession.rollNumber, targetWorkspace.id)
+    api.templates.list(studentSession.rollNumber, targetWorkspace.id, scope)
       .then(setTemplates)
       .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
-  }, [studentSession?.rollNumber, targetWorkspace]);
+  }, [studentSession?.rollNumber, targetWorkspace, scope]);
 
   useEffect(() => {
     fetchTemplates();
@@ -117,10 +130,43 @@ export default function TemplatesPage() {
       .catch(() => setUseProjectOptions([]));
   }, [useTemplate, studentSession?.rollNumber]);
 
+  // A dialog opened from the ⋮ menu must return focus to that card's ⋮
+  // trigger on close — the menu item that opened it unmounts with the menu,
+  // so focus it first and useModalA11y records the trigger instead.
+  const focusOptionsTrigger = (template: Template) => {
+    document.querySelector<HTMLElement>(`[data-template-options="${CSS.escape(template.id)}"]`)?.focus();
+  };
+
   const openRename = (template: Template) => {
+    focusOptionsTrigger(template);
     setRenameTemplate(template);
-    setRenameForm({ name: template.name, description: template.description ?? '' });
+    setRenameForm({ name: template.name, description: template.description ?? '', visibility: template.visibility });
     setMenuTemplate(null);
+  };
+
+  // Keeps an updated template in the list, or drops it when it no longer
+  // belongs to the current scope (e.g. made personal while on Community).
+  const applyUpdated = (updated: Template) => {
+    setTemplates(prev => matchesLibraryScope(updated, scope, roll)
+      ? prev.map(t => (t.id === updated.id ? { ...t, ...updated } : t))
+      : prev.filter(t => t.id !== updated.id));
+  };
+
+  const handleVisibility = async (template: Template, visibility: LibraryVisibility) => {
+    if (!roll) return;
+    setMenuTemplate(null);
+    setPublishingId(template.id);
+    try {
+      const updated = await api.templates.update(template.id, roll, { visibility });
+      applyUpdated(updated);
+      toast.success(visibility === 'community'
+        ? `Published to Community — everyone in ${workspaceLabel} can use it`
+        : 'Template is now personal — only you can use it');
+    } catch {
+      toast.error(visibility === 'community' ? 'Failed to publish template' : 'Failed to make template personal');
+    } finally {
+      setPublishingId(null);
+    }
   };
 
   const handleRename = async () => {
@@ -130,8 +176,9 @@ export default function TemplatesPage() {
       const updated = await api.templates.update(renameTemplate.id, studentSession.rollNumber, {
         name: renameForm.name.trim(),
         description: renameForm.description.trim() || null,
+        ...(renameForm.visibility !== renameTemplate.visibility ? { visibility: renameForm.visibility } : {}),
       });
-      setTemplates(prev => prev.map(t => t.id === updated.id ? { ...t, name: updated.name, description: updated.description } : t));
+      applyUpdated(updated);
       setRenameTemplate(null);
       toast.success('Template updated');
     } catch {
@@ -172,6 +219,7 @@ export default function TemplatesPage() {
   };
 
   const openUse = (template: Template) => {
+    if (menuTemplate) focusOptionsTrigger(template);
     setUseTemplate(template);
     setUseForm({ name: template.name, projectId: '' });
     setUseError('');
@@ -248,17 +296,20 @@ export default function TemplatesPage() {
         )}
       </div>
 
-      <div className="segmented" style={{ marginBottom: 'var(--space-xl)' }}>
-        {([['active', 'Active'], ['archived', 'Archived']] as const).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setShowArchived(key === 'archived')}
-            aria-pressed={(key === 'archived') === showArchived}
-            className="segmented-item touch-target"
-          >
-            {label}
-          </button>
-        ))}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 'var(--space-xl)' }}>
+        <ScopeTabs value={scope} onChange={setScope} mineLabel="My Templates" label="Show templates" />
+        <div role="group" aria-label="Template status" className="segmented">
+          {([['active', 'Active'], ['archived', 'Archived']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setShowArchived(key === 'archived')}
+              aria-pressed={(key === 'archived') === showArchived}
+              className="segmented-item touch-target"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading ? (
@@ -269,17 +320,27 @@ export default function TemplatesPage() {
         </p>
       ) : visibleTemplates.length === 0 ? (
         <p className="type-body" style={{ color: 'var(--color-ink-muted)' }}>
-          {showArchived ? 'No archived templates.' : 'No templates yet. Open a Moodboard and choose "Save as Template" to create one.'}
+          {showArchived
+            ? 'No archived templates.'
+            : scope === 'community'
+              ? isPersonalWorkspace
+                ? 'Community templates are shared inside team workspaces. Switch to a team workspace to see what your teammates have published.'
+                : `No community templates in ${workspaceLabel} yet. Publish one of yours, or ask a teammate to share theirs.`
+              : scope === 'mine'
+                ? 'You haven’t saved any templates here yet. Open a Moodboard and choose "Save as Template" to create one.'
+                : 'No templates yet. Open a Moodboard and choose "Save as Template" to create one.'}
         </p>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
-          {visibleTemplates.map(template => (
+          {visibleTemplates.map(template => {
+            const isOwner = isLibraryOwner(template, roll);
+            return (
             <div
               key={template.id}
               style={{
                 position: 'relative', borderRadius: 'var(--radius-lg)',
                 border: '1px solid var(--color-border)', background: 'var(--color-surface-1)',
-                overflow: 'hidden', opacity: archivingId === template.id ? 0.5 : 1,
+                overflow: 'hidden', opacity: archivingId === template.id || publishingId === template.id ? 0.5 : 1,
               }}
             >
               {/* Thumbnail placeholder — no thumbnail-generation system in
@@ -302,6 +363,7 @@ export default function TemplatesPage() {
                     <div key={i} style={{ background: `rgba(233,30,140,${alpha})` }} />
                   ))
                 )}
+                {isOwner && (
                 <button
                   onClick={e => {
                     e.stopPropagation();
@@ -311,6 +373,7 @@ export default function TemplatesPage() {
                   }}
                   aria-label={`Options for ${template.name}`}
                   aria-haspopup="menu"
+                  data-template-options={template.id}
                   style={{
                     position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: '50%',
                     background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
@@ -321,6 +384,7 @@ export default function TemplatesPage() {
                 >
                   ⋮
                 </button>
+                )}
               </div>
 
               <div style={{ padding: '14px 16px 16px' }}>
@@ -335,9 +399,12 @@ export default function TemplatesPage() {
                     {template.description}
                   </p>
                 )}
-                <p className="type-caption" style={{ margin: '0 0 12px' }}>
-                  Saved {timeAgo(template.created_at)}
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 12px', minWidth: 0 }}>
+                  <VisibilityBadge visibility={template.visibility} />
+                  <p className="type-caption" style={{ margin: 0, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {libraryAttribution(template, roll)} · {timeAgo(template.created_at)}
+                  </p>
+                </div>
                 {!template.is_archived && (
                   <button
                     onClick={() => openUse(template)}
@@ -349,7 +416,8 @@ export default function TemplatesPage() {
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -374,10 +442,13 @@ export default function TemplatesPage() {
             {[
               ...(menuTemplate.is_archived ? [] : [{ label: 'Use Template', onClick: () => openUse(menuTemplate) }]),
               { label: 'Rename / Edit', onClick: () => openRename(menuTemplate) },
+              ...(isPersonalWorkspace ? [] : [menuTemplate.visibility === 'community'
+                ? { label: 'Make Personal', onClick: () => handleVisibility(menuTemplate, 'personal') }
+                : { label: 'Publish to Community', onClick: () => handleVisibility(menuTemplate, 'community') }]),
               menuTemplate.is_archived
                 ? { label: 'Restore', onClick: () => handleArchiveToggle(menuTemplate, false) }
                 : { label: 'Archive', onClick: () => handleArchiveToggle(menuTemplate, true) },
-              { label: 'Delete', onClick: () => { setConfirmDelete(menuTemplate); setMenuTemplate(null); }, danger: true },
+              { label: 'Delete', onClick: () => { focusOptionsTrigger(menuTemplate); setConfirmDelete(menuTemplate); setMenuTemplate(null); }, danger: true },
             ].map(item => (
               <button
                 key={item.label}
@@ -448,6 +519,14 @@ export default function TemplatesPage() {
                   style={{ width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
+              <VisibilityPicker
+                value={renameForm.visibility}
+                onChange={visibility => setRenameForm(prev => ({ ...prev, visibility }))}
+                kind="template"
+                workspaceName={workspaceLabel}
+                isPersonalWorkspace={isPersonalWorkspace}
+                disabled={renaming}
+              />
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={handleRename}

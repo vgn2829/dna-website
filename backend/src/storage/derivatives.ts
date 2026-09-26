@@ -104,7 +104,9 @@ export type RenderResult =
   | { kind: 'skipped'; reason: string };
 
 // Pure: bytes in, derivative bytes out. Throws on undecodable input.
-export async function renderVariant(input: Buffer, variant: Variant = THUMB_VARIANT): Promise<RenderResult> {
+// input: the image bytes, or a path to it on local disk (a large upload's
+// temp file — sharp/libvips then reads it from disk, never all into memory).
+export async function renderVariant(input: Buffer | string, variant: Variant = THUMB_VARIANT): Promise<RenderResult> {
   const meta = await sharp(input).metadata();
   if (meta.format === 'svg') return { kind: 'skipped', reason: 'svg is served as the original' };
   if (!meta.format || !DERIVABLE_FORMATS.has(meta.format)) return { kind: 'skipped', reason: `unsupported format ${meta.format ?? 'unknown'}` };
@@ -143,7 +145,7 @@ export type GenerateOutcome = 'ready' | 'failed' | 'skipped' | 'ineligible';
 // Best-effort: never throws. Reads the original (from `source` when the
 // caller already has the bytes, else from storage), writes the derivative
 // object, then records 'ready'; any failure records 'failed' instead.
-export async function generateDerivative(sourceKey: string, source?: Buffer, variant: Variant = THUMB_VARIANT): Promise<GenerateOutcome> {
+export async function generateDerivative(sourceKey: string, source?: Buffer | string, variant: Variant = THUMB_VARIANT): Promise<GenerateOutcome> {
   if (!isDerivableSourceKey(sourceKey)) return 'ineligible';
   try {
     const input = source ?? await getStorage().download(sourceKey);
@@ -179,9 +181,11 @@ export async function generateDerivative(sourceKey: string, source?: Buffer, var
 let chain: Promise<unknown> = Promise.resolve();
 const pending = new Set<Promise<GenerateOutcome>>();
 
-export function scheduleDerivative(sourceKey: string, source: Buffer, variant: Variant = THUMB_VARIANT): void {
-  if (!isDerivableSourceKey(sourceKey)) return;
-  const job = chain.then(() => generateDerivative(sourceKey, source, variant));
+// onSettled runs once the job is done either way — used to remove the temp
+// file a disk-streamed upload handed over as `source`.
+export function scheduleDerivative(sourceKey: string, source: Buffer | string, variant: Variant = THUMB_VARIANT, onSettled?: () => void): void {
+  if (!isDerivableSourceKey(sourceKey)) { onSettled?.(); return; }
+  const job = chain.then(() => generateDerivative(sourceKey, source, variant)).finally(() => onSettled?.());
   chain = job.catch(() => undefined);
   pending.add(job);
   void job.finally(() => pending.delete(job)).catch(() => undefined);

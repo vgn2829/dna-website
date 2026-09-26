@@ -6,6 +6,7 @@ import { pool } from '../db/client';
 import { requireStudent } from '../middleware/studentAuth';
 import { param } from '../routeParams';
 import { getWorkspaceMembership } from './assets';
+import { libraryScopeSql } from '../lib/libraryVisibility';
 
 const router = Router();
 
@@ -22,6 +23,10 @@ const router = Router();
 //     owner/admin (same tier as deleting someone else's asset)
 // Deleting a collection never deletes assets: FK ON DELETE SET NULL just
 // ungroups them.
+//
+// asset_count only counts assets the caller can see (their own plus other
+// members' community assets — lib/libraryVisibility.ts), so a collection
+// never reveals how many personal assets someone else filed in it.
 // ─────────────────────────────────────────────────────────────────────────
 
 const writeLimiter = rateLimit({
@@ -44,6 +49,8 @@ interface CollectionRow {
 function toPublicCollection(row: CollectionRow) {
   return { ...row, asset_count: Number(row.asset_count ?? 0) };
 }
+
+const visibleCountSql = `SELECT COUNT(*)::int AS n FROM assets WHERE collection_id = $1 AND ${libraryScopeSql('all', () => '$2')}`;
 
 // Postgres unique_violation on uq_asset_collections_workspace_name.
 function isDuplicateName(err: unknown): boolean {
@@ -77,11 +84,11 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
     const result = await pool.query(`
       SELECT c.*, COUNT(a.id)::int AS asset_count
       FROM asset_collections c
-      LEFT JOIN assets a ON a.collection_id = c.id
+      LEFT JOIN assets a ON a.collection_id = c.id AND ${libraryScopeSql('all', () => '$2', 'a.')}
       WHERE c.workspace_id = $1
       GROUP BY c.id
       ORDER BY lower(c.name) ASC
-    `, [workspaceId]);
+    `, [workspaceId, roll]);
 
     res.json({ collections: (result.rows as CollectionRow[]).map(toPublicCollection) });
   } catch (err) {
@@ -160,7 +167,7 @@ router.patch('/:id', requireStudent, writeLimiter, async (req: Request, res: Res
         RETURNING *
       `, [loaded.row.id, parsed.data.name ?? null, parsed.data.description !== undefined,
           parsed.data.description || null, new Date().toISOString()]);
-      const count = await pool.query('SELECT COUNT(*)::int AS n FROM assets WHERE collection_id = $1', [loaded.row.id]);
+      const count = await pool.query(visibleCountSql, [loaded.row.id, roll]);
       res.json(toPublicCollection({ ...(result.rows[0] as CollectionRow), asset_count: (count.rows[0] as { n: number }).n }));
     } catch (err) {
       if (isDuplicateName(err)) {
@@ -181,7 +188,7 @@ router.delete('/:id', requireStudent, writeLimiter, async (req: Request, res: Re
     const loaded = await loadManageable(param(req.params.id), roll);
     if (!loaded.ok) return res.status(loaded.status).json({ error: loaded.error });
 
-    const count = await pool.query('SELECT COUNT(*)::int AS n FROM assets WHERE collection_id = $1', [loaded.row.id]);
+    const count = await pool.query(visibleCountSql, [loaded.row.id, roll]);
     await pool.query('DELETE FROM asset_collections WHERE id = $1', [loaded.row.id]);
     res.json({ success: true, ungroupedAssets: (count.rows[0] as { n: number }).n });
   } catch (err) {

@@ -22,6 +22,13 @@ export class LocalStorageProvider implements StorageProvider {
     fs.writeFileSync(full, buffer);
   }
 
+  // copyFile streams in the kernel/libuv — the file never sits in JS memory.
+  async uploadFile(filePath: string, localFilePath: string): Promise<void> {
+    const full = resolveWithin(filePath);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    await fs.promises.copyFile(localFilePath, full);
+  }
+
   async download(filePath: string): Promise<Buffer> {
     return fs.readFileSync(resolveWithin(filePath));
   }

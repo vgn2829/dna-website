@@ -5,7 +5,9 @@ import { ArrowLeft, Home, MessageCircle, MoreHorizontal, Image as ImageIcon, His
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useStudent } from '../context/StudentContext';
-import { api, type BoardDetail, type Workspace } from '../lib/api';
+import { api, type BoardDetail, type Workspace, type LibraryVisibility } from '../lib/api';
+import { useModalA11y } from '../components/hooks/useModalA11y';
+import { VisibilityPicker } from '../components/library/LibraryVisibility';
 import { clearBoardsCache } from './MoodboardsPage';
 import { rollToColor } from '../lib/utils';
 import { PresenceProvider } from '../context/PresenceProvider';
@@ -172,9 +174,14 @@ export default function BoardPage() {
   // button only calls the templates API; it never reads editor.store
   // directly or serializes anything client-side.
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
-  const [templateForm, setTemplateForm] = useState({ name: '', description: '' });
+  // visibility (Shared Creative Library): Personal by default — publishing
+  // to the workspace's Community is always an explicit choice.
+  const [templateForm, setTemplateForm] = useState<{ name: string; description: string; visibility: LibraryVisibility }>({ name: '', description: '', visibility: 'personal' });
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [templateError, setTemplateError] = useState('');
+  const saveTemplateDialogRef = useModalA11y(showSaveAsTemplate, () => setShowSaveAsTemplate(false), {
+    initialFocus: () => document.getElementById('save-template-template-name'),
+  });
   // Shown briefly after a restore on a board with connected collaborators —
   // see restoreVersion's hadLiveRoom in api.ts and rooms.ts's own comment on
   // why a restore causes one clean, deliberate reconnect cycle for everyone
@@ -416,7 +423,7 @@ export default function BoardPage() {
 
   const openSaveAsTemplate = () => {
     if (!board) return;
-    setTemplateForm({ name: board.name, description: '' });
+    setTemplateForm({ name: board.name, description: '', visibility: 'personal' });
     setTemplateError('');
     setShowSaveAsTemplate(true);
   };
@@ -435,10 +442,11 @@ export default function BoardPage() {
       await api.templates.create(studentSession.rollNumber, {
         name: templateForm.name.trim(),
         description: templateForm.description.trim() || undefined,
+        visibility: templateForm.visibility,
         source_board_id: id,
       });
       setShowSaveAsTemplate(false);
-      toast.success('Template saved');
+      toast.success(templateForm.visibility === 'community' ? 'Template saved and published to Community' : 'Template saved');
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
       setTemplateError(
@@ -520,6 +528,7 @@ export default function BoardPage() {
   const surfaceBg  = theme === 'dark' ? '#1a1a1a' : '#ffffff';
   const borderColor = theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
   const crumbs = boardCrumbs(board.name, board.workspace_id, viewerWorkspaces);
+  const boardWorkspace = viewerWorkspaces.find(w => w.id === board.workspace_id) ?? null;
 
   return (
     <>
@@ -976,6 +985,7 @@ export default function BoardPage() {
         <AssetLibrary
           workspaceId={board.workspace_id}
           workspaceName={crumbs[0].label}
+          isPersonalWorkspace={!!boardWorkspace?.is_personal}
           roll={studentSession.rollNumber}
           onClose={() => setShowAssetLibrary(false)}
           onSelect={handleInsertAsset}
@@ -995,16 +1005,21 @@ export default function BoardPage() {
             onClick={() => setShowSaveAsTemplate(false)}
           >
             <motion.div
+              ref={saveTemplateDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Save as Template"
+              tabIndex={-1}
               initial={{ opacity: 0, scale: 0.97 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
               onClick={e => e.stopPropagation()}
               style={{
-                width: '100%', maxWidth: 400,
+                width: '100%', maxWidth: 400, maxHeight: 'calc(100dvh - 48px)', overflowY: 'auto',
                 background: 'var(--color-surface-1)',
                 border: '1px solid var(--color-hairline)',
                 borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', boxShadow: 'var(--shadow-level-2)',
-                display: 'flex', flexDirection: 'column', gap: 16,
+                display: 'flex', flexDirection: 'column', gap: 16, outline: 'none',
               }}
             >
               <h3 className="type-headline" style={{ margin: 0 }}>
@@ -1021,7 +1036,6 @@ export default function BoardPage() {
                   value={templateForm.name}
                   onChange={e => setTemplateForm(prev => ({ ...prev, name: e.target.value }))}
                   style={{ width: '100%', boxSizing: 'border-box' }}
-                  autoFocus
                 />
               </div>
               <div>
@@ -1038,6 +1052,14 @@ export default function BoardPage() {
                   style={{ width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
+              <VisibilityPicker
+                value={templateForm.visibility}
+                onChange={visibility => setTemplateForm(prev => ({ ...prev, visibility }))}
+                kind="template"
+                workspaceName={boardWorkspace ? (boardWorkspace.is_personal ? 'your personal workspace' : boardWorkspace.name) : 'this workspace'}
+                isPersonalWorkspace={!!boardWorkspace?.is_personal}
+                disabled={savingTemplate}
+              />
               <p className="type-micro" style={{ margin: 0 }}>
                 Saves this board's current canvas as a reusable template in this workspace. Editing this board later won't change the template.
               </p>

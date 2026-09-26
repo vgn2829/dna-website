@@ -24,6 +24,7 @@ const PUBLIC = 'http://storage.test/public/';
 
 class MemoryStorage implements StorageProvider {
   async upload() {}
+  async uploadFile() {}
   async download(): Promise<Buffer> { throw new Error('unused'); }
   getPublicUrl(p: string) { return PUBLIC + p; }
   async delete() {}

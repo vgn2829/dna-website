@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout, Send, TriangleAlert, LayoutDashboard } from 'lucide-react';
+import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout, Send, TriangleAlert, LayoutDashboard, FolderOpen, LayoutTemplate } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
 import { api, setAdminToken, clearAdminToken, type SessionJoins, type CoordinatorMember, type EventRegistrants, type StudentOverview, type StudentRosterEntry } from '../lib/api';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
 import imageCompression from 'browser-image-compression';
 import { formatEventDate, validateEventTime } from '../lib/eventDate';
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from '../lib/uploadLimits';
+import { LibraryModerationTab } from '../components/admin/LibraryModerationTab';
 
 async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith('image/')) return file;
@@ -680,7 +682,7 @@ function RegistrantsModal({ event, onClose }: { event: ClubEvent; onClose: () =>
   );
 }
 
-type Tab = 'overview' | 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings' | 'announcements' | 'sessions' | 'moodboards';
+type Tab = 'overview' | 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings' | 'announcements' | 'sessions' | 'moodboards' | 'assets' | 'templates';
 
 // ── Overview tab ─────────────────────────────────────────────────────────────
 function StatCard({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
@@ -1254,14 +1256,13 @@ function GalleryTab() {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  const MAX_MB = 50;
   const ALLOWED_EXT = ['jpg','jpeg','png','webp','gif','pdf','mp4'];
 
   const handleFile = (f: File | null, setFileFn: (f: File | null) => void, setErr: (s: string) => void) => {
     if (!f) { setFileFn(null); return; }
     const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
     if (!ALLOWED_EXT.includes(ext)) { setErr(`Unsupported type. Allowed: ${ALLOWED_EXT.join(', ')}`); return; }
-    if (f.size > MAX_MB * 1024 * 1024) { setErr(`File exceeds ${MAX_MB} MB`); return; }
+    if (f.size > MAX_UPLOAD_BYTES) { setErr(`${f.name} exceeds the maximum file size of ${MAX_UPLOAD_LABEL}`); return; }
     setErr('');
     setFileFn(f);
   };
@@ -1337,10 +1338,15 @@ function GalleryTab() {
 
     setBulkMode(true);
 
+    // Oversized files are left out of the batch — and said so, not dropped silently.
+    const oversized = files.filter(f => f.size > MAX_UPLOAD_BYTES);
+    setUploadError(oversized.length
+      ? `Skipped ${oversized.map(f => f.name).join(', ')} — maximum file size is ${MAX_UPLOAD_LABEL}.`
+      : '');
     const items: BulkItem[] = files
       .filter(f => {
         const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-        return ALLOWED_EXT.includes(ext) && f.size <= MAX_MB * 1024 * 1024;
+        return ALLOWED_EXT.includes(ext) && f.size <= MAX_UPLOAD_BYTES;
       })
       .map(file => {
         const { title, artist } = parseFilename(file.name);
@@ -1475,7 +1481,7 @@ function GalleryTab() {
         <p className="type-headline flex items-center gap-2"><Upload size={14} /> Upload Media</p>
         <form onSubmit={handleUpload} className="space-y-3">
           <div>
-            <label className="type-micro block mb-1">File * <span style={{ color: 'var(--color-ink-muted)' }}>(jpg/png/webp/gif/pdf/mp4, max 50 MB)</span></label>
+            <label className="type-micro block mb-1">File * <span style={{ color: 'var(--color-ink-muted)' }}>(jpg/png/webp/gif/pdf/mp4 · Maximum file size: {MAX_UPLOAD_LABEL})</span></label>
             <div
               className="relative border-2 border-dashed rounded-xl p-4 text-center transition-colors"
               style={{ borderColor: file ? 'var(--color-accent-blue)' : 'var(--color-hairline)', cursor: 'pointer' }}
@@ -1538,6 +1544,10 @@ function GalleryTab() {
               </div>
             </div>
           </div>
+
+          {bulkMode && uploadError && (
+            <p role="alert" className="type-micro" style={{ margin: 0, color: 'var(--color-error)' }}>{uploadError}</p>
+          )}
 
           {/* Bulk queue UI — shown when multiple files selected */}
           {bulkMode && bulkQueue.length > 0 && (
@@ -4346,6 +4356,8 @@ export function AdminPage() {
     { id: 'announcements', label: 'Announcements', icon: Mail },
     { id: 'sessions',      label: 'Sessions',      icon: Radio },
     { id: 'moodboards',   label: 'Moodboards',   icon: Layout },
+    { id: 'assets',       label: 'Assets',       icon: FolderOpen },
+    { id: 'templates',    label: 'Templates',    icon: LayoutTemplate },
   ];
 
   return (
@@ -4390,6 +4402,8 @@ export function AdminPage() {
           {tab === 'announcements' && <motion.div key="announcements" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><AnnouncementsTab /></motion.div>}
           {tab === 'sessions'      && <motion.div key="sessions"      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><SessionsTab /></motion.div>}
           {tab === 'moodboards'   && <motion.div key="moodboards"   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><MoodboardsAdminTab /></motion.div>}
+          {tab === 'assets'       && <motion.div key="assets"       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><LibraryModerationTab kind="assets" /></motion.div>}
+          {tab === 'templates'    && <motion.div key="templates"    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><LibraryModerationTab kind="templates" /></motion.div>}
         </AnimatePresence>
       </div>
     </div>

@@ -1,7 +1,9 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { toast } from 'sonner';
-import { MoreHorizontal, Download, ExternalLink, Trash2, ImagePlus, FolderInput, Pencil, Copy, Layers } from 'lucide-react';
-import type { Asset } from '../../lib/api';
+import { MoreHorizontal, Download, ExternalLink, Trash2, ImagePlus, FolderInput, Pencil, Copy, Layers, Users, Lock } from 'lucide-react';
+import type { Asset, LibraryVisibility } from '../../lib/api';
+import { VISIBILITY_LABEL, isLibraryOwner, libraryAttribution } from '../../lib/libraryVisibility';
+import { VisibilityBadge } from '../library/LibraryVisibility';
 import { assetMetaLine, displayUrl, FAMILY_LABEL, fileFamily } from '../../lib/assetLibrary';
 import { usePortalContainer } from '../PortalContainer';
 import { AssetPreview } from './AssetPreview';
@@ -15,6 +17,11 @@ import { AssetPreview } from './AssetPreview';
 // Everything else lives in the "⋯" menu (Radix — keyboard accessible, and
 // portalled so it isn't clipped by the card's overflow:hidden; that
 // escape is intentional).
+//
+// Shared Creative Library: the card always states Personal/Community, and
+// credits the creator on other members' community assets. Rename,
+// publish/unpublish and delete are the owner's only (the server enforces
+// the same); anyone who can see the asset can open, insert or file it.
 // ─────────────────────────────────────────────────────────────────────────
 
 export function AssetCard({
@@ -24,6 +31,9 @@ export function AssetCard({
   onMove,
   onRename,
   onDelete,
+  roll,
+  onVisibility,
+  canPublish = true,
 }: {
   asset: Asset;
   // Shown as a chip when set (the browser omits it while already filtered
@@ -33,8 +43,13 @@ export function AssetCard({
   onMove: (asset: Asset) => void;
   onRename: (asset: Asset) => void;
   onDelete: (asset: Asset) => void;
+  roll: string;
+  onVisibility: (asset: Asset, visibility: LibraryVisibility) => void;
+  // false in a personal workspace — there is no one to publish to.
+  canPublish?: boolean;
 }) {
   const portalContainer = usePortalContainer();
+  const isOwner = isLibraryOwner(asset, roll);
   const canInsert = asset.kind === 'image' && !!onInsert;
   const typeLabel = asset.kind === 'image' ? 'Image' : asset.kind === 'link' ? 'Link' : FAMILY_LABEL[fileFamily(asset.extension)];
   const href = asset.kind === 'link' ? asset.link_url : asset.url;
@@ -71,7 +86,7 @@ export function AssetCard({
   return (
     <article
       className="asset-card"
-      aria-label={`${asset.filename}, ${typeLabel}`}
+      aria-label={`${asset.filename}, ${typeLabel}, ${VISIBILITY_LABEL[asset.visibility]}${isOwner ? '' : `, ${libraryAttribution(asset, roll)}`}`}
       style={{
         position: 'relative', minWidth: 0,
         display: 'flex', flexDirection: 'column',
@@ -114,6 +129,14 @@ export function AssetCard({
         >
           {metaLine}
         </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 6, rowGap: 2, marginTop: 4, minWidth: 0 }}>
+          <VisibilityBadge visibility={asset.visibility} />
+          {!isOwner && (
+            <span className="type-micro" style={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {libraryAttribution(asset, roll)}
+            </span>
+          )}
+        </div>
         {collectionName && (
           <span className="type-micro" style={{
             alignSelf: 'flex-start', maxWidth: '100%', marginTop: 4,
@@ -166,13 +189,24 @@ export function AssetCard({
             <DropdownMenu.Item className="dna-menu-item" onSelect={() => onMove(asset)}>
               <FolderInput size={15} /> Move to collection…
             </DropdownMenu.Item>
-            <DropdownMenu.Item className="dna-menu-item" onSelect={() => onRename(asset)}>
-              <Pencil size={15} /> Rename…
-            </DropdownMenu.Item>
-            <DropdownMenu.Separator className="dna-menu-sep" />
-            <DropdownMenu.Item className="dna-menu-item" data-danger="true" onSelect={() => onDelete(asset)}>
-              <Trash2 size={15} /> Delete
-            </DropdownMenu.Item>
+            {isOwner && (<>
+              <DropdownMenu.Item className="dna-menu-item" onSelect={() => onRename(asset)}>
+                <Pencil size={15} /> Rename…
+              </DropdownMenu.Item>
+              {canPublish && (asset.visibility === 'community' ? (
+                <DropdownMenu.Item className="dna-menu-item" onSelect={() => onVisibility(asset, 'personal')}>
+                  <Lock size={15} /> Make Personal
+                </DropdownMenu.Item>
+              ) : (
+                <DropdownMenu.Item className="dna-menu-item" onSelect={() => onVisibility(asset, 'community')}>
+                  <Users size={15} /> Publish to Community
+                </DropdownMenu.Item>
+              ))}
+              <DropdownMenu.Separator className="dna-menu-sep" />
+              <DropdownMenu.Item className="dna-menu-item" data-danger="true" onSelect={() => onDelete(asset)}>
+                <Trash2 size={15} /> Delete
+              </DropdownMenu.Item>
+            </>)}
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>

@@ -12,6 +12,11 @@ export interface StorageProvider {
   // express.static, where app.ts sets headers instead. Only image
   // derivatives (storage/derivatives.ts) pass it; originals never do.
   upload(path: string, buffer: Buffer, mimeType: string, opts?: { cacheControl?: string }): Promise<void>;
+  // Store a file that is already on local disk (a multer temp file) without
+  // reading it all into memory — the large-upload path (lib/uploadLimits.ts
+  // allows 300 MB). Throws StorageTooLargeError when the storage service
+  // refuses the object for its size.
+  uploadFile(path: string, localFilePath: string, mimeType: string): Promise<void>;
   // Read one object's bytes. Used by the derivative backfill to read an
   // original (never to modify it).
   download(path: string): Promise<Buffer>;
@@ -25,6 +30,15 @@ export interface StorageProvider {
   // ('' = everything), recursively, sorted by path. Used by the storage
   // inventory (storage/inventory.ts); never deletes.
   list(prefix: string): Promise<StoredObject[]>;
+}
+
+// The storage service refused an object because of its size (e.g. a
+// Supabase project whose global file size limit is below the app's own).
+export class StorageTooLargeError extends Error {
+  constructor(message = 'The file is larger than the storage service allows') {
+    super(message);
+    this.name = 'StorageTooLargeError';
+  }
 }
 
 let _provider: StorageProvider | null = null;

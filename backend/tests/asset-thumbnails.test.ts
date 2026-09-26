@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
@@ -25,6 +26,7 @@ const PUBLIC = 'http://storage.test/public/';
 class MemoryStorage implements StorageProvider {
   objects = new Map<string, Buffer>();
   async upload(p: string, buf: Buffer) { this.objects.set(p, Buffer.from(buf)); }
+  async uploadFile(p: string, file: string) { this.objects.set(p, fs.readFileSync(file)); }
   async download(p: string) { const b = this.objects.get(p); if (!b) throw new Error('not found'); return b; }
   getPublicUrl(p: string, opts?: { download?: string }) { return PUBLIC + p + (opts?.download ? `?download=${encodeURIComponent(opts.download)}` : ''); }
   async delete(p: string) { this.objects.delete(p); }

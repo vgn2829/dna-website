@@ -1653,6 +1653,37 @@ export async function initSchema(): Promise<void> {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_boards_owner_roll ON boards (owner_roll)`);
 
   console.log('lookup indexes migration done');
+
+  // Shared Creative Library (lib/libraryVisibility.ts): personal/community
+  // visibility (plus admin moderation status, below) for templates and assets, a layer INSIDE the item's
+  // workspace — community means "every member of this workspace", never
+  // public and never cross-workspace. Additive and idempotent; ADD COLUMN
+  // with a DEFAULT gives every existing row 'personal', so nothing is
+  // published by the migration. No new index: every list query still leads
+  // with workspace_id (idx_templates_workspace_id / idx_assets_workspace_id)
+  // and the owner/community predicate only filters within one workspace.
+  await pool.query(`
+    ALTER TABLE templates ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'personal'
+      CHECK (visibility IN ('personal', 'community'))
+  `);
+  await pool.query(`
+    ALTER TABLE assets ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'personal'
+      CHECK (visibility IN ('personal', 'community'))
+  `);
+
+  // Moderation status (admin hide/restore): 'active' | 'hidden'. Hidden
+  // items leave every normal flow but keep their row and stored file, so a
+  // restore is lossless. Existing rows default to 'active'.
+  await pool.query(`
+    ALTER TABLE templates ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'
+      CHECK (status IN ('active', 'hidden'))
+  `);
+  await pool.query(`
+    ALTER TABLE assets ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'
+      CHECK (status IN ('active', 'hidden'))
+  `);
+
+  console.log('library visibility migration done');
 }
 
 // Idempotent backfill for board_items saved before placed_at existed: marks
