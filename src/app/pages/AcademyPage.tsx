@@ -147,13 +147,51 @@ export function AcademyPage() {
   const { studentSession, studentProgress, openRollModal, markVideoWatched, unmarkVideoWatched, totalXP } = useStudent();
   const { domains, loading, error } = useAppData();
   const domainKeys = Object.keys(domains);
-  const [activeDomainId, setActiveDomainId] = useState(domainKeys[0] ?? 'uiux');
+  const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+  // On a direct load the domains arrive after the first render, so the
+  // selection can't be seeded from them — fall back to the first domain
+  // until the user picks one (or if the picked one no longer exists).
+  const activeDomainId = selectedDomainId && domains[selectedDomainId] ? selectedDomainId : domainKeys[0] ?? '';
+
+  const header = (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
+      <p className="type-caption mb-3">Learning Center</p>
+      <h1 className="type-display-xl" style={{ fontFamily: 'var(--font-display)' }}>
+        Creative<br />
+        <span style={{ color: 'var(--color-ink-muted)' }}>Academy</span>
+      </h1>
+    </motion.div>
+  );
 
   if (loading) {
+    // Same shell and grid as the loaded page, with placeholder cards, so a
+    // direct load shows the Academy immediately instead of a blank screen.
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: '5rem' }}>
-        <div style={{ color: 'var(--color-ink-muted)', fontSize: 14 }}>Loading academy…</div>
+      <div className="min-h-screen" style={{ background: 'var(--color-canvas)', paddingTop: '5rem', paddingBottom: '5rem' }}>
+        <div className="page-container">
+          {header}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" aria-busy="true">
+            <aside className="lg:col-span-3 space-y-4">
+              <div className="card p-4 space-y-1">
+                <p className="type-caption mb-3 px-1">Domains</p>
+                {[0, 1, 2, 3, 4].map(i => (
+                  <div key={i} className="p-3">
+                    <div className="skeleton-pulse" style={{ height: 14, width: '70%', background: 'var(--color-surface-2)', borderRadius: 'var(--radius-sm)' }} />
+                  </div>
+                ))}
+              </div>
+            </aside>
+            <div className="lg:col-span-9 space-y-5">
+              <div className="card overflow-hidden">
+                <div className="aspect-video skeleton-pulse" style={{ background: 'var(--color-surface-2)' }} />
+              </div>
+              <div className="card p-5">
+                <p className="type-caption" role="status">Loading academy…</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -187,14 +225,7 @@ export function AcademyPage() {
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-canvas)', paddingTop: '5rem', paddingBottom: '5rem' }}>
       <div className="page-container">
-        {/* Header */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
-          <p className="type-caption mb-3">Learning Center</p>
-          <h1 className="type-display-xl" style={{ fontFamily: 'var(--font-display)' }}>
-            Creative<br />
-            <span style={{ color: 'var(--color-ink-muted)' }}>Academy</span>
-          </h1>
-        </motion.div>
+        {header}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Sidebar */}
@@ -212,7 +243,7 @@ export function AcademyPage() {
                 return (
                   <button
                     key={key}
-                    onClick={() => { setActiveDomainId(key); setActiveVideoId(null); }}
+                    onClick={() => { setSelectedDomainId(key); setActiveVideoId(null); }}
                     className="w-full text-left p-3 rounded-xl transition-all"
                     style={{
                       background: isActive ? 'var(--color-surface-2)' : 'transparent',
