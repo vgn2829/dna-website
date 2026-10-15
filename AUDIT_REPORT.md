@@ -1,390 +1,431 @@
-# DnA Club Website — Pre-Launch Security Audit Report
+# DnA Club Website — Full Codebase Audit Report
 
-*Date: 2026-06-14 | Commit: 326a463 — Add: Mood tab with visual palette engine (jitter, adaptive chroma, mood profiles)*
+*Date: 2026-07-31 | Branch: `feat/manual-event-artwork-notifications` | HEAD: `9be1a27`*
 
----
+This is a ground-truth re-audit. A prior `AUDIT_REPORT.md` existed at commit `326a463`
+(2026-06-14), but 172 commits have landed since then, so it was treated only as
+background context, not a source of truth. This report supersedes it.
 
-## Summary Table
-
-| # | Audit Area | Issues Found | Highest Severity |
-|---|---|---|---|
-| 1 | Secret Leakage | 2 | CRITICAL |
-| 2 | Authentication Security | 3 | HIGH |
-| 3 | XSS Prevention | 1 | LOW |
-| 4 | Backend API Security | 3 | MEDIUM |
-| 5 | Infinite Loops & Memory Leaks | 1 | LOW |
-| 6 | Error States & Crashes | 3 | MEDIUM |
-| 7 | Form Input Hardening | 3 | MEDIUM |
-| 8 | Console & Code Quality | 2 | LOW |
-| 9 | Supabase & Database Security | 2 | MEDIUM |
-| 10 | Stability Edge Cases | 3 | MEDIUM |
+**Coverage**: Full. Every backend route/middleware/service/schema file, every frontend
+page and shared context, the Admin dashboard (3782 lines), the entire Design Studio
+subsystem (SVG converter, halftone, AI background removal, image cropper), the
+Moodboards/collaborative-canvas feature, deploy config (Docker/nginx/Vercel), the
+dependency tree, and the test suite were read in full and reviewed. `PaletteStudio.tsx`
+(2023 lines) was intentionally reviewed only at the wiring level and not deep-audited,
+per this project's own prior decision to treat it as a stable, previously-reviewed
+generation engine that's off-limits for changes — see `AUDIT_TASKS.md` for the full
+unit-by-unit checklist this report was built from.
 
 ---
 
-## Audit 1: Secret Leakage
+## Architecture Summary
 
-### Findings
+**Frontend**: React 18 + TypeScript SPA, Vite build, `react-router` (data router),
+Tailwind v4 + a custom CSS-variable design-token system, `motion` for animation,
+shadcn/Radix UI primitives. Three heavy client-side subsystems run in Web Workers:
+SVG vectorization (`vtracer-wasm`), AI background removal (`onnxruntime-web`, ONNX
+models `u2netp`/`modnet`), and a collaborative moodboard canvas (`tldraw`).
 
-**CRITICAL — Real production credentials in `backend/.env` on disk**
+**Backend**: Express + TypeScript, single `createApp()` factory (`backend/src/app.ts`),
+Postgres via `pg` (schema managed by a hand-rolled idempotent migration runner in
+`schema.ts`, not an ORM). Two auth systems: admin (single shared password → JWT) and
+student (IITK-email OTP → JWT), both via `jsonwebtoken` + `bcryptjs`. File storage is
+pluggable — local disk in dev, Supabase Storage in production — behind a small
+`StorageProvider` interface. Outbound email via Resend, with a custom quota-gating
+layer (`mailer.ts`) that protects login-critical OTP/welcome mail from being starved
+by bulk "Notify Students" broadcasts, plus a queue table drained by an externally
+-triggered `/api/internal/tick` endpoint (since the free-tier host spins down when idle).
 
-The file `/Users/venugopal/Downloads/dna_website/backend/.env` exists with the following real production values:
+**Data flow**: Frontend talks to the backend exclusively through `src/app/lib/api.ts`,
+a thin typed `fetch` wrapper that attaches admin (sessionStorage) or student
+(localStorage) JWTs as needed. `AppDataContext` holds shared CRUD state (events,
+artworks, domains, team) fetched once on mount; page components read from it rather
+than calling the API directly (except Admin, Moodboards, and Live Sessions, which call
+`api.*` directly for their own domains).
 
-```
-JWT_SECRET=dev-only-secret-change-in-production
-ADMIN_PASSWORD=Dnaontop19
-DATABASE_URL=postgresql://postgres.gecnkkcrprdphbocknru:Dna2019IITkanpur@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres
-```
+**Deploy**: Dockerized (separate frontend/nginx and backend containers via
+`docker-compose.yml`), or Vercel (frontend) + a Node host (backend) per `vercel.json`
+and `DEPLOYMENT.md`. `nginx.conf` carries a genuinely well-considered CSP (hash-pinned
+inline script, no blanket `unsafe-inline` for scripts).
 
-Two problems:
-1. **`JWT_SECRET` is the literal string `dev-only-secret-change-in-production`** — this is a weak, guessable secret. Anyone who knows this value can forge admin JWT tokens and bypass authentication entirely.
-2. **`ADMIN_PASSWORD=Dnaontop19` and the full Supabase `DATABASE_URL` with password `Dna2019IITkanpur` are stored in plaintext** on the developer machine. If this file is ever accidentally committed, or the machine is compromised, all three credentials are exposed simultaneously.
-
-**Git tracking status:** `backend/.env` is correctly listed in `.gitignore` (`backend/.env` appears in the root `.gitignore`) and is NOT tracked in git history. A scan of all git commit content finds no trace of `Dna2019IITkanpur`, `Dnaontop19`, or `dev-only-secret-change-in-production` in any committed file. The current state is not a git leak.
-
-**MEDIUM — Default fallback password in seed script**
-
-`/Users/venugopal/Downloads/dna_website/backend/src/db/seed.ts` line 17:
-```ts
-const pw = process.env.ADMIN_PASSWORD ?? 'admin123';
-```
-If the seed script is ever run in an environment where `ADMIN_PASSWORD` is unset, it silently falls back to `admin123` and hashes that into the database. The server startup guard at `server.ts` line 4-9 correctly requires `ADMIN_PASSWORD`, but the seed script does not.
-
-**No frontend secret leakage.** The `src/` directory contains zero references to `SUPABASE`, `JWT`, `SECRET`, `PASSWORD`, `API_KEY`, `DATABASE_URL`, or `service_role`. The frontend only exposes `VITE_API_BASE_URL` (an API endpoint, not a credential) via `src/app/lib/api.ts` line 1. All secrets stay server-side only.
-
----
-
-## Audit 2: Authentication Security
-
-### Findings
-
-**HIGH — `/admin` route has no server-enforced route guard**
-
-`/Users/venugopal/Downloads/dna_website/src/app/routes.tsx` line 25:
-```ts
-{ path: 'admin', Component: AdminPage },
-```
-This is a standard client-side React Router route with no `loader`, `ProtectedRoute` wrapper, or `requireAuth` function. Any user who types `http://yourdomain.com/admin` in the URL bar will have the React bundle loaded and the `AdminPage` component mounted.
-
-The `AdminPage` component itself gates rendering via a local `authed` state (`AdminPage.tsx` line 471-474):
-```tsx
-const [authed, setAuthed] = useState(false);
-if (!authed) return <AdminLogin onSuccess={() => setAuthed(true)} />;
-```
-This means a logged-out user who navigates to `/admin` **sees the login form, not the dashboard** — the dashboard content does not render. The protection is client-side state only, but since the admin token (`dna_admin_token` in `sessionStorage`) is checked per-request at the backend, and all admin API calls fail without a valid JWT, the practical risk is **low for data access** but **medium for UI exposure**: the admin dashboard skeleton and tab labels are visible to any authenticated admin in the current session only.
-
-**The real security boundary is the backend:** every admin write endpoint (`POST/PUT/PATCH/DELETE` on `/api/domains`, `/api/team`, `/api/artworks`, `/api/events`) is protected by `requireAdmin` middleware (`backend/src/middleware/adminAuth.ts`), which validates the JWT on every request. A logged-out user cannot perform any admin operation via the API.
-
-**MEDIUM — Admin token stored in `sessionStorage`**
-
-`/Users/venugopal/Downloads/dna_website/src/app/lib/api.ts` lines 3-5:
-```ts
-const ADMIN_TOKEN_KEY = 'dna_admin_token';
-export function getAdminToken(): string | null  { return sessionStorage.getItem(ADMIN_TOKEN_KEY); }
-export function setAdminToken(token: string)    { sessionStorage.setItem(ADMIN_TOKEN_KEY, token); }
-```
-`sessionStorage` is accessible to any JavaScript running in the same origin. Because there is no `dangerouslySetInnerHTML` that renders user-provided data, the XSS risk is low, but if any XSS vector were ever introduced, the admin token would be directly accessible via `sessionStorage.getItem('dna_admin_token')`.
-
-**MEDIUM — JWT expiry handling produces no user-visible error**
-
-The JWT is set to expire in 8 hours (`auth.ts` line 28: `expiresIn: '8h'`). The `requireAdmin` middleware correctly returns 401 on an expired token. However, the frontend API wrapper (`api.ts`) converts 401 responses into thrown `Error` objects. Admin mutating callbacks in `AppDataContext.tsx` (e.g., `deleteArtwork`, `addComment`) call `.catch(console.error)` but do not surface expired-token errors to the admin user. If a 401 is received, the operation silently fails with a `console.error` and no prompt to re-login. The admin must manually refresh. This is a UX gap, not a security gap.
-
-**All backend admin endpoints are protected.** Every write endpoint on `domains`, `team`, `artworks`, and `events` routes uses `requireAdmin` as middleware. Public GET endpoints are intentionally open.
+**Overall code quality**: Notably higher than the "vibe coded" framing suggests for the
+backend and most page components — consistent Zod validation, parameterized SQL,
+rate limiting, JWT algorithm pinning, thoughtful inline comments explaining
+non-obvious tradeoffs (quota gating, CORS, storage path traversal guards). The
+**Admin dashboard and the Moodboards/canvas feature** are the two areas where quality
+drops and real bugs surface — both are reported in detail below.
 
 ---
 
-## Audit 3: XSS Prevention
+## Critical Issues (security / data-loss / broken-flow risk)
 
-### Findings
+### C1. Zero automated test coverage for anything that touches auth, money-equivalent state, or data mutation
+The entire repository has exactly one test file: `tests/palette-engine.test.js`, a
+standalone Node script (not wired into either `package.json`'s `scripts`, so `npm test`
+doesn't even exist) that checks the color-palette derivation engine only. There are
+**no tests** for: admin/student login, OTP request/verify/expiry/attempt-lockout, JWT
+verification, event RSVP capacity/race-condition handling, artwork/board CRUD,
+storage upload/delete, the mail quota gate, or the reminder-tick endpoint. For a site
+with real user accounts, file uploads, and a from-scratch OTP auth system, this is the
+single biggest structural risk in the codebase — regressions in auth or RSVP capacity
+logic would ship silently.
+**Fix (described)**: at minimum, add integration tests for the OTP flow (request →
+verify → attempt lockout → expiry) and the RSVP capacity race (concurrent requests at
+the boundary), since these are the two flows most likely to have a subtle bug with
+real consequences (locked-out students, over-capacity events).
 
-**LOW — `dangerouslySetInnerHTML` in `chart.tsx`**
+### C2. AdminPage: session token is never restored on page load
+`src/app/pages/AdminPage.tsx` initializes `const [authed, setAuthed] = useState(false)`
+and never checks `getAdminToken()` (from `src/app/lib/api.ts:122`) on mount. Every
+full page reload of `/admin` — including an accidental refresh — drops a still-valid,
+unexpired admin straight back to the login screen, even though the token is sitting
+untouched in `sessionStorage`. Not a security hole (the server still enforces via
+`requireAdmin`), but it's a broken-flow bug that will look like "I got logged out for
+no reason" to whoever administers the site.
+**Fix (described)**: initialize `authed` from `!!getAdminToken()` on mount (optionally
+confirmed with one cheap authed GET before trusting it).
 
-`/Users/venugopal/Downloads/dna_website/src/app/components/ui/chart.tsx` line 83:
-```tsx
-dangerouslySetInnerHTML={{
-  __html: Object.entries(THEMES).map(([theme, prefix]) => `
-    ${prefix} [data-chart=${id}] { ... }`)
-```
-The content injected via `dangerouslySetInnerHTML` is constructed entirely from:
-- `THEMES` — a hard-coded constant: `{ light: "", dark: ".dark" }`
-- `id` — a developer-supplied `chartId` prop
-- `ChartConfig` — a developer-supplied configuration object, not user input
+### C3. AdminPage: 401/SESSION_EXPIRED is only handled for a subset of admin actions
+`api.ts:150` throws `Error('SESSION_EXPIRED')` on a 401 for admin-scoped calls, and
+`AppDataContext.tsx`'s `onAdminErr` catches that specific message and redirects to
+`/admin` — but that helper is wired in only for the events/artworks/domains/team/notify
+CRUD functions that live inside `AppDataContext`. Every other admin surface —
+**Settings, Coordinators, Live Sessions, Moodboards-admin, Email Templates, Custom
+Announcements, Registrants** — calls `api.*` directly inside `AdminPage.tsx` and
+catches errors with a generic `.catch(() => setError('Failed to load...'))`, never
+checking for `SESSION_EXPIRED`. Concretely: an admin's token expires while on the
+Settings or Sessions tab; every action from then on just shows a generic "Failed to
+load" message forever, with no indication why and no path back to login — a dead end.
+**Fix (described)**: centralize the SESSION_EXPIRED check (a shared response
+interceptor, or route every admin `api.*` call through one wrapper) instead of
+duplicating ad hoc `.catch` blocks per tab.
 
-No user-submitted data flows through this path. This is a shadow-component from a UI library (shadcn/ui pattern) and does not constitute an exploitable XSS risk in the current codebase.
+### C4. AdminPage: several mutations report success before the network request resolves
+In `AppDataContext.tsx`, `addEvent`, `addVideo`, `deleteArtwork`, `toggleFeatured`,
+`deleteVideo`, and `deleteTeamMember` are typed `void`, not `Promise`, and only
+`.catch(onAdminErr)` internally (console.error on anything but session expiry). Their
+callers in `AdminPage.tsx` assume success unconditionally:
+- `EventsTab.handleAdd` (~line 1741) clears the form and shows "Event created" **before**
+  the POST resolves. If it fails (validation error, network blip), the admin sees a
+  false success message and the event silently never exists.
+- `AcademyTab.handleAddVideo` (~line 497) clears the form and runs a hardcoded 600ms
+  fake-loading `setTimeout`, unrelated to whether the request actually succeeded.
+- `GalleryTab.handleToggleFeatured` (~line 817) flips the star icon optimistically for
+  a fixed 800ms, with no rollback UI if the PATCH fails.
+**Fix (described)**: make these context functions return promises that reject on
+failure, `await` them in the handlers, and only show success / clear the form after
+real resolution; surface caught errors in the tab's own error state.
 
-**No other `dangerouslySetInnerHTML` or `innerHTML` usage found anywhere in `src/`.**
+### C5. Moodboards: `canvasLoadedRef` is not reset when navigating between two boards without a full page reload
+`BoardPage.tsx` keys `canvasLoadedRef` (and the canvas-loading branch of `loadBoard`)
+by a ref that is never reset when the route's `:id` param changes. React Router does
+**not** remount the page component just because a param changed on the same route
+element — so if a user reaches a different board id while `BoardPage` stays mounted
+(e.g. browser back/forward through board history), `canvasLoadedRef.current` is
+already `true` from the previous board, the canvas-load branch is skipped, and
+`TldrawCanvas` (which also isn't given a `key={id}`) keeps showing the **previous
+board's** canvas content under the new board's URL/metadata.
+**Fix (described)**: reset `canvasLoadedRef.current = false` (and `setCanvasReady(false)`)
+whenever `id` changes inside `loadBoard`, or simpler — pass `key={id}` to force a clean
+remount of the canvas subtree per board.
 
-**User-submitted text is rendered safely.** Comments in `GalleryPage.tsx` lines 152-161 render `c.sender` and `c.text` as React text nodes (not HTML), so they are automatically escaped by React. Artwork titles, artist names, event titles, and team member names are all rendered via JSX text interpolation.
+### C6. Moodboards: no conflict detection for concurrent multi-user canvas edits
+`TldrawCanvas.tsx` debounces local edits 3s then PUTs the *entire* canvas snapshot to
+`/api/boards/:id/canvas`. There is no version/ETag check, no merge, and no polling of
+remote state back into an already-open canvas. For a board with `edit_mode: 'anyone'`
+or multiple members editing simultaneously, whichever client's debounced save lands
+last **silently overwrites** the other's entire canvas with no warning to either party
+— the save-status indicator will still show "Saved" on both sides while one user's
+work has actually been discarded.
+**Fix (described)**: at minimum, add a server-side version counter checked before
+accepting a write (reject/merge on mismatch, surface a conflict toast), or poll for
+remote changes while idle and warn before an overwriting save.
 
-**Social URL links are rendered directly as `href` values.** In `TeamPage.tsx` lines 51-58 and `Team.tsx` lines 37-44, `member.social.instagram` and `member.social.linkedin` are placed directly into `<a href={...}>`. The backend `memberSchema` does not validate that these are `https://` URLs — a `javascript:` href could be stored. However, exploiting this requires admin access to create the member with a malicious URL, making it a self-inflicted risk.
-
----
-
-## Audit 4: Backend API Security
-
-### Findings
-
-**MEDIUM — No rate limiting on public write endpoints**
-
-The following endpoints accept writes from any authenticated student and have **no rate limiting**:
-- `POST /api/artworks/:id/like` (`artworks.ts` line 149) — unlimited likes/unlikes per minute
-- `POST /api/artworks/:id/comments` (`artworks.ts` line 186) — unlimited comment creation
-- `POST /api/events/:id/rsvp` (`events.ts` line 63) — unlimited RSVP toggles
-
-The `POST /api/auth/admin/login` endpoint has a rate limiter (10 requests / 15 min window at `auth.ts` lines 10-14). The `POST /api/students/sessions` endpoint has a rate limiter (10 requests / 5 min at `students.ts` lines 9-13). The like/comment/RSVP endpoints do not.
-
-**MEDIUM — No URL format validation on social links (backend)**
-
-`team.ts` line 63-64 — the `memberSchema` uses `z.string().max(200).optional()` for `socialInstagram` and `socialLinkedin`. This permits any string including `javascript:alert(1)` or arbitrary text. While React's JSX href rendering won't execute `javascript:` URLs in modern browsers (most browsers block them), it is not enforced at the server level.
-
-**MEDIUM — No format/length validation on `videoId` and `domainId` path params in student progress routes**
-
-`students.ts` lines 68-97: `req.params.videoId` and `req.params.domainId` are used directly in parameterized SQL queries without any format validation (no regex, no max length). The queries are parameterized so SQL injection is not possible, but an authenticated student can write arbitrary-length strings (limited only by URL length) into `student_watched_videos.video_id` and `student_completed_quizzes.domain_id`. This could bloat the database.
-
-**GOOD — CORS is correctly configured.** `app.ts` lines 16-31 parse `CORS_ORIGINS` from the environment and reject unknown origins with a 403 — no wildcard. The `helmet()` middleware is applied globally.
-
-**GOOD — Error handler does not expose stack traces.** `app.ts` lines 57-73: the catch-all error handler returns `{ error: 'Internal server error' }` for 5xx responses — no stack traces are included in responses.
-
-**GOOD — Login rate limited, uses bcrypt, parameterized queries throughout.** All database operations use the `query()` helper with parameterized `$1, $2` placeholders. No raw string interpolation into SQL is used anywhere.
-
----
-
-## Audit 5: Infinite Loops and Memory Leaks
-
-### Findings
-
-**No infinite loops detected.**
-
-`AppDataContext.tsx` lines 82-103: The main data-loading `useEffect` has dependency array `[roll]`. It only re-fires when the student's roll number changes (login/logout). The `cancelled` flag correctly prevents state updates on unmounted/re-ran effects. No state variable that changes inside the effect is included in the dependency array.
-
-Individual callback hooks (`likeArtwork`, `addComment`, etc.) depend on `[roll]` only and do not update `roll` inside themselves.
-
-**LOW — `ThemeProvider` calls `localStorage` synchronously on first render**
-
-`ThemeContext.tsx` lines 11-13:
-```ts
-const [theme, setTheme] = useState<Theme>(
-  () => (localStorage.getItem('dna-theme') as Theme) ?? 'dark'
-);
-```
-If `localStorage` throws (Firefox private browsing can throw `SecurityError` on `localStorage` access), the state initializer crashes the `ThemeProvider`, which crashes the entire React tree. This is a stability risk (see Audit 10 for details). It is not an infinite loop.
-
-**Scroll listeners are properly cleaned up.** `Navigation.tsx` lines 26-29 and `BackToTop.tsx` lines 8-11 both use `{ passive: true }` and return cleanup functions that call `removeEventListener`. No leaks.
-
-`ArtworkModal` in `GalleryPage.tsx` lines 83-87 adds a `keydown` listener on mount and removes it on unmount. Correct.
-
-`EventsPage.tsx` countdown timers (`useCountdown`): each event card creates a `setInterval` that is cleared on unmount via `clearInterval(id)` at line 24. Correct.
-
----
-
-## Audit 6: Error States and Crashes
-
-### Findings
-
-**MEDIUM — `EventsPage` and `GalleryPage` have no loading or error state UI**
-
-`EventsPage.tsx`: The component destructures `{ events, rsvpEvent }` from `useAppData()` but never reads `loading` or `error`. If the API call is in-flight, `events` is an empty array `[]` and the page renders "No events in this category." If the API fails entirely, `events` stays `[]` permanently with no error message. The user sees an empty page with no indication of the problem.
-
-`GalleryPage.tsx`: Same issue. `loading` and `error` are not consumed. An API failure results in an empty masonry grid with no feedback.
-
-**MEDIUM — `AcademyPage` has no loading or error state UI**
-
-`AcademyPage.tsx` lines 114-334: The component does not read `loading` or `error` from `useAppData()`. If `domains` is an empty object (API down), `domainKeys` is `[]`, the sidebar renders nothing, the video theater renders nothing, and no feedback is shown to the user.
-
-**LOW — `Team` component (homepage) shows a spinner during load but no error state**
-
-`Team.tsx` lines 53-64: When `loading` is true, a spinner is rendered. However if the API fails, `loading` becomes `false`, `team` becomes `[]`, `coordinators` is `[]`, and the section renders only the heading with an empty grid — no error message.
-
-**GOOD — `TeamPage.tsx` shows a loading spinner (line 82-88). No error state, but same pattern.**
-
-**GOOD — No crashes from `.map()` on null/undefined.** All data arrays (`team`, `artworks`, `events`, `domain.videos`) are initialized as typed arrays/objects in `useState` and will never be `null` or `undefined`. The AppDataContext initializes with `useState<Artwork[]>([])`, `useState<ClubEvent[]>([])`, `useState<TeamMember[]>([])`, `useState<Record<string, Domain>>({})`, so `.map()` and `Object.keys()` will always receive a valid iterable.
+### C7. `ResourcesPage` is 100% hardcoded mock data with dead CTAs
+`src/app/pages/ResourcesPage.tsx` has no backend integration whatsoever — the 12
+"resources" (fake authors, fake ratings, fake durations) are a static array in the
+component. Every card's external-link icon and the "Submit a Resource" button have no
+`href`/`onClick` at all. This isn't a bug in the traditional sense, but it is a
+**live, publicly-reachable page that looks fully functional and does nothing** — a
+student who clicks any resource card or the submit CTA gets silence. This needs a
+product decision (build the real backend-driven feature, or pull the page/nav link
+until it's ready) rather than a code fix.
 
 ---
 
-## Audit 7: Form Input Hardening
+## Bugs / Correctness Issues
 
-### Findings
+### B1. `SvgConverter.tsx` — object URL for the raster source image is never revoked
+`handleFileUpload` calls `setImageUrl(URL.createObjectURL(file))` unconditionally,
+discarding the previous URL without revoking it; `reset()` clears `imageUrl` to `null`
+without revoking either. This is inconsistent with the SVG-upload path (`resetRaster()`,
+`handleSvgUpload`), which correctly revokes before replacing. Repeated upload/reset
+cycles in one session leak decoded-bitmap memory, worst on mobile.
+**Fix (described)**: revoke the previous `imageUrl` before replacing it, in both
+`handleFileUpload` and `reset()`.
 
-**MEDIUM — No `maxLength` on any text input in `AdminPage.tsx`**
+### B2. `BackgroundRemover.tsx` — a stale in-flight inference can paint onto a newer image
+`changeModel()` and `handleFile()` both call `clearResult()`/`resetEngine()` but do not
+cancel an in-flight `removeBackground()` promise. If a user clicks "Remove Background,"
+then uploads a different image before inference finishes, the original promise still
+resolves and unconditionally calls `resetHistory(mask)` / `setHasResult(true)` — painting
+a mask computed against the old image's dimensions onto the new canvas. `applyMask`
+only clamps by `Math.min(mask.length, out.length/4)`, so it silently truncates/misaligns
+rather than erroring.
+**Fix (described)**: give each `handleRemove` call a generation token (a ref incremented
+on every `handleFile`/`changeModel`), captured at call time and checked before applying
+the resolved mask.
 
-The AdminPage forms have no `maxLength` attribute on any `<input>` or `<textarea>`. The backend schemas provide the true length enforcement (e.g., `z.string().max(200)` on team member name), but the client provides no feedback until the API rejects the submission. Examples:
+### B3. `HalftoneStudio.tsx` — synchronous main-thread processing with no debounce or worker offload
+Unlike the SVG and background-removal tools, halftone processing runs synchronously on
+the main thread inside a `requestAnimationFrame` callback. With aggressive slider
+values (low detail/spacing) on a large image, the nested pixel loops run millions of
+iterations per frame, visibly freezing the UI on slider drag — worse on low-end/mobile
+devices. `requestAnimationFrame` cancellation prevents queuing but not the per-run cost.
+**Fix (described)**: move `processHalftone` to a Web Worker (matching the pattern
+already used elsewhere in Design Studio), or add a debounce plus a cheaper live-preview
+resolution while dragging.
 
-- `AdminPage.tsx` line 40 — password input: no `maxLength`
-- `AdminPage.tsx` line 119 — domain title: no `maxLength` (backend allows 100)
-- `AdminPage.tsx` line 127 — description textarea: no `maxLength` (backend allows 1000)
-- `AdminPage.tsx` line 161 — YouTube URL input: no `maxLength`, no format pre-check
-- `AdminPage.tsx` lines 373-378 — team name, designation, bio: no `maxLength`
-- `AdminPage.tsx` lines 381-382 — Instagram/LinkedIn URL inputs: no `maxLength`, no URL format validation
-- `AdminPage.tsx` line 444 — event description textarea: no `maxLength`
+### B4. `GalleryPage.tsx` — PDF viewer's error fallback effectively never fires
+`MediaViewer`'s PDF branch relies on `<iframe onError={() => setPdfLoadFailed(true)}>`
+around a Google Docs Viewer URL. Iframe `onError` essentially never fires for this kind
+of failure — a broken/inaccessible PDF still "loads" the iframe document (the viewer's
+own error page), so the fallback UI ("Unable to display PDF… Open PDF") is dead code in
+practice; a broken PDF just silently shows an empty/broken embedded viewer instead.
+**Fix (described)**: detect failure via the Docs Viewer's own postMessage API if
+available, or drop the false confidence and always show the "Open PDF" link alongside
+the iframe rather than gating it behind an error state that won't trigger.
 
-**MEDIUM — YouTube URL input has no client-side format check**
+### B5. `event_rsvps` reminder-tick query has no supporting index
+`backend/src/routes/internal.ts` (`/tick`, hit every ~10 min by an external scheduler)
+runs a query filtered on `reminder_sent_at IS NULL` joined against `events`/
+`student_sessions`. `event_rsvps` has only its composite PK `(event_id, roll_number)` —
+no index backs the `reminder_sent_at IS NULL` scan, and old RSVP rows are never pruned.
+As RSVPs accumulate across dozens of past events, every 10-minute tick does a growing
+full-table scan indefinitely.
+**Fix (described)**: add a partial index, e.g.
+`CREATE INDEX ON event_rsvps (event_id) WHERE reminder_sent_at IS NULL`.
 
-`AdminPage.tsx` line 161: the admin can type any string into the YouTube URL field and submit. The backend validates it (`domains.ts` line 110-116: `normalizeYouTubeId` must return a non-null result), so invalid values are rejected with a 400, but the form silently clears on error via `alert(String(err))` (line 82) and the video is not added. No inline validation.
+### B6. `boards` "my boards" query has no supporting index
+`backend/src/routes/boards.ts` (`GET /api/boards`) filters on
+`owner_roll = $1 OR id IN (SELECT board_id FROM board_members WHERE roll_number = $1)`.
+Neither `boards.owner_roll` nor `board_members.roll_number` alone is indexed (the
+latter's composite PK is `(board_id, roll_number)`, which doesn't serve a
+roll-number-only lookup). Every dashboard load will do two full scans as boards grow.
+**Fix (described)**: `CREATE INDEX ON boards(owner_roll)` and
+`CREATE INDEX ON board_members(roll_number)`.
 
-**LOW — Double-submit possible on some forms**
+### B7. Timestamp columns are inconsistently `TEXT` vs `TIMESTAMPTZ` across the schema
+Several tables store point-in-time values as `TEXT` ISO strings written by JS
+(`student_sessions.registered_at`, `live_sessions.scheduled_at`/`created_at`,
+`session_joins.joined_at`, `boards.created_at`, `board_items.created_at`,
+`audience_group_members.added_at`, `email_templates.updated_at`, `app_settings.updated_at`)
+while others correctly use `TIMESTAMPTZ` (`events`, `artworks`, OTP tables, `mail_usage`,
+`mail_queue`). The `TEXT` columns can't be used in native SQL interval arithmetic (the
+way `events.starts_at BETWEEN NOW() AND ...` is used in the reminder tick) and depend
+entirely on every write path producing a consistently-sortable ISO string.
+**Fix (described)**: standardize on `TIMESTAMPTZ` for all point-in-time columns; the
+`TEXT` ones appear to be legacy from an earlier schema iteration.
 
-`AcademyTab.handleAddVideo` (`AdminPage.tsx` lines 92-98) and `EventsTab.handleAdd` (lines 427-431) do not use a loading state or a `disabled` flag during submission. The `button type="submit"` is not disabled while the async API call is in flight, so rapid clicks can submit the form multiple times.
+### B8. `artworks.domain` has no referential integrity to `domains`
+Unlike `videos.domain_id`/`quiz_questions.domain_id` (both `REFERENCES domains(id)
+ON DELETE CASCADE`), `artworks.domain` is a free-text column with no FK. Renaming or
+deleting a domain silently orphans existing artworks' domain label with no cascade or
+warning.
+**Fix (described)**: add a foreign key (or rename to `domain_id` for clarity) if
+domains are meant to be stable identifiers artworks can rely on.
 
-`GalleryTab.handleUpload` (lines 250-265) and `TeamTab.handleAdd` (lines 346-364) correctly use `uploading`/`loading` state and disable the submit button.
+### B9. TeamPage: "Learn more" CTA button has no handler
+`src/app/pages/TeamPage.tsx` (~line 267): `<button ...>Learn more</button>` has no
+`onClick` at all — a dead button sitting next to the working "Apply Now" link.
 
-**GOOD — File type and size validation on both client and server.** `GalleryTab` validates extension and size before calling the API (lines 241-246). The backend independently verifies magic bytes and enforces 50 MB limit.
+### B10. Moodboards: duplicated last-3-digit roll-number hash is fragile to non-numeric characters
+`BoardPage.tsx` inlines `` `hsl(${parseInt(roll.slice(-3)) % 360}, 60%, 45%)` `` three
+times for avatar coloring. If a roll number's last 3 characters aren't purely numeric,
+`parseInt` returns `NaN`, producing an invalid HSL color that renders as a browser
+default (likely black). Should use a hash function tolerant of non-numeric input, and
+be extracted to one shared helper instead of being copy-pasted three times.
 
----
-
-## Audit 8: Console and Code Quality
-
-### Findings
-
-**LOW — Backend `console.error` calls expose internal error objects to logs**
-
-`app.ts` line 71: `console.error(err)` logs the full Error object (including potential stack traces) to server stdout on any unhandled 500 error. This is appropriate for server-side logging but means the server's stderr/stdout output (e.g., Render.com build/deploy logs or log aggregation services) will contain stack traces. Not exploitable by end users (the API response returns only `{ error: 'Internal server error' }`), but worth noting for log hygiene.
-
-`backend/src/routes/artworks.ts` line 142: `console.error('Storage delete failed:', err)` logs storage errors to server stdout.
-
-`AppDataContext.tsx` lines 99 and 117 use `console.error` for failed API calls — appropriate during development.
-
-**No `console.log` in frontend production code.** The grep confirms zero `console.log` calls in `src/`. Backend `console.log` calls are limited to benign startup messages (`server.ts` lines 32, 39; `seed.ts` lines 12, 133).
-
-**No TODO, FIXME, or HACK comments** found in either `src/` or `backend/src/`.
-
-**TypeScript `any` usage is minimal.** Only one match in `src/app/`: a comment in `Navigation.tsx` line 50 (a comment about columns, not a type annotation). The codebase is well-typed.
-
----
-
-## Audit 9: Supabase and Database Security
-
-### Findings
-
-**GOOD — `SUPABASE_SERVICE_ROLE_KEY` is server-side only.**
-
-`backend/src/storage/supabase.ts` lines 5-7: The Supabase client is initialized using `process.env.SUPABASE_URL` and `process.env.SUPABASE_SERVICE_ROLE_KEY`. These environment variables exist only in the backend Node.js process. There is no Supabase client in the frontend `src/` directory. The service role key is never sent to a browser.
-
-**MEDIUM — No server-side validation of `SUPABASE_SERVICE_ROLE_KEY` presence before upload operations**
-
-`backend/src/storage/supabase.ts` uses `process.env.SUPABASE_SERVICE_ROLE_KEY!` (non-null assertion) at lines 6-7. The startup guard in `server.ts` checks for the pair `(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)` together, but it does not require either — it only ensures they are both present or both absent. In the Supabase-mode code path, if for any reason the environment variable is empty at runtime (e.g., a Render.com secret is deleted), the `createClient` call will receive an empty string, which may produce unexpected behavior without a clear error.
-
-**GOOD — File uploads validate type and size before upload on both client and server.**
-
-`artworks.ts` lines 26-34: every allowed extension has a magic-byte verification function. The backend checks both the file extension and the actual binary signature (`spec.check(file.buffer)`) before uploading to storage. The 50 MB limit is enforced by multer (`limits: { fileSize: MAX_BYTES }`) and rechecked on line 101. Same pattern in `team.ts` lines 25-30.
-
-**GOOD — All database queries are parameterized.** No raw string interpolation into SQL queries was found in any route file. All values pass through `$1, $2, ...` placeholders using `pg`'s parameterized query interface.
-
-**MEDIUM — No Row-Level Security inferred for Supabase Postgres.**
-
-The app connects directly to the Supabase PostgreSQL database using a full `DATABASE_URL` connection string (not Supabase's REST client). This means Postgres RLS policies, if any exist in Supabase, are bypassed because the connection authenticates as the `postgres` superuser (from `DATABASE_URL`). The application-layer access control in the backend routes is the only protection. If the `DATABASE_URL` were compromised, an attacker would have full superuser access to the database.
-
----
-
-## Audit 10: Stability Edge Cases
-
-### Findings
-
-**MEDIUM — `ThemeContext.tsx` and `index.html` inline script both call `localStorage` without try/catch**
-
-`ThemeContext.tsx` lines 11-13:
-```ts
-const [theme, setTheme] = useState<Theme>(
-  () => (localStorage.getItem('dna-theme') as Theme) ?? 'dark'
-);
-```
-`index.html` lines 23-27:
-```js
-(function () {
-  var t = localStorage.getItem('dna-theme') || 'dark';
-  document.documentElement.setAttribute('data-theme', t);
-  document.documentElement.style.background = t === 'light' ? '#ffffff' : '#111110';
-})();
-```
-In Firefox Private Browsing mode (and some hardened browser configurations), `localStorage.getItem()` throws a `SecurityError: The operation is insecure`. The inline script in `index.html` will throw **before React loads**, leaving the page in an unstyled state (no `data-theme` attribute set). The `ThemeProvider` will crash its `useState` initializer, causing the entire React tree to fail to mount.
-
-The `StudentContext.tsx` localStorage calls (`loadSession`, `loadProgress` at lines 33-37) are already correctly wrapped in `try/catch` blocks. The same pattern needs to be applied to `ThemeContext.tsx` and the `index.html` inline script.
-
-**MEDIUM — `AppDataContext` returns `error: string | null` but no page consumes it**
-
-When `AppDataContext.tsx`'s `useEffect` fetch fails, `error` is set to a non-null string (line 100-101). However, `EventsPage.tsx`, `GalleryPage.tsx`, and `AcademyPage.tsx` do not read the `error` field. If the backend is down, these pages render empty content with no message. Only `TeamPage.tsx` and `Team.tsx` display a spinner (but not an error).
-
-**LOW — `member.name[0]` crashes if `name` is an empty string**
-
-`Team.tsx` line 27 and `TeamPage.tsx` line 24 both use `member.name.charAt(0)` / `member.name[0]` as a fallback avatar character. The backend schema enforces `z.string().min(1)` on `name`, so empty-string names cannot be inserted. This is safe in practice but depends entirely on the backend constraint being enforced.
-
-**GOOD — `domains` empty-object case is safe.** `AcademyPage.tsx` uses `Object.keys(domains)` which returns `[]` for an empty object — no crash. `domain?.videos.map(...)` uses optional chaining throughout. `domain?.videos.length ?? 0` safely handles undefined.
-
-**GOOD — `BackToTop.tsx` is safe from SSR issues.** The component uses `useEffect` (not `useLayoutEffect`) and `window.scrollY`, so it only accesses the browser window after mount. No SSR risk with Vite + React SPA.
+### B11. Moodboards: pending debounced canvas save is lost on in-app navigation
+`TldrawCanvas.tsx` flushes its pending save on `visibilitychange`/`beforeunload`, which
+covers tab close/switch, but client-side route navigation (e.g. clicking "← Boards")
+just unmounts the component with no equivalent flush-on-unmount effect. A user who
+draws something and immediately navigates away within the 3-second debounce window
+loses that edit silently.
+**Fix (described)**: add an unmount effect that calls `handleSave()` best-effort before
+cleanup.
 
 ---
 
-## Priority Fix List
+## Code Quality / Maintainability Issues
 
-### CRITICAL (fix before launch)
-
-1. **Rotate `JWT_SECRET` immediately** — `backend/.env` contains `JWT_SECRET=dev-only-secret-change-in-production`. This must be replaced with a cryptographically random secret of at least 32 characters (e.g., `openssl rand -hex 32`) in all environments before deploying. The current value is guessable and allows anyone to forge admin JWTs.
-   - *File:* `backend/.env` line 2
-
-2. **Confirm production deployment never uses the `backend/.env` credentials** — The `DATABASE_URL` in `backend/.env` contains the real Supabase Postgres connection string with a plaintext password (`Dna2019IITkanpur`). Verify that Render.com (or other deployment host) uses environment variables injected via the platform dashboard, not the `.env` file on disk. The `.env` file must never be committed or transferred to any server.
-
-3. **Fix `index.html` inline script to guard against `localStorage` throws** — Wrap the inline IIFE in `index.html` in a try/catch so Firefox Private Mode and hardened browsers do not crash before React loads:
-   ```js
-   (function () {
-     try {
-       var t = localStorage.getItem('dna-theme') || 'dark';
-       document.documentElement.setAttribute('data-theme', t);
-       document.documentElement.style.background = t === 'light' ? '#ffffff' : '#111110';
-     } catch (_) {
-       document.documentElement.setAttribute('data-theme', 'dark');
-     }
-   })();
-   ```
-   *File:* `index.html` lines 23-27
-
-4. **Fix `ThemeContext.tsx` to guard against `localStorage` throws** — Replace the synchronous `localStorage.getItem` in the `useState` initializer with a try/catch:
-   ```ts
-   const [theme, setTheme] = useState<Theme>(() => {
-     try { return (localStorage.getItem('dna-theme') as Theme) ?? 'dark'; }
-     catch { return 'dark'; }
-   });
-   ```
-   *File:* `ThemeContext.tsx` lines 11-13
-
----
-
-### MEDIUM (fix this week)
-
-5. **Add error UI to `EventsPage`, `GalleryPage`, and `AcademyPage`** — All three pages silently render empty content when the backend is down. Add a check for the `error` field from `useAppData()` and show a user-friendly error message. This is the same pattern already used in `AppDataContext` but not surfaced.
-   - *Files:* `EventsPage.tsx`, `GalleryPage.tsx`, `AcademyPage.tsx`
-
-6. **Add loading state to `EventsPage` and `GalleryPage`** — Neither page checks `loading` from `useAppData()`. Add a spinner while data is being fetched to prevent empty-state flicker.
-   - *Files:* `EventsPage.tsx`, `GalleryPage.tsx`
-
-7. **Add rate limiting to comment, like, and RSVP endpoints** — `POST /api/artworks/:id/comments`, `POST /api/artworks/:id/like`, and `POST /api/events/:id/rsvp` have no rate limiting. Apply `express-rate-limit` (already installed) with a window of 1 minute and a max of 20-30 requests to prevent abuse.
-   - *Files:* `backend/src/routes/artworks.ts`, `backend/src/routes/events.ts`
-
-8. **Validate social link URLs on the backend (team route)** — Add `z.string().url().max(200)` instead of `z.string().max(200)` for `socialInstagram` and `socialLinkedin` in `memberSchema` to prevent non-URL values (including `javascript:` protocol).
-   - *File:* `backend/src/routes/team.ts` lines 63-64
-
-9. **Prevent double-submit on AcademyTab video form and EventsTab event form** — Add a `loading` state and disable the submit button while the API call is in-flight, matching the pattern already used in `GalleryTab` and `TeamTab`.
-   - *File:* `AdminPage.tsx` `AcademyTab.handleAddVideo` (line 92) and `EventsTab.handleAdd` (line 427)
-
-10. **Add `maxLength` attributes to AdminPage form inputs** — Add `maxLength` attributes matching the backend Zod schema limits to provide immediate client-side feedback. Critical fields: domain title (100), description textarea (1000), team name (100), team designation (100), team bio (500), event title (200), event description (2000).
-    - *File:* `AdminPage.tsx` — multiple form inputs
-
-11. **Add length/format validation to `videoId` and `domainId` path params in student routes** — `req.params.videoId` and `req.params.domainId` are written directly to the database without any format check. Add a regex check (e.g., `/^[a-zA-Z0-9_-]{1,100}$/`) to prevent arbitrary long strings being stored.
-    - *File:* `backend/src/routes/students.ts` lines 68-97
-
-12. **Seed script should not fall back to `admin123`** — Change line 17 of `seed.ts` to require `ADMIN_PASSWORD` rather than defaulting:
-    ```ts
-    const pw = process.env.ADMIN_PASSWORD;
-    if (!pw) throw new Error('ADMIN_PASSWORD is required to seed');
-    ```
-    - *File:* `backend/src/db/seed.ts` line 17
+- **AdminPage.tsx (3782 lines) has heavy duplicated CRUD-modal boilerplate.** The
+  add/edit forms for Academy domains/videos, Gallery artworks, Team members, and Events
+  each repeat ~100-150 lines of near-identical `useState`-per-field + submit-handler +
+  form JSX. A shared `useEntityForm`/`<EntityFormModal>` abstraction would remove
+  several hundred lines of duplication and the copy-paste drift already visible (e.g.
+  one tab awaits its submit properly while a sibling tab fakes a timer instead).
+- **AdminPage.tsx mixes two visibly different styling conventions** — earlier tabs
+  (Academy, Gallery, Team, Events) use the shared utility classes (`type-micro`, `card`,
+  `btn-primary`) consistent with the rest of the site, while later tabs (Settings,
+  Templates, Sessions, Moodboards-admin) are written with large ad hoc inline `style={{}}`
+  blocks repeating the same design tokens dozens of times. Looks like two different
+  authoring sessions; worth consolidating for maintainability.
+- **AdminPage.tsx: leftover debug `console.log` statements** in `TeamTab`'s
+  `handleEditMember` and the photo-crop `onChange` handler (multiple lines logging
+  `'=== handleEditMember called ==='`, file name/size/type, `'updateTeamMember SUCCESS'`
+  etc.) — noisy in production console and mildly leaky about uploaded file metadata.
+- **AdminPage.tsx: `SessionsTab`/`MoodboardsAdminTab` type API responses as `any[]`**
+  (sessions, groups, past sessions, boards), unlike every other tab, which uses the
+  properly typed context values — this throws away compiler protection on the two
+  largest remaining untyped surfaces.
+- **AdminPage.tsx: `CustomAnnouncement`'s live preview uses `dangerouslySetInnerHTML`
+  directly into the page** for admin-authored HTML, while the sibling `TemplateEditor`
+  preview correctly uses a sandboxed `srcDoc` iframe. Low real-world risk (admin-only,
+  self-XSS at worst) but an inconsistency worth aligning.
+- **Moodboards: significant duplicated logic between `MoodboardsPage.tsx` and
+  `BoardPage.tsx`** — copy-to-clipboard-with-fallback, visibility/edit-mode toggle
+  handlers, add/remove-member handlers (with slightly different error copy: "must
+  register first" vs. "they must register first"), and the delete-board confirm modal
+  are all near-verbatim duplicated between the two files rather than shared.
+- **`schema.ts`: hardcoded team roster and coordinator roll numbers/names seeded
+  directly in the migration file** (real student names + roll numbers, arguably PII,
+  committed to source control permanently). Every committee turnover currently
+  requires a code change + deploy rather than an admin-UI action.
+- **`schema.ts`: inconsistent uniqueness modeling** — `session_joins` uses a surrogate
+  `id` PK plus a `UNIQUE(session_id, roll_number)` constraint, while every structurally
+  similar join table (`event_rsvps`, `artwork_likes`, `board_members`,
+  `audience_group_members`) uses a natural composite PK. Not a bug, just an
+  inconsistent pattern in an otherwise disciplined schema.
+- **`SvgConverter.tsx`/`vectorize.worker.ts`**: duplicated image-decode/downscale
+  boilerplate between `processImage` and `vectorizeImage`; the SVG post-processing
+  relies on regexes against vtracer's raw output string, workable but fragile to any
+  upstream format change (undocumented beyond an inline comment).
+- **`DesignStudioPage.tsx` (1445 lines)** bundles several unrelated tools (font
+  pairing, contrast checker, image converter, grid calculator) plus the tab shell in
+  one file, unlike SvgConverter/HalftoneStudio/BackgroundRemover, which each get their
+  own file. Worth splitting for future-audit and diff legibility.
+- **`backend/src/routes/boards.ts`: `canAccess()` helper is defined but never called**
+  — the actual access checks route through `isMember`/`canEdit` instead. Dead code,
+  safe to remove.
+- **`backend/src/routes/notify.ts`: `GET /notify/test-email`** is a leftover manual
+  debug endpoint (hits Resend directly, logs `RESEND_API_KEY: SET/NOT SET` to the
+  server console) gated only by `requireAdmin`. Functionally harmless but reads as
+  debug scaffolding that should either be removed or moved behind a dev-only flag.
 
 ---
 
-### LOW (acceptable risk / polish)
+## UI/UX Issues
 
-13. **Add expired-token feedback in admin UI** — When admin API calls return 401 (token expired), the error is swallowed by `.catch(console.error)` in `AppDataContext.tsx`. Detect the 401 in the API wrapper and either call `clearAdminToken()` + redirect to the login screen, or show a toast. This is a UX gap only; security is unaffected since the backend correctly rejects the call.
-    - *Files:* `src/app/lib/api.ts`, `AppDataContext.tsx`
+### Navigation & flow
+- Overall navigation is clear: a persistent floating nav pill, consistent page headers,
+  and a guest-friendly "Join" CTA. No dead-end flows found in the primary pages.
+- **ResourcesPage** (see C7) is effectively an orphaned dead end dressed as a working
+  feature — the highest-priority UX issue found, because it actively misleads users
+  into thinking a submission/browsing feature exists.
+- **AdminPage session-expiry dead ends** (see C3): Settings/Sessions/Moodboards-admin
+  tabs show a static "Failed to load" message forever after a token expires, with no
+  retry button and no link back to login.
 
-14. **`chart.tsx` `dangerouslySetInnerHTML` is safe but documents a risk** — The shadcn/ui `ChartStyle` component uses `dangerouslySetInnerHTML` to inject CSS custom properties. The values come from hard-coded theme config, not user input, so there is no current XSS risk. However, if a future developer passes user-controlled data as `ChartConfig`, it would become exploitable. Add a comment documenting that `config` must never include user-provided values.
-    - *File:* `src/app/components/ui/chart.tsx` line 83
+### Loading / empty / error states
+- Page-level async states (HomePage's children, Events, Gallery, Academy, Team) all
+  correctly implement loading/error/empty states via `AppDataContext`'s shared
+  `loading`/`error` flags.
+- Moodboards (`MoodboardsPage`/`BoardPage`) has particularly well-handled states,
+  including distinct 403 ("This board is private") and 404 ("Board not found")
+  messages with a clear back-navigation CTA — a high point of the UI/UX pass.
+- **HalftoneStudio** has no user-facing error state for a rejected file drop (wrong
+  MIME type silently no-ops), inconsistent with `BackgroundRemover`'s equivalent
+  upload path, which does surface a rejection message.
+- **AcademyTab (admin)**: "Add Video" has no success confirmation message at all,
+  unlike its sibling Gallery/Events tabs — combined with C4, an admin has no reliable
+  signal the action worked.
 
-15. **`GalleryPreview` (homepage) renders static mock data, not live API data** — `GalleryPreview.tsx` uses a hard-coded `ARTWORKS` array (6 static entries). The actual gallery artwork uploaded via the admin panel does not appear on the homepage preview. This is a content correctness gap.
-    - *File:* `src/app/components/GalleryPreview.tsx`
+### Forms
+- Student OTP flow (`RollModal`) and email-change flow (`ChangeEmailModal`) both have
+  solid inline validation, clear step-by-step UX, shake animation on error, and
+  correctly scoped loading/disabled states on submit buttons — a high point.
+- **AdminPage Team tab**: Instagram/LinkedIn fields are plain text inputs with no URL
+  format validation (email field alone gets `type="email"`); a typo'd social link
+  saves silently and only surfaces as broken on the public Team page later.
+
+### Responsive / accessibility
+- **BoardPage's top action bar** (back button, name, save-status badge, avatar stack,
+  Share/Invite/Delete buttons) uses `whiteSpace: nowrap` on most elements with no
+  responsive collapse — on a phone-width viewport this bar will overflow/clip since
+  nothing wraps or collapses into an overflow menu.
+- Most marketing pages use Tailwind responsive classes (`md:`, `lg:`) consistently;
+  the Navigation, Team, and Academy pages all have deliberate mobile breakpoints
+  (verified in code — a live-render check is still recommended before shipping any
+  visual changes, per this audit's text-only nature).
+
+### Visual/design consistency
+- See "AdminPage mixes two visibly different styling conventions" above — the most
+  concrete design-consistency finding in the codebase.
+
+---
+
+## Quick Wins (low effort, real impact)
+
+1. Fix C2 (restore admin session from `sessionStorage` on mount) — a few lines,
+   removes a recurring annoyance for whoever administers the site.
+2. Fix B1 (revoke `imageUrl` object URL in SvgConverter) — a one-line addition in two
+   places, matching a pattern already correctly used elsewhere in the same file.
+3. Remove the leftover `console.log` debug statements in AdminPage's Team tab.
+4. Wire up or remove TeamPage's dead "Learn more" button.
+5. Add the missing indexes from B5/B6 — two `CREATE INDEX` statements.
+6. Delete the unused `canAccess()` helper in `boards.ts`.
+7. Run `npm audit fix` at the root and in `backend/` — two low-severity advisories
+   (`body-parser` DoS, `esbuild` dev-server file read on Windows), both fixable without
+   a major version bump.
+8. Wire `tests/palette-engine.test.js` into an actual `npm test` script in
+   `package.json` so it at least runs somewhere (CI or pre-commit), rather than being
+   a script nobody invokes.
+
+---
+
+## Explicitly Out-of-Scope / Needs a Product Decision
+
+- **ResourcesPage (C7)**: is this meant to become a real backend-driven feature, or
+  should the page/nav link be pulled until it is? Can't be resolved with a code fix
+  alone.
+- **Team roster / coordinator seed data living in `schema.ts` (see Code Quality)**:
+  moving this to an admin-UI-driven flow is a real feature request, not a bug fix —
+  flagging the current state, not prescribing the solution.
+- **Docker Compose's backend service** doesn't pass through `DATABASE_URL`,
+  `RESEND_API_KEY`, or Supabase storage vars — meaning the documented `docker-compose`
+  path will crash on the `server.ts` startup guard (`DATABASE_URL` is required) unless
+  those are supplied externally. Worth clarifying in `DEPLOYMENT.md` whether Compose is
+  meant to be a fully self-contained local-Postgres setup or assumes an external DB —
+  currently ambiguous.
+- **Live UI/browser verification**: this audit was code-only (no dev server was run
+  against a live browser). Visual/responsive claims above are inferred from
+  Tailwind classes and inline styles, not confirmed by rendering — recommend a manual
+  pass on mobile viewport widths for BoardPage's action bar specifically (flagged
+  above) before considering that finding fully confirmed.
+- **Dependency majors**: React 18→19, Express 4→5, MUI 7→9, Zod 3→4, and several Radix
+  packages are all one or more majors behind. None showed a *known* high-severity CVE
+  in this pass (only two low-severity advisories, both in transitive deps, see Quick
+  Wins), but a deliberate upgrade pass is a product/timing decision, not something to
+  do incidentally during a bug-fix pass.
+
+---
+
+## What Was Covered vs. Not
+
+**Fully covered** (read in complete detail): all backend route/middleware/service/
+storage files, `schema.ts` (754 lines), `client.ts`, `seed.ts`; all frontend contexts,
+the API client, routing/app-shell; every marketing/content page (Home, Events, Gallery,
+Team, Academy, Resources) and their key sub-components; the entire Admin dashboard
+(3782 lines); the entire Moodboards/canvas feature; the entire Design Studio subsystem
+except PaletteStudio's internals (SvgConverter, HalftoneStudio, BackgroundRemover and
+all their supporting worker/hook/util files, ImageCropper); deploy config (Dockerfiles,
+nginx, docker-compose, vercel.json); the full dependency tree (`npm outdated`/
+`npm audit` at both root and backend); the one existing test file.
+
+**Not deep-audited, by design**: `PaletteStudio.tsx`'s internal generation/scoring
+algorithm — reviewed only at the wiring level, per this project's standing decision
+to treat that file as a stable, previously-reviewed engine that's off-limits for
+changes. The shared shadcn/Radix UI kit (`components/ui/*`) was spot-checked rather
+than read file-by-file, since it's largely unmodified vendor-generated component
+scaffolding; nothing unusual surfaced in the spot check.
