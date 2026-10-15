@@ -11,10 +11,8 @@ services:
       # rather than silently booting with a weak default.
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
-      DATA_DIR: /data
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
-    volumes:
-      - db_data:/data
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:4000/api/health"]
       interval: 30s
@@ -31,6 +29,3 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-
-volumes:
-  db_data:
