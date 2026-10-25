@@ -6,7 +6,7 @@ import { useStudent } from '../context/StudentContext';
 import { api, LiveSession } from '../lib/api';
 import { usePageMeta } from '../components/hooks/use-page-meta';
 import { DAY_MS, HOUR_MS, MINUTE_MS, SECOND_MS, formatEventDate, getEventStatus, parseEventStart } from '../lib/eventDate';
-import { formActionLabel, safeFormUrl } from '../lib/eventForm';
+import { eventCardActions } from '../lib/eventForm';
 
 function useCountdown(dateStr: string, timeStr: string, startsAt?: string | null) {
   const event = { date: dateStr, time: timeStr, startsAt };
@@ -64,9 +64,8 @@ function EventCard({ event, view, delay, onRSVP, onCancel, rsvpPending }: {
   const status = getEventStatus(event);
   // Optional extras (both null for most events, which render exactly as
   // before). The form link is only ever the server's allowlisted value.
-  const formUrl = safeFormUrl(event.registrationFormUrl);
-  const formLabel = formActionLabel(!!event.attachment);
-  const showRsvp = status !== 'past' || event.isRegistered;
+  const actions = eventCardActions(event, status === 'past');
+  const { formUrl, formLabel } = actions;
   // Re-check every second, but only re-render when the status actually flips
   // (upcoming → live → past); an unchanged value bails out of the update.
   const [, setLiveStatus] = useState(status);
@@ -159,7 +158,7 @@ function EventCard({ event, view, delay, onRSVP, onCancel, rsvpPending }: {
         {/* RSVP — plus, when configured, the problem statement and the
             registration form (Problem Statement first: read the brief, then
             register / respond). */}
-        {event.attachment || formUrl ? (
+        {actions.problemStatement || formUrl ? (
           <div className="mt-auto flex flex-col gap-2">
             {event.attachment && (
               <a
@@ -173,7 +172,7 @@ function EventCard({ event, view, delay, onRSVP, onCancel, rsvpPending }: {
                 <FileText size={14} /> Problem Statement
               </a>
             )}
-            {showRsvp && (formUrl && event.isRegistered ? (
+            {actions.primary !== 'none' && (actions.primary === 'form' && formUrl ? (
               <>
                 {/* Persistent: works even if the browser blocked the tab
                     opened right after registering. */}
@@ -204,7 +203,7 @@ function EventCard({ event, view, delay, onRSVP, onCancel, rsvpPending }: {
               </>
             ) : rsvpButton(''))}
           </div>
-        ) : showRsvp && rsvpButton('mt-auto')}
+        ) : actions.primary !== 'none' && rsvpButton('mt-auto')}
       </div>
     </motion.div>
   );

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
-import { formActionLabel, safeFormUrl } from '../lib/eventForm';
+import { applyRsvpResult, formActionLabel, safeFormUrl } from '../lib/eventForm';
 import { useStudent } from './StudentContext';
 import { toast } from 'sonner';
 
@@ -239,9 +239,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       return { ...e, isRegistered: !e.isRegistered, registeredCount: e.isRegistered ? Math.max(0, e.registeredCount - 1) : e.registeredCount + 1 };
     }));
     api.events.rsvp(id, roll)
-      .then(({ registeredCount, isRegistered }) => {
-        setEvents(prev => prev.map(e => e.id !== id ? e : { ...e, registeredCount, isRegistered }));
-        toast.success(isRegistered ? 'You are registered for this event.' : 'Your RSVP has been cancelled.');
+      .then(result => {
+        setEvents(prev => prev.map(e => e.id !== id ? e : applyRsvpResult(e, result)));
+        toast.success(result.isRegistered ? 'You are registered for this event.' : 'Your RSVP has been cancelled.');
       })
       .catch((err: unknown) => {
         setEvents(prev => prev.map(e => {
@@ -264,10 +264,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     if (!roll) return;
     setRsvpPendingId(target.id);
     api.events.rsvp(target.id, roll, 'register')
-      .then(({ registeredCount, isRegistered, registrationFormUrl }) => {
-        setEvents(prev => prev.map(e => e.id !== target.id ? e : { ...e, registeredCount, isRegistered, registrationFormUrl: registrationFormUrl ?? e.registrationFormUrl }));
-        const url = safeFormUrl(registrationFormUrl);
-        if (!isRegistered || !url) {
+      .then(result => {
+        // The server's answer decides the form link: if the admin removed the
+        // form since this page loaded, the stale link is cleared, not kept.
+        setEvents(prev => prev.map(e => e.id !== target.id ? e : applyRsvpResult(e, result)));
+        const url = safeFormUrl(result.registrationFormUrl);
+        if (!result.isRegistered || !url) {
           toast.success('You are registered for this event.');
           return;
         }
@@ -285,8 +287,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     if (!roll || rsvpPendingId) return;
     setRsvpPendingId(id);
     api.events.rsvp(id, roll, 'cancel')
-      .then(({ registeredCount, isRegistered }) => {
-        setEvents(prev => prev.map(e => e.id !== id ? e : { ...e, registeredCount, isRegistered }));
+      .then(result => {
+        setEvents(prev => prev.map(e => e.id !== id ? e : applyRsvpResult(e, result)));
         toast.success('Your registration has been cancelled.');
       })
       .catch(rsvpErrorToast)

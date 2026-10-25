@@ -1,4 +1,5 @@
 import { describeUploadFailure, type UploadFailure } from './assetLibrary';
+import type { RsvpResult } from './eventForm';
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '') + '/api';
 export const API_BASE = BASE;
@@ -610,7 +611,7 @@ export const api = {
     // form-enabled events use them so a retry can never cancel a reservation.
     // registrationFormUrl comes back only for an event that has a form.
     rsvp:  (id: string, roll: string, action?: 'register' | 'cancel') =>
-      request<{ registeredCount: number; isRegistered: boolean; registrationFormUrl?: string }>('POST', `/events/${id}/rsvp`, { roll, ...(action ? { body: { action } } : {}) }),
+      request<RsvpResult>('POST', `/events/${id}/rsvp`, { roll, ...(action ? { body: { action } } : {}) }),
     registrants: (id: string) =>
       request<EventRegistrants>('GET', `/events/${id}/registrants`, { admin: true }),
   },

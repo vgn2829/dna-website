@@ -42,6 +42,45 @@ export function safeFormUrl(url: string | null | undefined): string | null {
   return checked.ok ? checked.url : null;
 }
 
+// An RSVP response, as the server sends it. registrationFormUrl is present
+// exactly when the event has a form NOW — the server re-reads the event in
+// the same request — so its absence means "no form", never "not supplied".
+export interface RsvpResult {
+  registeredCount: number;
+  isRegistered: boolean;
+  registrationFormUrl?: string;
+}
+
+// Applies an RSVP response to a loaded event, treating the server as the
+// authority on the form link: a form the admin removed after the page
+// loaded is cleared (no stale Complete Registration link), and one added
+// since is picked up.
+export function applyRsvpResult<E extends { registeredCount: number; isRegistered: boolean; registrationFormUrl: string | null }>(event: E, result: RsvpResult): E {
+  return { ...event, registeredCount: result.registeredCount, isRegistered: result.isRegistered, registrationFormUrl: result.registrationFormUrl ?? null };
+}
+
+// What an event card shows, from the event as loaded:
+//   problemStatement — the attachment action;
+//   primary — 'form': the persistent Complete Registration / Submit Response
+//     link (registered for a form event); 'rsvp': the Register / Registered ✓
+//     button; 'none': nothing (a past event the student didn't register for);
+//   registersViaForm — Register records an idempotent registration and then
+//     opens the form (instead of the original toggle).
+export function eventCardActions(
+  event: { registrationFormUrl: string | null; attachment: unknown | null; isRegistered: boolean },
+  isPast: boolean,
+) {
+  const formUrl = safeFormUrl(event.registrationFormUrl);
+  const showRsvp = !isPast || event.isRegistered;
+  return {
+    problemStatement: event.attachment !== null && event.attachment !== undefined,
+    formUrl,
+    formLabel: formActionLabel(event.attachment !== null && event.attachment !== undefined),
+    primary: !showRsvp ? 'none' as const : formUrl && event.isRegistered ? 'form' as const : 'rsvp' as const,
+    registersViaForm: formUrl !== null,
+  };
+}
+
 // Label for the form action. With a problem statement the form is where
 // participants submit their response; otherwise it completes registration.
 export function formActionLabel(hasAttachment: boolean): 'Submit Response' | 'Complete Registration' {
