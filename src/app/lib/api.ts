@@ -595,12 +595,22 @@ export const api = {
   },
   events: {
     list: (roll?: string) => request<unknown[]>('GET', '/events', { roll }),
-    add:  (event: { title: string; date: string; time: string; location: string; content: string; capacity: number; startsAt?: string | null }) =>
-      request<unknown>('POST', '/events', { body: event, admin: true }),
-    update: (id: string, data: object) => request<unknown>('PUT', `/events/${id}`, { body: data, admin: true }),
+    // JSON, or FormData when the admin attaches a file (field "attachment";
+    // the other fields as strings — see backend routes/events.ts).
+    add:  (event: { title: string; date: string; time: string; location: string; content: string; capacity: number; startsAt?: string | null; registrationFormUrl?: string | null } | FormData) =>
+      event instanceof FormData
+        ? uploadRequest<unknown>('/events', event)
+        : request<unknown>('POST', '/events', { body: event, admin: true }),
+    update: (id: string, data: object | FormData) =>
+      data instanceof FormData
+        ? uploadPutRequest<unknown>(`/events/${id}`, data)
+        : request<unknown>('PUT', `/events/${id}`, { body: data, admin: true }),
     delete: (id: string)  => request<void>('DELETE', `/events/${id}`, { admin: true }),
-    rsvp:  (id: string, roll: string) =>
-      request<{ registeredCount: number; isRegistered: boolean }>('POST', `/events/${id}/rsvp`, { roll }),
+    // No action → the original toggle. 'register' / 'cancel' are idempotent;
+    // form-enabled events use them so a retry can never cancel a reservation.
+    // registrationFormUrl comes back only for an event that has a form.
+    rsvp:  (id: string, roll: string, action?: 'register' | 'cancel') =>
+      request<{ registeredCount: number; isRegistered: boolean; registrationFormUrl?: string }>('POST', `/events/${id}/rsvp`, { roll, ...(action ? { body: { action } } : {}) }),
     registrants: (id: string) =>
       request<EventRegistrants>('GET', `/events/${id}/registrants`, { admin: true }),
   },

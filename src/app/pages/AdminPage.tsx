@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout, Send, TriangleAlert, LayoutDashboard, FolderOpen, LayoutTemplate } from 'lucide-react';
+import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout, Send, TriangleAlert, LayoutDashboard, FolderOpen, LayoutTemplate, FileText } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
 import { api, setAdminToken, clearAdminToken, type SessionJoins, type CoordinatorMember, type EventRegistrants, type StudentOverview, type StudentRosterEntry } from '../lib/api';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
 import imageCompression from 'browser-image-compression';
 import { formatEventDate, validateEventTime } from '../lib/eventDate';
+import { EVENT_ATTACHMENT_ACCEPT, checkEventAttachment, checkGoogleFormUrl } from '../lib/eventForm';
+import { formatSize } from '../lib/assetLibrary';
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from '../lib/uploadLimits';
 import { LibraryModerationTab } from '../components/admin/LibraryModerationTab';
 
@@ -2254,8 +2256,13 @@ function EventsTab() {
   const [eContent, setEContent] = useState('');
   const [eCapacity, setECapacity] = useState('100');
   const [eStartsAt, setEStartsAt] = useState(''); // datetime-local value, e.g. "2026-12-31T18:00"
+  // Optional extras: a Google Forms link and a problem-statement file.
+  const [eFormUrl, setEFormUrl] = useState('');
+  const [eFile, setEFile] = useState<File | null>(null);
+  const eFileRef = useRef<HTMLInputElement>(null);
   const [addingEvent, setAddingEvent] = useState(false);
   const [eSuccess, setESuccess] = useState('');
+  const [eError, setEError] = useState('');
 
   // Edit event modal
   const [editEvent, setEditEvent] = useState<ClubEvent | null>(null);
@@ -2266,6 +2273,10 @@ function EventsTab() {
   const [eeContent, setEeContent] = useState('');
   const [eeCapacity, setEeCapacity] = useState('100');
   const [eeStartsAt, setEeStartsAt] = useState('');
+  const [eeFormUrl, setEeFormUrl] = useState('');
+  const [eeFile, setEeFile] = useState<File | null>(null);
+  const [eeRemoveAttachment, setEeRemoveAttachment] = useState(false);
+  const eeFileRef = useRef<HTMLInputElement>(null);
   const [eeLoading, setEeLoading] = useState(false);
   const [eeError, setEeError] = useState('');
 
@@ -2286,17 +2297,65 @@ function EventsTab() {
     return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
   };
 
-  const handleAdd = (e: React.SyntheticEvent) => {
+  const errorText = (err: unknown) => err instanceof Error ? err.message : String(err);
+
+  // Optional form link: '' = none; otherwise it must be a Google Forms link
+  // (the server checks again and is the authority). Returns an error or null.
+  const formUrlError = (raw: string): string | null => {
+    if (!raw.trim()) return null;
+    const checked = checkGoogleFormUrl(raw);
+    return checked.ok ? null : checked.error;
+  };
+
+  // Picks (or clears) an attachment file, refusing it up front with the
+  // server's own rules so the admin isn't told only after uploading.
+  const pickAttachment = (file: File | undefined, set: (f: File | null) => void, setError: (m: string) => void): boolean => {
+    if (!file) return false;
+    const problem = checkEventAttachment(file);
+    if (problem) { setError(problem); return false; }
+    setError('');
+    set(file);
+    return true;
+  };
+
+  // Every field travels in one multipart request with the optional file, so
+  // the event and its attachment are saved together or not at all.
+  const eventFormData = (fields: Record<string, string>, file: File | null, removeAttachment = false): FormData => {
+    const fd = new FormData();
+    for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+    if (file) fd.append('attachment', file);
+    else if (removeAttachment) fd.append('removeAttachment', 'true');
+    return fd;
+  };
+
+  const handleAdd = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (addingEvent) return;
+    setESuccess('');
     const date = eDate || null;
-    if (!date) { setESuccess('Select a date'); return; }
-    if (!validateEventTime(eTime)) { setESuccess('Enter a valid event time or time range'); return; }
+    if (!date) { setEError('Select a date'); return; }
+    if (!validateEventTime(eTime)) { setEError('Enter a valid event time or time range'); return; }
+    const urlProblem = formUrlError(eFormUrl);
+    if (urlProblem) { setEError(urlProblem); return; }
+    setEError('');
     setAddingEvent(true);
-    addEvent({ title: eTitle, date, time: eTime, location: eLocation, content: eContent, capacity: Number(eCapacity) || 100, startsAt: localToIso(eStartsAt) ?? null });
-    setETitle(''); setEDate(''); setETime(''); setELocation(''); setEContent(''); setEStartsAt('');
-    setESuccess('Event created · use Notify Students to email members');
-    setTimeout(() => { setAddingEvent(false); setESuccess(''); }, 4000);
+    try {
+      await addEvent(eventFormData({
+        title: eTitle, date, time: eTime, location: eLocation, content: eContent,
+        capacity: String(Number(eCapacity) || 100), startsAt: localToIso(eStartsAt) ?? '',
+        registrationFormUrl: eFormUrl.trim(),
+      }, eFile));
+      // Cleared only once the server has saved the event.
+      setETitle(''); setEDate(''); setETime(''); setELocation(''); setEContent(''); setEStartsAt('');
+      setEFormUrl(''); setEFile(null);
+      if (eFileRef.current) eFileRef.current.value = '';
+      setESuccess('Event created · use Notify Students to email members');
+      setTimeout(() => setESuccess(''), 4000);
+    } catch (err) {
+      setEError(`Event not saved — ${errorText(err)}`);
+    } finally {
+      setAddingEvent(false);
+    }
   };
 
   const openEditEvent = (ev: ClubEvent) => {
@@ -2304,6 +2363,9 @@ function EventsTab() {
     setEeTitle(ev.title); setEeDate(ev.date); setEeTime(ev.time);
     setEeLocation(ev.location); setEeContent(ev.content); setEeCapacity(String(ev.capacity));
     setEeStartsAt(isoToLocal(ev.startsAt));
+    setEeFormUrl(ev.registrationFormUrl ?? '');
+    setEeFile(null);
+    setEeRemoveAttachment(false);
     setEeError('');
   };
 
@@ -2313,11 +2375,19 @@ function EventsTab() {
     const date = eeDate || null;
     if (!date) { setEeError('Select a date'); return; }
     if (!validateEventTime(eeTime)) { setEeError('Enter a valid event time or time range'); return; }
+    const urlProblem = formUrlError(eeFormUrl);
+    if (urlProblem) { setEeError(urlProblem); return; }
     setEeLoading(true); setEeError('');
     try {
-      await updateEvent(editEvent.id, { title: eeTitle, date, time: eeTime, location: eeLocation, content: eeContent, capacity: Number(eeCapacity) || editEvent.capacity, startsAt: localToIso(eeStartsAt) ?? null });
+      // The form link field starts out holding the saved link, so sending it
+      // back keeps it; emptying the field clears it.
+      await updateEvent(editEvent.id, eventFormData({
+        title: eeTitle, date, time: eeTime, location: eeLocation, content: eeContent,
+        capacity: String(Number(eeCapacity) || editEvent.capacity), startsAt: localToIso(eeStartsAt) ?? '',
+        registrationFormUrl: eeFormUrl.trim(),
+      }, eeFile, eeRemoveAttachment));
       setEditEvent(null);
-    } catch (err) { setEeError(String(err)); } finally { setEeLoading(false); }
+    } catch (err) { setEeError(`Changes not saved — ${errorText(err)}`); } finally { setEeLoading(false); }
   };
 
   return (
@@ -2338,10 +2408,31 @@ function EventsTab() {
             <input type="datetime-local" value={eStartsAt} onChange={e => setEStartsAt(e.target.value)} className="input-base" />
             <p className="type-micro" style={{ marginTop: 4, color: 'var(--color-ink-muted)' }}>Powers the ~1-hour-before reminder email. The Time field above stays the display label.</p>
           </div>
+          <div>
+            <label htmlFor="event-form-url" className="type-micro block mb-1">Registration form (optional)</label>
+            <input id="event-form-url" type="url" inputMode="url" value={eFormUrl} onChange={e => setEFormUrl(e.target.value)} placeholder="https://forms.gle/…" className="input-base" maxLength={2048} />
+            <p className="type-micro" style={{ marginTop: 4, color: 'var(--color-ink-muted)' }}>A Google Forms link. Students are taken there after their registration is recorded.</p>
+          </div>
+          <div>
+            <label htmlFor="event-attachment" className="type-micro block mb-1">Problem statement (optional)</label>
+            <input id="event-attachment" ref={eFileRef} type="file" accept={EVENT_ATTACHMENT_ACCEPT} className="input-base text-xs"
+              onChange={e => { if (!pickAttachment(e.target.files?.[0], setEFile, setEError)) { e.target.value = ''; setEFile(null); } }} />
+            {eFile ? (
+              <div className="flex items-center gap-2" style={{ marginTop: 4 }}>
+                <FileText size={12} style={{ color: 'var(--color-ink-muted)', flexShrink: 0 }} />
+                <span className="type-micro truncate" style={{ minWidth: 0 }}>{eFile.name} · {formatSize(eFile.size)}</span>
+                <button type="button" className="type-micro" style={{ textDecoration: 'underline', flexShrink: 0 }}
+                  onClick={() => { setEFile(null); if (eFileRef.current) eFileRef.current.value = ''; }}>Remove</button>
+              </div>
+            ) : (
+              <p className="type-micro" style={{ marginTop: 4, color: 'var(--color-ink-muted)' }}>PDF, image, DOCX, PPTX or ZIP, up to 25 MB. Shown on the event as “Problem Statement”.</p>
+            )}
+          </div>
           <button type="submit" disabled={addingEvent} className="btn-primary w-full justify-center" style={{ opacity: addingEvent ? 0.5 : 1 }}>
             {addingEvent ? <><Loader2 size={13} className="animate-spin mr-2" />Scheduling…</> : 'Schedule Event'}
           </button>
-          {eSuccess && <p className="type-micro" style={{ color: '#4ade80' }}>{eSuccess}</p>}
+          {eError && <p role="alert" className="type-micro" style={{ color: '#e5484d' }}>{eError}</p>}
+          {eSuccess && <p role="status" className="type-micro" style={{ color: '#4ade80' }}>{eSuccess}</p>}
         </form>
       </div>
       <div className="lg:col-span-3 space-y-2">
@@ -2352,7 +2443,11 @@ function EventsTab() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="type-body-sm truncate">{ev.title}</p>
-              <p className="type-micro">{formatEventDate(ev.date)} · {ev.registeredCount}/{ev.capacity}</p>
+              <p className="type-micro">
+                {formatEventDate(ev.date)} · {ev.registeredCount}/{ev.capacity}
+                {ev.registrationFormUrl && ' · Form'}
+                {ev.attachment && ' · Problem statement'}
+              </p>
             </div>
             <NotifiedBadge notifiedAt={ev.notifiedAt} />
             <AdminActionButton
@@ -2414,7 +2509,45 @@ function EventsTab() {
                 <input type="datetime-local" value={eeStartsAt} onChange={e => setEeStartsAt(e.target.value)} className="input-base" />
                 <p className="type-micro" style={{ marginTop: 4, color: 'var(--color-ink-muted)' }}>Powers the ~1-hour-before reminder email. The Time field above stays the display label.</p>
               </div>
-              {eeError && <p className="type-micro" style={{ color: '#e5484d' }}>{eeError}</p>}
+              <div>
+                <label htmlFor="edit-event-form-url" className="type-micro block mb-1">Registration form (optional)</label>
+                <input id="edit-event-form-url" type="url" inputMode="url" value={eeFormUrl} onChange={e => setEeFormUrl(e.target.value)} placeholder="https://forms.gle/…" className="input-base" maxLength={2048} />
+                <p className="type-micro" style={{ marginTop: 4, color: 'var(--color-ink-muted)' }}>A Google Forms link. Clear the field to remove the form.</p>
+              </div>
+              <div>
+                <label htmlFor="edit-event-attachment" className="type-micro block mb-1">Problem statement (optional)</label>
+                {editEvent.attachment && !eeFile && (
+                  <div className="flex items-center gap-2" style={{ marginBottom: 6 }}>
+                    <FileText size={12} style={{ color: 'var(--color-ink-muted)', flexShrink: 0 }} />
+                    {eeRemoveAttachment ? (
+                      <span className="type-micro truncate" style={{ minWidth: 0, textDecoration: 'line-through' }}>{editEvent.attachment.name}</span>
+                    ) : (
+                      <a href={editEvent.attachment.url} target="_blank" rel="noopener noreferrer" className="type-micro truncate" style={{ minWidth: 0, textDecoration: 'underline' }}>{editEvent.attachment.name}</a>
+                    )}
+                    {editEvent.attachment.size !== null && !eeRemoveAttachment && <span className="type-micro" style={{ flexShrink: 0 }}>· {formatSize(editEvent.attachment.size)}</span>}
+                    <button type="button" className="type-micro" style={{ textDecoration: 'underline', flexShrink: 0, marginLeft: 'auto' }}
+                      onClick={() => setEeRemoveAttachment(r => !r)}>{eeRemoveAttachment ? 'Undo' : 'Remove'}</button>
+                  </div>
+                )}
+                <input id="edit-event-attachment" ref={eeFileRef} type="file" accept={EVENT_ATTACHMENT_ACCEPT} className="input-base text-xs"
+                  aria-label={editEvent.attachment ? 'Replace problem statement' : 'Add problem statement'}
+                  onChange={e => {
+                    if (pickAttachment(e.target.files?.[0], setEeFile, setEeError)) setEeRemoveAttachment(false);
+                    else { e.target.value = ''; setEeFile(null); }
+                  }} />
+                {eeFile ? (
+                  <div className="flex items-center gap-2" style={{ marginTop: 4 }}>
+                    <span className="type-micro truncate" style={{ minWidth: 0 }}>{editEvent.attachment ? 'Replaces it with ' : ''}{eeFile.name} · {formatSize(eeFile.size)}</span>
+                    <button type="button" className="type-micro" style={{ textDecoration: 'underline', flexShrink: 0 }}
+                      onClick={() => { setEeFile(null); if (eeFileRef.current) eeFileRef.current.value = ''; }}>Cancel</button>
+                  </div>
+                ) : (
+                  <p className="type-micro" style={{ marginTop: 4, color: 'var(--color-ink-muted)' }}>
+                    {eeRemoveAttachment ? 'Removed when you save.' : editEvent.attachment ? 'Choose a file to replace it.' : 'PDF, image, DOCX, PPTX or ZIP, up to 25 MB.'}
+                  </p>
+                )}
+              </div>
+              {eeError && <p role="alert" className="type-micro" style={{ color: '#e5484d' }}>{eeError}</p>}
               <div className="flex gap-2">
                 <button type="submit" disabled={eeLoading} className="btn-primary flex items-center gap-2" style={{ opacity: eeLoading ? 0.6 : 1 }}>
                   {eeLoading ? <Loader2 size={13} className="animate-spin" /> : null} Save Changes
