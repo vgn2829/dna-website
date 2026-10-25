@@ -34,34 +34,43 @@ import { param } from '../routeParams';
 
 export const assetSharingRouter = Router();
 
+// The owner's sharing view. Existing grants are the owner's to inspect and
+// revoke even after they've left the asset's source workspace (they can
+// still stop sharing what they shared). Sharing into NEW workspaces needs
+// current source membership — the same rule grant() enforces — so without
+// it canShare is false and no targets are offered. Anyone but the owner
+// gets null (→ 404), revealing nothing.
 async function sharingInfo(id: string, roll: string) {
-  const asset = await pool.query(
-    `SELECT a.id FROM assets a
-     JOIN workspace_members m ON m.workspace_id = a.workspace_id AND m.roll_number = $2
+  const asset = await pool.query<{ workspace_id: string; source_member: boolean }>(
+    `SELECT a.workspace_id,
+            EXISTS (SELECT 1 FROM workspace_members m WHERE m.workspace_id = a.workspace_id AND m.roll_number = $2) AS source_member
+     FROM assets a
      WHERE a.id = $1 AND a.owner_roll = $2 AND a.status = 'active'`,
     [id, roll]
   );
   if (!asset.rowCount) return null;
+  const canShare = asset.rows[0].source_member;
   const grants = await pool.query(
     `SELECT g.workspace_id, w.name FROM asset_workspace_grants g
      JOIN workspaces w ON w.id = g.workspace_id
      WHERE g.asset_id = $1 ORDER BY w.name`,
     [id]
   );
-  const targets = await pool.query(
-    `SELECT w.id, w.name FROM workspaces w
-     JOIN workspace_members m ON m.workspace_id = w.id
-     WHERE m.roll_number = $2 AND NOT w.is_personal
-       AND w.id <> (SELECT workspace_id FROM assets WHERE id = $1)
-     ORDER BY w.name`,
-    [id, roll]
-  );
-  return { grants: grants.rows, targets: targets.rows };
+  const targets = canShare
+    ? (await pool.query(
+      `SELECT w.id, w.name FROM workspaces w
+       JOIN workspace_members m ON m.workspace_id = w.id
+       WHERE m.roll_number = $1 AND NOT w.is_personal AND w.id <> $2
+       ORDER BY w.name`,
+      [roll, asset.rows[0].workspace_id]
+    )).rows
+    : [];
+  return { grants: grants.rows, targets, canShare };
 }
 
-// GET /api/assets/:id/shares — the owner's view: current grants plus the
-// workspaces they may still share into (every non-personal workspace they
-// belong to, other than the asset's own).
+// GET /api/assets/:id/shares — the owner's view: current grants, whether
+// they may share it further, and the workspaces they may still share into
+// (every non-personal workspace they belong to, other than the asset's own).
 assetSharingRouter.get('/:id/shares', requireStudent, async (req, res) => {
   const result = await sharingInfo(param(req.params.id), req.studentRoll!);
   if (!result) { res.status(404).json({ error: 'Asset not found' }); return; }

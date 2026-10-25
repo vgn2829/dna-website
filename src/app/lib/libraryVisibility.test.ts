@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { assetPublishedMessage, canRemoveIncomingShare, communityAvailable, isLibraryOwner, libraryAttribution, matchesLibraryScope, visibilityHint, VISIBILITY_LABEL } from './libraryVisibility';
+import { assetPublishedMessage, canRemoveIncomingShare, communityAvailable, shareDialogMode, isLibraryOwner, libraryAttribution, matchesLibraryScope, visibilityHint, VISIBILITY_LABEL } from './libraryVisibility';
 
 // Shared Creative Library — client helpers, plus static guards that the
 // owner-only controls stay owner-only in the UI (the server enforces the
@@ -50,6 +50,12 @@ describe('visibility copy', () => {
     expect(visibilityHint('personal', 'template', 'Personal', true)).toMatch(/Community sharing is available in team workspaces/);
     expect(communityAvailable('template', true)).toBe(false);
     expect(communityAvailable('template', false)).toBe(true);
+  });
+  it('share dialog: manage-only once the owner left the workspace, regardless of visibility', () => {
+    expect(shareDialogMode(true, true)).toBe('share');
+    expect(shareDialogMode(true, false)).toBe('publish-first');
+    expect(shareDialogMode(false, true)).toBe('manage-only');
+    expect(shareDialogMode(false, false)).toBe('manage-only');
   });
   it('only a workspace owner/admin may remove an asset shared into it, never their own', () => {
     const incoming = { workspace_id: 'source', owner_roll: 'OWNER' };

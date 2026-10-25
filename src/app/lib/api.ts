@@ -1038,7 +1038,9 @@ export const api = {
     },
     get: (roll: string, id: string, workspaceId?: string) =>
       request<Asset>('GET', `/assets/${id}${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, { roll }),
-    shares: (roll: string, id: string) => request<{grants: Array<{workspace_id: string; name: string}>; targets: Array<{id: string; name: string}>}>('GET', `/assets/${id}/shares`, { roll }),
+    // canShare is false once the owner has left the asset's own workspace:
+    // they can still stop existing shares, but not add new ones.
+    shares: (roll: string, id: string) => request<{grants: Array<{workspace_id: string; name: string}>; targets: Array<{id: string; name: string}>; canShare: boolean}>('GET', `/assets/${id}/shares`, { roll }),
     grant: (roll: string, id: string, workspaceId: string) => request<void>('PUT', `/assets/${id}/shares/${encodeURIComponent(workspaceId)}`, { roll }),
     revoke: (roll: string, id: string, workspaceId: string) => request<void>('DELETE', `/assets/${id}/shares/${encodeURIComponent(workspaceId)}`, { roll }),
     delete: (roll: string, id: string) =>

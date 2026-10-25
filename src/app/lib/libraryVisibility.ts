@@ -59,6 +59,17 @@ export function canRemoveIncomingShare(
   return asset.workspace_id !== workspaceId && asset.owner_roll !== roll && (workspaceRole === 'owner' || workspaceRole === 'admin');
 }
 
+// What the owner's Share with workspace… dialog offers:
+//   share         — add or stop shares (an active Community asset);
+//   publish-first — it must be published to Community before sharing;
+//   manage-only   — the owner left the asset's workspace: existing shares
+//                   can be stopped, nothing new can be shared (or published).
+export type ShareDialogMode = 'share' | 'publish-first' | 'manage-only';
+export function shareDialogMode(canShare: boolean, isCommunity: boolean): ShareDialogMode {
+  if (!canShare) return 'manage-only';
+  return isCommunity ? 'share' : 'publish-first';
+}
+
 // Toast after an asset is published to Community. From a personal workspace
 // nobody else can see it yet — say so, so the next step (sharing) is clear.
 export function assetPublishedMessage(workspaceName: string, isPersonalWorkspace: boolean): string {

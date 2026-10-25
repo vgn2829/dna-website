@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { Check, Users } from 'lucide-react';
 import { api, type Asset } from '../../lib/api';
 import { notifyAssetsChanged } from '../../lib/assetRefresh';
+import { shareDialogMode } from '../../lib/libraryVisibility';
 import { LibraryDialog } from './LibraryDialog';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -50,6 +51,8 @@ export function ShareAssetDialog({
   }, [load]);
 
   const isCommunity = asset.visibility === 'community';
+  // Until sharing info loads, assume the owner may share (the common case).
+  const mode = shareDialogMode(data?.canShare ?? true, isCommunity);
 
   // One row per workspace: every current grant, plus every workspace the
   // owner may still share into.
@@ -96,7 +99,7 @@ export function ShareAssetDialog({
       onClose={onClose}
       footer={<>
         <button type="button" className="btn-secondary" onClick={onClose} style={{ minHeight: 40 }}>Done</button>
-        {!isCommunity && (
+        {mode === 'publish-first' && (
           <button type="button" className="btn-primary" onClick={publish} disabled={publishing} style={{ minHeight: 40, opacity: publishing ? 0.6 : 1 }}>
             {publishing ? 'Publishing…' : 'Publish to Community'}
           </button>
@@ -104,9 +107,11 @@ export function ShareAssetDialog({
       </>}
     >
       <p className="type-body-sm" style={{ margin: '0 0 14px', color: 'var(--color-ink-muted)' }}>
-        {isCommunity
-          ? 'Everyone in a workspace you share with can find and use this asset. It stays yours, and the file is never copied. If you stop sharing, boards that already use it keep it.'
-          : 'Only Community assets can be shared with other workspaces. Publish it to Community first — it stays yours, and the file is never copied.'}
+        {mode === 'manage-only'
+          ? 'You’re no longer a member of this asset’s workspace, so you can’t share it with new workspaces. You can still stop sharing it where it’s shared now — boards that already use it keep it.'
+          : mode === 'share'
+            ? 'Everyone in a workspace you share with can find and use this asset. It stays yours, and the file is never copied. If you stop sharing, boards that already use it keep it.'
+            : 'Only Community assets can be shared with other workspaces. Publish it to Community first — it stays yours, and the file is never copied.'}
       </p>
 
       {!data && !error && (
@@ -115,7 +120,9 @@ export function ShareAssetDialog({
 
       {data && rows.length === 0 && (
         <p className="type-caption" style={{ margin: 0 }}>
-          You can share with team workspaces you’re a member of. Join or create a team workspace to share this asset.
+          {mode === 'manage-only'
+            ? 'It isn’t shared with any workspace.'
+            : 'You can share with team workspaces you’re a member of. Join or create a team workspace to share this asset.'}
         </p>
       )}
 

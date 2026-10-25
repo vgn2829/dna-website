@@ -164,7 +164,8 @@ describe('ordinary members share their own assets', () => {
     await query(`INSERT INTO workspace_members(workspace_id, roll_number, role, added_at) VALUES ('studio', 'BOB', 'member', now())`);
     await query(`DELETE FROM workspace_members WHERE workspace_id = 'team' AND roll_number = 'BOB'`);
     expect((await share('BOB', own, 'studio')).status).toBe(404);
-    expect((await request(app).get(`/api/assets/${own}/shares`).set(auth('BOB'))).status).toBe(404);
+    // They may still see (and stop) their existing shares, but get no new targets.
+    expect((await request(app).get(`/api/assets/${own}/shares`).set(auth('BOB'))).body).toEqual({ grants: [], targets: [], canShare: false });
 
     // A recipient removed from the target loses list and detail access.
     const alice = (await upload('ALICE', 'p-alice', { visibility: 'community' })).body.id as string;
@@ -175,6 +176,44 @@ describe('ordinary members share their own assets', () => {
     await query(`DELETE FROM workspace_members WHERE workspace_id = 'team' AND roll_number = 'BOB'`);
     expect((await list('BOB', 'team')).status).toBe(403);
     expect((await detail('BOB', alice)).status).toBe(404);
+  });
+});
+
+describe('owners who left the source workspace', () => {
+  it('can inspect and stop existing shares, but share nowhere new and see nothing else', async () => {
+    // Bob's community asset lives in TEAM; he shares it into STUDIO, then leaves TEAM.
+    const id = (await upload('BOB', 'team', { visibility: 'community' })).body.id as string;
+    const before = await request(app).get(`/api/assets/${id}/shares`).set(auth('BOB'));
+    expect(before.body).toMatchObject({ canShare: true, targets: [{ id: 'studio', name: 'Studio' }] });
+    expect((await share('BOB', id, 'studio')).status).toBe(204);
+    await query(`DELETE FROM workspace_members WHERE workspace_id = 'team' AND roll_number = 'BOB'`);
+
+    const info = await request(app).get(`/api/assets/${id}/shares`).set(auth('BOB'));
+    expect(info.status).toBe(200);
+    expect(info.body).toEqual({ grants: [{ workspace_id: 'studio', name: 'Studio' }], targets: [], canShare: false });
+    // No new grants, even into a workspace he still belongs to; no rejoining.
+    await query(`INSERT INTO workspaces(id, name, is_personal, owner_roll, created_at) VALUES ('lab', 'Lab', false, 'BOB', now())`);
+    await query(`INSERT INTO workspace_members(workspace_id, roll_number, role, added_at) VALUES ('lab', 'BOB', 'owner', now())`);
+    expect((await share('BOB', id, 'lab')).status).toBe(404);
+    expect(await query(`SELECT 1 FROM workspace_members WHERE workspace_id = 'team' AND roll_number = 'BOB'`)).toEqual([]);
+    // He can't manage the asset itself any more either.
+    expect((await request(app).patch(`/api/assets/${id}`).set(auth('BOB')).send({ filename: 'x.png' })).status).toBe(403);
+    // But he can stop the share he made.
+    expect((await unshare('BOB', id, 'studio')).status).toBe(204);
+    expect(ids(await list('DAVE', 'studio'))).toEqual([]);
+    expect((await request(app).get(`/api/assets/${id}/shares`).set(auth('BOB'))).body).toEqual({ grants: [], targets: [], canShare: false });
+  });
+
+  it("never exposes another user's asset or grants, nor a hidden asset's", async () => {
+    const id = (await upload('ALICE', 'team', { visibility: 'community' })).body.id as string;
+    await request(app).put(`/api/assets/admin/${id}/shares/studio`).set(admin());
+    for (const roll of ['BOB', 'DAVE', 'EVE']) {
+      const res = await request(app).get(`/api/assets/${id}/shares`).set(auth(roll));
+      expect(res.status).toBe(404);
+      expect(res.body).toEqual({ error: 'Asset not found' });
+    }
+    await request(app).patch(`/api/assets/admin/${id}`).set(admin()).send({ status: 'hidden' });
+    expect((await request(app).get(`/api/assets/${id}/shares`).set(auth('ALICE'))).status).toBe(404);
   });
 });
 
