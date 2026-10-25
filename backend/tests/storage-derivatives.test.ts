@@ -460,11 +460,12 @@ describe('read-time URL mapping', () => {
 });
 
 describe('local static serving cache headers', () => {
-  it('derived/ objects and library asset originals are immutable for a year; other uploads keep their existing headers', async () => {
+  it('derived/ objects cache for a year, library asset originals for a day; other uploads keep their existing headers', async () => {
     vi.restoreAllMocks(); // real local provider for this one
     const UPLOADS = path.join(__dirname, '../uploads');
     const dKey = `derived/assets/cachetest/${uuidv4()}.jpg/t512.webp`;
-    // Library asset originals: a fresh uuid key per upload, never overwritten.
+    // Library asset originals: a fresh uuid key per upload, never overwritten,
+    // cached for a day (storage/index.ts ASSET_ORIGINAL_CACHE_SECONDS).
     const oKey = `assets/cachetest/${uuidv4()}.jpg`;
     // Any other upload path (gallery, canvas files, …) is untouched.
     const otherKey = `cachetest-other/${uuidv4()}.jpg`;
@@ -475,7 +476,9 @@ describe('local static serving cache headers', () => {
       const other = await request(app).get(`/uploads/${otherKey}`);
       expect(d.status).toBe(200);
       expect(d.headers['cache-control']).toBe(DERIVATIVE_CACHE_CONTROL);
-      expect(o.headers['cache-control']).toBe(DERIVATIVE_CACHE_CONTROL);
+      expect(o.headers['cache-control']).toBe('public, max-age=86400');
+      expect(o.headers['cache-control']).toBe(storageModule.ASSET_ORIGINAL_CACHE_CONTROL);
+      expect(d.headers['cache-control']).toBe('public, max-age=31536000, immutable'); // thumbnails unchanged
       expect(other.headers['cache-control']).toBe('public, max-age=0');
       expect(d.headers['content-disposition']).toBe('attachment');
       expect(o.headers['content-disposition']).toBe('attachment');

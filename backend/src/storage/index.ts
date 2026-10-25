@@ -12,7 +12,7 @@ export interface StorageProvider {
   // express.static, where app.ts sets headers instead. Pass it only for an
   // object whose key is never overwritten — image derivatives
   // (storage/derivatives.ts) and library asset originals (routes/assets.ts,
-  // a fresh uuid key per upload).
+  // a fresh uuid key per upload; see ASSET_ORIGINAL_CACHE_SECONDS).
   upload(path: string, buffer: Buffer, mimeType: string, opts?: { cacheControl?: string }): Promise<void>;
   // Store a file that is already on local disk (a multer temp file) without
   // reading it all into memory — the large-upload path (lib/uploadLimits.ts
@@ -34,9 +34,20 @@ export interface StorageProvider {
   list(prefix: string): Promise<StoredObject[]>;
 }
 
-// cacheControl (seconds) for an object whose key is never overwritten: a
-// year, the same as image derivatives (storage/derivatives.ts).
-export const IMMUTABLE_CACHE_SECONDS = '31536000';
+// Cache lifetime for library asset ORIGINALS: one day. Their keys are fresh
+// uuids that are never overwritten, so a cached copy is never stale content
+// — but deleting an asset should stop its file being served, and whether
+// the Supabase CDN purges cached objects on delete has not been verified
+// for this project. A day bounds how long a deleted or replaced original
+// can keep being served from a cache (Supabase's own default is an hour).
+// It does NOT make URLs private: storage URLs are public, and anyone with
+// one can fetch the file until it is deleted and caches expire.
+// Thumbnails (storage/derivatives.ts) keep their own, longer policy.
+// storage-js sends it as `cache-control: max-age=<seconds>` (what Supabase's
+// CDN then serves isn't verified here); the local provider serves
+// ASSET_ORIGINAL_CACHE_CONTROL (app.ts).
+export const ASSET_ORIGINAL_CACHE_SECONDS = '86400';
+export const ASSET_ORIGINAL_CACHE_CONTROL = `public, max-age=${ASSET_ORIGINAL_CACHE_SECONDS}`;
 
 // The storage service refused an object because of its size (e.g. a
 // Supabase project whose global file size limit is below the app's own).

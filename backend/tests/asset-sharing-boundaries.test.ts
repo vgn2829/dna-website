@@ -341,13 +341,13 @@ describe('revoking blocks new discovery and use but never touches saved content'
 });
 
 describe('upload efficiency', () => {
-  it('stores originals as immutable and fingerprints only keyed (retryable) uploads', async () => {
+  it('caches originals for a day and fingerprints only keyed (retryable) uploads', async () => {
     const store = vi.spyOn(storageModule.getStorage(), 'uploadFile');
     const plain = await upload('ALICE', 'team');
     const keyed = await upload('ALICE', 'team', { client_upload_id: 'keyed-upload-1' });
     expect(plain.status).toBe(201);
     expect(keyed.status).toBe(201);
-    for (const call of store.mock.calls) expect(call[3]).toEqual({ cacheControl: storageModule.IMMUTABLE_CACHE_SECONDS });
+    for (const call of store.mock.calls) expect(call[3]).toEqual({ cacheControl: '86400' }); // one day
 
     const rows = await query<{ id: string; upload_fingerprint: string | null }>('SELECT id, upload_fingerprint FROM assets');
     expect(rows.find(r => r.id === plain.body.id)!.upload_fingerprint).toBeNull();
@@ -357,7 +357,7 @@ describe('upload efficiency', () => {
     const key = (await query<{ storage_key: string }>('SELECT storage_key FROM assets WHERE id = $1', [plain.body.id]))[0].storage_key;
     const served = await request(app).get(`/uploads/${key}`);
     expect(served.status).toBe(200);
-    expect(served.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+    expect(served.headers['cache-control']).toBe('public, max-age=86400');
   });
 
   it('other uploads (not under assets/) keep their default caching', async () => {
