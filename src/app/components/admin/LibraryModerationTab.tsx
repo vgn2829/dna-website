@@ -1,8 +1,9 @@
+import { notifyAssetsChanged } from '../../lib/assetRefresh';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { EyeOff, FileText, Link2, LayoutTemplate, Search } from 'lucide-react';
+import { EyeOff, FileText, Link2, LayoutTemplate, Search, Trash2 } from 'lucide-react';
 import { api, type AdminAsset, type AdminTemplate, type LibraryAdminFilters, type LibraryStatus, type LibraryVisibility } from '../../lib/api';
-import { formatSize } from '../../lib/assetLibrary';
+import { FAMILY_LABEL, fileFamily, formatSize } from '../../lib/assetLibrary';
 import { VisibilityBadge } from '../library/LibraryVisibility';
 import { VISIBILITY_LABEL } from '../../lib/libraryVisibility';
 
@@ -15,7 +16,8 @@ import { VISIBILITY_LABEL } from '../../lib/libraryVisibility';
 // Admins see everything — all workspaces, personal and community, active and
 // hidden — and can override visibility or hide/restore. Hiding never deletes
 // anything: the item leaves every normal flow and comes back intact on
-// restore. Layout follows the Moodboards admin tab (header + search, one
+// restore. Assets can also be deleted: the server removes the library entry
+// and deletes the stored file only if no board or template still uses it. Layout follows the Moodboards admin tab (header + search, one
 // card row per item, controls on the right, native confirm for Hide).
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -90,9 +92,27 @@ export function LibraryModerationTab({ kind }: { kind: Kind }) {
         ? await api.assets.adminUpdate(row.id, body)
         : await api.templates.adminUpdate(row.id, body);
       applyUpdated(updated as Row);
+      if (kind === 'assets') notifyAssetsChanged();
       toast.success(success);
     } catch {
       toast.error(`Failed to update ${noun}`);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const remove = async (row: Row) => {
+    const name = nameOf(kind, row);
+    if (!confirm(`Delete "${name}" by ${row.owner_name ?? row.owner_roll}? It is removed from the library for everyone. Its file is deleted too, unless a board or template already uses it — then the file is kept so those stay intact. This can't be undone.`)) return;
+    setBusyId(row.id);
+    try {
+      const result = await api.assets.adminDelete(row.id);
+      notifyAssetsChanged();
+      setRows(prev => prev.filter(r => r.id !== row.id));
+      if (result.storageWarning) toast.warning(result.storageWarning);
+      else toast.success(result.fileRetained ? `“${name}” deleted — its file is kept because boards still use it` : `“${name}” deleted`);
+    } catch {
+      toast.error(`Failed to delete ${noun}`);
     } finally {
       setBusyId(null);
     }
@@ -112,7 +132,7 @@ export function LibraryModerationTab({ kind }: { kind: Kind }) {
             {kind === 'assets' ? 'Assets' : 'Templates'}
           </h2>
           <p className="type-caption" style={{ margin: 0 }}>
-            Every {noun} in every workspace — change visibility, or hide and restore. Hiding never deletes anything.
+            Every {noun} in every workspace — change visibility, or hide and restore. Hiding never deletes anything.{kind === 'assets' ? ' Delete removes an asset for good.' : ''}
           </p>
         </div>
         <label className="search-field" style={{ flex: '0 1 280px', minWidth: 0 }}>
@@ -160,8 +180,15 @@ export function LibraryModerationTab({ kind }: { kind: Kind }) {
           {rows.map(row => {
             const name = nameOf(kind, row);
             const busy = busyId === row.id;
+            const asset = row as AdminAsset;
             const meta = kind === 'assets'
-              ? [(row as AdminAsset).kind === 'link' ? 'Link' : formatSize((row as AdminAsset).size_bytes) || (row as AdminAsset).kind]
+              ? asset.kind === 'link'
+                ? ['Link']
+                : [
+                    asset.kind === 'image' ? 'Image' : FAMILY_LABEL[fileFamily(asset.extension)],
+                    asset.extension ? asset.extension.toUpperCase() : '',
+                    formatSize(asset.size_bytes),
+                  ]
               : [];
             return (
               <li key={row.id} data-library-row={row.id} style={{
@@ -214,6 +241,11 @@ export function LibraryModerationTab({ kind }: { kind: Kind }) {
                   ) : (
                     <button type="button" disabled={busy} onClick={() => hide(row)} className="btn-translucent btn-sm is-danger touch-target" aria-label={`Hide ${name}`}>
                       Hide
+                    </button>
+                  )}
+                  {kind === 'assets' && (
+                    <button type="button" disabled={busy} onClick={() => remove(row)} className="btn-translucent btn-sm btn-icon is-danger touch-target" aria-label={`Delete ${name}`} title="Delete">
+                      <Trash2 size={14} />
                     </button>
                   )}
                 </div>

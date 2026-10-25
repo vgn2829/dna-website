@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { isLibraryOwner, libraryAttribution, matchesLibraryScope, visibilityHint, VISIBILITY_LABEL } from './libraryVisibility';
+import { assetPublishedMessage, communityAvailable, isLibraryOwner, libraryAttribution, matchesLibraryScope, visibilityHint, VISIBILITY_LABEL } from './libraryVisibility';
 
 // Shared Creative Library — client helpers, plus static guards that the
 // owner-only controls stay owner-only in the UI (the server enforces the
@@ -44,10 +44,22 @@ describe('visibility copy', () => {
   it('labels are words, not colors', () => {
     expect(VISIBILITY_LABEL).toEqual({ personal: 'Personal', community: 'Community' });
   });
-  it('explains each choice, and why community is unavailable in a personal workspace', () => {
+  it('explains each choice; template community is its workspace, and unavailable in a personal one', () => {
     expect(visibilityHint('personal', 'template', 'Design Team', false)).toBe('Only you can use this template.');
-    expect(visibilityHint('community', 'asset', 'Design Team', false)).toMatch(/^Anyone in Design Team can discover and use this asset\. Only you can edit or delete it\.$/);
-    expect(visibilityHint('personal', 'asset', 'Personal', true)).toMatch(/Community sharing is available in team workspaces/);
+    expect(visibilityHint('community', 'template', 'Design Team', false)).toMatch(/^Anyone in Design Team can discover and use this template\. Only you can edit or delete it\.$/);
+    expect(visibilityHint('personal', 'template', 'Personal', true)).toMatch(/Community sharing is available in team workspaces/);
+    expect(communityAvailable('template', true)).toBe(false);
+    expect(communityAvailable('template', false)).toBe(true);
+  });
+  it('asset community is always available; its copy never promises reach a personal workspace lacks', () => {
+    for (const personalWs of [true, false]) {
+      expect(communityAvailable('asset', personalWs)).toBe(true);
+      expect(visibilityHint('personal', 'asset', 'Personal', personalWs)).toBe('Only you can use this asset.');
+    }
+    expect(visibilityHint('community', 'asset', 'Personal', true)).toBe('Only workspaces you share it with can use it — choose Share with workspace… from its ⋯ menu. Only you can edit or delete it.');
+    expect(visibilityHint('community', 'asset', 'Design Team', false)).toBe('Anyone in Design Team can discover and use this asset, plus any workspace you share it with. Only you can edit or delete it.');
+    expect(assetPublishedMessage('Personal', true)).toBe('Published to Community — share it with a workspace so others can use it');
+    expect(assetPublishedMessage('Design Team', false)).toBe('Published to Community — everyone in Design Team can use it');
   });
 });
 
@@ -96,10 +108,42 @@ describe('admin moderation UI + upload limit (static)', () => {
     expect(tab).toMatch(/if \(!confirm\(/); // Hide asks first
   });
   it('upload copy and validation read the shared 300 MB constant', () => {
-    expect(read('components/assets/AddAssetDialog.tsx')).toMatch(/Maximum file size: \{MAX_UPLOAD_LABEL\}/);
+    expect(read('components/assets/AddAssetDialog.tsx')).toMatch(/Files up to \{MAX_UPLOAD_LABEL\}/);
     const admin = read('pages/AdminPage.tsx');
     expect(admin).toMatch(/Maximum file size: \{MAX_UPLOAD_LABEL\}/);
     expect(admin).not.toMatch(/MAX_MB|max 50 MB/);
     expect(read('lib/uploadLimits.ts')).toMatch(/export \* from '\.\.\/\.\.\/\.\.\/backend\/src\/lib\/uploadLimits'/);
+  });
+});
+
+describe('asset upload + moderation wiring (static)', () => {
+  it('the Add Asset queue plans files up front, sends an idempotency key, reports progress, and offers Retry', () => {
+    const dialog = read('components/assets/AddAssetDialog.tsx');
+    expect(dialog).toMatch(/planUploadBatch\(files\)/);
+    expect(dialog).toMatch(/clientUploadId: next\.clientUploadId/);
+    expect(dialog).toMatch(/onProgress: fraction =>/);
+    expect(dialog).toMatch(/role="progressbar"/);
+    expect(dialog).toMatch(/onClick=\{\(\) => retry\(item\.key\)\}/);
+    // A failure shows the classified reason, never the raw exception text alone.
+    expect(dialog).toMatch(/err instanceof UploadError/);
+    // A server rate limit pauses the queue for Retry-After, then resumes.
+    expect(dialog).toMatch(/if \(failure\.retryAfterSeconds\) \{[\s\S]*?await pause\(failure\.retryAfterSeconds \* 1000\);[\s\S]*?continue;/);
+    const api = read('lib/api.ts');
+    expect(api).toMatch(/formData\.append\('client_upload_id', opts\.clientUploadId\)/);
+    expect(api).toMatch(/xhr\.onerror = \(\) => reject\(new UploadError\(describeUploadFailure\(\{ type: 'network' \}\)\)\)/);
+  });
+  it('a broken image shows a genuine error tile; files keep their type tile', () => {
+    const preview = read('components/assets/AssetPreview.tsx');
+    expect(preview).toMatch(/aria-label="Image couldn't load"/);
+    expect(preview).toMatch(/else setFailed\(true\)/);
+  });
+  it('admins delete assets through the admin endpoint, after a confirm', () => {
+    const tab = read('components/admin/LibraryModerationTab.tsx');
+    expect(tab).toMatch(/api\.assets\.adminDelete\(row\.id\)/);
+    expect(tab.slice(tab.indexOf('const remove'), tab.indexOf('const hide'))).toMatch(/if \(!confirm\(/);
+  });
+  it('a community asset from another workspace can be used but not filed into this workspace\'s collections', () => {
+    expect(read('components/assets/AssetBrowser.tsx')).toMatch(/canMove=\{asset\.workspace_id === workspaceId && asset\.owner_roll === roll\}/);
+    expect(read('components/assets/AssetCard.tsx')).toMatch(/\{canMove && <DropdownMenu\.Item/);
   });
 });

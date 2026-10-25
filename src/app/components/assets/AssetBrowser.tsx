@@ -1,9 +1,11 @@
+import { notifyAssetsChanged, useAssetRefresh } from '../../lib/assetRefresh';
+import { ShareAssetDialog } from './ShareAssetDialog';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { toast } from 'sonner';
 import { Search, Plus, Layers, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { api, type Asset, type AssetCollection, type AssetKind, type LibraryScope, type LibraryVisibility } from '../../lib/api';
-import { matchesLibraryScope } from '../../lib/libraryVisibility';
+import { assetPublishedMessage, matchesLibraryScope } from '../../lib/libraryVisibility';
 import { ScopeTabs } from '../library/LibraryVisibility';
 import { usePortalContainer } from '../PortalContainer';
 import { AssetCard } from './AssetCard';
@@ -21,9 +23,10 @@ import { CollectionFormDialog, MoveAssetDialog, RenameAssetDialog } from './Coll
 //     handleInsertAsset → insertImageAsset path
 // Filtering (kind / q / collection / scope) is server-side so it composes
 // with the existing cursor pagination instead of only filtering the first
-// page. Scope is the Shared Creative Library view: All Assets (yours plus
-// members' community assets), My Assets, Community — another member's
-// personal asset is never sent to this browser at all.
+// page. Scope is the Shared Creative Library view: All Assets (yours in
+// this workspace plus explicitly granted Community assets), My Assets,
+// Community (source workspace or explicit grants) — another
+// member's personal asset is never sent to this browser at all.
 // ─────────────────────────────────────────────────────────────────────────
 
 export type LibraryTab = 'all' | AssetKind;
@@ -56,6 +59,8 @@ export function AssetBrowser({
   isPersonalWorkspace?: boolean;
 }) {
   const portalContainer = usePortalContainer();
+  const revision = useAssetRefresh();
+  const [sharing, setSharing] = useState<Asset | null>(null);
   const [tab, setTab] = useState<LibraryTab>(initialTab);
   const [collectionFilter, setCollectionFilter] = useState<CollectionFilter>('all');
   const [scope, setScope] = useState<LibraryScope>('all');
@@ -92,7 +97,7 @@ export function AssetBrowser({
       .catch(() => { /* the bar just stays as-is; assets still load */ });
   }, [roll, workspaceId]);
 
-  useEffect(() => { refreshCollections(); }, [refreshCollections]);
+  useEffect(() => { refreshCollections(); }, [refreshCollections, revision]);
 
   // A collection that disappeared (deleted here or elsewhere) drops the
   // filter back to everything rather than showing a permanently empty view.
@@ -122,7 +127,7 @@ export function AssetBrowser({
       })
       .catch(() => { if (seq === requestSeq.current) setLoadError(true); })
       .finally(() => { if (seq === requestSeq.current) setLoading(false); });
-  }, [roll, workspaceId, filters]);
+  }, [roll, workspaceId, filters, revision]);
 
   const loadMore = async () => {
     if (!nextCursor) return;
@@ -149,6 +154,7 @@ export function AssetBrowser({
       || (collectionFilter === 'none' ? asset.collection_id === null : asset.collection_id === collectionFilter));
 
   const handleAdded = (asset: Asset) => {
+    notifyAssetsChanged();
     if (matchesView(asset)) setAssets(prev => [asset, ...prev.filter(a => a.id !== asset.id)]);
     if (asset.collection_id) refreshCollections();
   };
@@ -164,6 +170,7 @@ export function AssetBrowser({
   const handleMove = async (asset: Asset, collectionId: string | null) => {
     const updated = await api.assets.update(roll, asset.id, { collection_id: collectionId });
     applyUpdated(updated);
+    notifyAssetsChanged();
     refreshCollections();
     setMoving(null);
     toast.success(collectionId ? `Moved to ${collectionById.get(collectionId)?.name ?? 'collection'}` : 'Removed from collection');
@@ -172,6 +179,7 @@ export function AssetBrowser({
   const handleRename = async (asset: Asset, name: string) => {
     const updated = await api.assets.update(roll, asset.id, { filename: name });
     applyUpdated(updated);
+    notifyAssetsChanged();
     setRenaming(null);
     toast.success('Asset renamed');
   };
@@ -181,9 +189,10 @@ export function AssetBrowser({
     try {
       const updated = await api.assets.update(roll, asset.id, { visibility });
       applyUpdated(updated);
+      notifyAssetsChanged();
       refreshCollections();
       toast.success(visibility === 'community'
-        ? `Published to Community — everyone in ${workspaceName} can use it`
+        ? assetPublishedMessage(workspaceName, isPersonalWorkspace)
         : 'Asset is now personal — only you can see it');
     } catch {
       toast.error(visibility === 'community' ? 'Failed to publish asset' : 'Failed to make asset personal');
@@ -196,6 +205,7 @@ export function AssetBrowser({
       const res = await api.assets.delete(roll, asset.id);
       setAssets(prev => prev.filter(a => a.id !== asset.id));
       setConfirmDelete(null);
+      notifyAssetsChanged();
       if (asset.collection_id) refreshCollections();
       if (res.storageWarning) toast.warning(res.storageWarning);
       else toast.success('Asset deleted');
@@ -361,8 +371,8 @@ export function AssetBrowser({
           <EmptyState
             title="No community assets yet"
             body={isPersonalWorkspace
-              ? 'Community assets are shared inside team workspaces. Switch to a team workspace to see what your teammates have published.'
-              : `Nothing in ${workspaceName} has been published to Community yet. Publish one of your assets from its ⋯ menu to share it with the workspace.`}
+              ? 'Your personal workspace has only you in it. To share an asset with your team, publish it to Community, then choose Share with workspace… from its ⋯ menu. Assets your teammates publish appear in that team workspace.'
+              : `Nothing in ${workspaceName} has been published or shared to Community yet. Publish one of your assets from its ⋯ menu, or choose Community when you add it.`}
           />
         ) : isFiltered ? (
           <EmptyState
@@ -385,12 +395,14 @@ export function AssetBrowser({
                 asset={asset}
                 collectionName={asset.collection_id && asset.collection_id !== collectionFilter ? collectionById.get(asset.collection_id)?.name : null}
                 onInsert={onInsert}
+                workspaceId={workspaceId}
+                onShare={setSharing}
                 onMove={setMoving}
                 onRename={setRenaming}
                 onDelete={setConfirmDelete}
                 roll={roll}
                 onVisibility={handleVisibility}
-                canPublish={!isPersonalWorkspace}
+                canMove={asset.workspace_id === workspaceId && asset.owner_roll === roll}
               />
             ))}
           </div>
@@ -402,6 +414,20 @@ export function AssetBrowser({
             </div>
           )}
         </>
+      )}
+
+      {sharing && (
+        <ShareAssetDialog
+          asset={sharing}
+          roll={roll}
+          onClose={() => setSharing(null)}
+          onPublish={async asset => {
+            const updated = await api.assets.update(roll, asset.id, { visibility: 'community' });
+            applyUpdated(updated);
+            notifyAssetsChanged();
+            setSharing(updated);
+          }}
+        />
       )}
 
       {showAdd && (

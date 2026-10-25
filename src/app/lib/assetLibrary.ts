@@ -39,6 +39,7 @@ export type UploadPlan =
 // go through the original image path (previewable, insertable onto
 // boards); everything else is a general library file.
 export function classifyUpload(file: { name: string; type: string; size: number }): UploadPlan {
+  if (file.size === 0) return { ok: false, error: `${file.name} is empty (0 bytes).` };
   if (IMAGE_MIME.includes(file.type)) {
     if (file.size > IMAGE_MAX_BYTES) return { ok: false, error: `${file.name} is larger than the ${MAX_UPLOAD_LABEL} maximum file size.` };
     return { ok: true, kind: 'image' };
@@ -50,14 +51,16 @@ export function classifyUpload(file: { name: string; type: string; size: number 
 
 // Visual grouping for a file card's icon/label only — never a restriction
 // (unknown extensions simply fall into 'other').
-export type FileFamily = 'design' | 'document' | 'slides' | 'archive' | 'image' | 'video' | 'audio' | 'font' | 'other';
+export type FileFamily = 'design' | 'document' | 'slides' | 'archive' | 'image' | 'raw' | 'video' | 'audio' | 'font' | 'other';
 
 const FAMILY_BY_EXT: Record<string, FileFamily> = {
   psd: 'design', ai: 'design', eps: 'design', xd: 'design', fig: 'design', sketch: 'design', indd: 'design', afdesign: 'design', blend: 'design', c4d: 'design', aep: 'design', prproj: 'design',
   pdf: 'document', doc: 'document', docx: 'document', txt: 'document', md: 'document', rtf: 'document', pages: 'document', xls: 'document', xlsx: 'document', csv: 'document',
   ppt: 'slides', pptx: 'slides', key: 'slides',
   zip: 'archive', rar: 'archive', '7z': 'archive', gz: 'archive', tar: 'archive',
-  png: 'image', jpg: 'image', jpeg: 'image', webp: 'image', gif: 'image', svg: 'image', tif: 'image', tiff: 'image', heic: 'image', raw: 'image', bmp: 'image',
+  png: 'image', jpg: 'image', jpeg: 'image', webp: 'image', gif: 'image', svg: 'image', tif: 'image', tiff: 'image', heic: 'image', bmp: 'image',
+  // Camera RAW — stored and downloadable, never previewable in a browser.
+  raw: 'raw', arw: 'raw', cr2: 'raw', cr3: 'raw', nef: 'raw', nrw: 'raw', orf: 'raw', rw2: 'raw', raf: 'raw', dng: 'raw', srw: 'raw', pef: 'raw',
   mp4: 'video', mov: 'video', webm: 'video', avi: 'video', mkv: 'video',
   mp3: 'audio', wav: 'audio', aac: 'audio', flac: 'audio',
   ttf: 'font', otf: 'font', woff: 'font', woff2: 'font',
@@ -69,7 +72,7 @@ export function fileFamily(extension: string | null | undefined): FileFamily {
 
 export const FAMILY_LABEL: Record<FileFamily, string> = {
   design: 'Design file', document: 'Document', slides: 'Presentation', archive: 'Archive',
-  image: 'Image file', video: 'Video', audio: 'Audio', font: 'Font', other: 'File',
+  image: 'Image file', raw: 'RAW image', video: 'Video', audio: 'Audio', font: 'Font', other: 'File',
 };
 
 export const KIND_LABEL: Record<AssetKind, string> = { image: 'Image', file: 'File', link: 'Link' };
@@ -151,4 +154,91 @@ export function assetPreviewSrc(asset: Pick<Asset, 'kind' | 'url' | 'thumb_url'>
 export function assetPreviewFallback(asset: Pick<Asset, 'url' | 'thumb_url'>, failedSrc: string): string | null {
   if (!asset.thumb_url || !asset.url || asset.url === asset.thumb_url) return null;
   return failedSrc === asset.thumb_url ? asset.url : null;
+}
+
+// ── Upload queue ────────────────────────────────────────────────────────
+// Splits picked/dropped files into those the queue will upload and those
+// refused up front (too large, no extension) — a refused file never enters
+// the queue, so it can't hold anything up.
+export function planUploadBatch<F extends { name: string; type: string; size: number }>(files: F[]): {
+  accepted: Array<{ file: F; kind: 'image' | 'file' }>;
+  rejected: Array<{ name: string; reason: string }>;
+} {
+  const accepted: Array<{ file: F; kind: 'image' | 'file' }> = [];
+  const rejected: Array<{ name: string; reason: string }> = [];
+  for (const file of files) {
+    const plan = classifyUpload(file);
+    if (plan.ok) accepted.push({ file, kind: plan.kind });
+    else rejected.push({ name: file.name, reason: plan.error });
+  }
+  return { accepted, rejected };
+}
+
+// Per-file idempotency key: a retry reuses it, so an upload whose response
+// was lost is never stored twice (the server returns the first asset).
+export function newClientUploadId(): string {
+  const c = globalThis.crypto as Crypto | undefined;
+  if (c?.randomUUID) return c.randomUUID();
+  return `u${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+}
+
+// What happened to an upload request, as the queue reports it.
+//   network — no HTTP response reached the page (connection dropped, server
+//             restarting, a proxy error without CORS headers). Browsers
+//             report this as "Load failed" (Safari) / "Failed to fetch".
+//   timeout — the request exceeded its time limit.
+//   http    — the server answered with this status (body may be non-JSON,
+//             e.g. a proxy's HTML error page).
+export type UploadOutcome =
+  | { type: 'network' }
+  | { type: 'timeout' }
+  | { type: 'http'; status: number; body: string; retryAfterSeconds?: number };
+
+export interface UploadFailure {
+  message: string;
+  retryable: boolean;
+  sessionExpired?: true;
+  // Set on a rate-limit (429) the server says how long to wait for; the
+  // queue pauses that long and resumes on its own.
+  retryAfterSeconds?: number;
+}
+
+// Longest server-requested pause the queue waits out automatically.
+export const MAX_AUTO_RESUME_SECONDS = 120;
+
+function serverMessage(body: string): string | null {
+  try {
+    const data = JSON.parse(body) as { error?: unknown; message?: unknown };
+    const msg = data.error ?? data.message;
+    return typeof msg === 'string' && msg.trim() ? msg.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+// Turns a failed upload into an honest, specific message — never the
+// browser's raw "Load failed" — and says whether retrying can help.
+export function describeUploadFailure(outcome: UploadOutcome): UploadFailure {
+  if (outcome.type === 'network') {
+    return { message: 'Upload interrupted — the connection to the server was lost. Retry to finish it; nothing will be added twice.', retryable: true };
+  }
+  if (outcome.type === 'timeout') {
+    return { message: 'Upload timed out before the server replied. Retry to upload it again.', retryable: true };
+  }
+  const { status, body } = outcome;
+  const msg = serverMessage(body);
+  if (status === 401) return { message: 'Your session has expired. Sign in again, then retry.', retryable: false, sessionExpired: true };
+  if (status === 413) return { message: msg ?? `This file is larger than the ${MAX_UPLOAD_LABEL} maximum file size.`, retryable: false };
+  if (status === 429) {
+    const wait = outcome.retryAfterSeconds;
+    return wait && wait > 0 && wait <= MAX_AUTO_RESUME_SECONDS
+      ? { message: `Upload limit reached — resuming automatically in about ${Math.ceil(wait)} s.`, retryable: true, retryAfterSeconds: wait }
+      : { message: 'Too many uploads in a short time. Wait a minute, then retry.', retryable: true };
+  }
+  if (status >= 500) {
+    return msg
+      ? { message: `${msg} (HTTP ${status}). Retry in a moment.`, retryable: true }
+      : { message: `The server is temporarily unavailable (HTTP ${status}). Retry in a moment.`, retryable: true };
+  }
+  return { message: msg ?? `Upload failed (HTTP ${status}).`, retryable: false };
 }

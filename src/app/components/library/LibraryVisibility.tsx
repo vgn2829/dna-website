@@ -1,6 +1,6 @@
 import { Lock, Users } from 'lucide-react';
 import type { LibraryScope, LibraryVisibility } from '../../lib/api';
-import { VISIBILITY_LABEL, visibilityHint } from '../../lib/libraryVisibility';
+import { VISIBILITY_LABEL, communityAvailable, visibilityHint } from '../../lib/libraryVisibility';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Shared Creative Library UI — used by templates (TemplatesPage, BoardPage's
@@ -26,8 +26,10 @@ export function VisibilityBadge({ visibility }: { visibility: LibraryVisibility 
 }
 
 // Personal / Community choice for save, upload and edit flows. Personal is
-// every caller's default. In a personal workspace there is no one else to
-// share with, so Community is disabled and the hint says why.
+// every caller's default. A template's Community is its workspace, so in a
+// personal workspace (no one else to share with) it is disabled and the
+// hint says why. An asset's Community also covers workspaces the owner
+// explicitly shares it with, so it is always available.
 export function VisibilityPicker({
   value,
   onChange,
@@ -50,7 +52,7 @@ export function VisibilityPicker({
       </p>
       <div role="group" aria-label={`Who can use this ${kind}`} className="segmented is-block">
         {(['personal', 'community'] as const).map(option => {
-          const unavailable = disabled || (option === 'community' && isPersonalWorkspace);
+          const unavailable = disabled || (option === 'community' && !communityAvailable(kind, isPersonalWorkspace));
           return (
           <button
             key={option}

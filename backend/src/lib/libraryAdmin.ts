@@ -5,9 +5,11 @@ import { LIBRARY_STATUSES, LIBRARY_VISIBILITIES } from './libraryVisibility';
 // requireAdmin: the site admin JWT (role 'admin', issued by POST
 // /api/auth/admin/login) — a student token, including a workspace
 // owner/admin's, is refused with 401. Admins see every item, active and
-// hidden, across all workspaces, and may change visibility or status. They
-// never change workspace_id or ownership, so community visibility set by an
-// admin still only reaches that item's own workspace members.
+// hidden, across all workspaces, and may change visibility or status (and
+// delete assets). They never change workspace_id, ownership or storage_key,
+// so community visibility set by an admin reaches exactly who the owner's
+// own choice would: the item's workspace members, plus — for an asset —
+// the members of workspaces it has been explicitly shared with.
 export const adminListQuery = z.object({
   q: z.string().trim().max(100).optional(),
   status: z.enum(['active', 'hidden', 'all']).optional(),

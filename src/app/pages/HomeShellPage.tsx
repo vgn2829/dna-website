@@ -1,3 +1,4 @@
+import { useAssetRefresh } from '../lib/assetRefresh';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { api, type Board, type Asset, type Project, type Template } from '../lib/api';
@@ -121,6 +122,7 @@ function SectionHeading({ title, action }: { title: string; action?: { label: st
 }
 
 export default function HomeShellPage() {
+  const assetRevision = useAssetRefresh();
   const { studentSession, openRollModal } = useStudent();
   const { activeWorkspaceId, personalWorkspace, workspaces } = useWorkspace();
   const homeContext = workspaceContext(activeWorkspaceId ? workspaces.find(w => w.id === activeWorkspaceId) ?? null : null, { spansAllWorkspaces: true });
@@ -153,11 +155,11 @@ export default function HomeShellPage() {
     const targetWorkspaceId = activeWorkspaceId ?? personalWorkspace?.id;
     if (!targetWorkspaceId) return;
     let cancelled = false;
-    api.assets.list(studentSession.rollNumber, targetWorkspaceId)
+    api.assets.list(studentSession.rollNumber, targetWorkspaceId, undefined, { limit: 6 })
       .then(res => { if (!cancelled) setAssets(res.assets.slice(0, 6)); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [studentSession?.rollNumber, activeWorkspaceId, personalWorkspace?.id]);
+  }, [studentSession?.rollNumber, activeWorkspaceId, personalWorkspace?.id, assetRevision]);
 
   // Projects — same workspace-scoping/personal-fallback shape as Assets
   // above (V2.2 Phase 8); a project has no cross-workspace view (see

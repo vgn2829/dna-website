@@ -21,11 +21,17 @@ import { AssetPreview } from './AssetPreview';
 // Shared Creative Library: the card always states Personal/Community, and
 // credits the creator on other members' community assets. Rename,
 // publish/unpublish and delete are the owner's only (the server enforces
-// the same); anyone who can see the asset can open, insert or file it.
+// the same); anyone who can see the asset can open or insert it. Only the
+// owner files it into a collection, and only from its own workspace —
+// collections are per workspace, so an asset shared in from another
+// workspace stays in its source's collections. Insert is re-authorized by
+// the board (BoardPage handleInsertAsset) against the board's workspace.
 // ─────────────────────────────────────────────────────────────────────────
 
 export function AssetCard({
   asset,
+  workspaceId,
+  onShare,
   collectionName,
   onInsert,
   onMove,
@@ -34,8 +40,11 @@ export function AssetCard({
   roll,
   onVisibility,
   canPublish = true,
+  canMove = true,
 }: {
   asset: Asset;
+  workspaceId: string;
+  onShare: (asset: Asset) => void;
   // Shown as a chip when set (the browser omits it while already filtered
   // to that collection).
   collectionName?: string | null;
@@ -45,8 +54,13 @@ export function AssetCard({
   onDelete: (asset: Asset) => void;
   roll: string;
   onVisibility: (asset: Asset, visibility: LibraryVisibility) => void;
-  // false in a personal workspace — there is no one to publish to.
+  // false where there is no one to publish to. Assets can always be
+  // published: from a personal workspace, Community is what makes an asset
+  // shareable with a team workspace (Share with workspace…).
   canPublish?: boolean;
+  // false unless the viewer owns the asset and it lives in this workspace —
+  // collections are per workspace and only the owner files an asset.
+  canMove?: boolean;
 }) {
   const portalContainer = usePortalContainer();
   const isOwner = isLibraryOwner(asset, roll);
@@ -131,6 +145,7 @@ export function AssetCard({
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 6, rowGap: 2, marginTop: 4, minWidth: 0 }}>
           <VisibilityBadge visibility={asset.visibility} />
+          {asset.workspace_id !== workspaceId && <span className="type-micro">Shared from another workspace</span>}
           {!isOwner && (
             <span className="type-micro" style={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {libraryAttribution(asset, roll)}
@@ -186,10 +201,13 @@ export function AssetCard({
                 <Copy size={15} /> Copy URL
               </DropdownMenu.Item>
             )}
-            <DropdownMenu.Item className="dna-menu-item" onSelect={() => onMove(asset)}>
+            {canMove && <DropdownMenu.Item className="dna-menu-item" onSelect={() => onMove(asset)}>
               <FolderInput size={15} /> Move to collection…
-            </DropdownMenu.Item>
+            </DropdownMenu.Item>}
             {isOwner && (<>
+              <DropdownMenu.Item className="dna-menu-item" onSelect={() => onShare(asset)}>
+                <Users size={15} /> Share with workspace…
+              </DropdownMenu.Item>
               <DropdownMenu.Item className="dna-menu-item" onSelect={() => onRename(asset)}>
                 <Pencil size={15} /> Rename…
               </DropdownMenu.Item>

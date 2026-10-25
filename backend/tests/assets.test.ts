@@ -143,6 +143,13 @@ describe('POST /api/assets — upload', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('answers a request with no multipart body with a 400, not a 500', async () => {
+    await registerStudent('UP8');
+    const res = await request(app).post('/api/assets').set('Authorization', `Bearer ${tokenFor('UP8')}`);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('workspace_id is required');
+  });
 });
 
 describe('GET /api/assets — list', () => {

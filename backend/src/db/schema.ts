@@ -1,3 +1,4 @@
+import { initAssetSharingSchema } from './assetSharingSchema';
 import { pool } from './client';
 import { canvasSummaryColumns } from '../lib/canvasSummary';
 import { MARK_PLACED_BOARD_ITEMS_SQL } from '../lib/boardRows';
@@ -1683,6 +1684,17 @@ export async function initSchema(): Promise<void> {
       CHECK (status IN ('active', 'hidden'))
   `);
 
+  // Idempotent uploads: the Add Asset queue sends a per-file id, and a retry
+  // after a lost response reuses it — the server returns the asset the first
+  // attempt created instead of storing the file twice. Scoped per owner.
+  await pool.query(`ALTER TABLE assets ADD COLUMN IF NOT EXISTS client_upload_id TEXT`);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_assets_owner_client_upload
+      ON assets (owner_roll, client_upload_id)
+      WHERE client_upload_id IS NOT NULL
+  `);
+
+  await initAssetSharingSchema(pool);
   console.log('library visibility migration done');
 }
 

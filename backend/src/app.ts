@@ -74,6 +74,10 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    // Retry-After is not a CORS-safelisted response header: without this the
+    // cross-origin frontend can't read how long a 429 asks it to wait (the
+    // upload queue pauses for exactly that long, then resumes).
+    exposedHeaders: ['Retry-After'],
     // Access-Control-Max-Age on preflight responses: lets the browser reuse
     // a granted preflight for 10 minutes instead of re-sending OPTIONS
     // before every authorized request (without it Chrome caches for ~5s).
