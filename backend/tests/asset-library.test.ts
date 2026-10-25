@@ -448,7 +448,7 @@ describe('asset collections', () => {
   // Shared Creative Library: any member who can see an asset (their own, or
   // a community one) can file it into a collection; only its owner renames
   // it — no admin override; another member's personal asset is invisible.
-  it('PATCH: any member can move a community asset; only its owner can rename; outsiders get 403', async () => {
+  it('PATCH: only the owner can move or rename a community asset; outsiders get 403', async () => {
     await registerStudent('CO6');
     const ws = await createWorkspace('CO6', 'Team');
     await addMember(ws, 'CO7');
@@ -458,7 +458,7 @@ describe('asset collections', () => {
     const asset = await insertAssetDirect('CO6', ws, 'hero.png', 'image', 'community');
     const personal = await insertAssetDirect('CO6', ws, 'private.png');
 
-    expect((await patchAsset('CO7', asset, { collection_id: pack })).status).toBe(200);
+    expect((await patchAsset('CO7', asset, { collection_id: pack })).status).toBe(403);
     expect((await patchAsset('CO7', asset, { filename: 'renamed.png' })).status).toBe(403);
     expect((await patchAsset('CO8', asset, { filename: 'by-admin.png' })).status).toBe(403);
     expect((await patchAsset('CO6', asset, { filename: 'by-owner.png' })).body.filename).toBe('by-owner.png');

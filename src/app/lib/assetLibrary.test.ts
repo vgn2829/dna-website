@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { assetPreviewFallback, assetPreviewSrc, assetMetaLine, classifyUpload, fileExtension, fileFamily, formatSize, displayUrl, isAcceptableLinkUrl, linkDomain, linkSource, FILE_MAX_BYTES, IMAGE_MAX_BYTES } from './assetLibrary';
+import { assetPreviewFallback, assetPreviewSrc, assetMetaLine, classifyUpload, describeUploadFailure, fileExtension, fileFamily, formatSize, displayUrl, isAcceptableLinkUrl, linkDomain, linkSource, newClientUploadId, planUploadBatch, FAMILY_LABEL, MAX_AUTO_RESUME_SECONDS, FILE_MAX_BYTES, IMAGE_MAX_BYTES } from './assetLibrary';
 
 describe('classifyUpload', () => {
   it('routes allowlisted images through the image path', () => {
@@ -18,7 +18,7 @@ describe('classifyUpload', () => {
   it('rejects a file without an extension', () => {
     expect(classifyUpload({ name: 'README', type: 'text/plain', size: 10 }).ok).toBe(false);
   });
-  it('enforces 15MB for images and 25MB for files', () => {
+  it('enforces the one shared 300 MB limit for images and files', () => {
     expect(IMAGE_MAX_BYTES).toBe(300 * 1024 * 1024);
     expect(classifyUpload({ name: 'a.png', type: 'image/png', size: IMAGE_MAX_BYTES }).ok).toBe(true);
     expect(classifyUpload({ name: 'a.png', type: 'image/png', size: IMAGE_MAX_BYTES + 1 })).toEqual({ ok: false, error: 'a.png is larger than the 300 MB maximum file size.' });
@@ -109,5 +109,78 @@ describe('asset preview thumbnails', () => {
     expect(assetPreviewFallback({ url: ORIGINAL, thumb_url: THUMB }, ORIGINAL)).toBeNull();
     expect(assetPreviewFallback({ url: ORIGINAL, thumb_url: null }, ORIGINAL)).toBeNull();
     expect(assetPreviewFallback({ url: ORIGINAL, thumb_url: ORIGINAL }, ORIGINAL)).toBeNull();
+  });
+});
+
+describe('upload queue planning', () => {
+  const MB = 1024 * 1024;
+  it('refuses oversized, empty and extensionless files up front — they never enter the queue — and keeps the rest in order', () => {
+    const files = [
+      { name: 'ok.png', type: 'image/png', size: 5 * MB },
+      { name: 'huge.zip', type: 'application/zip', size: 300 * MB + 1 },
+      { name: 'noext', type: '', size: 10 },
+      { name: 'exact.zip', type: 'application/zip', size: 300 * MB },
+      { name: 'DSC09876.ARW', type: 'image/x-sony-arw', size: 22 * MB },
+      { name: 'placeholder.png', type: 'image/png', size: 0 },
+    ];
+    const { accepted, rejected } = planUploadBatch(files);
+    expect(accepted.map(a => [a.file.name, a.kind])).toEqual([['ok.png', 'image'], ['exact.zip', 'file'], ['DSC09876.ARW', 'file']]);
+    expect(rejected).toEqual([
+      { name: 'huge.zip', reason: 'huge.zip is larger than the 300 MB maximum file size.' },
+      { name: 'noext', reason: 'noext needs a file extension (e.g. .psd, .pdf, .zip).' },
+      { name: 'placeholder.png', reason: 'placeholder.png is empty (0 bytes).' },
+    ]);
+  });
+  it('makes idempotency keys the server accepts, unique per file', () => {
+    const ids = new Set(Array.from({ length: 50 }, () => newClientUploadId()));
+    expect(ids.size).toBe(50);
+    for (const id of ids) expect(id).toMatch(/^[A-Za-z0-9_-]{8,64}$/);
+  });
+});
+
+describe('describeUploadFailure', () => {
+  it('never surfaces the browser\'s raw "Load failed": a lost connection is explained and retryable', () => {
+    const f = describeUploadFailure({ type: 'network' });
+    expect(f.retryable).toBe(true);
+    expect(f.message).toMatch(/connection to the server was lost/);
+    expect(f.message).not.toMatch(/load failed|failed to fetch/i);
+    expect(describeUploadFailure({ type: 'timeout' }).retryable).toBe(true);
+  });
+  it('treats a proxy error page (non-JSON 502/503) as a temporary, retryable outage', () => {
+    for (const status of [502, 503, 504]) {
+      const f = describeUploadFailure({ type: 'http', status, body: '<html><h1>Bad Gateway</h1></html>' });
+      expect(f).toEqual({ message: `The server is temporarily unavailable (HTTP ${status}). Retry in a moment.`, retryable: true });
+    }
+  });
+  it('passes the server\'s own reason through, retryable only when retrying can help', () => {
+    expect(describeUploadFailure({ type: 'http', status: 413, body: '{"error":"File exceeds the 300 MB limit"}' }))
+      .toEqual({ message: 'File exceeds the 300 MB limit', retryable: false });
+    expect(describeUploadFailure({ type: 'http', status: 413, body: '' }))
+      .toEqual({ message: 'This file is larger than the 300 MB maximum file size.', retryable: false });
+    expect(describeUploadFailure({ type: 'http', status: 403, body: '{"error":"Not a member of that workspace"}' }))
+      .toEqual({ message: 'Not a member of that workspace', retryable: false });
+    expect(describeUploadFailure({ type: 'http', status: 500, body: '{"error":"Internal server error"}' }))
+      .toEqual({ message: 'Internal server error (HTTP 500). Retry in a moment.', retryable: true });
+    expect(describeUploadFailure({ type: 'http', status: 429, body: '{"error":"Too many uploads — please slow down"}' }).retryable).toBe(true);
+  });
+  it('a rate limit with Retry-After pauses and resumes automatically; without one (or too long) it asks for a manual retry', () => {
+    expect(describeUploadFailure({ type: 'http', status: 429, body: '{"error":"Too many uploads — please slow down"}', retryAfterSeconds: 42 }))
+      .toEqual({ message: 'Upload limit reached — resuming automatically in about 42 s.', retryable: true, retryAfterSeconds: 42 });
+    for (const retryAfterSeconds of [undefined, 0, MAX_AUTO_RESUME_SECONDS + 1]) {
+      expect(describeUploadFailure({ type: 'http', status: 429, body: '', retryAfterSeconds }))
+        .toEqual({ message: 'Too many uploads in a short time. Wait a minute, then retry.', retryable: true });
+    }
+  });
+  it('flags an expired session instead of offering a retry that cannot work', () => {
+    expect(describeUploadFailure({ type: 'http', status: 401, body: '{"error":"Sign in required"}' }))
+      .toEqual({ message: 'Your session has expired. Sign in again, then retry.', retryable: false, sessionExpired: true });
+  });
+});
+
+describe('camera RAW files', () => {
+  it('are a RAW image family (a file tile, never an image preview)', () => {
+    for (const ext of ['arw', 'ARW', 'cr2', 'cr3', 'nef', 'dng', 'raf', 'rw2', 'orf', 'raw']) expect(fileFamily(ext), ext).toBe('raw');
+    expect(FAMILY_LABEL.raw).toBe('RAW image');
+    expect(assetPreviewSrc({ kind: 'file', url: 'https://x/a.arw', thumb_url: null })).toBeNull();
   });
 });

@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Clock, Calendar, List, CheckCircle2, Loader2 } from 'lucide-react';
+import { MapPin, Clock, Calendar, List, CheckCircle2, Loader2, FileText, ExternalLink } from 'lucide-react';
 import { useAppData } from '../context/AppDataContext';
 import { useStudent } from '../context/StudentContext';
 import { api, LiveSession } from '../lib/api';
 import { usePageMeta } from '../components/hooks/use-page-meta';
 import { DAY_MS, HOUR_MS, MINUTE_MS, SECOND_MS, formatEventDate, getEventStatus, parseEventStart } from '../lib/eventDate';
+import { eventCardActions } from '../lib/eventForm';
 
 function useCountdown(dateStr: string, timeStr: string, startsAt?: string | null) {
   const event = { date: dateStr, time: timeStr, startsAt };
@@ -52,14 +53,19 @@ function Countdown({ event }: { event: ReturnType<typeof useAppData>['events'][n
   );
 }
 
-function EventCard({ event, view, delay, onRSVP, rsvpPending }: {
+function EventCard({ event, view, delay, onRSVP, onCancel, rsvpPending }: {
   event: ReturnType<typeof useAppData>['events'][number];
   view: 'grid' | 'list';
   delay: number;
   onRSVP: () => void;
+  onCancel: () => void;
   rsvpPending: boolean;
 }) {
   const status = getEventStatus(event);
+  // Optional extras (both null for most events, which render exactly as
+  // before). The form link is only ever the server's allowlisted value.
+  const actions = eventCardActions(event, status === 'past');
+  const { formUrl, formLabel } = actions;
   // Re-check every second, but only re-render when the status actually flips
   // (upcoming → live → past); an unchanged value bails out of the update.
   const [, setLiveStatus] = useState(status);
@@ -67,6 +73,27 @@ function EventCard({ event, view, delay, onRSVP, rsvpPending }: {
     const id = setInterval(() => setLiveStatus(getEventStatus(event)), 1000);
     return () => clearInterval(id);
   }, [event]);
+
+  // The original Register / Registered ✓ button, unchanged.
+  const rsvpButton = (className: string) => (
+    <button
+      onClick={onRSVP}
+      disabled={rsvpPending || (event.registeredCount >= event.capacity && !event.isRegistered)}
+      aria-busy={rsvpPending}
+      aria-label={event.isRegistered ? `Cancel RSVP for ${event.title}` : `RSVP for ${event.title}`}
+      className={className}
+    >
+      {event.isRegistered ? (
+        <span className="btn-secondary w-full flex items-center justify-center gap-2" style={{ color: '#3ecf5f', background: 'rgba(62,207,95,0.10)' }}>
+          {rsvpPending ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} {rsvpPending ? 'Updating…' : 'Registered ✓'}
+        </span>
+      ) : (
+        <span className="btn-primary w-full flex items-center justify-center gap-2">
+          {rsvpPending && <Loader2 size={14} className="animate-spin" />} {rsvpPending ? 'Registering…' : event.registeredCount >= event.capacity ? 'Event full' : 'Register for this event'}
+        </span>
+      )}
+    </button>
+  );
 
   return (
     // Position-only layout animation: animating size would scale-distort the
@@ -128,26 +155,55 @@ function EventCard({ event, view, delay, onRSVP, rsvpPending }: {
         {/* Countdown */}
         {status === 'upcoming' && view === 'grid' && <Countdown event={event} />}
 
-        {/* RSVP */}
-        {(status !== 'past' || event.isRegistered) && (
-          <button
-            onClick={onRSVP}
-            disabled={rsvpPending || (event.registeredCount >= event.capacity && !event.isRegistered)}
-            aria-busy={rsvpPending}
-            aria-label={event.isRegistered ? `Cancel RSVP for ${event.title}` : `RSVP for ${event.title}`}
-            className="mt-auto"
-          >
-            {event.isRegistered ? (
-              <span className="btn-secondary w-full flex items-center justify-center gap-2" style={{ color: '#3ecf5f', background: 'rgba(62,207,95,0.10)' }}>
-                {rsvpPending ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} {rsvpPending ? 'Updating…' : 'Registered ✓'}
-              </span>
-            ) : (
-              <span className="btn-primary w-full flex items-center justify-center gap-2">
-                {rsvpPending && <Loader2 size={14} className="animate-spin" />} {rsvpPending ? 'Registering…' : event.registeredCount >= event.capacity ? 'Event full' : 'Register for this event'}
-              </span>
+        {/* RSVP — plus, when configured, the problem statement and the
+            registration form (Problem Statement first: read the brief, then
+            register / respond). */}
+        {actions.problemStatement || formUrl ? (
+          <div className="mt-auto flex flex-col gap-2">
+            {event.attachment && (
+              <a
+                href={event.attachment.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={event.attachment.name}
+                aria-label={`Problem Statement for ${event.title} (${event.attachment.name})`}
+                className="btn-secondary w-full flex items-center justify-center gap-2"
+              >
+                <FileText size={14} /> Problem Statement
+              </a>
             )}
-          </button>
-        )}
+            {actions.primary !== 'none' && (actions.primary === 'form' && formUrl ? (
+              <>
+                {/* Persistent: works even if the browser blocked the tab
+                    opened right after registering. */}
+                <a
+                  href={formUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`${formLabel} for ${event.title} (opens Google Forms)`}
+                  className="btn-primary w-full flex items-center justify-center gap-2"
+                >
+                  {formLabel} <ExternalLink size={14} />
+                </a>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="type-micro flex items-center gap-1" style={{ color: '#3ecf5f' }}>
+                    <CheckCircle2 size={12} /> Place reserved
+                  </span>
+                  <button
+                    type="button"
+                    onClick={onCancel}
+                    disabled={rsvpPending}
+                    aria-busy={rsvpPending}
+                    aria-label={`Cancel registration for ${event.title}`}
+                    className="btn-translucent btn-sm touch-target"
+                  >
+                    {rsvpPending ? 'Updating…' : 'Cancel registration'}
+                  </button>
+                </div>
+              </>
+            ) : rsvpButton(''))}
+          </div>
+        ) : actions.primary !== 'none' && rsvpButton('mt-auto')}
       </div>
     </motion.div>
   );
@@ -160,7 +216,7 @@ export function EventsPage() {
     path: '/events',
   });
 
-  const { events, rsvpEvent, rsvpPendingId, loading, error } = useAppData();
+  const { events, rsvpEvent, cancelRegistration, rsvpPendingId, loading, error } = useAppData();
   const { studentSession, openRollModal } = useStudent();
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('all');
@@ -365,7 +421,7 @@ export function EventsPage() {
         <AnimatePresence mode="popLayout">
           <motion.div className={view === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-4'}>
             {filtered.map((evt, i) => (
-              <EventCard key={evt.id} event={evt} view={view} delay={i * 0.06} rsvpPending={rsvpPendingId === evt.id} onRSVP={() => handleRSVP(evt.id)} />
+              <EventCard key={evt.id} event={evt} view={view} delay={i * 0.06} rsvpPending={rsvpPendingId === evt.id} onRSVP={() => handleRSVP(evt.id)} onCancel={() => cancelRegistration(evt.id)} />
             ))}
           </motion.div>
         </AnimatePresence>

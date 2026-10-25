@@ -19,6 +19,7 @@ import { useScreenSize } from '../components/hooks/use-screen-size';
 import { boardCrumbs, isCompactBoardHeader, MOODBOARDS_HREF } from '../lib/boardNav';
 import type { Editor } from 'tldraw';
 import type { Asset } from '../lib/api';
+import { notifyAssetsChanged } from '../lib/assetRefresh';
 
 const TldrawCanvas = lazy(() =>
   import('./TldrawCanvas').then(m => ({ default: m.TldrawCanvas }))
@@ -485,7 +486,20 @@ export default function BoardPage() {
       // V2.4 Phase 6 — asset.id is the source-of-truth Asset Manager
       // record; passed through so the created tldraw asset's meta field
       // can carry sourceAssetId (see insertImageAsset's own comment).
-      await insertImageAsset(editor, asset.url, asset.filename, asset.width, asset.height, asset.id);
+      if (!studentSession || !board) return;
+      // New use is re-authorized against THIS board's workspace: the picker
+      // list may predate an unshare, unpublish or hide. Saved boards are
+      // unaffected — they keep the URL they already stored.
+      let fresh: Asset;
+      try {
+        fresh = await api.assets.get(studentSession.rollNumber, asset.id, board.workspace_id);
+      } catch {
+        notifyAssetsChanged();
+        toast.error('This asset is no longer available in this workspace');
+        return;
+      }
+      if (fresh.kind !== 'image' || !fresh.url) throw new Error('Asset unavailable');
+      await insertImageAsset(editor, fresh.url, fresh.filename, fresh.width, fresh.height, fresh.id);
       setShowAssetLibrary(false);
       toast.success('Asset added to board');
     } catch {
@@ -986,6 +1000,7 @@ export default function BoardPage() {
           workspaceId={board.workspace_id}
           workspaceName={crumbs[0].label}
           isPersonalWorkspace={!!boardWorkspace?.is_personal}
+          workspaceRole={boardWorkspace?.role ?? null}
           roll={studentSession.rollNumber}
           onClose={() => setShowAssetLibrary(false)}
           onSelect={handleInsertAsset}

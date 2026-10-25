@@ -1,3 +1,6 @@
+import { describeUploadFailure, type UploadFailure } from './assetLibrary';
+import type { RsvpResult } from './eventForm';
+
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '') + '/api';
 export const API_BASE = BASE;
 
@@ -208,8 +211,9 @@ export interface Project {
 // be null if that board was later deleted.
 // Shared Creative Library — mirrors backend/src/lib/libraryVisibility.ts.
 // personal: only the owner sees/uses it. community: every member of the
-// item's workspace can discover and use it (never public, never another
-// workspace). Only the owner manages it either way.
+// item's workspace — and, for an asset, of each workspace its owner has
+// explicitly shared it with (assets.shares/grant/revoke). Never public,
+// never club-wide. Only the owner manages it either way.
 export type LibraryVisibility = 'personal' | 'community';
 // List scope: all = mine + other members' community items; mine; community.
 export type LibraryScope = 'all' | 'mine' | 'community';
@@ -464,51 +468,93 @@ async function request<T>(
   return data as T;
 }
 
+// Upload responses. A dropped connection (fetch rejects: "Load failed" in
+// Safari, "Failed to fetch" in Chrome) or a non-JSON error page (e.g. a
+// proxy's 502 while the API restarts) becomes a clear message instead of
+// the browser's raw error or a JSON parse failure.
+async function sendUpload(path: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(`${BASE}${path}`, init);
+  } catch {
+    throw new Error(describeUploadFailure({ type: 'network' }).message);
+  }
+}
+
+async function readUploadResponse<T>(res: Response): Promise<T> {
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  if (!res.ok) throw new Error(describeUploadFailure({ type: 'http', status: res.status, body: text }).message);
+  return JSON.parse(text) as T;
+}
+
 async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
   const headers: Record<string, string> = {};
   const tok = getAdminToken();
   if (tok) headers['Authorization'] = `Bearer ${tok}`;
-  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: formData });
-  if (res.status === 204) return undefined as T;
-  const data = await res.json() as T | { message?: unknown; error?: unknown };
-  if (!res.ok) {
-    console.log('Upload error response:', data);
-    const d = data as { message?: unknown; error?: unknown };
-    const msg = d.message ?? d.error ?? res.statusText;
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
-  }
-  return data as T;
+  return readUploadResponse<T>(await sendUpload(path, { method: 'POST', headers, body: formData }));
 }
 
 async function uploadPutRequest<T>(path: string, formData: FormData): Promise<T> {
   const headers: Record<string, string> = {};
   const tok = getAdminToken();
   if (tok) headers['Authorization'] = `Bearer ${tok}`;
-  const res = await fetch(`${BASE}${path}`, { method: 'PUT', headers, body: formData });
-  if (res.status === 204) return undefined as T;
-  const data = await res.json() as T | { message?: unknown; error?: unknown };
-  if (!res.ok) {
-    console.log('Upload error response:', data);
-    const d = data as { message?: unknown; error?: unknown };
-    const msg = d.message ?? d.error ?? res.statusText;
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
-  }
-  return data as T;
+  return readUploadResponse<T>(await sendUpload(path, { method: 'PUT', headers, body: formData }));
 }
 
 async function studentUploadRequest<T>(path: string, formData: FormData): Promise<T> {
   const headers: Record<string, string> = {};
   const tok = getStudentToken();
   if (tok) headers['Authorization'] = `Bearer ${tok}`;
-  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: formData });
-  const data = await res.json() as T | { message?: unknown; error?: unknown };
+  const res = await sendUpload(path, { method: 'POST', headers, body: formData });
   if (res.status === 401) { clearStudentToken(); throw new Error('SESSION_EXPIRED'); }
-  if (!res.ok) {
-    const d = data as { message?: unknown; error?: unknown };
-    const msg = d.message ?? d.error ?? res.statusText;
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  return readUploadResponse<T>(res);
+}
+
+// A failed library upload, with whether retrying can help (see
+// describeUploadFailure).
+export class UploadError extends Error {
+  readonly failure: UploadFailure;
+  constructor(failure: UploadFailure) {
+    super(failure.message);
+    this.name = 'UploadError';
+    this.failure = failure;
   }
-  return data as T;
+}
+
+// Library uploads go through XMLHttpRequest rather than fetch: it is the
+// only browser API that reports upload progress. No timeout — a 300 MB file
+// on a slow link legitimately takes minutes; a dead connection still fails
+// through onerror.
+function studentUploadWithProgress<T>(path: string, formData: FormData, onProgress?: (fraction: number) => void): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${BASE}${path}`);
+    const tok = getStudentToken();
+    if (tok) xhr.setRequestHeader('Authorization', `Bearer ${tok}`);
+    xhr.upload.onprogress = e => { if (e.lengthComputable && e.total > 0) onProgress?.(e.loaded / e.total); };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText) as T);
+        } catch {
+          reject(new UploadError(describeUploadFailure({ type: 'http', status: 502, body: '' })));
+        }
+        return;
+      }
+      // Only a 429 carries one (and reading an unexposed header on other
+      // responses would just log a browser warning).
+      const retryAfter = xhr.status === 429 ? Number(xhr.getResponseHeader('Retry-After')) : NaN;
+      const failure = describeUploadFailure({
+        type: 'http', status: xhr.status, body: xhr.responseText,
+        retryAfterSeconds: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined,
+      });
+      if (failure.sessionExpired) clearStudentToken();
+      reject(new UploadError(failure));
+    };
+    xhr.onerror = () => reject(new UploadError(describeUploadFailure({ type: 'network' })));
+    xhr.ontimeout = () => reject(new UploadError(describeUploadFailure({ type: 'timeout' })));
+    xhr.send(formData);
+  });
 }
 
 export const api = {
@@ -550,12 +596,22 @@ export const api = {
   },
   events: {
     list: (roll?: string) => request<unknown[]>('GET', '/events', { roll }),
-    add:  (event: { title: string; date: string; time: string; location: string; content: string; capacity: number; startsAt?: string | null }) =>
-      request<unknown>('POST', '/events', { body: event, admin: true }),
-    update: (id: string, data: object) => request<unknown>('PUT', `/events/${id}`, { body: data, admin: true }),
+    // JSON, or FormData when the admin attaches a file (field "attachment";
+    // the other fields as strings — see backend routes/events.ts).
+    add:  (event: { title: string; date: string; time: string; location: string; content: string; capacity: number; startsAt?: string | null; registrationFormUrl?: string | null } | FormData) =>
+      event instanceof FormData
+        ? uploadRequest<unknown>('/events', event)
+        : request<unknown>('POST', '/events', { body: event, admin: true }),
+    update: (id: string, data: object | FormData) =>
+      data instanceof FormData
+        ? uploadPutRequest<unknown>(`/events/${id}`, data)
+        : request<unknown>('PUT', `/events/${id}`, { body: data, admin: true }),
     delete: (id: string)  => request<void>('DELETE', `/events/${id}`, { admin: true }),
-    rsvp:  (id: string, roll: string) =>
-      request<{ registeredCount: number; isRegistered: boolean }>('POST', `/events/${id}/rsvp`, { roll }),
+    // No action → the original toggle. 'register' / 'cancel' are idempotent;
+    // form-enabled events use them so a retry can never cancel a reservation.
+    // registrationFormUrl comes back only for an event that has a form.
+    rsvp:  (id: string, roll: string, action?: 'register' | 'cancel') =>
+      request<RsvpResult>('POST', `/events/${id}/rsvp`, { roll, ...(action ? { body: { action } } : {}) }),
     registrants: (id: string) =>
       request<EventRegistrants>('GET', `/events/${id}/registrants`, { admin: true }),
   },
@@ -947,15 +1003,22 @@ export const api = {
   assets: {
     // opts.kind 'file' opts in to general (non-image) library files; an
     // allowlisted image is always stored as an image regardless.
-    upload: (workspaceId: string, file: File, opts?: { kind?: 'file'; collectionId?: string | null; visibility?: LibraryVisibility }) => {
+    // clientUploadId makes a retry idempotent (the server returns the asset
+    // an earlier attempt created). Rejects with UploadError.
+    upload: (workspaceId: string, file: File, opts?: {
+      kind?: 'file'; collectionId?: string | null; visibility?: LibraryVisibility;
+      clientUploadId?: string; onProgress?: (fraction: number) => void;
+    }) => {
       const formData = new FormData();
-      formData.append('file', file);
+      // Text fields before the file — multer's recommended field order.
       formData.append('workspace_id', workspaceId);
       formData.append('filename', file.name);
       if (opts?.kind) formData.append('kind', opts.kind);
       if (opts?.collectionId) formData.append('collection_id', opts.collectionId);
       if (opts?.visibility) formData.append('visibility', opts.visibility);
-      return studentUploadRequest<Asset>('/assets', formData);
+      if (opts?.clientUploadId) formData.append('client_upload_id', opts.clientUploadId);
+      formData.append('file', file);
+      return studentUploadWithProgress<Asset>('/assets', formData, opts?.onProgress);
     },
     createLink: (roll: string, body: { workspace_id: string; name: string; url: string; collection_id?: string | null; visibility?: LibraryVisibility }) =>
       request<Asset>('POST', '/assets/links', { roll, body }),
@@ -974,8 +1037,13 @@ export const api = {
       if (filters?.limit) params.set('limit', String(filters.limit));
       return request<{ assets: Asset[]; nextCursor: string | null }>('GET', `/assets?${params}`, { roll });
     },
-    get: (roll: string, id: string) =>
-      request<Asset>('GET', `/assets/${id}`, { roll }),
+    get: (roll: string, id: string, workspaceId?: string) =>
+      request<Asset>('GET', `/assets/${id}${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, { roll }),
+    // canShare is false once the owner has left the asset's own workspace:
+    // they can still stop existing shares, but not add new ones.
+    shares: (roll: string, id: string) => request<{grants: Array<{workspace_id: string; name: string}>; targets: Array<{id: string; name: string}>; canShare: boolean}>('GET', `/assets/${id}/shares`, { roll }),
+    grant: (roll: string, id: string, workspaceId: string) => request<void>('PUT', `/assets/${id}/shares/${encodeURIComponent(workspaceId)}`, { roll }),
+    revoke: (roll: string, id: string, workspaceId: string) => request<void>('DELETE', `/assets/${id}/shares/${encodeURIComponent(workspaceId)}`, { roll }),
     delete: (roll: string, id: string) =>
       request<{ success: boolean; storageWarning?: string }>('DELETE', `/assets/${id}`, { roll }),
     // Admin moderation (admin token; requireAdmin server-side).
@@ -983,6 +1051,9 @@ export const api = {
       request<{ assets: AdminAsset[] }>('GET', `/assets/admin/all${libraryAdminQuery(filters)}`, { admin: true }),
     adminUpdate: (id: string, body: { visibility?: LibraryVisibility; status?: LibraryStatus }) =>
       request<AdminAsset>('PATCH', `/assets/admin/${id}`, { body, admin: true }),
+    // Admin removal: row always; stored file only when nothing references it.
+    adminDelete: (id: string) =>
+      request<{ success: true; fileRetained?: true; storageWarning?: string }>('DELETE', `/assets/admin/${id}`, { admin: true }),
   },
   // Asset collections ("asset packs") — mirrors backend/src/routes/assetCollections.ts.
   assetCollections: {

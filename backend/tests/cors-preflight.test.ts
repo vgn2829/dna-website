@@ -51,3 +51,11 @@ describe('CORS preflight caching', () => {
     expect(res.headers['access-control-allow-credentials']).toBeUndefined();
   });
 });
+
+describe('CORS exposed headers', () => {
+  it('actual responses expose Retry-After, so the cross-origin upload queue can read a 429\'s wait', async () => {
+    const res = await request(app).get('/api/health').set('Origin', ALLOWED);
+    expect(res.headers['access-control-allow-origin']).toBe(ALLOWED);
+    expect(res.headers['access-control-expose-headers']).toBe('Retry-After');
+  });
+});

@@ -1,4 +1,5 @@
-import { FileText, FileArchive, FileImage, FileVideo, FileAudio, Presentation, PenTool, Type, File as FileIcon, Link2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { FileText, FileArchive, FileImage, FileVideo, FileAudio, Presentation, PenTool, Type, File as FileIcon, Link2, Camera, ImageOff } from 'lucide-react';
 import type { Asset } from '../../lib/api';
 import { assetPreviewFallback, assetPreviewSrc, fileFamily, linkDomain, linkSource, type FileFamily } from '../../lib/assetLibrary';
 
@@ -10,24 +11,51 @@ import { assetPreviewFallback, assetPreviewSrc, fileFamily, linkDomain, linkSour
 // external links (source + domain from the URL itself — no remote
 // thumbnail is fetched). Fills its parent, which owns the size/aspect
 // ratio and clipping. Shared by AssetCard and Home's "Recent Assets".
+//
+// Two different "no picture" states, never confused:
+//   - a file the browser can't render (PSD, RAW, ZIP, video…) gets its
+//     file-type tile — the upload is fine, there is just no inline preview;
+//   - an IMAGE whose stored file fails to load (thumbnail, then original)
+//     gets an explicit "couldn't load" tile — a genuine error, not hidden.
 // ─────────────────────────────────────────────────────────────────────────
 
 const FAMILY_ICON: Record<FileFamily, typeof FileIcon> = {
   design: PenTool, document: FileText, slides: Presentation, archive: FileArchive,
-  image: FileImage, video: FileVideo, audio: FileAudio, font: Type, other: FileIcon,
+  image: FileImage, raw: Camera, video: FileVideo, audio: FileAudio, font: Type, other: FileIcon,
 };
 
 export function AssetPreview({ asset, compact = false }: { asset: Asset; compact?: boolean }) {
   const previewSrc = assetPreviewSrc(asset);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [previewSrc]);
+
+  if (asset.kind === 'image' && previewSrc && failed) {
+    return (
+      <div
+        role="img"
+        aria-label="Image couldn't load"
+        style={{
+          width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: compact ? 4 : 8, padding: 8, textAlign: 'center', background: 'var(--color-surface-2)', color: 'var(--color-error)',
+        }}
+      >
+        <ImageOff size={compact ? 18 : 24} strokeWidth={1.75} aria-hidden="true" />
+        {!compact && <span style={{ fontSize: 12, fontFamily: 'var(--font-body)', lineHeight: 1.3 }}>Image couldn’t load</span>}
+      </div>
+    );
+  }
+
   if (asset.kind === 'image' && previewSrc) {
     return (
       <img
         src={previewSrc}
         // A ready thumbnail that fails to load (e.g. its object went
-        // missing) falls back to the original, once.
+        // missing) falls back to the original, once; a failed original is
+        // a real error and says so.
         onError={e => {
           const fallback = assetPreviewFallback(asset, e.currentTarget.getAttribute('src') ?? '');
           if (fallback) e.currentTarget.src = fallback;
+          else setFailed(true);
         }}
         alt=""
         loading="lazy"

@@ -460,22 +460,32 @@ describe('read-time URL mapping', () => {
 });
 
 describe('local static serving cache headers', () => {
-  it('derived/ objects are immutable for a year; originals keep their existing headers', async () => {
+  it('derived/ objects cache for a year, library asset originals for a day; other uploads keep their existing headers', async () => {
     vi.restoreAllMocks(); // real local provider for this one
     const UPLOADS = path.join(__dirname, '../uploads');
     const dKey = `derived/assets/cachetest/${uuidv4()}.jpg/t512.webp`;
+    // Library asset originals: a fresh uuid key per upload, never overwritten,
+    // cached for a day (storage/index.ts ASSET_ORIGINAL_CACHE_SECONDS).
     const oKey = `assets/cachetest/${uuidv4()}.jpg`;
-    for (const k of [dKey, oKey]) { fs.mkdirSync(path.dirname(path.join(UPLOADS, k)), { recursive: true }); fs.writeFileSync(path.join(UPLOADS, k), Buffer.from('x')); }
+    // Any other upload path (gallery, canvas files, …) is untouched.
+    const otherKey = `cachetest-other/${uuidv4()}.jpg`;
+    for (const k of [dKey, oKey, otherKey]) { fs.mkdirSync(path.dirname(path.join(UPLOADS, k)), { recursive: true }); fs.writeFileSync(path.join(UPLOADS, k), Buffer.from('x')); }
     try {
       const d = await request(app).get(`/uploads/${dKey}`);
       const o = await request(app).get(`/uploads/${oKey}`);
+      const other = await request(app).get(`/uploads/${otherKey}`);
       expect(d.status).toBe(200);
       expect(d.headers['cache-control']).toBe(DERIVATIVE_CACHE_CONTROL);
-      expect(o.headers['cache-control']).toBe('public, max-age=0');
+      expect(o.headers['cache-control']).toBe('public, max-age=86400');
+      expect(o.headers['cache-control']).toBe(storageModule.ASSET_ORIGINAL_CACHE_CONTROL);
+      expect(d.headers['cache-control']).toBe('public, max-age=31536000, immutable'); // thumbnails unchanged
+      expect(other.headers['cache-control']).toBe('public, max-age=0');
       expect(d.headers['content-disposition']).toBe('attachment');
+      expect(o.headers['content-disposition']).toBe('attachment');
     } finally {
       fs.rmSync(path.join(UPLOADS, 'derived/assets/cachetest'), { recursive: true, force: true });
       fs.rmSync(path.join(UPLOADS, 'assets/cachetest'), { recursive: true, force: true });
+      fs.rmSync(path.join(UPLOADS, 'cachetest-other'), { recursive: true, force: true });
     }
   });
 });

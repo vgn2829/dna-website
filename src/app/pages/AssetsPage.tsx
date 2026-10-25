@@ -82,6 +82,7 @@ export default function AssetsPage() {
         workspaceName={targetWorkspace.is_personal ? 'Personal' : targetWorkspace.name}
         roll={studentSession.rollNumber}
         isPersonalWorkspace={targetWorkspace.is_personal}
+        workspaceRole={targetWorkspace.role}
       />
     </div>
   );

@@ -37,9 +37,55 @@ export function libraryAttribution(item: LibraryItem, roll: string | null | unde
   return `by ${item.owner_name?.trim() || 'a workspace member'}`;
 }
 
-// Helper copy under the Personal/Community control. A personal workspace
-// has no other members, so community sharing is unavailable there.
+// Can this kind be published to Community from here? Templates: community
+// is the workspace's members, so a personal workspace has no one to share
+// with. Assets: always — Community is also what lets the owner share an
+// asset with another (team) workspace, which is how an asset kept in a
+// personal workspace reaches anyone else.
+export function communityAvailable(kind: 'template' | 'asset', isPersonalWorkspace: boolean): boolean {
+  return kind === 'asset' || !isPersonalWorkspace;
+}
+
+// May this viewer remove an asset that was SHARED INTO this workspace from
+// another one? Only an owner/admin of this workspace, and never their own
+// asset (owners manage sharing from Share with workspace…). The server
+// enforces the same rule; this only decides whether to offer the action.
+export function canRemoveIncomingShare(
+  asset: { workspace_id: string; owner_roll: string },
+  workspaceId: string,
+  roll: string,
+  workspaceRole: 'owner' | 'admin' | 'member' | null | undefined,
+): boolean {
+  return asset.workspace_id !== workspaceId && asset.owner_roll !== roll && (workspaceRole === 'owner' || workspaceRole === 'admin');
+}
+
+// What the owner's Share with workspace… dialog offers:
+//   share         — add or stop shares (an active Community asset);
+//   publish-first — it must be published to Community before sharing;
+//   manage-only   — the owner left the asset's workspace: existing shares
+//                   can be stopped, nothing new can be shared (or published).
+export type ShareDialogMode = 'share' | 'publish-first' | 'manage-only';
+export function shareDialogMode(canShare: boolean, isCommunity: boolean): ShareDialogMode {
+  if (!canShare) return 'manage-only';
+  return isCommunity ? 'share' : 'publish-first';
+}
+
+// Toast after an asset is published to Community. From a personal workspace
+// nobody else can see it yet — say so, so the next step (sharing) is clear.
+export function assetPublishedMessage(workspaceName: string, isPersonalWorkspace: boolean): string {
+  return isPersonalWorkspace
+    ? 'Published to Community — share it with a workspace so others can use it'
+    : `Published to Community — everyone in ${workspaceName} can use it`;
+}
+
+// Helper copy under the Personal/Community control.
 export function visibilityHint(visibility: LibraryVisibility, kind: 'template' | 'asset', workspaceName: string, isPersonalWorkspace: boolean): string {
+  if (kind === 'asset') {
+    if (visibility === 'personal') return 'Only you can use this asset.';
+    return isPersonalWorkspace
+      ? 'Only workspaces you share it with can use it — choose Share with workspace… from its ⋯ menu. Only you can edit or delete it.'
+      : `Anyone in ${workspaceName} can discover and use this asset, plus any workspace you share it with. Only you can edit or delete it.`;
+  }
   if (isPersonalWorkspace) {
     return `Only you can use this ${kind}. Community sharing is available in team workspaces.`;
   }

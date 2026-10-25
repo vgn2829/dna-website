@@ -1,7 +1,26 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
+import { applyRsvpResult, formActionLabel, safeFormUrl } from '../lib/eventForm';
 import { useStudent } from './StudentContext';
 import { toast } from 'sonner';
+
+// Maps an RSVP failure to the existing user-facing messages.
+function rsvpErrorToast(err: unknown): void {
+  const message = err instanceof Error ? err.message.toLowerCase() : '';
+  if (message.includes('no longer accepting')) toast.error('This event is no longer accepting registrations.');
+  else if (message.includes('capacity')) toast.error('This event is full. Please try another event.');
+  else if (message === 'session_expired') toast.error('Your session expired. Please verify your roll number again.');
+  else toast.error('We could not update your registration. Please try again.');
+}
+
+// Opens an external page in a new tab without giving it a handle back to
+// this one. Returns false when the browser blocked the tab.
+function openInNewTab(url: string): boolean {
+  const w = window.open(url, '_blank');
+  if (!w) return false;
+  w.opener = null;
+  return true;
+}
 
 function onAdminErr(err: unknown): void {
   if (err instanceof Error && err.message === 'SESSION_EXPIRED') {
@@ -37,7 +56,22 @@ export interface ClubEvent {
   // free-text `time` field above remains the display label; startsAt is null
   // until an admin sets it via the datetime input.
   startsAt: string | null;
+  // Optional extras, independent of each other (backend routes/events.ts):
+  // a validated Google Forms link students complete after registering, and
+  // one attachment such as a problem statement. null when not configured.
+  registrationFormUrl: string | null;
+  attachment: EventAttachment | null;
 }
+
+export interface EventAttachment {
+  name: string;
+  size: number | null;
+  url: string;
+}
+
+// What an admin create/edit sends: JSON fields, or FormData when it carries
+// an attachment file (see api.events.add / update).
+export type EventInput = Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered' | 'notifiedAt' | 'attachment'>;
 
 // Outcome of a "Notify Students" send. Because Resend's free tier caps daily/
 // monthly volume, a send may not fully complete immediately: sentNow is what
@@ -82,9 +116,13 @@ interface AppDataContextValue {
   notifyArtwork:  (id: string) => Promise<NotifyResult>;
   // Events
   rsvpEvent:   (id: string) => void;
+  // Form-enabled events only: an explicit, idempotent cancel (their Register
+  // never toggles off). Events without a form cancel through rsvpEvent.
+  cancelRegistration: (id: string) => void;
   rsvpPendingId: string | null;
-  addEvent:    (event: Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered' | 'notifiedAt'>) => void;
-  updateEvent: (id: string, data: Partial<Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered' | 'notifiedAt'>>) => Promise<void>;
+  // Both resolve only once the server has saved, and reject with its error.
+  addEvent:    (event: EventInput | FormData) => Promise<void>;
+  updateEvent: (id: string, data: Partial<EventInput> | FormData) => Promise<void>;
   deleteEvent: (id: string) => void;
   notifyEvent: (id: string, audience?: 'all' | 'registered') => Promise<NotifyResult>;
   // Domains / videos
@@ -189,6 +227,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   const rsvpEvent = useCallback((id: string) => {
     if (!roll || rsvpPendingId) return;
+    const target = events.find(e => e.id === id);
+    if (target && safeFormUrl(target.registrationFormUrl)) {
+      registerThenOpenForm(target);
+      return;
+    }
     setRsvpPendingId(id);
     setEvents(prev => prev.map(e => {
       if (e.id !== id) return e;
@@ -196,30 +239,69 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       return { ...e, isRegistered: !e.isRegistered, registeredCount: e.isRegistered ? Math.max(0, e.registeredCount - 1) : e.registeredCount + 1 };
     }));
     api.events.rsvp(id, roll)
-      .then(({ registeredCount, isRegistered }) => {
-        setEvents(prev => prev.map(e => e.id !== id ? e : { ...e, registeredCount, isRegistered }));
-        toast.success(isRegistered ? 'You are registered for this event.' : 'Your RSVP has been cancelled.');
+      .then(result => {
+        setEvents(prev => prev.map(e => e.id !== id ? e : applyRsvpResult(e, result)));
+        toast.success(result.isRegistered ? 'You are registered for this event.' : 'Your RSVP has been cancelled.');
       })
       .catch((err: unknown) => {
         setEvents(prev => prev.map(e => {
           if (e.id !== id) return e;
           return { ...e, isRegistered: !e.isRegistered, registeredCount: e.isRegistered ? e.registeredCount + 1 : Math.max(0, e.registeredCount - 1) };
         }));
-        const message = err instanceof Error ? err.message.toLowerCase() : '';
-        if (message.includes('no longer accepting')) toast.error('This event is no longer accepting registrations.');
-        else if (message.includes('capacity')) toast.error('This event is full. Please try another event.');
-        else if (message === 'session_expired') toast.error('Your session expired. Please verify your roll number again.');
-        else toast.error('We could not update your registration. Please try again.');
+        rsvpErrorToast(err);
       })
+      .finally(() => setRsvpPendingId(null));
+  // registerThenOpenForm is recreated with roll; listing it would only churn.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roll, rsvpPendingId, events]);
+
+  // Form-enabled event: record the registration (idempotent 'register' — a
+  // repeat or retry can never cancel it), and only once the server confirms
+  // it, open the form link the SERVER returned. No optimistic update: the
+  // form must never open for a registration that wasn't recorded. If the
+  // browser blocks the new tab, the card's persistent form action remains.
+  const registerThenOpenForm = (target: ClubEvent) => {
+    if (!roll) return;
+    setRsvpPendingId(target.id);
+    api.events.rsvp(target.id, roll, 'register')
+      .then(result => {
+        // The server's answer decides the form link: if the admin removed the
+        // form since this page loaded, the stale link is cleared, not kept.
+        setEvents(prev => prev.map(e => e.id !== target.id ? e : applyRsvpResult(e, result)));
+        const url = safeFormUrl(result.registrationFormUrl);
+        if (!result.isRegistered || !url) {
+          toast.success('You are registered for this event.');
+          return;
+        }
+        const label = formActionLabel(!!target.attachment);
+        const opened = openInNewTab(url);
+        toast.success(opened
+          ? `Your place is reserved. Finish by completing the form in the new tab (${label}).`
+          : `Your place is reserved. Select “${label}” to open the form and finish.`);
+      })
+      .catch(rsvpErrorToast)
+      .finally(() => setRsvpPendingId(null));
+  };
+
+  const cancelRegistration = useCallback((id: string) => {
+    if (!roll || rsvpPendingId) return;
+    setRsvpPendingId(id);
+    api.events.rsvp(id, roll, 'cancel')
+      .then(result => {
+        setEvents(prev => prev.map(e => e.id !== id ? e : applyRsvpResult(e, result)));
+        toast.success('Your registration has been cancelled.');
+      })
+      .catch(rsvpErrorToast)
       .finally(() => setRsvpPendingId(null));
   }, [roll, rsvpPendingId]);
 
-  const addEvent = useCallback((event: Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered' | 'notifiedAt'>) => {
+  const addEvent = useCallback(async (event: EventInput | FormData) => {
     // Creation no longer auto-notifies students — the admin sends explicitly via
     // notifyEvent (with a confirm dialog). New events start as "Not sent".
-    api.events.add(event).then(e => {
-      setEvents(prev => [e as ClubEvent, ...prev]);
-    }).catch(onAdminErr);
+    // Resolves only after the server saved it; a failure rejects so the admin
+    // form can keep what was entered and show why.
+    const created = await api.events.add(event);
+    setEvents(prev => [created as ClubEvent, ...prev]);
   }, []);
 
   // Sends the student notification for an already-created event and updates the
@@ -234,7 +316,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     return { notifiedAt, sentNow, queued };
   }, []);
 
-  const updateEvent = useCallback(async (id: string, data: Partial<Omit<ClubEvent, 'id' | 'registeredCount' | 'isRegistered'>>) => {
+  const updateEvent = useCallback(async (id: string, data: Partial<EventInput> | FormData) => {
     const updated = await api.events.update(id, data);
     setEvents(prev => prev.map(e => e.id !== id ? e : updated as ClubEvent));
   }, []);
@@ -344,7 +426,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     <AppDataContext.Provider value={{
       domains, artworks, events, team, loading, error,
       likeArtwork, addComment, uploadArtwork, updateArtwork, deleteArtwork, toggleFeatured, deleteComment, notifyArtwork,
-      rsvpEvent, rsvpPendingId, addEvent, updateEvent, deleteEvent, notifyEvent,
+      rsvpEvent, cancelRegistration, rsvpPendingId, addEvent, updateEvent, deleteEvent, notifyEvent,
       addDomain, updateDomain, deleteDomain, addVideo, updateVideo, deleteVideo, updateVideoSequence,
       addTeamMember, updateTeamMember, deleteTeamMember, reorderTeamSection,
     }}>

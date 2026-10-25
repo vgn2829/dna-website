@@ -28,6 +28,7 @@ import type { VersionHistoryService } from './realtime/history/versionHistorySer
 import type { RestoreService } from './realtime/history/restoreService';
 import type { CommentBroadcaster } from './realtime/comments/commentBroadcaster';
 import { DERIVED_ROOT, DERIVATIVE_CACHE_CONTROL } from './storage/derivatives';
+import { ASSET_ORIGINAL_CACHE_CONTROL } from './storage';
 
 // Generic over SessionMeta so this accepts whatever concrete
 // RoomManager<SessionMeta>-backed services server.ts actually constructed
@@ -74,6 +75,10 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    // Retry-After is not a CORS-safelisted response header: without this the
+    // cross-origin frontend can't read how long a 429 asks it to wait (the
+    // upload queue pauses for exactly that long, then resumes).
+    exposedHeaders: ['Retry-After'],
     // Access-Control-Max-Age on preflight responses: lets the browser reuse
     // a granted preflight for 10 minutes instead of re-sending OPTIONS
     // before every authorized request (without it Chrome caches for ~5s).
@@ -89,10 +94,14 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
     (req, res, next) => {
       res.setHeader('Content-Disposition', 'attachment');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-      // Image derivatives never change under a given key (storage/
-      // derivatives.ts), so they cache for a year. express.static keeps a
-      // Cache-Control that is already set; originals are untouched.
+      // Mirrors the cache policy Supabase stores with these objects.
+      // express.static keeps a Cache-Control that is already set; other
+      // uploads are untouched.
+      //   derived/ — image derivatives: a year (storage/derivatives.ts).
+      //   assets/  — library asset originals: a day (storage/index.ts
+      //              ASSET_ORIGINAL_CACHE_SECONDS says why).
       if (req.path.startsWith(`/${DERIVED_ROOT}/`)) res.setHeader('Cache-Control', DERIVATIVE_CACHE_CONTROL);
+      else if (req.path.startsWith('/assets/')) res.setHeader('Cache-Control', ASSET_ORIGINAL_CACHE_CONTROL);
       next();
     },
     express.static(path.join(__dirname, '../uploads'))

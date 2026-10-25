@@ -25,7 +25,8 @@ import { SAFE_ID, SAFE_FILE, DERIVED_ROOT, parseDerivativeKey } from './derivati
 //       never keeps an asset alive.
 //
 // Everything else (gallery/, thumbs/, covers/ — artworks; team/ — team
-// members; anything unexpected) is UNKNOWN: retained, never a candidate.
+// members; events/ — event attachments, released by routes/events.ts
+// itself; anything unexpected) is UNKNOWN: retained, never a candidate.
 //
 // Classification:
 //   LIVE_OWNER                owner record exists (a derivative: its source

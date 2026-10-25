@@ -157,7 +157,7 @@ describe('admin moderation', () => {
     expect((await request(app).get('/api/templates/admin/all?status=gone').set(admin())).status).toBe(400);
   });
 
-  it('10 & 18: admin switches Personal ↔ Community; members see the change, within the item\'s own workspace only', async () => {
+  it('10 & 18: admin switches Personal ↔ Community; templates stay in their workspace, assets stay scoped without grants', async () => {
     const board = await createBoardDirect(OWNER, ws);
     const t = (await createTemplate(OWNER, board)).body.id as string;
     const a = await insertAsset(OWNER, ws);
@@ -166,9 +166,12 @@ describe('admin moderation', () => {
     expect((await request(app).patch(`/api/templates/admin/${t}`).set(admin()).send({ visibility: 'community' })).body.visibility).toBe('community');
     expect(ids((await listAssets(MEMBER, ws)).body.assets)).toEqual([a]);
     expect(ids((await listTemplates(MEMBER, ws)).body)).toEqual([t]);
-    // 23: an admin override never reaches another workspace.
+    // 23: an admin override never reaches another workspace: an asset's
+    // community reaches exactly who the owner's own choice would — its
+    // workspace's members, plus workspaces it is explicitly shared with
+    // (none here). Listing someone else's workspace still needs membership.
     expect((await listAssets(OUTSIDER, ws)).status).toBe(403);
-    expect((await listAssets(OUTSIDER, outsiderWs)).body.assets).toEqual([]);
+    expect(ids((await listAssets(OUTSIDER, outsiderWs)).body.assets)).toEqual([]);
     expect((await listTemplates(OUTSIDER, outsiderWs)).body).toEqual([]);
 
     await request(app).patch(`/api/assets/admin/${a}`).set(admin()).send({ visibility: 'personal' });

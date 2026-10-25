@@ -14,8 +14,10 @@ import { settleDerivativeJobs } from '../src/storage/derivatives';
 //
 // Cast, in every test: OWNER and MEMBER share a team workspace; OUTSIDER is
 // a registered student who is not a member of it (and owns a workspace of
-// their own). "Community" is the item's workspace members — never public,
-// never another workspace.
+// their own). A community item reaches its workspace's members only; a
+// community ASSET also reaches workspaces it is explicitly shared with
+// (asset-scoped-sharing.test.ts) — never club-wide. Neither is ever
+// public, and a personal item never leaves its owner.
 // ─────────────────────────────────────────────────────────────────────────
 
 const app = createApp();
@@ -317,11 +319,11 @@ describe('assets', () => {
       .toEqual({ filename: 'mark.png', visibility: 'community' });
   });
 
-  it('collections still work: members group community assets, and counts never reveal others\' personal assets', async () => {
+  it('collections still work: owners group community assets, and counts never reveal others\' personal assets', async () => {
     const pack = (await request(app).post('/api/asset-collections').set(auth(OWNER)).send({ workspace_id: ws, name: 'Brand' })).body.id as string;
     const shared = (await uploadPng(OWNER, ws, 'community')).body.id as string;
     const secret = (await uploadPng(OWNER, ws)).body.id as string;
-    expect((await request(app).patch(`/api/assets/${shared}`).set(auth(MEMBER)).send({ collection_id: pack })).status).toBe(200);
+    expect((await request(app).patch(`/api/assets/${shared}`).set(auth(OWNER)).send({ collection_id: pack })).status).toBe(200);
     expect((await request(app).patch(`/api/assets/${secret}`).set(auth(OWNER)).send({ collection_id: pack })).status).toBe(200);
 
     const countFor = async (roll: string) =>
@@ -349,27 +351,78 @@ describe('assets', () => {
 });
 
 describe('workspace boundaries', () => {
-  it('24 & 25: a non-member cannot list, fetch, use, edit or delete community content, and scopes never cross workspaces', async () => {
+  it('24 & 25: a non-member cannot list, fetch, use, edit or delete a community template, and template scopes never cross workspaces', async () => {
     const board = await createBoardDirect(OWNER, ws);
     const t = (await createTemplate(OWNER, board, 'community')).body.id as string;
-    const a = (await uploadPng(OWNER, ws, 'community')).body.id as string;
 
     for (const scope of [undefined, 'all', 'mine', 'community']) {
       expect((await listTemplates(OUTSIDER, ws, scope)).status).toBe(403);
-      expect((await listAssets(OUTSIDER, ws, scope)).status).toBe(403);
-      // The outsider's own workspace never shows another workspace's community items.
+      // The outsider's own workspace never shows another workspace's community templates.
       expect((await listTemplates(OUTSIDER, outsiderWs, scope)).body).toEqual([]);
-      expect((await listAssets(OUTSIDER, outsiderWs, scope)).body.assets).toEqual([]);
     }
     expect((await request(app).get(`/api/templates/${t}`).set(auth(OUTSIDER))).status).toBe(403);
     expect((await request(app).post(`/api/templates/${t}/use`).set(auth(OUTSIDER)).send({})).status).toBe(403);
     expect((await request(app).patch(`/api/templates/${t}`).set(auth(OUTSIDER)).send({ name: 'x' })).status).toBe(403);
     expect((await request(app).delete(`/api/templates/${t}`).set(auth(OUTSIDER))).status).toBe(403);
-    expect((await request(app).get(`/api/assets/${a}`).set(auth(OUTSIDER))).status).toBe(403);
-    expect((await request(app).patch(`/api/assets/${a}`).set(auth(OUTSIDER)).send({ visibility: 'personal' })).status).toBe(403);
-    expect((await request(app).delete(`/api/assets/${a}`).set(auth(OUTSIDER))).status).toBe(403);
     expect((await query('SELECT 1 FROM templates WHERE id = $1', [t]))).toHaveLength(1);
-    expect((await query('SELECT 1 FROM assets WHERE id = $1', [a]))).toHaveLength(1);
+  });
+
+  it('an explicit grant allows target members to use an asset, but not manage it', async () => {
+    const a = (await uploadPng(OWNER, ws, 'community')).body.id as string;
+    const url = (await request(app).get(`/api/assets/${a}`).set(auth(OWNER))).body.url as string;
+
+    // Listing someone else's workspace still requires membership.
+    for (const scope of [undefined, 'all', 'mine', 'community']) {
+      expect((await listAssets(OUTSIDER, ws, scope)).status).toBe(403);
+    }
+    expect(ids((await listAssets(OUTSIDER, outsiderWs)).body.assets)).toEqual([]);
+    await query(`INSERT INTO workspace_members(workspace_id,roll_number,role,added_at) VALUES($1,$2,'admin',now())`,[outsiderWs,OWNER]);
+    expect((await request(app).put(`/api/assets/${a}/shares/${outsiderWs}`).set(auth(OWNER))).status).toBe(204);
+    // From their own workspace, the outsider sees it under All and Community — never under Mine.
+    expect(ids((await listAssets(OUTSIDER, outsiderWs)).body.assets)).toEqual([a]);
+    expect(ids((await listAssets(OUTSIDER, outsiderWs, 'community')).body.assets)).toEqual([a]);
+    expect((await listAssets(OUTSIDER, outsiderWs, 'mine')).body.assets).toEqual([]);
+
+    // Fetching it (to place it on a board) gives the same file: one stored object.
+    const seen = await request(app).get(`/api/assets/${a}`).set(auth(OUTSIDER));
+    expect(seen.status).toBe(200);
+    expect(seen.body.url).toBe(url);
+    expect(seen.body).not.toHaveProperty('storage_key');
+    expect(seen.body).not.toHaveProperty('client_upload_id');
+
+    // Use only: no rename, publish/unpublish, collection filing or delete.
+    const pack = (await request(app).post('/api/asset-collections').set(auth(OUTSIDER)).send({ workspace_id: outsiderWs, name: 'Mine' })).body.id as string;
+    expect((await request(app).patch(`/api/assets/${a}`).set(auth(OUTSIDER)).send({ visibility: 'personal' })).status).toBe(403);
+    expect((await request(app).patch(`/api/assets/${a}`).set(auth(OUTSIDER)).send({ filename: 'x.png' })).status).toBe(403);
+    expect((await request(app).patch(`/api/assets/${a}`).set(auth(OUTSIDER)).send({ collection_id: pack })).status).toBe(403);
+    expect((await request(app).delete(`/api/assets/${a}`).set(auth(OUTSIDER))).status).toBe(403);
+    const row = (await query<{ owner_roll: string; workspace_id: string; visibility: string; collection_id: string | null }>(
+      'SELECT owner_roll, workspace_id, visibility, collection_id FROM assets WHERE id = $1', [a]))[0];
+    expect(row).toEqual({ owner_roll: OWNER, workspace_id: ws, visibility: 'community', collection_id: null });
+
+    // A collection view (and "ungrouped") shows only the current workspace's assets.
+    expect((await request(app).get(`/api/assets?workspace_id=${outsiderWs}&collection_id=none`).set(auth(OUTSIDER))).body.assets).toEqual([]);
+
+    // Unpublished again → gone for the outsider (a non-member's direct fetch
+    // gets 403, never the asset).
+    await request(app).patch(`/api/assets/${a}`).set(auth(OWNER)).send({ visibility: 'personal' });
+    expect((await listAssets(OUTSIDER, outsiderWs)).body.assets).toEqual([]);
+    expect((await request(app).get(`/api/assets/${a}`).set(auth(OUTSIDER))).status).toBe(404);
+  });
+
+  it('a personal-workspace upload can be Community but does not reach unrelated workspaces', async () => {
+    const personalWs = (await request(app).get('/api/workspaces').set(auth(OUTSIDER))).body
+      .find((w: { is_personal: boolean }) => w.is_personal).id as string;
+    const up = await uploadPng(OUTSIDER, personalWs, 'community');
+    expect(up.status).toBe(201);
+    expect(up.body.visibility).toBe('community');
+    expect(ids((await listAssets(MEMBER, ws, 'community')).body.assets)).toEqual([]);
+    expect(ids((await listAssets(OWNER, ws)).body.assets)).toEqual([]);
+    // …and a hidden community asset is gone for everyone, its owner included.
+    await query("UPDATE assets SET status = 'hidden' WHERE id = $1", [up.body.id]);
+    expect((await listAssets(MEMBER, ws, 'community')).body.assets).toEqual([]);
+    expect((await request(app).get(`/api/assets/${up.body.id}`).set(auth(MEMBER))).status).toBe(404);
+    expect((await listAssets(OUTSIDER, personalWs)).body.assets).toEqual([]);
   });
 
   it('26: personal content never leaks to other users or workspaces, whatever the scope', async () => {
