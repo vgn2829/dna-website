@@ -87,7 +87,10 @@ export function useBoardComments({ boardId, roll, live, roomId }: UseBoardCommen
   useEffect(() => { rollRef.current = roll; }, [roll]);
 
   useEffect(() => {
-    if (!roll) return;
+    // BoardPage passes '' until the board has loaded (first render, or a
+    // hard refresh): fetching then requested /api/boards//comments → a 404
+    // and a momentary "Failed to load comments". Wait for a real id.
+    if (!roll || !boardId) return;
     let cancelled = false;
     setLoading(true);
     setError(null);

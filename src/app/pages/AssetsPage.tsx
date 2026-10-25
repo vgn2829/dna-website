@@ -2,6 +2,9 @@ import { useStudent } from '../context/StudentContext';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { workspaceContext, personalFallbackNote } from '../lib/workspaceSearch';
 import { AssetBrowser } from '../components/assets/AssetBrowser';
+import { WorkspaceLoadErrorState } from '../components/shell/WorkspaceLoadErrorState';
+import { workspacePageGate } from '../lib/workspaceLoad';
+import { Image as ImageIcon } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────
 // AssetsPage — the Workspace Asset Library as a real page: existing
@@ -24,7 +27,7 @@ import { AssetBrowser } from '../components/assets/AssetBrowser';
 
 export default function AssetsPage() {
   const { studentSession, openRollModal } = useStudent();
-  const { activeWorkspaceId, workspaces, personalWorkspace, loading } = useWorkspace();
+  const { activeWorkspaceId, workspaces, personalWorkspace, loading, loadError, refresh } = useWorkspace();
 
   if (!studentSession) {
     return (
@@ -39,7 +42,11 @@ export default function AssetsPage() {
     );
   }
 
-  if (loading && workspaces.length === 0) {
+  const activeWorkspace = activeWorkspaceId ? workspaces.find(w => w.id === activeWorkspaceId) ?? null : null;
+  const targetWorkspace = activeWorkspace ?? personalWorkspace;
+  const gate = workspacePageGate({ loading, loadError, workspaceCount: workspaces.length, hasTargetWorkspace: !!targetWorkspace });
+
+  if (gate === 'loading') {
     return (
       <div style={{ padding: '80px 0', textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)' }}>
         Loading…
@@ -47,8 +54,10 @@ export default function AssetsPage() {
     );
   }
 
-  const activeWorkspace = activeWorkspaceId ? workspaces.find(w => w.id === activeWorkspaceId) ?? null : null;
-  const targetWorkspace = activeWorkspace ?? personalWorkspace;
+  if (gate === 'error' && loadError) {
+    return <WorkspaceLoadErrorState error={loadError} icon={ImageIcon} noun="assets" onRetry={() => void refresh()} onSignIn={openRollModal} />;
+  }
+
   const context = workspaceContext(activeWorkspaceId ? targetWorkspace : null, { spansAllWorkspaces: false });
 
   if (!targetWorkspace) {
