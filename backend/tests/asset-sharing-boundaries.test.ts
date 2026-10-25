@@ -19,7 +19,8 @@ import { settleDerivativeJobs } from '../src/storage/derivatives';
 // must and must not do to content already saved on boards.
 //
 // Cast: ALICE owns personal workspace p-alice and team TEAM (owner);
-// BOB is an ordinary member of TEAM; EVE is in neither.
+// BOB is an ordinary member of TEAM and of STUDIO (owned by DAVE); EVE is
+// in none of them.
 // ─────────────────────────────────────────────────────────────────────────
 
 afterEach(async () => { await settleDerivativeJobs(); vi.restoreAllMocks(); });
@@ -54,10 +55,12 @@ beforeEach(async () => {
     );
   }
   await query(`INSERT INTO workspaces(id, name, is_personal, owner_roll, created_at) VALUES
-    ('p-alice', 'Alice', true, 'ALICE', now()), ('p-bob', 'Bob', true, 'BOB', now()), ('team', 'Team', false, 'ALICE', now())`);
+    ('p-alice', 'Alice', true, 'ALICE', now()), ('p-bob', 'Bob', true, 'BOB', now()), ('team', 'Team', false, 'ALICE', now()),
+    ('studio', 'Studio', false, 'DAVE', now())`);
   await query(`INSERT INTO workspace_members(workspace_id, roll_number, role, added_at) VALUES
     ('p-alice', 'ALICE', 'owner', now()), ('p-bob', 'BOB', 'owner', now()),
-    ('team', 'ALICE', 'owner', now()), ('team', 'BOB', 'member', now())`);
+    ('team', 'ALICE', 'owner', now()), ('team', 'BOB', 'member', now()),
+    ('studio', 'DAVE', 'owner', now()), ('studio', 'BOB', 'member', now())`);
   if (!adminToken) {
     adminToken = (await request(app).post('/api/auth/admin/login').send({ password: process.env.ADMIN_PASSWORD })).body.token as string;
   }
@@ -111,6 +114,67 @@ describe('personal workspace → team workspace sharing (the reported bug)', () 
     await share('ALICE', id, 'team');
     expect((await unshare('BOB', id, 'team')).status).toBe(404);
     expect(ids(await list('BOB', 'team'))).toEqual([id]);
+  });
+});
+
+describe('ordinary members share their own assets', () => {
+  it('an ordinary member shares their own asset into a team they belong to, and nowhere else', async () => {
+    const id = (await upload('BOB', 'p-bob', { visibility: 'community' })).body.id as string;
+    const info = await request(app).get(`/api/assets/${id}/shares`).set(auth('BOB'));
+    expect(info.status).toBe(200);
+    expect(info.body.targets.map((t: { id: string }) => t.id).sort()).toEqual(['studio', 'team']);
+
+    expect((await share('BOB', id, 'team')).status).toBe(204);
+    expect(ids(await list('ALICE', 'team'))).toEqual([id]);
+    expect((await detail('ALICE', id, 'team')).status).toBe(200);
+    // Not into a personal workspace (another's, or their own), nor one they aren't in.
+    expect((await share('BOB', id, 'p-alice')).status).toBe(404);
+    expect((await share('BOB', id, 'p-bob')).status).toBe(409); // its own source
+    // Outsiders stay isolated.
+    expect((await detail('EVE', id)).status).toBe(404);
+    expect((await share('EVE', id, 'team')).status).toBe(404);
+    expect(ids(await list('DAVE', 'studio'))).toEqual([]);
+
+    // Bob revokes his own grant.
+    expect((await unshare('BOB', id, 'team')).status).toBe(204);
+    expect(ids(await list('ALICE', 'team'))).toEqual([]);
+  });
+
+  it("no member can share, inspect or revoke another user's asset", async () => {
+    const id = (await upload('ALICE', 'team', { visibility: 'community' })).body.id as string;
+    // Bob can see and use it in TEAM, and is a member of STUDIO — still not his to share.
+    expect((await detail('BOB', id, 'team')).status).toBe(200);
+    expect((await share('BOB', id, 'studio')).status).toBe(404);
+    expect((await request(app).get(`/api/assets/${id}/shares`).set(auth('BOB'))).status).toBe(404);
+    expect((await request(app).put(`/api/assets/admin/${id}/shares/studio`).set(auth('BOB'))).status).toBe(401);
+    expect(await query('SELECT * FROM asset_workspace_grants')).toEqual([]);
+
+    // Once a site admin shares it into STUDIO, Bob still can't revoke it.
+    expect((await request(app).put(`/api/assets/admin/${id}/shares/studio`).set(admin())).status).toBe(204);
+    expect((await unshare('BOB', id, 'studio')).status).toBe(404);
+    expect(ids(await list('DAVE', 'studio'))).toEqual([id]);
+  });
+
+  it('removed members lose the right to share, and recipients lose access', async () => {
+    const own = (await upload('BOB', 'team', { visibility: 'community' })).body.id as string;
+    // Removed from the target: can no longer share into it.
+    await query(`DELETE FROM workspace_members WHERE workspace_id = 'studio' AND roll_number = 'BOB'`);
+    expect((await share('BOB', own, 'studio')).status).toBe(404);
+    // Removed from the source: can no longer share it anywhere.
+    await query(`INSERT INTO workspace_members(workspace_id, roll_number, role, added_at) VALUES ('studio', 'BOB', 'member', now())`);
+    await query(`DELETE FROM workspace_members WHERE workspace_id = 'team' AND roll_number = 'BOB'`);
+    expect((await share('BOB', own, 'studio')).status).toBe(404);
+    expect((await request(app).get(`/api/assets/${own}/shares`).set(auth('BOB'))).status).toBe(404);
+
+    // A recipient removed from the target loses list and detail access.
+    const alice = (await upload('ALICE', 'p-alice', { visibility: 'community' })).body.id as string;
+    await share('ALICE', alice, 'team');
+    expect(ids(await list('ALICE', 'team'))).toContain(alice);
+    await query(`INSERT INTO workspace_members(workspace_id, roll_number, role, added_at) VALUES ('team', 'BOB', 'member', now())`);
+    expect((await detail('BOB', alice, 'team')).status).toBe(200);
+    await query(`DELETE FROM workspace_members WHERE workspace_id = 'team' AND roll_number = 'BOB'`);
+    expect((await list('BOB', 'team')).status).toBe(403);
+    expect((await detail('BOB', alice)).status).toBe(404);
   });
 });
 

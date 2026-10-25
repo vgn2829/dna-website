@@ -11,8 +11,8 @@ import { LibraryDialog } from './LibraryDialog';
 // chosen workspace's library; nothing is copied, and the owner, source
 // workspace and stored file never change. Stopping sharing removes it from
 // that workspace's library and picker; boards that already placed it keep
-// it. Targets are the team workspaces the owner owns or administers — the
-// server decides, this only lists what it returns.
+// it. Targets are the team workspaces the owner belongs to — the server
+// decides, this only lists what it returns.
 // ─────────────────────────────────────────────────────────────────────────
 
 type Sharing = Awaited<ReturnType<typeof api.assets.shares>>;
@@ -115,7 +115,7 @@ export function ShareAssetDialog({
 
       {data && rows.length === 0 && (
         <p className="type-caption" style={{ margin: 0 }}>
-          You can share with team workspaces you own or administer. You don’t manage another team workspace yet.
+          You can share with team workspaces you’re a member of. Join or create a team workspace to share this asset.
         </p>
       )}
 

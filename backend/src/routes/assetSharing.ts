@@ -19,9 +19,11 @@ import { param } from '../routeParams';
 //
 // Who may grant:
 //   - the asset's owner, while still a member of its source workspace,
-//     into a non-personal workspace they are an owner or admin of (the
-//     workspace-management tier, routes/workspaces.ts). A recipient or an
-//     ordinary member can never grant or re-share.
+//     into any non-personal workspace they are currently a member of (any
+//     role — membership is the row in workspace_members; a removed member
+//     has none). Only an asset's owner shares it: another member of the
+//     source workspace, or a recipient in a target workspace, can never
+//     grant or re-share someone else's asset.
 //   - a site admin (requireAdmin), into any non-personal workspace. Owner
 //     management never confers site-admin moderation powers, and site-admin
 //     moderation (routes/assets.ts /admin) stays separate from sharing.
@@ -47,7 +49,7 @@ async function sharingInfo(id: string, roll: string) {
   const targets = await pool.query(
     `SELECT w.id, w.name FROM workspaces w
      JOIN workspace_members m ON m.workspace_id = w.id
-     WHERE m.roll_number = $2 AND m.role IN ('owner', 'admin') AND NOT w.is_personal
+     WHERE m.roll_number = $2 AND NOT w.is_personal
        AND w.id <> (SELECT workspace_id FROM assets WHERE id = $1)
      ORDER BY w.name`,
     [id, roll]
@@ -56,7 +58,8 @@ async function sharingInfo(id: string, roll: string) {
 }
 
 // GET /api/assets/:id/shares — the owner's view: current grants plus the
-// workspaces they may still share into.
+// workspaces they may still share into (every non-personal workspace they
+// belong to, other than the asset's own).
 assetSharingRouter.get('/:id/shares', requireStudent, async (req, res) => {
   const result = await sharingInfo(param(req.params.id), req.studentRoll!);
   if (!result) { res.status(404).json({ error: 'Asset not found' }); return; }
@@ -64,8 +67,8 @@ assetSharingRouter.get('/:id/shares', requireStudent, async (req, res) => {
 });
 
 // Locks the asset so a concurrent hide/unpublish can't race the eligibility
-// check. The target role is checked independently; receiving a grant never
-// permits resharing. roll = null is the site-admin path.
+// check. Target membership is checked independently; receiving a grant
+// never permits resharing. roll = null is the site-admin path.
 async function grant(id: string, target: string, roll: string | null): Promise<number> {
   const client = await pool.connect();
   try {
@@ -87,7 +90,7 @@ async function grant(id: string, target: string, roll: string | null): Promise<n
     const allowed = roll
       ? await client.query(
         `SELECT 1 FROM workspace_members m JOIN workspaces w ON w.id = m.workspace_id
-         WHERE m.workspace_id = $1 AND m.roll_number = $2 AND m.role IN ('owner', 'admin') AND NOT w.is_personal
+         WHERE m.workspace_id = $1 AND m.roll_number = $2 AND NOT w.is_personal
          FOR SHARE OF m`,
         [target, roll]
       )

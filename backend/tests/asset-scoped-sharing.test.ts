@@ -85,13 +85,19 @@ describe('explicit workspace grants', () => {
     expect(ids(await list('RECIPIENT','target'))).toEqual([]);
     expect((await request(app).get('/api/assets/shared?workspace_id=target').set(auth('RECIPIENT'))).status).toBe(404);
   });
-  it('rejects recipients, ordinary target members, personal/hidden assets and arbitrary targets', async () => {
+  it('rejects non-owners, personal/hidden assets, non-member and arbitrary targets', async () => {
     expect((await grant('MEMBER')).status).toBe(404);
     expect((await grant('OWNER','shared','outside')).status).toBe(404);
     expect((await grant('OWNER','personal')).status).toBe(409);
     expect((await grant('OWNER','hidden')).status).toBe(409);
     expect((await grant('OWNER','shared','source')).status).toBe(409);
+    expect(await query('SELECT * FROM asset_workspace_grants')).toHaveLength(0);
+    // An ordinary (non-admin) member of the target may share their own asset there…
     await query(`UPDATE workspace_members SET role='member' WHERE workspace_id='target' AND roll_number='OWNER'`);
+    expect((await grant()).status).toBe(204);
+    await query('DELETE FROM asset_workspace_grants');
+    // …but not once they are no longer a member of it.
+    await query(`DELETE FROM workspace_members WHERE workspace_id='target' AND roll_number='OWNER'`);
     expect((await grant()).status).toBe(404);
     expect(await query('SELECT * FROM asset_workspace_grants')).toHaveLength(0);
   });
