@@ -10,7 +10,7 @@ import { requireStudent } from '../middleware/studentAuth';
 import { requireAdmin } from '../middleware/adminAuth';
 import { adminListQuery, adminListWhere, adminUpdateSchema } from '../lib/libraryAdmin';
 import { param } from '../routeParams';
-import { getStorage, StorageTooLargeError } from '../storage';
+import { getStorage, IMMUTABLE_CACHE_SECONDS, StorageTooLargeError } from '../storage';
 import { findStorageReferences } from '../storage/references';
 import { deleteDerivatives, derivativeKey, isDerivableSourceKey, resolveDerivativeUrls, scheduleDerivative } from '../storage/derivatives';
 import { LIBRARY_VISIBILITIES, canSeeLibraryItem, isLibraryVisibility, libraryScopeSql, parseLibraryScope, rollBinder, type LibraryStatus, type LibraryVisibility } from '../lib/libraryVisibility';
@@ -311,7 +311,9 @@ router.post('/', requireStudent, uploadAssetLimiter, diskUploadSingle('file'), a
     const storageKey = `assets/${workspaceId}/${id}.${ext}`;
 
     try {
-      await getStorage().uploadFile(storageKey, req.file.path, storedMime);
+      // The key is a fresh uuid that is never overwritten (rename and
+      // publish touch only the row), so the object is cached as immutable.
+      await getStorage().uploadFile(storageKey, req.file.path, storedMime, { cacheControl: IMMUTABLE_CACHE_SECONDS });
     } catch (storageErr) {
       if (storageErr instanceof StorageTooLargeError) {
         return res.status(413).json({ error: 'This file is larger than the storage service currently accepts' });

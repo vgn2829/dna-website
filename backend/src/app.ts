@@ -89,10 +89,12 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
     (req, res, next) => {
       res.setHeader('Content-Disposition', 'attachment');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-      // Image derivatives never change under a given key (storage/
-      // derivatives.ts), so they cache for a year. express.static keeps a
-      // Cache-Control that is already set; originals are untouched.
-      if (req.path.startsWith(`/${DERIVED_ROOT}/`)) res.setHeader('Cache-Control', DERIVATIVE_CACHE_CONTROL);
+      // Image derivatives and library asset originals never change under a
+      // given key (storage/derivatives.ts; routes/assets.ts stores each
+      // upload under a fresh uuid), so they cache for a year — the same
+      // header Supabase serves for them. express.static keeps a
+      // Cache-Control that is already set; other uploads are untouched.
+      if (req.path.startsWith(`/${DERIVED_ROOT}/`) || req.path.startsWith('/assets/')) res.setHeader('Cache-Control', DERIVATIVE_CACHE_CONTROL);
       next();
     },
     express.static(path.join(__dirname, '../uploads'))

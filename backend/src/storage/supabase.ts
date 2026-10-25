@@ -33,16 +33,16 @@ export class SupabaseStorageProvider implements StorageProvider {
     }
   }
 
-  async uploadFile(path: string, localFilePath: string, mimeType: string): Promise<void> {
+  async uploadFile(path: string, localFilePath: string, mimeType: string, opts?: { cacheControl?: string }): Promise<void> {
     const { size } = await fs.promises.stat(localFilePath);
     if (size <= BUFFERED_UPLOAD_MAX_BYTES) {
-      return this.upload(path, await fs.promises.readFile(localFilePath), mimeType);
+      return this.upload(path, await fs.promises.readFile(localFilePath), mimeType, opts);
     }
     // storage-js sends a Node stream with duplex: 'half' (chunked), so the
     // server's memory use stays at a few stream chunks, not the file size.
     const { error } = await client().storage
       .from(bucket())
-      .upload(path, fs.createReadStream(localFilePath), { contentType: mimeType, upsert: true, duplex: 'half' });
+      .upload(path, fs.createReadStream(localFilePath), { contentType: mimeType, upsert: true, duplex: 'half', ...(opts?.cacheControl ? { cacheControl: opts.cacheControl } : {}) });
     if (error) {
       console.error('Supabase storage streamed upload error:', error);
       if (isTooLarge(error as { message?: string; statusCode?: string })) throw new StorageTooLargeError();
