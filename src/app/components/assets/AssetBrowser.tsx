@@ -5,7 +5,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { toast } from 'sonner';
 import { Search, Plus, Layers, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { api, type Asset, type AssetCollection, type AssetKind, type LibraryScope, type LibraryVisibility } from '../../lib/api';
-import { assetPublishedMessage, matchesLibraryScope } from '../../lib/libraryVisibility';
+import { assetPublishedMessage, canRemoveIncomingShare, matchesLibraryScope } from '../../lib/libraryVisibility';
 import { ScopeTabs } from '../library/LibraryVisibility';
 import { usePortalContainer } from '../PortalContainer';
 import { AssetCard } from './AssetCard';
@@ -49,6 +49,7 @@ export function AssetBrowser({
   onInsert,
   initialTab = 'all',
   isPersonalWorkspace = false,
+  workspaceRole,
 }: {
   workspaceId: string;
   workspaceName: string;
@@ -57,10 +58,14 @@ export function AssetBrowser({
   initialTab?: LibraryTab;
   // A personal workspace has no other members: nothing to publish to.
   isPersonalWorkspace?: boolean;
+  // The viewer's role here; an owner/admin may remove assets shared in.
+  workspaceRole?: 'owner' | 'admin' | 'member' | null;
 }) {
   const portalContainer = usePortalContainer();
   const revision = useAssetRefresh();
   const [sharing, setSharing] = useState<Asset | null>(null);
+  const [confirmUnshare, setConfirmUnshare] = useState<Asset | null>(null);
+  const [unsharing, setUnsharing] = useState(false);
   const [tab, setTab] = useState<LibraryTab>(initialTab);
   const [collectionFilter, setCollectionFilter] = useState<CollectionFilter>('all');
   const [scope, setScope] = useState<LibraryScope>('all');
@@ -215,6 +220,24 @@ export function AssetBrowser({
         : 'Failed to delete asset');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  // A workspace owner/admin removes an asset shared into this workspace:
+  // only the grant goes — the asset, its owner and its file are untouched,
+  // and boards that already use it keep it.
+  const handleUnshare = async (asset: Asset) => {
+    setUnsharing(true);
+    try {
+      await api.assets.revoke(roll, asset.id, workspaceId);
+      setAssets(prev => prev.filter(a => a.id !== asset.id));
+      setConfirmUnshare(null);
+      notifyAssetsChanged();
+      toast.success(`Removed from ${workspaceName}`);
+    } catch {
+      toast.error('Couldn’t remove this asset from the workspace');
+    } finally {
+      setUnsharing(false);
     }
   };
 
@@ -397,6 +420,7 @@ export function AssetBrowser({
                 onInsert={onInsert}
                 workspaceId={workspaceId}
                 onShare={setSharing}
+                onRemoveShare={canRemoveIncomingShare(asset, workspaceId, roll, workspaceRole) ? setConfirmUnshare : undefined}
                 onMove={setMoving}
                 onRename={setRenaming}
                 onDelete={setConfirmDelete}
@@ -476,6 +500,25 @@ export function AssetBrowser({
             {confirmDelete.kind === 'link'
               ? 'This removes the link from the asset library.'
               : 'This removes it from the asset library. Copies already placed on boards are unaffected.'}
+          </p>
+        </LibraryDialog>
+      )}
+
+      {confirmUnshare && (
+        <LibraryDialog
+          title={`Remove “${confirmUnshare.filename}” from ${workspaceName}?`}
+          role="alertdialog"
+          maxWidth={400}
+          onClose={() => { if (!unsharing) setConfirmUnshare(null); }}
+          footer={<>
+            <button type="button" className="btn-translucent" onClick={() => setConfirmUnshare(null)} disabled={unsharing} style={{ minHeight: 40 }}>Cancel</button>
+            <button type="button" className="btn-primary btn-danger" onClick={() => handleUnshare(confirmUnshare)} disabled={unsharing} style={{ minHeight: 40 }}>
+              {unsharing ? 'Removing…' : 'Remove'}
+            </button>
+          </>}
+        >
+          <p className="type-body" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>
+            It was shared here from another workspace. Removing it stops everyone in {workspaceName} from finding or adding it. The asset stays with its owner, and boards that already use it keep it.
           </p>
         </LibraryDialog>
       )}

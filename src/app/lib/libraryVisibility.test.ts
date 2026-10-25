@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { assetPublishedMessage, communityAvailable, isLibraryOwner, libraryAttribution, matchesLibraryScope, visibilityHint, VISIBILITY_LABEL } from './libraryVisibility';
+import { assetPublishedMessage, canRemoveIncomingShare, communityAvailable, isLibraryOwner, libraryAttribution, matchesLibraryScope, visibilityHint, VISIBILITY_LABEL } from './libraryVisibility';
 
 // Shared Creative Library — client helpers, plus static guards that the
 // owner-only controls stay owner-only in the UI (the server enforces the
@@ -50,6 +50,17 @@ describe('visibility copy', () => {
     expect(visibilityHint('personal', 'template', 'Personal', true)).toMatch(/Community sharing is available in team workspaces/);
     expect(communityAvailable('template', true)).toBe(false);
     expect(communityAvailable('template', false)).toBe(true);
+  });
+  it('only a workspace owner/admin may remove an asset shared into it, never their own', () => {
+    const incoming = { workspace_id: 'source', owner_roll: 'OWNER' };
+    expect(canRemoveIncomingShare(incoming, 'team', 'ADMIN', 'admin')).toBe(true);
+    expect(canRemoveIncomingShare(incoming, 'team', 'BOSS', 'owner')).toBe(true);
+    expect(canRemoveIncomingShare(incoming, 'team', 'MEMBER', 'member')).toBe(false);
+    expect(canRemoveIncomingShare(incoming, 'team', 'X', undefined)).toBe(false);
+    // Not shared in: it lives here.
+    expect(canRemoveIncomingShare({ workspace_id: 'team', owner_roll: 'OWNER' }, 'team', 'ADMIN', 'admin')).toBe(false);
+    // Their own asset: they manage it from Share with workspace… instead.
+    expect(canRemoveIncomingShare({ workspace_id: 'source', owner_roll: 'ADMIN' }, 'team', 'ADMIN', 'admin')).toBe(false);
   });
   it('asset community is always available; its copy never promises reach a personal workspace lacks', () => {
     for (const personalWs of [true, false]) {

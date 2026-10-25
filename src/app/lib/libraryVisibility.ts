@@ -46,6 +46,19 @@ export function communityAvailable(kind: 'template' | 'asset', isPersonalWorkspa
   return kind === 'asset' || !isPersonalWorkspace;
 }
 
+// May this viewer remove an asset that was SHARED INTO this workspace from
+// another one? Only an owner/admin of this workspace, and never their own
+// asset (owners manage sharing from Share with workspace…). The server
+// enforces the same rule; this only decides whether to offer the action.
+export function canRemoveIncomingShare(
+  asset: { workspace_id: string; owner_roll: string },
+  workspaceId: string,
+  roll: string,
+  workspaceRole: 'owner' | 'admin' | 'member' | null | undefined,
+): boolean {
+  return asset.workspace_id !== workspaceId && asset.owner_roll !== roll && (workspaceRole === 'owner' || workspaceRole === 'admin');
+}
+
 // Toast after an asset is published to Community. From a personal workspace
 // nobody else can see it yet — say so, so the next step (sharing) is clear.
 export function assetPublishedMessage(workspaceName: string, isPersonalWorkspace: boolean): string {

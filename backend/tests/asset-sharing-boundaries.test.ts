@@ -178,6 +178,80 @@ describe('ordinary members share their own assets', () => {
   });
 });
 
+describe('who can revoke a grant', () => {
+  // TEAM gains CARA (admin) and MIA (ordinary member) for these tests.
+  beforeEach(async () => {
+    await query(`INSERT INTO workspace_members(workspace_id, roll_number, role, added_at) VALUES
+      ('team', 'CARA', 'admin', now()), ('team', 'MIA', 'member', now())`);
+  });
+  const sharedIntoTeam = async () => {
+    const id = (await upload('BOB', 'p-bob', { visibility: 'community' })).body.id as string;
+    expect((await share('BOB', id, 'team')).status).toBe(204);
+    return id;
+  };
+  const grantCount = async (id: string) => (await query<{ n: number }>('SELECT count(*)::int AS n FROM asset_workspace_grants WHERE asset_id = $1', [id]))[0].n;
+
+  it('refuses ordinary target members, unrelated workspace owners and outsiders — revealing nothing', async () => {
+    const id = await sharedIntoTeam();
+    const notFound = await request(app).delete('/api/assets/does-not-exist/shares/team').set(auth('MIA'));
+    for (const roll of ['MIA', 'DAVE', 'EVE']) {
+      const res = await unshare(roll, id, 'team');
+      expect(res.status).toBe(404);
+      expect(res.body).toEqual(notFound.body); // identical to a nonexistent asset
+      expect(res.body).toEqual({ error: 'Asset not found' });
+    }
+    expect(await grantCount(id)).toBe(1);
+    // A workspace owner can't revoke into someone else's workspace, nor probe
+    // for a grant into their own that doesn't exist.
+    expect((await unshare('DAVE', id, 'studio')).status).toBe(404);
+    expect(ids(await list('MIA', 'team'))).toEqual([id]);
+  });
+
+  it('a target admin and a target owner can remove an incoming share — and nothing more', async () => {
+    const id = await sharedIntoTeam();
+    const before = (await query('SELECT * FROM assets WHERE id = $1', [id]))[0];
+    // Bob placed it on a team board before it is removed.
+    const board = (await request(app).post('/api/boards').set(auth('BOB')).send({ name: 'Team board', workspace_id: 'team' })).body.id as string;
+    const url = (await detail('BOB', id, 'team')).body.url as string;
+    const canvas = JSON.stringify({ document: { store: { 'asset:x': { typeName: 'asset', id: 'asset:x', type: 'image', props: { src: url } } }, schema: {} }, session: {} });
+    await request(app).put(`/api/boards/${board}/canvas`).set(auth('BOB')).send({ canvas_data: canvas });
+
+    expect((await unshare('CARA', id, 'team')).status).toBe(204);
+    expect(await grantCount(id)).toBe(0);
+    expect(ids(await list('MIA', 'team'))).toEqual([]);
+    expect((await detail('MIA', id, 'team')).status).toBe(404);
+    // The asset itself is untouched, and so is saved content.
+    expect((await query('SELECT * FROM assets WHERE id = $1', [id]))[0]).toEqual(before);
+    expect((await query<{ canvas_data: string }>('SELECT canvas_data FROM boards WHERE id = $1', [board]))[0].canvas_data).toBe(canvas);
+    expect((await request(app).get(`/uploads/${before.storage_key}`)).status).toBe(200);
+    // Revoking gave the target admin no power over the asset.
+    expect((await request(app).patch(`/api/assets/${id}`).set(auth('CARA')).send({ filename: 'x.png' })).status).toBe(403);
+    expect((await request(app).delete(`/api/assets/${id}`).set(auth('CARA'))).status).toBe(403);
+    expect((await share('CARA', id, 'team')).status).toBe(404);
+    expect((await request(app).get(`/api/assets/${id}/shares`).set(auth('CARA'))).status).toBe(404);
+
+    // The target owner can do the same.
+    await share('BOB', id, 'team');
+    expect((await unshare('ALICE', id, 'team')).status).toBe(204);
+    expect(await grantCount(id)).toBe(0);
+    // Once the grant is gone, a target admin can't use revoke to probe it.
+    expect((await unshare('CARA', id, 'team')).status).toBe(404);
+  });
+
+  it('the asset owner (idempotently) and a site admin can always revoke', async () => {
+    const id = await sharedIntoTeam();
+    expect((await unshare('BOB', id, 'team')).status).toBe(204);
+    expect((await unshare('BOB', id, 'team')).status).toBe(204);
+    await share('BOB', id, 'team');
+    expect((await request(app).delete(`/api/assets/admin/${id}/shares/team`).set(admin())).status).toBe(204);
+    expect(await grantCount(id)).toBe(0);
+    // Students can't use the admin route.
+    await share('BOB', id, 'team');
+    expect((await request(app).delete(`/api/assets/admin/${id}/shares/team`).set(auth('CARA'))).status).toBe(401);
+    expect(await grantCount(id)).toBe(1);
+  });
+});
+
 describe('revoking blocks new discovery and use but never touches saved content', () => {
   it('a board that already placed the asset keeps it; the file survives revoke and even owner delete', async () => {
     const up = await upload('ALICE', 'p-alice', { visibility: 'community' });

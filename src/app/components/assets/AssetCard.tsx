@@ -1,6 +1,6 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { toast } from 'sonner';
-import { MoreHorizontal, Download, ExternalLink, Trash2, ImagePlus, FolderInput, Pencil, Copy, Layers, Users, Lock } from 'lucide-react';
+import { MoreHorizontal, Download, ExternalLink, Trash2, ImagePlus, FolderInput, Pencil, Copy, Layers, Users, Lock, Unlink } from 'lucide-react';
 import type { Asset, LibraryVisibility } from '../../lib/api';
 import { VISIBILITY_LABEL, isLibraryOwner, libraryAttribution } from '../../lib/libraryVisibility';
 import { VisibilityBadge } from '../library/LibraryVisibility';
@@ -32,6 +32,7 @@ export function AssetCard({
   asset,
   workspaceId,
   onShare,
+  onRemoveShare,
   collectionName,
   onInsert,
   onMove,
@@ -45,6 +46,9 @@ export function AssetCard({
   asset: Asset;
   workspaceId: string;
   onShare: (asset: Asset) => void;
+  // Set only for a workspace owner/admin viewing an asset shared in from
+  // another workspace: removes the share (never the asset).
+  onRemoveShare?: (asset: Asset) => void;
   // Shown as a chip when set (the browser omits it while already filtered
   // to that collection).
   collectionName?: string | null;
@@ -199,6 +203,11 @@ export function AssetCard({
             {asset.kind === 'link' && (
               <DropdownMenu.Item className="dna-menu-item" onSelect={copyLink}>
                 <Copy size={15} /> Copy URL
+              </DropdownMenu.Item>
+            )}
+            {onRemoveShare && (
+              <DropdownMenu.Item className="dna-menu-item" data-danger="true" onSelect={() => onRemoveShare(asset)}>
+                <Unlink size={15} /> Remove from this workspace
               </DropdownMenu.Item>
             )}
             {canMove && <DropdownMenu.Item className="dna-menu-item" onSelect={() => onMove(asset)}>

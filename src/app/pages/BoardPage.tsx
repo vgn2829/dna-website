@@ -1000,6 +1000,7 @@ export default function BoardPage() {
           workspaceId={board.workspace_id}
           workspaceName={crumbs[0].label}
           isPersonalWorkspace={!!boardWorkspace?.is_personal}
+          workspaceRole={boardWorkspace?.role ?? null}
           roll={studentSession.rollNumber}
           onClose={() => setShowAssetLibrary(false)}
           onSelect={handleInsertAsset}

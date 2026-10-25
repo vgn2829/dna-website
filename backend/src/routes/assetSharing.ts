@@ -27,6 +27,8 @@ import { param } from '../routeParams';
 //   - a site admin (requireAdmin), into any non-personal workspace. Owner
 //     management never confers site-admin moderation powers, and site-admin
 //     moderation (routes/assets.ts /admin) stays separate from sharing.
+// A target workspace's owner/admin may also REVOKE a grant into their
+// workspace (see revoke) — never create one on someone else's behalf.
 // A personal workspace is never a target: its only member is its owner.
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -111,12 +113,30 @@ async function grant(id: string, target: string, roll: string | null): Promise<n
   }
 }
 
-// Owners can revoke even after losing target membership or while the asset
-// is hidden. This only removes access; it reveals no asset data and never
-// touches storage.
+// Who may revoke a grant:
+//   - the asset's owner — even after losing source or target membership, or
+//     while the asset is hidden (idempotent: revoking a missing grant is 204);
+//   - a site admin (roll = null);
+//   - an owner or admin of the TARGET workspace, for a grant that exists into
+//     that workspace — so a team can remove what was shared into it. This is
+//     the only thing it lets them do: they still can't edit, delete, re-share
+//     or otherwise manage the asset itself.
+// Everyone else (ordinary target members, other members of the source
+// workspace, outsiders) gets the same 404 as a nonexistent asset, so the
+// response reveals nothing about the asset or its grants. Revoking only
+// removes access; it never touches storage.
 async function revoke(id: string, target: string, roll: string | null): Promise<number> {
   const found = await pool.query('SELECT owner_roll FROM assets WHERE id = $1', [id]);
-  if (!found.rowCount || (roll && found.rows[0].owner_roll !== roll)) return 404;
+  if (!found.rowCount) return 404;
+  if (roll && found.rows[0].owner_roll !== roll) {
+    const managesTarget = await pool.query(
+      `SELECT 1 FROM asset_workspace_grants g
+       JOIN workspace_members m ON m.workspace_id = g.workspace_id
+       WHERE g.asset_id = $1 AND g.workspace_id = $2 AND m.roll_number = $3 AND m.role IN ('owner', 'admin')`,
+      [id, target, roll]
+    );
+    if (!managesTarget.rowCount) return 404;
+  }
   await pool.query('DELETE FROM asset_workspace_grants WHERE asset_id = $1 AND workspace_id = $2', [id, target]);
   return 204;
 }
