@@ -145,3 +145,8 @@ jobs:
 
       - name: Production build
         run: pnpm vite build
+
+      # The build's root must not shadow a client route (e.g. /assets): the
+      # static host serves real files before the SPA fallback.
+      - name: Built output does not shadow client routes
+        run: node scripts/check-route-collisions.mjs

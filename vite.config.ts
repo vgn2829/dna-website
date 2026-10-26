@@ -34,6 +34,16 @@ export default defineConfig({
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
 
+  build: {
+    // Built JS/CSS go to dist/static/, NOT Vite's default dist/assets/: the
+    // app has a client route /assets (the Asset Library), and a static host
+    // resolves real files/directories before its SPA fallback to index.html.
+    // With dist/assets/ present, refreshing /assets made Vercel serve a
+    // vendor chunk from that directory instead of the app. Keep this name
+    // clear of every top-level route (src/app/deepLinkRoutes.test.ts).
+    assetsDir: 'static',
+  },
+
   optimizeDeps: {
     include: ['tldraw'],
     // ORT ships its own WASM loader; let it be served as emitted assets rather
