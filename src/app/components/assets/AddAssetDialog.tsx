@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { UploadCloud, Check, AlertCircle, Loader2, Link2, RotateCcw, X } from 'lucide-react';
-import { api, UploadError, type Asset, type AssetCollection, type LibraryVisibility } from '../../lib/api';
+import { api, UploadError, type Asset, type AssetCollection, type AssetVisibility } from '../../lib/api';
 import { formatSize, isAcceptableLinkUrl, linkSource, newClientUploadId, planUploadBatch } from '../../lib/assetLibrary';
 import { MAX_UPLOAD_LABEL } from '../../lib/uploadLimits';
 import { LibraryDialog } from './LibraryDialog';
@@ -29,8 +29,9 @@ import { VisibilityPicker } from '../library/LibraryVisibility';
 //
 // Both flows can file the new asset straight into a collection; the
 // default is the collection currently being browsed. Both also choose a
-// visibility — Personal by default; Community shares it with every signed-in
-// DnA member (the file itself is stored once either way).
+// visibility — Personal by default; Workspace shares it with this workspace
+// (plus any workspace it is shared with); Community publishes it to every
+// signed-in DnA member, in any workspace (the file is stored once either way).
 // ─────────────────────────────────────────────────────────────────────────
 
 // Layout only — type comes from .type-caption on each label.
@@ -44,7 +45,7 @@ type QueueItem = {
   kind: 'image' | 'file';
   // Captured when the file is added, so a later change to the pickers (or a
   // retry) never re-files an already-queued upload.
-  visibility: LibraryVisibility;
+  visibility: AssetVisibility;
   collectionId: string | null;
   clientUploadId: string;
   status: 'waiting' | 'uploading' | 'done' | 'error';
@@ -75,7 +76,7 @@ export function AddAssetDialog({
 }) {
   const [mode, setMode] = useState<'upload' | 'link'>('upload');
   const [collectionId, setCollectionId] = useState<string | null>(defaultCollectionId);
-  const [visibility, setVisibility] = useState<LibraryVisibility>('personal');
+  const [visibility, setVisibility] = useState<AssetVisibility>('personal');
   const [linkName, setLinkName] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [linkError, setLinkError] = useState<string | null>(null);

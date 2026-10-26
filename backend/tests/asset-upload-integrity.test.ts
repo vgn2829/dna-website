@@ -192,17 +192,18 @@ describe('admin moderation', () => {
   });
 
   it('5: hide, restore and visibility changes never move owner, workspace or the stored file', async () => {
-    const a = (await upload(MEMBER, ws, { visibility: 'community' })).body.id as string;
+    const a = (await upload(MEMBER, ws, { visibility: 'workspace' })).body.id as string;
     // The outsider's workspace reaches the asset only through an explicit grant.
     expect((await request(app).put(`/api/assets/admin/${a}/shares/${outsiderWs}`).set(admin())).status).toBe(204);
     const before = await rowOf(a);
     const listCommunity = async (roll: string, w: string) =>
-      (await request(app).get(`/api/assets?workspace_id=${w}&scope=community`).set(auth(roll))).body.assets.map((x: { id: string }) => x.id);
+      (await request(app).get(`/api/assets?workspace_id=${w}`).set(auth(roll))).body.assets.map((x: { id: string }) => x.id);
 
     expect((await request(app).patch(`/api/assets/admin/${a}`).set(admin()).send({ status: 'hidden' })).body.status).toBe('hidden');
     expect(await listCommunity(OUTSIDER, outsiderWs)).toEqual([]);
     expect(await listCommunity(OWNER, ws)).toEqual([]);
     expect((await request(app).patch(`/api/assets/admin/${a}`).set(admin()).send({ status: 'active' })).body.status).toBe('active');
+    expect(await listCommunity(OWNER, ws)).toEqual([a]);
     expect(await listCommunity(OUTSIDER, outsiderWs)).toEqual([a]);
     expect((await request(app).patch(`/api/assets/admin/${a}`).set(admin()).send({ visibility: 'personal' })).body.visibility).toBe('personal');
     expect(await listCommunity(OUTSIDER, outsiderWs)).toEqual([]);
@@ -229,11 +230,11 @@ describe('admin moderation', () => {
     expect((await request(app).delete(`/api/assets/admin/${a}`).set(admin())).status).toBe(404);
   });
 
-  it('delete keeps the file while a board still uses it (placed community asset — by reference, never copied)', async () => {
-    const up = await upload(OWNER, ws, { visibility: 'community' });
+  it('delete keeps the file while a board still uses it (placed shared asset — by reference, never copied)', async () => {
+    const up = await upload(OWNER, ws, { visibility: 'workspace' });
     const key = (await rowOf(up.body.id)).storage_key;
     // Shared with the outsider's workspace, the outsider places the
-    // community asset on their own board: the canvas stores the asset's
+    // workspace asset on their own board: the canvas stores the asset's
     // URL — the same single stored object.
     expect((await request(app).put(`/api/assets/admin/${up.body.id}/shares/${outsiderWs}`).set(admin())).status).toBe(204);
     const board = (await request(app).post('/api/boards').set(auth(OUTSIDER)).send({ name: 'Mine', workspace_id: outsiderWs })).body.id as string;

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Clock, Calendar, List, CheckCircle2, Loader2, FileText, ExternalLink } from 'lucide-react';
+import { MapPin, Clock, Calendar, List, CheckCircle2, Loader2, FileText, ExternalLink, Download, Paperclip } from 'lucide-react';
 import { useAppData } from '../context/AppDataContext';
 import { useStudent } from '../context/StudentContext';
 import { api, LiveSession } from '../lib/api';
@@ -65,7 +65,7 @@ function EventCard({ event, view, delay, onRSVP, onCancel, rsvpPending }: {
   // Optional extras (both null for most events, which render exactly as
   // before). The form link is only ever the server's allowlisted value.
   const actions = eventCardActions(event, status === 'past');
-  const { formUrl, formLabel } = actions;
+  const { formUrl, formLabel, attachment } = actions;
   // Re-check every second, but only re-render when the status actually flips
   // (upcoming → live → past); an unchanged value bails out of the update.
   const [, setLiveStatus] = useState(status);
@@ -143,11 +143,13 @@ function EventCard({ event, view, delay, onRSVP, onCancel, rsvpPending }: {
 
         <p className="type-body line-clamp-2" style={{ color: 'var(--color-ink-muted)' }}>{event.content}</p>
 
-        {/* Meta */}
+        {/* Meta — plus a marker when the event has a problem statement, so
+            it's visible before reaching the actions. */}
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           <span className="type-micro flex items-center gap-1"><Calendar size={11} />{formatEventDate(event.date)}</span>
           <span className="type-micro flex items-center gap-1"><Clock size={11} />{event.time}</span>
           <span className="type-micro flex items-center gap-1"><MapPin size={11} />{event.location}</span>
+          {attachment && <span className="type-micro flex items-center gap-1"><Paperclip size={11} aria-hidden="true" />Problem statement</span>}
         </div>
 
 
@@ -160,16 +162,31 @@ function EventCard({ event, view, delay, onRSVP, onCancel, rsvpPending }: {
             register / respond). */}
         {actions.problemStatement || formUrl ? (
           <div className="mt-auto flex flex-col gap-2">
-            {event.attachment && (
+            {/* The attachment is a resource, not a registration step: a
+                bordered file row (name, type, size), visually apart from the
+                primary Register / Submit Response and the Cancel action. */}
+            {attachment && (
               <a
-                href={event.attachment.url}
+                href={attachment.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                title={event.attachment.name}
-                aria-label={`Problem Statement for ${event.title} (${event.attachment.name})`}
-                className="btn-secondary w-full flex items-center justify-center gap-2"
+                title={attachment.name}
+                aria-label={`${attachment.label} for ${event.title}: ${attachment.name}, ${attachment.meta}${attachment.opensInBrowser ? ' (opens in a new tab)' : ''}`}
+                className="touch-target flex items-center gap-3 w-full"
+                style={{
+                  padding: '10px 12px', minHeight: 44, borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--color-hairline)', background: 'var(--color-surface-2)',
+                  color: 'var(--color-ink)', textDecoration: 'none',
+                }}
               >
-                <FileText size={14} /> Problem Statement
+                <FileText size={18} aria-hidden="true" style={{ flexShrink: 0, color: 'var(--color-ink-muted)' }} />
+                <span className="flex-1 min-w-0 flex flex-col">
+                  <span className="type-body-sm font-semibold">{attachment.label}</span>
+                  <span className="type-micro truncate" style={{ color: 'var(--color-ink-muted)' }}>{attachment.name} · {attachment.meta}</span>
+                </span>
+                {attachment.opensInBrowser
+                  ? <ExternalLink size={14} aria-hidden="true" style={{ flexShrink: 0, color: 'var(--color-ink-muted)' }} />
+                  : <Download size={14} aria-hidden="true" style={{ flexShrink: 0, color: 'var(--color-ink-muted)' }} />}
               </a>
             )}
             {actions.primary !== 'none' && (actions.primary === 'form' && formUrl ? (

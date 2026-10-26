@@ -1673,7 +1673,9 @@ export async function initSchema(): Promise<void> {
   // Shared Creative Library (lib/libraryVisibility.ts): personal/community
   // visibility (plus admin moderation status, below) for templates and assets, a layer INSIDE the item's
   // workspace — community means "every member of this workspace", never
-  // public and never cross-workspace. Additive and idempotent; ADD COLUMN
+  // public and never cross-workspace. (Assets later gained a third value,
+  // and their 'community' became club-wide — see assetSharingSchema.ts
+  // migrateAssetVisibility.) Additive and idempotent; ADD COLUMN
   // with a DEFAULT gives every existing row 'personal', so nothing is
   // published by the migration. No new index: every list query still leads
   // with workspace_id (idx_templates_workspace_id / idx_assets_workspace_id)

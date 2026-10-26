@@ -1,5 +1,5 @@
-import { Lock, Users } from 'lucide-react';
-import type { LibraryScope, LibraryVisibility } from '../../lib/api';
+import { Globe, Lock, Users } from 'lucide-react';
+import type { AssetVisibility, LibraryScope } from '../../lib/api';
 import { VISIBILITY_LABEL, communityAvailable, visibilityHint } from '../../lib/libraryVisibility';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -11,8 +11,12 @@ import { VISIBILITY_LABEL, communityAvailable, visibilityHint } from '../../lib/
 // text next to an icon, never signalled by color alone.
 // ─────────────────────────────────────────────────────────────────────────
 
-export function VisibilityBadge({ visibility }: { visibility: LibraryVisibility }) {
-  const Icon = visibility === 'community' ? Users : Lock;
+// Community is club-wide only for assets; a template's Community is its
+// workspace, so templates keep the people icon for it.
+export const VISIBILITY_ICON: Record<AssetVisibility, typeof Lock> = { personal: Lock, workspace: Users, community: Globe };
+
+export function VisibilityBadge({ visibility, kind = 'asset' }: { visibility: AssetVisibility; kind?: 'template' | 'asset' }) {
+  const Icon = kind === 'template' && visibility === 'community' ? Users : VISIBILITY_ICON[visibility];
   return (
     <span className="type-micro" style={{
       display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
@@ -25,12 +29,13 @@ export function VisibilityBadge({ visibility }: { visibility: LibraryVisibility 
   );
 }
 
-// Personal / Community choice for save, upload and edit flows. Personal is
-// every caller's default. A template's Community is its workspace, so in a
-// personal workspace (no one else to share with) it is disabled and the
-// hint says why. An asset's Community also covers workspaces the owner
-// explicitly shares it with, so it is always available.
-export function VisibilityPicker({
+// Visibility choice for save, upload and edit flows. Personal is every
+// caller's default. Templates: Personal / Community, where Community is the
+// workspace — disabled in a personal workspace (no one else to share with)
+// and the hint says why. Assets: Personal / Workspace / Community, where
+// Workspace is this workspace plus explicit shares and Community is the
+// whole club, so both are always available.
+export function VisibilityPicker<V extends AssetVisibility>({
   value,
   onChange,
   kind,
@@ -38,8 +43,8 @@ export function VisibilityPicker({
   isPersonalWorkspace,
   disabled,
 }: {
-  value: LibraryVisibility;
-  onChange: (value: LibraryVisibility) => void;
+  value: V;
+  onChange: (value: V) => void;
   kind: 'template' | 'asset';
   workspaceName: string;
   isPersonalWorkspace: boolean;
@@ -51,8 +56,9 @@ export function VisibilityPicker({
         Visibility
       </p>
       <div role="group" aria-label={`Who can use this ${kind}`} className="segmented is-block">
-        {(['personal', 'community'] as const).map(option => {
+        {((kind === 'asset' ? ['personal', 'workspace', 'community'] : ['personal', 'community']) as V[]).map(option => {
           const unavailable = disabled || (option === 'community' && !communityAvailable(kind, isPersonalWorkspace));
+          const Icon = kind === 'template' && option === 'community' ? Users : VISIBILITY_ICON[option];
           return (
           <button
             key={option}
@@ -63,7 +69,7 @@ export function VisibilityPicker({
             className="segmented-item touch-target"
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: unavailable ? 0.5 : 1, cursor: unavailable ? 'not-allowed' : 'pointer' }}
           >
-            {option === 'community' ? <Users size={14} aria-hidden="true" /> : <Lock size={14} aria-hidden="true" />}
+            <Icon size={14} aria-hidden="true" />
             {VISIBILITY_LABEL[option]}
           </button>
           );
