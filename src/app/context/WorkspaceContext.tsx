@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { workspaceListLoading, type WorkspaceLoadError } from '../lib/workspaceLoad';
 import { api, type Workspace } from '../lib/api';
 import { useStudent } from './StudentContext';
 
@@ -68,12 +69,19 @@ function writeStoredWorkspaceId(id: string | null): void {
   }
 }
 
+export type { WorkspaceLoadError };
+
 interface WorkspaceContextValue {
   // null = "All Workspaces" (the pre-existing unscoped-across-my-own-
   // workspaces default) — a first-class selection, not a loading state.
   activeWorkspaceId: string | null;
   workspaces: Workspace[];
+  // True from the first render until the signed-in user's workspace list
+  // has loaded or failed — never false-with-an-empty-list before that.
   loading: boolean;
+  // Why the last load failed (null after a successful load). Pages show it
+  // instead of an empty "no workspace" state; refresh() retries.
+  loadError: WorkspaceLoadError | null;
   // The caller's personal workspace, if loaded — convenience accessor for
   // "Assets needs a concrete workspace even in All-Workspaces view" style
   // call sites (mirrors MoodboardsPage's pre-existing assetsWorkspaceId
@@ -94,8 +102,16 @@ const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const { studentSession } = useStudent();
+  const roll = studentSession?.rollNumber ?? null;
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(false);
+  // The roll whose fetch has settled (loaded or failed). Until it matches the
+  // signed-in roll, the list is "not loaded yet" — including the very first
+  // render after a hard refresh, before the fetch effect has even run. Pages
+  // must never read that state as "this user has no workspaces".
+  const [settledRoll, setSettledRoll] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<WorkspaceLoadError | null>(null);
+  const loading = workspaceListLoading(roll, fetching, settledRoll);
   const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string | null>(() => readStoredWorkspaceId());
 
   // Guards against a stale response landing after the roll number has
@@ -104,23 +120,34 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const requestIdRef = useRef(0);
 
   const fetchWorkspaces = useCallback(async () => {
-    if (!studentSession?.rollNumber) {
+    if (!roll) {
+      ++requestIdRef.current; // drop any in-flight response for a previous roll
       setWorkspaces([]);
+      setLoadError(null);
+      setFetching(false);
+      setSettledRoll(null);
       return;
     }
     const requestId = ++requestIdRef.current;
-    setLoading(true);
+    setFetching(true);
     try {
-      const list = await api.workspaces.list(studentSession.rollNumber);
+      const list = await api.workspaces.list(roll);
       if (requestIdRef.current !== requestId) return; // superseded by a newer call
       setWorkspaces(list);
-    } catch {
+      setLoadError(null);
+    } catch (err) {
       if (requestIdRef.current !== requestId) return;
+      // A failure is reported, not disguised as "no workspaces": pages show
+      // an error with a way to recover (retry, or sign in again).
       setWorkspaces([]);
+      setLoadError(err instanceof Error && err.message === 'SESSION_EXPIRED' ? 'session-expired' : 'failed');
     } finally {
-      if (requestIdRef.current === requestId) setLoading(false);
+      if (requestIdRef.current === requestId) {
+        setFetching(false);
+        setSettledRoll(roll);
+      }
     }
-  }, [studentSession?.rollNumber]);
+  }, [roll]);
 
   useEffect(() => {
     fetchWorkspaces();
@@ -197,6 +224,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         activeWorkspaceId,
         workspaces,
         loading,
+        loadError,
         personalWorkspace,
         switchWorkspace,
         refresh,

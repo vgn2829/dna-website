@@ -6,6 +6,8 @@ import { LayoutTemplate } from 'lucide-react';
 import { api, type Template, type Project, type LibraryScope, type LibraryVisibility } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { WorkspaceLoadErrorState } from '../components/shell/WorkspaceLoadErrorState';
+import { workspacePageGate } from '../lib/workspaceLoad';
 import { workspaceContext, personalFallbackNote } from '../lib/workspaceSearch';
 import { useModalA11y } from '../components/hooks/useModalA11y';
 import { ScopeTabs, VisibilityBadge, VisibilityPicker } from '../components/library/LibraryVisibility';
@@ -51,7 +53,7 @@ function timeAgo(iso: string): string {
 
 export default function TemplatesPage() {
   const { studentSession, openRollModal } = useStudent();
-  const { activeWorkspaceId, personalWorkspace, workspaces, loading: workspaceLoading } = useWorkspace();
+  const { activeWorkspaceId, personalWorkspace, workspaces, loading: workspaceLoading, loadError: workspaceLoadError, refresh: refreshWorkspaces } = useWorkspace();
   const navigate = useNavigate();
 
   const targetWorkspace = activeWorkspaceId
@@ -262,8 +264,14 @@ export default function TemplatesPage() {
     );
   }
 
-  if (workspaceLoading && workspaces.length === 0) {
+  const gate = workspacePageGate({ loading: workspaceLoading, loadError: workspaceLoadError, workspaceCount: workspaces.length, hasTargetWorkspace: !!targetWorkspace });
+
+  if (gate === 'loading') {
     return <p className="type-body" style={{ color: 'var(--color-ink-muted)', padding: '40px 0' }}>Loading…</p>;
+  }
+
+  if (gate === 'error' && workspaceLoadError) {
+    return <WorkspaceLoadErrorState error={workspaceLoadError} icon={LayoutTemplate} noun="templates" onRetry={() => void refreshWorkspaces()} onSignIn={openRollModal} />;
   }
 
   if (!targetWorkspace) {
