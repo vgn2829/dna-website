@@ -91,7 +91,7 @@ describe('event card actions for the four configurations', () => {
   it('neither, form only, attachment only, both — before and after registering', () => {
     const neither = loaded({ registrationFormUrl: null });
     // Exactly as before the extras existed: just Register, no attachment.
-    expect(eventCardActions(neither, false)).toEqual({ problemStatement: false, attachment: null, formUrl: null, formLabel: 'Complete Registration', primary: 'rsvp', registersViaForm: false });
+    expect(eventCardActions(neither, false)).toEqual({ problemStatement: false, attachment: null, formUrl: null, formLabel: 'Complete Registration', primary: 'rsvp', registersViaForm: false, showCancel: false });
     expect(eventCardActions({ ...neither, isRegistered: true }, false).primary).toBe('rsvp'); // Registered ✓ toggle
 
     const formOnly = loaded();
@@ -107,6 +107,19 @@ describe('event card actions for the four configurations', () => {
   it('past events: no registration action unless registered; the problem statement stays', () => {
     expect(eventCardActions(loaded({ attachment: PDF }), true)).toMatchObject({ problemStatement: true, primary: 'none' });
     expect(eventCardActions(loaded({ isRegistered: true }), true).primary).toBe('form');
+  });
+  it('Cancel registration shows exactly where it did before: registered viewers of form events', () => {
+    // Registered form event (upcoming or past, with or without an attachment).
+    for (const attachment of [null, PDF]) for (const past of [false, true]) {
+      expect(eventCardActions(loaded({ attachment, isRegistered: true }), past).showCancel).toBe(true);
+    }
+    // Not registered, or no form (the Registered ✓ toggle cancels instead).
+    expect(eventCardActions(loaded(), false).showCancel).toBe(false);
+    expect(eventCardActions(loaded(), true).showCancel).toBe(false);
+    expect(eventCardActions(loaded({ registrationFormUrl: null, isRegistered: true }), false).showCancel).toBe(false);
+    expect(eventCardActions(loaded({ registrationFormUrl: null, attachment: PDF, isRegistered: true }), true).showCancel).toBe(false);
+    // An unsafe form link never yields a form action, so no separate Cancel.
+    expect(eventCardActions(loaded({ registrationFormUrl: 'https://evil.example/f', isRegistered: true }), false).showCancel).toBe(false);
   });
   it('never offers a link that fails the allowlist', () => {
     expect(eventCardActions(loaded({ registrationFormUrl: 'https://evil.example/f', isRegistered: true }), false)).toMatchObject({ formUrl: null, primary: 'rsvp', registersViaForm: false });
@@ -182,36 +195,62 @@ describe('event form wiring (static)', () => {
     expect(admin).toMatch(/Registration form link \(optional\)/);
     expect(read('components/events/EventAttachmentField.tsx')).toMatch(/Attachment \(optional\)/);
   });
-  it('the card shows the attachment as one small link beside the status, only when there is one', () => {
+  const card = () => {
     const page = read('pages/EventsPage.tsx');
-    const status = page.slice(page.indexOf('{/* Status + title */}'), page.indexOf('<h3 className="type-body font-semibold'));
-    // In the status row (space the original card already has), at the
-    // meta's size, gated on the attachment.
-    expect(status).toMatch(/\{attachment && \(\n\s*<a\n\s*href=\{attachment\.url\}/);
-    expect(status).toMatch(/className="type-micro flex items-center gap-1"/);
-    // The file name lives in the tooltip / accessible name, not the layout.
-    expect(status).toMatch(/title=\{`\$\{attachment\.name\}/);
-    expect(status).toMatch(/aria-label=\{`\$\{attachment\.label\} for \$\{event\.title\}: \$\{attachment\.name\}/);
-    expect(status).not.toMatch(/>\{attachment\.name\}</);
-    // No bordered attachment panel, no duplicate "Problem statement" marker.
-    expect(page).not.toMatch(/Paperclip|border: '1px solid var\(--color-hairline\)'|btn-secondary w-full flex items-center justify-center gap-2"\s*>\s*<FileText/);
+    const start = page.indexOf('function EventCard(');
+    return page.slice(start, page.indexOf('export function EventsPage', start));
+  };
+  const actionsArea = (src: string) => src.slice(src.indexOf('{/* Countdown */}'), src.indexOf('</motion.div>', src.indexOf('{/* Countdown */}')));
+
+  it('the problem statement is a full-width secondary button directly above the primary action', () => {
+    const src = card();
+    const actions = actionsArea(src);
+    // One bottom-anchored action column, present whenever there is an
+    // attachment or a registration action; attachment first, primary last.
+    expect(actions).toMatch(/\{\(attachment \|\| actions\.primary !== 'none'\) && \(\n\s*<div className="mt-auto flex flex-col gap-2">\n\s*\{attachment && \(/);
+    expect(actions.indexOf('{attachment && (')).toBeLessThan(actions.indexOf("actions.primary === 'form' && formUrl ?"));
+    expect(actions).toMatch(/className="btn-translucent w-full flex items-center justify-center gap-2"\n\s*style=\{\{ border: '1px solid var\(--color-hairline\)' \}\}/);
+    // File handling and accessibility unchanged: same URL, new tab, label
+    // with the file's name, type and size; the name never in the layout.
+    expect(actions).toMatch(/href=\{attachment\.url\}\n\s*target="_blank"\n\s*rel="noopener noreferrer"/);
+    expect(actions).toMatch(/aria-label=\{`\$\{attachment\.label\} for \$\{event\.title\}: \$\{attachment\.name\}, \$\{attachment\.meta\}/);
+    expect(actions).not.toMatch(/>\{attachment\.name\}</);
+    // Not beside the status any more, and no old bordered file panel.
+    const status = src.slice(src.indexOf('{/* Status + title */}'), src.indexOf('<h3 className="type-body font-semibold'));
+    expect(status).not.toMatch(/attachment/);
+    expect(src).not.toMatch(/Paperclip|radius-md\)', ?\n?\s*border|flex-1 min-w-0 flex flex-col/);
+  });
+  it('the primary action is unchanged: Register / Registered ✓, or the form action once registered', () => {
+    const actions = actionsArea(card());
+    expect(actions).toMatch(/\{actions\.primary === 'form' && formUrl \? \([\s\S]*?className="btn-primary w-full flex items-center justify-center gap-2"[\s\S]*?\{formLabel\} <ExternalLink size=\{14\} \/>[\s\S]*?\) : actions\.primary !== 'none' && rsvpButton\(''\)\}/);
+    // Cancel registration is no longer in the bottom action area.
+    expect(actions).not.toMatch(/Cancel registration|onCancel/);
+  });
+  it('Cancel registration is a compact control in the top-right, with the same handler and pending state', () => {
+    const src = card();
+    expect(src).toMatch(/const cancelControl = showCancel && \(\n\s*<button\n\s*type="button"\n\s*onClick=\{onCancel\}\n\s*disabled=\{rsvpPending\}\n\s*aria-busy=\{rsvpPending\}\n\s*aria-label=\{`Cancel registration for \$\{event\.title\}`\}\n\s*className="btn-translucent btn-sm touch-target shrink-0"/);
+    expect(src).toMatch(/\{rsvpPending \? 'Updating…' : 'Cancel registration'\}/);
+    // Beside the date badge whenever the card stacks (grid; list below md);
+    // at the end of the status row in list view's md+ row layout. Exactly
+    // one of the two is displayed at any width.
+    expect(src).toMatch(/\{cancelControl \? \(\n\s*<div className=\{`flex items-start justify-between gap-3 \$\{view === 'list' \? 'shrink-0' : ''\}`\}>\n\s*\{dateBadge\}\n\s*<span className=\{`shrink-0 \$\{view === 'list' \? 'md:hidden' : ''\}`\}>\{cancelControl\}<\/span>\n\s*<\/div>\n\s*\) : dateBadge\}/);
+    expect(src).toMatch(/\{view === 'list' && cancelControl && <span className="ml-auto hidden md:inline-flex">\{cancelControl\}<\/span>\}/);
+    // Rendered once per view, wired by the page to the existing context call.
+    expect(src.match(/\{cancelControl\}/g)).toHaveLength(2);
+    expect(read('pages/EventsPage.tsx')).toMatch(/onCancel=\{\(\) => cancelRegistration\(evt\.id\)\}/);
+  });
+  it('Place reserved stays with the registered state, beside the status', () => {
+    const src = card();
+    const status = src.slice(src.indexOf('{/* Status + title */}'), src.indexOf('<h3 className="type-body font-semibold'));
+    expect(status).toMatch(/\{showCancel && \(\n\s*<span className="type-micro flex items-center gap-1" style=\{\{ color: '#3ecf5f' \}\}>\n\s*<CheckCircle2 size=\{12\} \/> Place reserved/);
+    expect(status).toMatch(/className="flex flex-wrap items-center gap-2 mb-2"/); // wraps on narrow cards
   });
   it('the meta row is the original one', () => {
-    const page = read('pages/EventsPage.tsx');
-    expect(page).toContain(`{/* Meta */}
+    expect(card()).toContain(`{/* Meta */}
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           <span className="type-micro flex items-center gap-1"><Calendar size={11} />{formatEventDate(event.date)}</span>
           <span className="type-micro flex items-center gap-1"><Clock size={11} />{event.time}</span>
           <span className="type-micro flex items-center gap-1"><MapPin size={11} />{event.location}</span>
         </div>`);
-  });
-  it('the actions area is the pre-attachment one: an attachment never adds a wrapper or button there', () => {
-    const page = read('pages/EventsPage.tsx');
-    const actions = page.slice(page.indexOf('{/* Countdown */}'), page.indexOf('</motion.div>', page.indexOf('{/* Countdown */}')));
-    // Only a registration form opens the extra-actions column; otherwise the
-    // original Register button, exactly as before attachments existed.
-    expect(actions).toMatch(/\{formUrl \? \(\n\s*<div className="mt-auto flex flex-col gap-2">/);
-    expect(actions).toMatch(/\) : actions\.primary !== 'none' && rsvpButton\('mt-auto'\)\}/);
-    expect(actions).not.toMatch(/attachment|problemStatement/);
   });
 });

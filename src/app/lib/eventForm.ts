@@ -69,7 +69,11 @@ export function applyRsvpResult<E extends { registeredCount: number; isRegistere
 //     link (registered for a form event); 'rsvp': the Register / Registered ✓
 //     button; 'none': nothing (a past event the student didn't register for);
 //   registersViaForm — Register records an idempotent registration and then
-//     opens the form (instead of the original toggle).
+//     opens the form (instead of the original toggle);
+//   showCancel — the separate Cancel registration control: exactly when
+//     the form action replaces the Register / Registered ✓ toggle (a
+//     registered viewer of a form event). Elsewhere the Registered ✓ toggle
+//     is itself the way to cancel, as before.
 export function eventCardActions(
   event: { registrationFormUrl: string | null; attachment: { name: string; size: number | null; url: string } | null; isRegistered: boolean },
   isPast: boolean,
@@ -77,6 +81,7 @@ export function eventCardActions(
   const formUrl = safeFormUrl(event.registrationFormUrl);
   const showRsvp = !isPast || event.isRegistered;
   const file = event.attachment ?? null;
+  const primary = !showRsvp ? 'none' as const : formUrl && event.isRegistered ? 'form' as const : 'rsvp' as const;
   return {
     problemStatement: file !== null,
     attachment: file && {
@@ -88,8 +93,9 @@ export function eventCardActions(
     },
     formUrl,
     formLabel: formActionLabel(event.attachment !== null && event.attachment !== undefined),
-    primary: !showRsvp ? 'none' as const : formUrl && event.isRegistered ? 'form' as const : 'rsvp' as const,
+    primary,
     registersViaForm: formUrl !== null,
+    showCancel: primary === 'form',
   };
 }
 
