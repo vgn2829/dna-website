@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Clock, Calendar, List, CheckCircle2, Loader2, FileText, ExternalLink, Download, Paperclip } from 'lucide-react';
+import { MapPin, Clock, Calendar, List, CheckCircle2, Loader2, FileText, ExternalLink, Download } from 'lucide-react';
 import { useAppData } from '../context/AppDataContext';
 import { useStudent } from '../context/StudentContext';
 import { api, LiveSession } from '../lib/api';
@@ -143,13 +143,29 @@ function EventCard({ event, view, delay, onRSVP, onCancel, rsvpPending }: {
 
         <p className="type-body line-clamp-2" style={{ color: 'var(--color-ink-muted)' }}>{event.content}</p>
 
-        {/* Meta — plus a marker when the event has a problem statement, so
-            it's visible before reaching the actions. */}
+        {/* Meta — plus, when the event has one, the problem statement as one
+            more compact item: same size as the meta, but an underlined
+            link so it reads as an action. The file name is in the tooltip
+            and the accessible name, never in the layout. */}
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           <span className="type-micro flex items-center gap-1"><Calendar size={11} />{formatEventDate(event.date)}</span>
           <span className="type-micro flex items-center gap-1"><Clock size={11} />{event.time}</span>
           <span className="type-micro flex items-center gap-1"><MapPin size={11} />{event.location}</span>
-          {attachment && <span className="type-micro flex items-center gap-1"><Paperclip size={11} aria-hidden="true" />Problem statement</span>}
+          {attachment && (
+            <a
+              href={attachment.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`${attachment.name} · ${attachment.meta}`}
+              aria-label={`${attachment.label} for ${event.title}: ${attachment.name}, ${attachment.meta}${attachment.opensInBrowser ? ' (opens in a new tab)' : ''}`}
+              className="type-micro flex items-center gap-1"
+              // Taller hit area for touch without changing the row's height.
+              style={{ color: 'var(--color-ink)', textDecoration: 'underline', textUnderlineOffset: 2, padding: '6px 0', margin: '-6px 0' }}
+            >
+              {attachment.opensInBrowser ? <FileText size={11} aria-hidden="true" /> : <Download size={11} aria-hidden="true" />}
+              {attachment.label}{attachment.opensInBrowser && ' ↗'}
+            </a>
+          )}
         </div>
 
 
@@ -157,38 +173,10 @@ function EventCard({ event, view, delay, onRSVP, onCancel, rsvpPending }: {
         {/* Countdown */}
         {status === 'upcoming' && view === 'grid' && <Countdown event={event} />}
 
-        {/* RSVP — plus, when configured, the problem statement and the
-            registration form (Problem Statement first: read the brief, then
-            register / respond). */}
-        {actions.problemStatement || formUrl ? (
+        {/* RSVP — plus, when the event has a registration form, the
+            persistent form action and Cancel registration. */}
+        {formUrl ? (
           <div className="mt-auto flex flex-col gap-2">
-            {/* The attachment is a resource, not a registration step: a
-                bordered file row (name, type, size), visually apart from the
-                primary Register / Submit Response and the Cancel action. */}
-            {attachment && (
-              <a
-                href={attachment.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={attachment.name}
-                aria-label={`${attachment.label} for ${event.title}: ${attachment.name}, ${attachment.meta}${attachment.opensInBrowser ? ' (opens in a new tab)' : ''}`}
-                className="touch-target flex items-center gap-3 w-full"
-                style={{
-                  padding: '10px 12px', minHeight: 44, borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-hairline)', background: 'var(--color-surface-2)',
-                  color: 'var(--color-ink)', textDecoration: 'none',
-                }}
-              >
-                <FileText size={18} aria-hidden="true" style={{ flexShrink: 0, color: 'var(--color-ink-muted)' }} />
-                <span className="flex-1 min-w-0 flex flex-col">
-                  <span className="type-body-sm font-semibold">{attachment.label}</span>
-                  <span className="type-micro truncate" style={{ color: 'var(--color-ink-muted)' }}>{attachment.name} · {attachment.meta}</span>
-                </span>
-                {attachment.opensInBrowser
-                  ? <ExternalLink size={14} aria-hidden="true" style={{ flexShrink: 0, color: 'var(--color-ink-muted)' }} />
-                  : <Download size={14} aria-hidden="true" style={{ flexShrink: 0, color: 'var(--color-ink-muted)' }} />}
-              </a>
-            )}
             {actions.primary !== 'none' && (actions.primary === 'form' && formUrl ? (
               <>
                 {/* Persistent: works even if the browser blocked the tab
