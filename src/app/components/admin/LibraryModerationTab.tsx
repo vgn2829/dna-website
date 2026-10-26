@@ -2,10 +2,10 @@ import { notifyAssetsChanged } from '../../lib/assetRefresh';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { EyeOff, FileText, Link2, LayoutTemplate, Search, Trash2 } from 'lucide-react';
-import { api, type AdminAsset, type AdminTemplate, type LibraryAdminFilters, type LibraryStatus, type LibraryVisibility } from '../../lib/api';
+import { api, type AdminAsset, type AdminTemplate, type AssetVisibility, type LibraryAdminFilters, type LibraryStatus } from '../../lib/api';
 import { FAMILY_LABEL, fileFamily, formatSize } from '../../lib/assetLibrary';
 import { VisibilityBadge } from '../library/LibraryVisibility';
-import { VISIBILITY_LABEL } from '../../lib/libraryVisibility';
+import { VISIBILITY_LABEL, adminVisibilityMessage, visibilityOptions } from '../../lib/libraryVisibility';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Admin moderation for the Shared Creative Library — the Admin panel's
@@ -13,8 +13,11 @@ import { VISIBILITY_LABEL } from '../../lib/libraryVisibility';
 // the /admin endpoints with the admin token (requireAdmin enforces it
 // server-side; nothing here is a security boundary on its own).
 //
-// Admins see everything — all workspaces, personal and community, active and
-// hidden — and can override visibility or hide/restore. Hiding never deletes
+// Admins see everything — all workspaces, every visibility, active and
+// hidden — and can override visibility or hide/restore. An asset's
+// Community is club-wide (every signed-in member, any workspace); its
+// Workspace is its workspace plus explicit shares; a template's Community
+// is its workspace. Hiding never deletes
 // anything: the item leaves every normal flow and comes back intact on
 // restore. Assets can also be deleted: the server removes the library entry
 // and deletes the stored file only if no board or template still uses it. Layout follows the Moodboards admin tab (header + search, one
@@ -85,17 +88,18 @@ export function LibraryModerationTab({ kind }: { kind: Kind }) {
     setRows(prev => fits ? prev.map(r => (r.id === updated.id ? updated : r)) : prev.filter(r => r.id !== updated.id));
   };
 
-  const update = async (row: Row, body: { visibility?: LibraryVisibility; status?: LibraryStatus }, success: string) => {
+  const update = async (row: Row, body: { visibility?: AssetVisibility; status?: LibraryStatus }, success: string) => {
+    if (busyId) return;
     setBusyId(row.id);
     try {
       const updated = kind === 'assets'
         ? await api.assets.adminUpdate(row.id, body)
-        : await api.templates.adminUpdate(row.id, body);
+        : await api.templates.adminUpdate(row.id, body as { visibility?: 'personal' | 'community'; status?: LibraryStatus });
       applyUpdated(updated as Row);
       if (kind === 'assets') notifyAssetsChanged();
       toast.success(success);
-    } catch {
-      toast.error(`Failed to update ${noun}`);
+    } catch (err) {
+      toast.error(`Failed to update ${noun}${err instanceof Error && err.message ? ` — ${err.message}` : ''}`);
     } finally {
       setBusyId(null);
     }
@@ -157,7 +161,7 @@ export function LibraryModerationTab({ kind }: { kind: Kind }) {
           ))}
         </div>
         <div role="group" aria-label="Filter by visibility" className="segmented">
-          {(['all', 'personal', 'community'] as const).map(v => (
+          {(['all', ...visibilityOptions(kind === 'assets' ? 'asset' : 'template')] as const).map(v => (
             <button key={v} type="button" onClick={() => setVisibility(v)} aria-pressed={visibility === v} className="segmented-item touch-target" style={{ textTransform: 'capitalize' }}>
               {v}
             </button>
@@ -202,7 +206,7 @@ export function LibraryModerationTab({ kind }: { kind: Kind }) {
                     <p className="type-body-sm" style={{ margin: 0, color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }} title={name}>
                       {name}
                     </p>
-                    <VisibilityBadge visibility={row.visibility} />
+                    <VisibilityBadge visibility={row.visibility} kind={kind === 'assets' ? 'asset' : 'template'} />
                     {row.status === 'hidden' && (
                       <span className="type-micro" style={{
                         display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 'var(--radius-pill)',
@@ -221,13 +225,13 @@ export function LibraryModerationTab({ kind }: { kind: Kind }) {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <div role="group" aria-label={`Visibility of ${name}`} className="segmented">
-                    {(['personal', 'community'] as const).map(v => (
+                    {visibilityOptions(kind === 'assets' ? 'asset' : 'template').map(v => (
                       <button
                         key={v}
                         type="button"
                         disabled={busy}
                         aria-pressed={row.visibility === v}
-                        onClick={() => { if (row.visibility !== v) update(row, { visibility: v }, `“${name}” set to ${VISIBILITY_LABEL[v]}`); }}
+                        onClick={() => { if (row.visibility !== v) update(row, { visibility: v }, adminVisibilityMessage(kind === 'assets' ? 'asset' : 'template', name, v)); }}
                         className="segmented-item touch-target"
                       >
                         {VISIBILITY_LABEL[v]}

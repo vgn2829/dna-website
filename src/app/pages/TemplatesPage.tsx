@@ -400,7 +400,7 @@ export default function TemplatesPage() {
                   </p>
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 12px', minWidth: 0 }}>
-                  <VisibilityBadge visibility={template.visibility} />
+                  <VisibilityBadge visibility={template.visibility} kind="template" />
                   <p className="type-caption" style={{ margin: 0, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {libraryAttribution(template, roll)} · {timeAgo(template.created_at)}
                   </p>

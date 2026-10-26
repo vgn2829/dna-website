@@ -368,7 +368,7 @@ describe('workspace boundaries', () => {
   });
 
   it('an explicit grant allows target members to use an asset, but not manage it', async () => {
-    const a = (await uploadPng(OWNER, ws, 'community')).body.id as string;
+    const a = (await uploadPng(OWNER, ws, 'workspace')).body.id as string;
     const url = (await request(app).get(`/api/assets/${a}`).set(auth(OWNER))).body.url as string;
 
     // Listing someone else's workspace still requires membership.
@@ -378,9 +378,10 @@ describe('workspace boundaries', () => {
     expect(ids((await listAssets(OUTSIDER, outsiderWs)).body.assets)).toEqual([]);
     await query(`INSERT INTO workspace_members(workspace_id,roll_number,role,added_at) VALUES($1,$2,'admin',now())`,[outsiderWs,OWNER]);
     expect((await request(app).put(`/api/assets/${a}/shares/${outsiderWs}`).set(auth(OWNER))).status).toBe(204);
-    // From their own workspace, the outsider sees it under All and Community — never under Mine.
+    // From their own workspace, the outsider sees it under All — never under
+    // Mine, and never as Community (a grant is not a publication).
     expect(ids((await listAssets(OUTSIDER, outsiderWs)).body.assets)).toEqual([a]);
-    expect(ids((await listAssets(OUTSIDER, outsiderWs, 'community')).body.assets)).toEqual([a]);
+    expect((await listAssets(OUTSIDER, outsiderWs, 'community')).body.assets).toEqual([]);
     expect((await listAssets(OUTSIDER, outsiderWs, 'mine')).body.assets).toEqual([]);
 
     // Fetching it (to place it on a board) gives the same file: one stored object.
@@ -398,7 +399,7 @@ describe('workspace boundaries', () => {
     expect((await request(app).delete(`/api/assets/${a}`).set(auth(OUTSIDER))).status).toBe(403);
     const row = (await query<{ owner_roll: string; workspace_id: string; visibility: string; collection_id: string | null }>(
       'SELECT owner_roll, workspace_id, visibility, collection_id FROM assets WHERE id = $1', [a]))[0];
-    expect(row).toEqual({ owner_roll: OWNER, workspace_id: ws, visibility: 'community', collection_id: null });
+    expect(row).toEqual({ owner_roll: OWNER, workspace_id: ws, visibility: 'workspace', collection_id: null });
 
     // A collection view (and "ungrouped") shows only the current workspace's assets.
     expect((await request(app).get(`/api/assets?workspace_id=${outsiderWs}&collection_id=none`).set(auth(OUTSIDER))).body.assets).toEqual([]);
@@ -410,14 +411,22 @@ describe('workspace boundaries', () => {
     expect((await request(app).get(`/api/assets/${a}`).set(auth(OUTSIDER))).status).toBe(404);
   });
 
-  it('a personal-workspace upload can be Community but does not reach unrelated workspaces', async () => {
+  it('a personal-workspace upload reaches other workspaces only when published to Community', async () => {
     const personalWs = (await request(app).get('/api/workspaces').set(auth(OUTSIDER))).body
       .find((w: { is_personal: boolean }) => w.is_personal).id as string;
+    // Workspace visibility from a personal workspace reaches nobody else.
+    const scoped = await uploadPng(OUTSIDER, personalWs, 'workspace');
+    expect(scoped.status).toBe(201);
+    expect(scoped.body.visibility).toBe('workspace');
+    expect(ids((await listAssets(MEMBER, ws)).body.assets)).toEqual([]);
+    expect((await request(app).get(`/api/assets/${scoped.body.id}`).set(auth(MEMBER))).status).toBe(404);
+    await query('DELETE FROM assets WHERE id = $1', [scoped.body.id]);
+
     const up = await uploadPng(OUTSIDER, personalWs, 'community');
     expect(up.status).toBe(201);
     expect(up.body.visibility).toBe('community');
-    expect(ids((await listAssets(MEMBER, ws, 'community')).body.assets)).toEqual([]);
-    expect(ids((await listAssets(OWNER, ws)).body.assets)).toEqual([]);
+    expect(ids((await listAssets(MEMBER, ws, 'community')).body.assets)).toEqual([up.body.id]);
+    expect(ids((await listAssets(OWNER, ws)).body.assets)).toEqual([up.body.id]);
     // …and a hidden community asset is gone for everyone, its owner included.
     await query("UPDATE assets SET status = 'hidden' WHERE id = $1", [up.body.id]);
     expect((await listAssets(MEMBER, ws, 'community')).body.assets).toEqual([]);

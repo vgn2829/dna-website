@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { toast } from 'sonner';
 import { Search, Plus, Layers, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
-import { api, type Asset, type AssetCollection, type AssetKind, type LibraryScope, type LibraryVisibility } from '../../lib/api';
-import { assetPublishedMessage, canRemoveIncomingShare, matchesLibraryScope } from '../../lib/libraryVisibility';
+import { api, type Asset, type AssetCollection, type AssetKind, type AssetVisibility, type LibraryScope } from '../../lib/api';
+import { assetVisibilityMessage, canRemoveIncomingShare, matchesLibraryScope } from '../../lib/libraryVisibility';
 import { ScopeTabs } from '../library/LibraryVisibility';
 import { usePortalContainer } from '../PortalContainer';
 import { AssetCard } from './AssetCard';
@@ -190,17 +190,22 @@ export function AssetBrowser({
   };
 
   // Publish/unpublish — metadata only; the file and its URL never change.
-  const handleVisibility = async (asset: Asset, visibility: LibraryVisibility) => {
+  // One change per asset at a time, so a double click can't race itself.
+  const visibilityPending = useRef(new Set<string>());
+  const handleVisibility = async (asset: Asset, visibility: AssetVisibility) => {
+    if (visibilityPending.current.has(asset.id)) return;
+    visibilityPending.current.add(asset.id);
     try {
       const updated = await api.assets.update(roll, asset.id, { visibility });
       applyUpdated(updated);
       notifyAssetsChanged();
       refreshCollections();
-      toast.success(visibility === 'community'
-        ? assetPublishedMessage(workspaceName, isPersonalWorkspace)
-        : 'Asset is now personal — only you can see it');
-    } catch {
-      toast.error(visibility === 'community' ? 'Failed to publish asset' : 'Failed to make asset personal');
+      toast.success(assetVisibilityMessage(updated.visibility, workspaceName, isPersonalWorkspace));
+    } catch (err) {
+      const action = visibility === 'community' ? 'publish asset to Community' : visibility === 'workspace' ? 'set asset to Workspace' : 'make asset personal';
+      toast.error(`Couldn’t ${action}${err instanceof Error && err.message ? ` — ${err.message}` : ''}`);
+    } finally {
+      visibilityPending.current.delete(asset.id);
     }
   };
 
@@ -446,7 +451,7 @@ export function AssetBrowser({
           roll={roll}
           onClose={() => setSharing(null)}
           onPublish={async asset => {
-            const updated = await api.assets.update(roll, asset.id, { visibility: 'community' });
+            const updated = await api.assets.update(roll, asset.id, { visibility: 'workspace' });
             applyUpdated(updated);
             notifyAssetsChanged();
             setSharing(updated);

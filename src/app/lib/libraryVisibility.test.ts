@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { assetPublishedMessage, canRemoveIncomingShare, communityAvailable, shareDialogMode, isLibraryOwner, libraryAttribution, matchesLibraryScope, visibilityHint, VISIBILITY_LABEL } from './libraryVisibility';
+import { adminVisibilityMessage, assetVisibilityMessage, canRemoveIncomingShare, communityAvailable, foreignAssetLabel, shareDialogMode, isLibraryOwner, libraryAttribution, matchesLibraryScope, visibilityHint, visibilityOptions, VISIBILITY_LABEL } from './libraryVisibility';
 
 // Shared Creative Library — client helpers, plus static guards that the
 // owner-only controls stay owner-only in the UI (the server enforces the
@@ -12,16 +12,17 @@ const mine = { owner_roll: 'ME', owner_name: 'Me', visibility: 'personal' as con
 const myShared = { ...mine, visibility: 'community' as const };
 const theirs = { owner_roll: 'THEM', owner_name: 'Venu', visibility: 'community' as const };
 const theirPrivate = { ...theirs, visibility: 'personal' as const };
+const theirWorkspace = { ...theirs, visibility: 'workspace' as const };
 
 describe('matchesLibraryScope mirrors the server scopes', () => {
-  it('all = my items plus other members’ community items, never their personal ones', () => {
-    expect([mine, myShared, theirs, theirPrivate].map(i => matchesLibraryScope(i, 'all', 'ME'))).toEqual([true, true, true, false]);
+  it('all = my items plus other members’ workspace and community items, never their personal ones', () => {
+    expect([mine, myShared, theirs, theirPrivate, theirWorkspace].map(i => matchesLibraryScope(i, 'all', 'ME'))).toEqual([true, true, true, false, true]);
   });
-  it('mine = owned by me, either visibility', () => {
-    expect([mine, myShared, theirs, theirPrivate].map(i => matchesLibraryScope(i, 'mine', 'ME'))).toEqual([true, true, false, false]);
+  it('mine = owned by me, any visibility', () => {
+    expect([mine, myShared, theirs, theirPrivate, theirWorkspace].map(i => matchesLibraryScope(i, 'mine', 'ME'))).toEqual([true, true, false, false, false]);
   });
-  it('community = community items, mine included', () => {
-    expect([mine, myShared, theirs, theirPrivate].map(i => matchesLibraryScope(i, 'community', 'ME'))).toEqual([false, true, true, false]);
+  it('community = community items only, mine included — a workspace share is not Community', () => {
+    expect([mine, myShared, theirs, theirPrivate, theirWorkspace].map(i => matchesLibraryScope(i, 'community', 'ME'))).toEqual([false, true, true, false, false]);
   });
 });
 
@@ -42,7 +43,10 @@ describe('ownership and attribution', () => {
 
 describe('visibility copy', () => {
   it('labels are words, not colors', () => {
-    expect(VISIBILITY_LABEL).toEqual({ personal: 'Personal', community: 'Community' });
+    expect(VISIBILITY_LABEL).toEqual({ personal: 'Personal', workspace: 'Workspace', community: 'Community' });
+    expect(visibilityOptions('asset')).toEqual(['personal', 'workspace', 'community']);
+    // Templates have no Workspace level: their Community is the workspace.
+    expect(visibilityOptions('template')).toEqual(['personal', 'community']);
   });
   it('explains each choice; template community is its workspace, and unavailable in a personal one', () => {
     expect(visibilityHint('personal', 'template', 'Design Team', false)).toBe('Only you can use this template.');
@@ -51,32 +55,46 @@ describe('visibility copy', () => {
     expect(communityAvailable('template', true)).toBe(false);
     expect(communityAvailable('template', false)).toBe(true);
   });
-  it('share dialog: manage-only once the owner left the workspace, regardless of visibility', () => {
-    expect(shareDialogMode(true, true)).toBe('share');
-    expect(shareDialogMode(true, false)).toBe('publish-first');
-    expect(shareDialogMode(false, true)).toBe('manage-only');
-    expect(shareDialogMode(false, false)).toBe('manage-only');
+  it('share dialog: shares need Workspace, Community needs none, manage-only once the owner left', () => {
+    expect(shareDialogMode(true, 'workspace')).toBe('share');
+    expect(shareDialogMode(true, 'personal')).toBe('publish-first');
+    expect(shareDialogMode(true, 'community')).toBe('community');
+    for (const v of ['personal', 'workspace', 'community'] as const) expect(shareDialogMode(false, v)).toBe('manage-only');
   });
   it('only a workspace owner/admin may remove an asset shared into it, never their own', () => {
-    const incoming = { workspace_id: 'source', owner_roll: 'OWNER' };
+    const incoming = { workspace_id: 'source', owner_roll: 'OWNER', visibility: 'workspace' as const };
     expect(canRemoveIncomingShare(incoming, 'team', 'ADMIN', 'admin')).toBe(true);
     expect(canRemoveIncomingShare(incoming, 'team', 'BOSS', 'owner')).toBe(true);
     expect(canRemoveIncomingShare(incoming, 'team', 'MEMBER', 'member')).toBe(false);
     expect(canRemoveIncomingShare(incoming, 'team', 'X', undefined)).toBe(false);
     // Not shared in: it lives here.
-    expect(canRemoveIncomingShare({ workspace_id: 'team', owner_roll: 'OWNER' }, 'team', 'ADMIN', 'admin')).toBe(false);
+    expect(canRemoveIncomingShare({ ...incoming, workspace_id: 'team' }, 'team', 'ADMIN', 'admin')).toBe(false);
+    // A Community asset from elsewhere is published, not shared in: nothing to remove.
+    expect(canRemoveIncomingShare({ ...incoming, visibility: 'community' }, 'team', 'ADMIN', 'admin')).toBe(false);
+    expect(foreignAssetLabel({ ...incoming, visibility: 'community' }, 'team')).toBe('From another workspace');
+    expect(foreignAssetLabel(incoming, 'team')).toBe('Shared from another workspace');
+    expect(foreignAssetLabel(incoming, 'source')).toBeNull();
     // Their own asset: they manage it from Share with workspace… instead.
-    expect(canRemoveIncomingShare({ workspace_id: 'source', owner_roll: 'ADMIN' }, 'team', 'ADMIN', 'admin')).toBe(false);
+    expect(canRemoveIncomingShare({ ...incoming, owner_roll: 'ADMIN' }, 'team', 'ADMIN', 'admin')).toBe(false);
   });
-  it('asset community is always available; its copy never promises reach a personal workspace lacks', () => {
+  it('asset Community is always available and club-wide; Workspace copy never promises reach a personal workspace lacks', () => {
     for (const personalWs of [true, false]) {
       expect(communityAvailable('asset', personalWs)).toBe(true);
       expect(visibilityHint('personal', 'asset', 'Personal', personalWs)).toBe('Only you can use this asset.');
+      expect(visibilityHint('community', 'asset', 'Personal', personalWs)).toBe('Every signed-in DnA member can discover and use this asset, from any workspace. Only you can edit or delete it.');
+      expect(assetVisibilityMessage('community', 'Personal', personalWs)).toBe('Published to Community — every DnA member can find and use it, from any workspace');
+      expect(assetVisibilityMessage('personal', 'Personal', personalWs)).toBe('Made personal — only you can use it now');
     }
-    expect(visibilityHint('community', 'asset', 'Personal', true)).toBe('Only workspaces you share it with can use it — choose Share with workspace… from its ⋯ menu. Only you can edit or delete it.');
-    expect(visibilityHint('community', 'asset', 'Design Team', false)).toBe('Anyone in Design Team can discover and use this asset, plus any workspace you share it with. Only you can edit or delete it.');
-    expect(assetPublishedMessage('Personal', true)).toBe('Published to Community — share it with a workspace so others can use it');
-    expect(assetPublishedMessage('Design Team', false)).toBe('Published to Community — everyone in Design Team can use it');
+    expect(visibilityHint('workspace', 'asset', 'Personal', true)).toBe('Only workspaces you share it with can use it — choose Share with workspace… from its ⋯ menu. Only you can edit or delete it.');
+    expect(visibilityHint('workspace', 'asset', 'Design Team', false)).toBe('Anyone in Design Team can discover and use this asset, plus any workspace you share it with. Only you can edit or delete it.');
+    expect(assetVisibilityMessage('workspace', 'Personal', true)).toBe('Set to Workspace — choose Share with workspace… to pick which teams can use it');
+    expect(assetVisibilityMessage('workspace', 'Design Team', false)).toBe('Set to Workspace — everyone in Design Team can use it');
+  });
+  it('admin overrides say who can use the item now', () => {
+    expect(adminVisibilityMessage('asset', 'Poster', 'community')).toBe('“Poster” published to Community — every signed-in member can find it, from any workspace');
+    expect(adminVisibilityMessage('asset', 'Poster', 'workspace')).toMatch(/its workspace and the workspaces it’s shared with/);
+    expect(adminVisibilityMessage('asset', 'Poster', 'personal')).toBe('“Poster” set to Personal — only its owner can use it');
+    expect(adminVisibilityMessage('template', 'Grid', 'community')).toBe('“Grid” set to Community — members of its workspace can use it');
   });
 });
 
@@ -94,12 +112,12 @@ describe('owner-only controls (static)', () => {
   it('Assets: rename, publish/unpublish and delete sit inside the owner-only block', () => {
     const src = read('components/assets/AssetCard.tsx');
     const block = src.slice(src.indexOf('{isOwner && (<>'), src.indexOf('</>)}'));
-    for (const action of ['Rename…', 'Make Personal', 'Publish to Community', 'Delete']) expect(block).toContain(action);
+    for (const action of ['Rename…', 'Make Personal', 'Publish to Community', 'Set to Workspace', 'Delete']) expect(block).toContain(action);
     expect(src.slice(0, src.indexOf('{isOwner && (<>'))).not.toMatch(/onDelete\(asset\)|onRename\(asset\)/);
   });
   it('save/upload flows default to Personal and use the shared segmented control', () => {
     expect(read('pages/BoardPage.tsx')).toMatch(/useState<\{ name: string; description: string; visibility: LibraryVisibility \}>\(\{ name: '', description: '', visibility: 'personal' \}\)/);
-    expect(read('components/assets/AddAssetDialog.tsx')).toMatch(/useState<LibraryVisibility>\('personal'\)/);
+    expect(read('components/assets/AddAssetDialog.tsx')).toMatch(/useState<AssetVisibility>\('personal'\)/);
     const picker = read('components/library/LibraryVisibility.tsx');
     expect(picker).toMatch(/className="segmented is-block"/);
     expect(picker).toMatch(/aria-pressed=\{value === option\}/);

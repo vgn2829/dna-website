@@ -11,12 +11,12 @@ import { exceedsUploadLimit } from '../lib/uploadLimits';
 import { pool } from '../db/client';
 import { requireStudent } from '../middleware/studentAuth';
 import { requireAdmin } from '../middleware/adminAuth';
-import { adminListQuery, adminListWhere, adminUpdateSchema } from '../lib/libraryAdmin';
+import { adminAssetListQuery, adminAssetUpdateSchema, adminListWhere } from '../lib/libraryAdmin';
 import { param } from '../routeParams';
 import { getStorage, ASSET_ORIGINAL_CACHE_SECONDS, StorageTooLargeError } from '../storage';
 import { findStorageReferences } from '../storage/references';
 import { deleteDerivatives, derivativeKey, isDerivableSourceKey, resolveDerivativeUrls, scheduleDerivative } from '../storage/derivatives';
-import { LIBRARY_VISIBILITIES, assetScopeSql, canSeeAsset, isLibraryVisibility, parseLibraryScope, rollBinder, type LibraryStatus, type LibraryVisibility } from '../lib/libraryVisibility';
+import { ASSET_VISIBILITIES, assetScopeSql, canSeeAsset, isAssetVisibility, parseLibraryScope, rollBinder, type AssetVisibility, type LibraryStatus } from '../lib/libraryVisibility';
 
 const router = Router();
 
@@ -34,8 +34,10 @@ const router = Router();
 //   UPLOAD/LIST — caller must be a member of the target workspace
 //     (workspace_members lookup, same inline check POST /api/boards already
 //     uses for its own optional workspace_id — see that route's comment).
-//     Lists include Community assets explicitly granted to that workspace.
-//   VIEW/USE — source-workspace membership or an explicit target grant.
+//     Lists include Workspace assets explicitly granted to that workspace
+//     and every Community asset, whichever workspace it lives in.
+//   VIEW/USE — Community: any signed-in student. Workspace: source-workspace
+//     membership or an explicit target grant. Personal: the owner.
 //   EDIT/DELETE — the asset's owner only; site admins moderate and remove
 //     through the /admin routes (requireAdmin).
 //   INSERT-ONTO-BOARD is not a route here at all — the frontend fetches the
@@ -149,7 +151,7 @@ interface AssetRow {
   width: number | null;
   height: number | null;
   created_at: string;
-  visibility: LibraryVisibility;
+  visibility: AssetVisibility;
   status: LibraryStatus;
   // Idempotency key from the upload queue (never returned to clients).
   client_upload_id?: string | null;
@@ -157,8 +159,10 @@ interface AssetRow {
 }
 
 // Shared Creative Library (lib/libraryVisibility.ts): a personal asset is
-// its owner's alone; a community asset is visible to and usable by every
-// eligible source/target-workspace member (see assetScopeSql). Publishing changes only this row's visibility — the
+// its owner's alone; a workspace asset is visible to and usable by its
+// source workspace's members and any workspace it is granted into; a
+// community asset by every signed-in student, from any workspace (see
+// assetScopeSql / canSeeAsset). Publishing changes only this row's visibility — the
 // stored object, its storage_key and its URL never change and are never
 // copied. Only the owner renames, publishes or deletes; site admins
 // moderate. Another member's personal asset answers 404, as if it did not
@@ -181,9 +185,9 @@ async function findUploadByClientId(roll: string, clientUploadId: string): Promi
 
 // Reads the optional visibility field of a create request (multipart form
 // or JSON). Absent → personal; anything else invalid → null (400).
-function createVisibility(raw: unknown): LibraryVisibility | null {
+function createVisibility(raw: unknown): AssetVisibility | null {
   if (raw === undefined || raw === '') return 'personal';
-  return isLibraryVisibility(raw) ? raw : null;
+  return isAssetVisibility(raw) ? raw : null;
 }
 
 function toPublicAsset(row: AssetRow) {
@@ -459,7 +463,9 @@ router.post('/', requireStudent, uploadAssetLimiter, diskUploadSingle('file'), a
 
 // GET /api/assets?workspace_id=...&limit=&cursor=&kind=&q=&collection_id=&scope=
 // Listed from the caller's current workspace (membership required): their
-// own assets there plus eligible Community assets. Newest-first,
+// own assets there, Workspace assets of (or granted into) this workspace,
+// and every Community asset — Community never depends on which workspace
+// the caller has selected. Newest-first,
 // cursor-paginated on created_at+id (both strictly monotonic-enough for
 // this table's insert pattern — created_at alone could tie within the same
 // millisecond under concurrent uploads). Optional filters narrow the same
@@ -500,8 +506,9 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid scope' });
     }
 
-    // The caller's own assets come from their current workspace; community
-    // assets come from this workspace or explicit grants. Values are bound
+    // The caller's own assets come from their current workspace; workspace
+    // assets from this workspace or explicit grants; Community assets from
+    // anywhere (assetScopeSql). Values are bound
     // lazily — Postgres rejects a parameter the statement never references
     // only when referenced by the predicate.
     const params: unknown[] = [];
@@ -570,7 +577,7 @@ const createLinkSchema = z.object({
   name: z.string().trim().min(1).max(255),
   url: z.string().max(2048),
   collection_id: z.string().min(1).nullable().optional(),
-  visibility: z.enum(LIBRARY_VISIBILITIES).optional(),
+  visibility: z.enum(ASSET_VISIBILITIES).optional(),
 });
 
 // POST /api/assets/links
@@ -623,7 +630,7 @@ router.post('/links', requireStudent, createLinkLimiter, async (req: Request, re
 const updateAssetSchema = z.object({
   filename: z.string().trim().min(1).max(255).optional(),
   collection_id: z.string().min(1).nullable().optional(),
-  visibility: z.enum(LIBRARY_VISIBILITIES).optional(),
+  visibility: z.enum(ASSET_VISIBILITIES).optional(),
 }).refine(v => v.filename !== undefined || v.collection_id !== undefined || v.visibility !== undefined, { message: 'Nothing to update' });
 
 // PATCH /api/assets/:id
@@ -688,9 +695,12 @@ router.patch('/:id', requireStudent, async (req: Request, res: Response) => {
 });
 
 // GET /api/assets/:id
-// Detail/action revalidation: source membership or an explicit target grant.
-// Unauthorized and hidden assets answer 404. Optional workspace_id constrains
-// a picker action to the target board's workspace.
+// Detail/action revalidation (canSeeAsset): Community — any signed-in
+// student; Workspace — source membership or an explicit target grant;
+// Personal — the owner. Unauthorized and hidden assets answer 404.
+// Optional workspace_id constrains a picker action to the target board's
+// workspace: the caller must belong to it, and a Workspace asset must live
+// in or be granted into it.
 router.get('/:id', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
@@ -701,6 +711,12 @@ router.get('/:id', requireStudent, async (req: Request, res: Response) => {
     }
 
     const target = typeof req.query.workspace_id === 'string' ? req.query.workspace_id : undefined;
+    if (row.visibility === 'community' && row.status === 'active') {
+      if (target && !(await getWorkspaceMembership(target, roll))) {
+        return res.status(404).json({ error: 'Asset not found' });
+      }
+      return res.json(await toPublicAssetOne(row));
+    }
     const access = await pool.query(`SELECT 1 FROM workspace_members m
       WHERE m.roll_number = $1 AND ($3::text IS NULL OR m.workspace_id = $3)
       AND (m.workspace_id = $2 OR EXISTS (
@@ -822,7 +838,7 @@ async function toAdminAssets(rows: AdminAssetRow[]) {
 // GET /api/assets/admin/all?q=&status=active|hidden|all&visibility=…&limit=
 router.get('/admin/all', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const parsed = adminListQuery.safeParse(req.query);
+    const parsed = adminAssetListQuery.safeParse(req.query);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid filters' });
     const params: unknown[] = [];
     const where = adminListWhere(parsed.data, 'filename', params);
@@ -846,7 +862,7 @@ router.get('/admin/all', requireAdmin, async (req: Request, res: Response) => {
 // stored object, storage_key, owner and workspace never change.
 router.patch('/admin/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const parsed = adminUpdateSchema.safeParse(req.body);
+    const parsed = adminAssetUpdateSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid update' });
     const result = await pool.query(
       `UPDATE assets SET visibility = COALESCE($2, visibility), status = COALESCE($3, status)

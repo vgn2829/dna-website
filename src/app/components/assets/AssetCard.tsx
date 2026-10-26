@@ -1,8 +1,8 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { toast } from 'sonner';
-import { MoreHorizontal, Download, ExternalLink, Trash2, ImagePlus, FolderInput, Pencil, Copy, Layers, Users, Lock, Unlink } from 'lucide-react';
-import type { Asset, LibraryVisibility } from '../../lib/api';
-import { VISIBILITY_LABEL, isLibraryOwner, libraryAttribution } from '../../lib/libraryVisibility';
+import { MoreHorizontal, Download, ExternalLink, Trash2, ImagePlus, FolderInput, Pencil, Copy, Layers, Users, Lock, Unlink, Globe } from 'lucide-react';
+import type { Asset, AssetVisibility } from '../../lib/api';
+import { VISIBILITY_LABEL, foreignAssetLabel, isLibraryOwner, libraryAttribution } from '../../lib/libraryVisibility';
 import { VisibilityBadge } from '../library/LibraryVisibility';
 import { assetMetaLine, displayUrl, FAMILY_LABEL, fileFamily } from '../../lib/assetLibrary';
 import { usePortalContainer } from '../PortalContainer';
@@ -57,10 +57,9 @@ export function AssetCard({
   onRename: (asset: Asset) => void;
   onDelete: (asset: Asset) => void;
   roll: string;
-  onVisibility: (asset: Asset, visibility: LibraryVisibility) => void;
-  // false where there is no one to publish to. Assets can always be
-  // published: from a personal workspace, Community is what makes an asset
-  // shareable with a team workspace (Share with workspace…).
+  onVisibility: (asset: Asset, visibility: AssetVisibility) => void;
+  // false hides the visibility actions. Assets can always be published:
+  // Community reaches every member, Workspace this workspace plus shares.
   canPublish?: boolean;
   // false unless the viewer owns the asset and it lives in this workspace —
   // collections are per workspace and only the owner files an asset.
@@ -149,7 +148,7 @@ export function AssetCard({
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 6, rowGap: 2, marginTop: 4, minWidth: 0 }}>
           <VisibilityBadge visibility={asset.visibility} />
-          {asset.workspace_id !== workspaceId && <span className="type-micro">Shared from another workspace</span>}
+          {foreignAssetLabel(asset, workspaceId) && <span className="type-micro">{foreignAssetLabel(asset, workspaceId)}</span>}
           {!isOwner && (
             <span className="type-micro" style={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {libraryAttribution(asset, roll)}
@@ -220,15 +219,23 @@ export function AssetCard({
               <DropdownMenu.Item className="dna-menu-item" onSelect={() => onRename(asset)}>
                 <Pencil size={15} /> Rename…
               </DropdownMenu.Item>
-              {canPublish && (asset.visibility === 'community' ? (
+              {/* Every visibility the asset isn't in now: Community reaches
+                  the whole club, Workspace this workspace plus shares. */}
+              {canPublish && asset.visibility !== 'community' && (
+                <DropdownMenu.Item className="dna-menu-item" onSelect={() => onVisibility(asset, 'community')}>
+                  <Globe size={15} /> Publish to Community
+                </DropdownMenu.Item>
+              )}
+              {canPublish && asset.visibility !== 'workspace' && (
+                <DropdownMenu.Item className="dna-menu-item" onSelect={() => onVisibility(asset, 'workspace')}>
+                  <Users size={15} /> {asset.visibility === 'community' ? 'Limit to Workspace' : 'Set to Workspace'}
+                </DropdownMenu.Item>
+              )}
+              {canPublish && asset.visibility !== 'personal' && (
                 <DropdownMenu.Item className="dna-menu-item" onSelect={() => onVisibility(asset, 'personal')}>
                   <Lock size={15} /> Make Personal
                 </DropdownMenu.Item>
-              ) : (
-                <DropdownMenu.Item className="dna-menu-item" onSelect={() => onVisibility(asset, 'community')}>
-                  <Users size={15} /> Publish to Community
-                </DropdownMenu.Item>
-              ))}
+              )}
               <DropdownMenu.Separator className="dna-menu-sep" />
               <DropdownMenu.Item className="dna-menu-item" data-danger="true" onSelect={() => onDelete(asset)}>
                 <Trash2 size={15} /> Delete

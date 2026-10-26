@@ -1,20 +1,29 @@
 // ─────────────────────────────────────────────────────────────────────────
-// Shared Creative Library — personal/community visibility for templates and
-// assets (both workspace-scoped; see db/schema.ts).
+// Shared Creative Library — visibility for templates and assets.
 //
-// For TEMPLATES, visibility is a layer INSIDE a workspace, never across
-// one: every route still requires workspace membership first
+// TEMPLATES: visibility is a layer INSIDE a workspace, never across one:
+// every route still requires workspace membership first
 // (getWorkspaceMembership), and then
 //   personal  — only the item's owner (owner_roll) can see or use it
 //   community — every member of the item's workspace can see and use it
-// ASSETS work the same way inside their own (source) workspace, and an
-// owner may also share an active community asset with another workspace
-// they manage (asset_workspace_grants, routes/assetSharing.ts). A grant
-// exposes only that one asset, only to the target workspace's members, and
-// only while it stays community and active — never club-wide access.
+//
+// ASSETS have three levels (ASSET_VISIBILITIES):
+//   personal  — only the owner, from the asset's own (source) workspace.
+//   workspace — every member of the source workspace, plus the members of
+//               any workspace the owner explicitly shared it with
+//               (asset_workspace_grants, routes/assetSharing.ts). A grant
+//               exposes only that one asset, only to the target workspace's
+//               members, and only while it stays 'workspace' and active.
+//   community — a deliberate publication to the whole club: every signed-in
+//               student (requireStudent), from whichever workspace they are
+//               in, with no grant and no shared membership needed. It is
+//               still never anonymous or public-internet access — every
+//               route stays behind requireStudent.
+// Before 'workspace' existed, an asset's 'community' meant exactly what
+// 'workspace' means now; a one-time migration (db/schema.ts) renamed those
+// rows, so nothing already published reached anyone new.
 // Only the owner ever manages an item (edit, delete, publish/unpublish).
-// Nothing here is public: no anonymous access, no cross-workspace listing,
-// no storage change — publishing flips this column and nothing else.
+// No storage change — publishing flips this column and nothing else.
 //
 // Moderation (status): an admin can hide any item. A hidden item is out of
 // every normal flow — lists, search, direct fetches, Use, owner actions —
@@ -25,6 +34,13 @@
 
 export const LIBRARY_VISIBILITIES = ['personal', 'community'] as const;
 export type LibraryVisibility = typeof LIBRARY_VISIBILITIES[number];
+
+export const ASSET_VISIBILITIES = ['personal', 'workspace', 'community'] as const;
+export type AssetVisibility = typeof ASSET_VISIBILITIES[number];
+
+export function isAssetVisibility(value: unknown): value is AssetVisibility {
+  return typeof value === 'string' && (ASSET_VISIBILITIES as readonly string[]).includes(value);
+}
 
 export const LIBRARY_STATUSES = ['active', 'hidden'] as const;
 export type LibraryStatus = typeof LIBRARY_STATUSES[number];
@@ -78,24 +94,34 @@ export function canSeeLibraryItem(row: { owner_roll: string; visibility: Library
   return row.status === 'active' && (row.owner_roll === roll || row.visibility === 'community');
 }
 
-// The caller must be a member of the selected workspace. A grant exposes
-// only its named active Community asset, never the source workspace.
+// Asset list predicate for the caller's selected workspace (membership is
+// checked by the route first):
+//   mine      — the caller's own assets in this workspace;
+//   community — every active Community asset, from any workspace;
+//   all       — mine, plus 'workspace' assets of this workspace or granted
+//               into it, plus every Community asset.
+// A grant only ever widens a 'workspace' asset; it never exposes a personal
+// one, and a Community asset needs none.
 export function assetScopeSql(scope: LibraryScope, bindRoll: () => string, bindWorkspace: () => string, prefix = ''): string {
+  const active = `${prefix}status = 'active'`;
+  const community = `${prefix}visibility = 'community'`;
+  if (scope === 'community') return `(${active} AND ${community})`;
   const ws = bindWorkspace();
   const source = `${prefix}workspace_id = ${ws}`;
-  const active = `${prefix}status = 'active'`;
-  const community = `(${prefix}visibility = 'community' AND (${source} OR EXISTS (
-    SELECT 1 FROM asset_workspace_grants g WHERE g.asset_id = ${prefix || 'assets.'}id AND g.workspace_id = ${ws}
-  )))`;
-  if (scope === 'community') return `(${active} AND ${community})`;
   const own = `(${source} AND ${prefix}owner_roll = ${bindRoll()})`;
   if (scope === 'mine') return `(${active} AND ${own})`;
-  return `(${active} AND (${own} OR ${community}))`;
+  const workspace = `(${prefix}visibility = 'workspace' AND (${source} OR EXISTS (
+    SELECT 1 FROM asset_workspace_grants g WHERE g.asset_id = ${prefix || 'assets.'}id AND g.workspace_id = ${ws}
+  )))`;
+  return `(${active} AND (${own} OR ${workspace} OR ${community}))`;
 }
 
-export function canSeeAsset(row: { owner_roll: string; visibility: LibraryVisibility; status: LibraryStatus }, roll: string, isWorkspaceMember: boolean, hasGrant = false): boolean {
-  return row.status === 'active' && (
-    (isWorkspaceMember && row.owner_roll === roll) ||
-    (row.visibility === 'community' && (isWorkspaceMember || hasGrant))
-  );
+// Row-level read check for single-asset routes. isWorkspaceMember: the
+// caller belongs to the asset's source workspace; hasGrant: the caller
+// belongs to a workspace the asset is granted into.
+export function canSeeAsset(row: { owner_roll: string; visibility: AssetVisibility; status: LibraryStatus }, roll: string, isWorkspaceMember: boolean, hasGrant = false): boolean {
+  if (row.status !== 'active') return false;
+  if (row.visibility === 'community') return true;
+  if (isWorkspaceMember && row.owner_roll === roll) return true;
+  return row.visibility === 'workspace' && (isWorkspaceMember || hasGrant);
 }
