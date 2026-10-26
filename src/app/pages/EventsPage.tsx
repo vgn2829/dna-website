@@ -137,35 +137,36 @@ function EventCard({ event, view, delay, onRSVP, onCancel, rsvpPending }: {
             >
               {status === 'live' ? 'LIVE' : status === 'past' ? 'Past' : 'Upcoming'}
             </span>
+            {/* The problem statement, when the event has one: a small link at
+                the meta's size beside the status, in space the row already
+                has, so the card keeps its original layout and height. The file
+                name is in the tooltip and the accessible name, never the layout. */}
+            {attachment && (
+              <a
+                href={attachment.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`${attachment.name} · ${attachment.meta}`}
+                aria-label={`${attachment.label} for ${event.title}: ${attachment.name}, ${attachment.meta}${attachment.opensInBrowser ? ' (opens in a new tab)' : ''}`}
+                className="type-micro flex items-center gap-1"
+                // Taller hit area for touch without changing the row's height.
+                style={{ color: 'var(--color-ink)', textDecoration: 'underline', textUnderlineOffset: 2, padding: '6px 0', margin: '-6px 0' }}
+              >
+                {attachment.opensInBrowser ? <FileText size={11} aria-hidden="true" /> : <Download size={11} aria-hidden="true" />}
+                {attachment.label}{attachment.opensInBrowser && ' ↗'}
+              </a>
+            )}
           </div>
           <h3 className="type-body font-semibold leading-snug" style={{ color: 'var(--color-ink)' }}>{event.title}</h3>
         </div>
 
         <p className="type-body line-clamp-2" style={{ color: 'var(--color-ink-muted)' }}>{event.content}</p>
 
-        {/* Meta — plus, when the event has one, the problem statement as one
-            more compact item: same size as the meta, but an underlined
-            link so it reads as an action. The file name is in the tooltip
-            and the accessible name, never in the layout. */}
+        {/* Meta */}
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           <span className="type-micro flex items-center gap-1"><Calendar size={11} />{formatEventDate(event.date)}</span>
           <span className="type-micro flex items-center gap-1"><Clock size={11} />{event.time}</span>
           <span className="type-micro flex items-center gap-1"><MapPin size={11} />{event.location}</span>
-          {attachment && (
-            <a
-              href={attachment.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              title={`${attachment.name} · ${attachment.meta}`}
-              aria-label={`${attachment.label} for ${event.title}: ${attachment.name}, ${attachment.meta}${attachment.opensInBrowser ? ' (opens in a new tab)' : ''}`}
-              className="type-micro flex items-center gap-1"
-              // Taller hit area for touch without changing the row's height.
-              style={{ color: 'var(--color-ink)', textDecoration: 'underline', textUnderlineOffset: 2, padding: '6px 0', margin: '-6px 0' }}
-            >
-              {attachment.opensInBrowser ? <FileText size={11} aria-hidden="true" /> : <Download size={11} aria-hidden="true" />}
-              {attachment.label}{attachment.opensInBrowser && ' ↗'}
-            </a>
-          )}
         </div>
 
 

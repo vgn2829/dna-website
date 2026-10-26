@@ -182,18 +182,28 @@ describe('event form wiring (static)', () => {
     expect(admin).toMatch(/Registration form link \(optional\)/);
     expect(read('components/events/EventAttachmentField.tsx')).toMatch(/Attachment \(optional\)/);
   });
-  it('the card shows the attachment as one compact meta-row link, only when there is one', () => {
+  it('the card shows the attachment as one small link beside the status, only when there is one', () => {
     const page = read('pages/EventsPage.tsx');
-    const meta = page.slice(page.indexOf('<div className="flex flex-wrap gap-x-4 gap-y-1">'), page.indexOf('{/* Countdown */}'));
-    // In the meta row, at the meta's own size, gated on the attachment.
-    expect(meta).toMatch(/\{attachment && \(\n\s*<a\n\s*href=\{attachment\.url\}/);
-    expect(meta).toMatch(/className="type-micro flex items-center gap-1"/);
+    const status = page.slice(page.indexOf('{/* Status + title */}'), page.indexOf('<h3 className="type-body font-semibold'));
+    // In the status row (space the original card already has), at the
+    // meta's size, gated on the attachment.
+    expect(status).toMatch(/\{attachment && \(\n\s*<a\n\s*href=\{attachment\.url\}/);
+    expect(status).toMatch(/className="type-micro flex items-center gap-1"/);
     // The file name lives in the tooltip / accessible name, not the layout.
-    expect(meta).toMatch(/title=\{`\$\{attachment\.name\}/);
-    expect(meta).toMatch(/aria-label=\{`\$\{attachment\.label\} for \$\{event\.title\}: \$\{attachment\.name\}/);
-    expect(meta).not.toMatch(/>\{attachment\.name\}</);
+    expect(status).toMatch(/title=\{`\$\{attachment\.name\}/);
+    expect(status).toMatch(/aria-label=\{`\$\{attachment\.label\} for \$\{event\.title\}: \$\{attachment\.name\}/);
+    expect(status).not.toMatch(/>\{attachment\.name\}</);
     // No bordered attachment panel, no duplicate "Problem statement" marker.
     expect(page).not.toMatch(/Paperclip|border: '1px solid var\(--color-hairline\)'|btn-secondary w-full flex items-center justify-center gap-2"\s*>\s*<FileText/);
+  });
+  it('the meta row is the original one', () => {
+    const page = read('pages/EventsPage.tsx');
+    expect(page).toContain(`{/* Meta */}
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <span className="type-micro flex items-center gap-1"><Calendar size={11} />{formatEventDate(event.date)}</span>
+          <span className="type-micro flex items-center gap-1"><Clock size={11} />{event.time}</span>
+          <span className="type-micro flex items-center gap-1"><MapPin size={11} />{event.location}</span>
+        </div>`);
   });
   it('the actions area is the pre-attachment one: an attachment never adds a wrapper or button there', () => {
     const page = read('pages/EventsPage.tsx');
