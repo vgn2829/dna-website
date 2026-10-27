@@ -99,6 +99,25 @@ export function eventCardActions(
   };
 }
 
+// The Register / Registered ✓ button's state, from the event as loaded and
+// whether its RSVP request is in flight — the Events card's rules: a full
+// event can't be joined (but a registered student can still cancel), and
+// the label says what is happening. `label` is null when the caller shows
+// its own call to action (Events: "Register for this event"; Home:
+// "Register Now").
+export function rsvpButtonState(
+  event: { isRegistered: boolean; registeredCount: number; capacity: number },
+  pending: boolean,
+): { registered: boolean; disabled: boolean; label: 'Updating…' | 'Registered ✓' | 'Registering…' | 'Event full' | null } {
+  const full = !event.isRegistered && event.registeredCount >= event.capacity;
+  return {
+    registered: event.isRegistered,
+    disabled: pending || full,
+    label: event.isRegistered ? (pending ? 'Updating…' : 'Registered ✓')
+      : pending ? 'Registering…' : full ? 'Event full' : null,
+  };
+}
+
 // Label for the form action. With a problem statement the form is where
 // participants submit their response; otherwise it completes registration.
 export function formActionLabel(hasAttachment: boolean): 'Submit Response' | 'Complete Registration' {
