@@ -7,12 +7,16 @@ import { VisibilityBadge } from '../library/LibraryVisibility';
 import { assetMetaLine, displayUrl, FAMILY_LABEL, fileFamily } from '../../lib/assetLibrary';
 import { usePortalContainer } from '../PortalContainer';
 import { AssetPreview } from './AssetPreview';
+import { opensPreview } from '../../lib/assetPreview';
 
 // ─────────────────────────────────────────────────────────────────────────
 // One library item. The preview area is the card's primary action:
 //   image → insert onto the board when the library is open from a board
-//           (onInsert), otherwise open the full image
-//   file  → download (asset.url is already a download URL for files)
+//           (onInsert), otherwise open the preview (onOpen — the Assets
+//           lightbox with Download and Add to Moodboard), or without one
+//           open the full image
+//   file  → open the preview (onOpen), or without one download (asset.url
+//           is already a download URL for files)
 //   link  → open the external URL in a new tab (noopener/noreferrer)
 // Everything else lives in the "⋯" menu (Radix — keyboard accessible, and
 // portalled so it isn't clipped by the card's overflow:hidden; that
@@ -35,6 +39,7 @@ export function AssetCard({
   onRemoveShare,
   collectionName,
   onInsert,
+  onOpen,
   onMove,
   onRename,
   onDelete,
@@ -53,6 +58,9 @@ export function AssetCard({
   // to that collection).
   collectionName?: string | null;
   onInsert?: (asset: Asset) => void;
+  // Opens the preview for images and files (never links, never while
+  // inserting onto a board).
+  onOpen?: (asset: Asset) => void;
   onMove: (asset: Asset) => void;
   onRename: (asset: Asset) => void;
   onDelete: (asset: Asset) => void;
@@ -70,9 +78,11 @@ export function AssetCard({
   const canInsert = asset.kind === 'image' && !!onInsert;
   const typeLabel = asset.kind === 'image' ? 'Image' : asset.kind === 'link' ? 'Link' : FAMILY_LABEL[fileFamily(asset.extension)];
   const href = asset.kind === 'link' ? asset.link_url : asset.url;
+  const canOpen = !canInsert && !!onOpen && opensPreview(asset);
 
   const primaryLabel = canInsert
     ? `Insert ${asset.filename} onto the board`
+    : canOpen ? `Preview ${asset.filename}`
     : asset.kind === 'image' ? `Open ${asset.filename}`
     : asset.kind === 'link' ? `Open link ${asset.filename}`
     : `Download ${asset.filename}`;
@@ -118,6 +128,17 @@ export function AssetCard({
           aria-label={primaryLabel}
           title={`Insert ${asset.filename}`}
           style={{ display: 'block', width: '100%', padding: 0, border: 'none', background: 'none', cursor: 'copy' }}
+        >
+          {previewInner}
+        </button>
+      ) : canOpen ? (
+        <button
+          type="button"
+          onClick={() => onOpen!(asset)}
+          aria-label={primaryLabel}
+          title={primaryLabel}
+          aria-haspopup="dialog"
+          style={{ display: 'block', width: '100%', padding: 0, border: 'none', background: 'none', cursor: 'zoom-in' }}
         >
           {previewInner}
         </button>

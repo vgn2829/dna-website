@@ -12,15 +12,18 @@ import { AssetCard } from './AssetCard';
 import { AddAssetDialog } from './AddAssetDialog';
 import { LibraryDialog } from './LibraryDialog';
 import { CollectionFormDialog, MoveAssetDialog, RenameAssetDialog } from './CollectionDialogs';
+import { AssetPreviewModal } from './AssetPreviewModal';
+import { AnimatePresence } from 'motion/react';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Workspace Asset Library browser — search, type tabs, collections ("asset
 // packs"), grid, pagination, add/move/rename/delete. One component, two
 // hosts:
-//   - AssetsPage (/assets): the library as a real page
+//   - AssetsPage (/assets): the library as a real page; a card opens the
+//     preview (AssetPreviewModal — Download, Add to Moodboard)
 //   - AssetLibrary (modal): opened from a board, where onInsert inserts an
 //     image onto the canvas through BoardPage's existing, unchanged
-//     handleInsertAsset → insertImageAsset path
+//     handleInsertAsset → insertImageAsset path (no preview there)
 // Filtering (kind / q / collection / scope) is server-side so it composes
 // with the existing cursor pagination instead of only filtering the first
 // page. Scope is the Shared Creative Library view: All Assets (yours in
@@ -64,6 +67,7 @@ export function AssetBrowser({
   const portalContainer = usePortalContainer();
   const revision = useAssetRefresh();
   const [sharing, setSharing] = useState<Asset | null>(null);
+  const [previewing, setPreviewing] = useState<Asset | null>(null);
   const [confirmUnshare, setConfirmUnshare] = useState<Asset | null>(null);
   const [unsharing, setUnsharing] = useState(false);
   const [tab, setTab] = useState<LibraryTab>(initialTab);
@@ -423,6 +427,7 @@ export function AssetBrowser({
                 asset={asset}
                 collectionName={asset.collection_id && asset.collection_id !== collectionFilter ? collectionById.get(asset.collection_id)?.name : null}
                 onInsert={onInsert}
+                onOpen={onInsert ? undefined : setPreviewing}
                 workspaceId={workspaceId}
                 onShare={setSharing}
                 onRemoveShare={canRemoveIncomingShare(asset, workspaceId, roll, workspaceRole) ? setConfirmUnshare : undefined}
@@ -444,6 +449,12 @@ export function AssetBrowser({
           )}
         </>
       )}
+
+      <AnimatePresence>
+        {previewing && (
+          <AssetPreviewModal key={previewing.id} asset={previewing} roll={roll} onClose={() => setPreviewing(null)} />
+        )}
+      </AnimatePresence>
 
       {sharing && (
         <ShareAssetDialog

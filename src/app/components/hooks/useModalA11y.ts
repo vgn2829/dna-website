@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Lightweight accessibility primitive for this app's existing custom
@@ -26,6 +26,11 @@ const FOCUSABLE_SELECTOR = [
   'select:not([disabled])', 'textarea:not([disabled])',
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
+
+// Open dialogs, oldest first. When focus is inside none of them (e.g. it
+// fell to <body> because the focused button became disabled or unmounted),
+// only the topmost one answers Escape — not every layer at once.
+const openDialogs: Array<RefObject<HTMLDivElement | null>> = [];
 
 export interface ModalA11yOptions {
   // Element to focus on open instead of the dialog container — for a
@@ -64,6 +69,7 @@ export function useModalA11y(open: boolean, onClose: () => void, options: ModalA
     if (!open) return;
 
     previouslyFocused.current = document.activeElement as HTMLElement | null;
+    openDialogs.push(dialogRef);
 
     // Focus the dialog itself first (not the first field) — matches how a
     // screen reader announces a newly-opened dialog before reading into
@@ -82,6 +88,10 @@ export function useModalA11y(open: boolean, onClose: () => void, options: ModalA
       if (
         dialogRef.current && active && !dialogRef.current.contains(active)
         && active.closest('[aria-modal="true"]')
+      ) return;
+      if (
+        dialogRef.current && !(active && dialogRef.current.contains(active))
+        && openDialogs[openDialogs.length - 1] !== dialogRef
       ) return;
 
       if (e.key === 'Escape') {
@@ -111,6 +121,7 @@ export function useModalA11y(open: boolean, onClose: () => void, options: ModalA
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener('keydown', handleKeyDown);
+      openDialogs.splice(openDialogs.indexOf(dialogRef), 1);
       previouslyFocused.current?.focus?.();
     };
   }, [open]);
