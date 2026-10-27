@@ -135,7 +135,7 @@ async function resolveCreateCollection(raw: unknown, workspaceId: string): Promi
   return { ok: true, id: raw };
 }
 
-interface AssetRow {
+export interface AssetRow {
   id: string;
   workspace_id: string;
   owner_roll: string;
@@ -202,13 +202,24 @@ function toPublicAsset(row: AssetRow) {
   // Links have no stored object: url is null and link_url carries the
   // external address.
   const { storage_key: storageKey, client_upload_id: _clientUploadId, upload_fingerprint: _fingerprint, ...rest } = row;
-  if (!storageKey) return { ...rest, extension: null, url: null };
+  if (!storageKey) return { ...rest, extension: null, url: null, download_url: null };
   const extension = storageKey.slice(storageKey.lastIndexOf('.') + 1) || null;
   const url = getStorage().getPublicUrl(
     storageKey,
     row.kind === 'file' ? { download: row.filename } : undefined,
   );
-  return { ...rest, extension, url };
+  // An explicit "Download" for an image needs its own attachment URL (the
+  // inline `url` would just open in the browser). Same object, same
+  // storage URL scheme files already use; files download from `url` itself.
+  const downloadUrl = row.kind === 'file'
+    ? url
+    : getStorage().getPublicUrl(storageKey, { download: downloadName(row.filename, extension) });
+  return { ...rest, extension, url, download_url: downloadUrl };
+}
+
+// A renamed image ("Hero shot") still downloads with its real extension.
+function downloadName(filename: string, extension: string | null): string {
+  return extension && !filename.toLowerCase().endsWith(`.${extension}`) ? `${filename}.${extension}` : filename;
 }
 
 // Every asset response goes through here (list AND single-asset routes),
@@ -236,6 +247,31 @@ async function toPublicAssets(rows: AssetRow[]) {
 
 async function toPublicAssetOne(row: AssetRow) {
   return (await toPublicAssets([row]))[0];
+}
+
+// The VIEW/USE rule (canSeeAsset) for one asset, optionally constrained to
+// a target workspace — the workspace of the board it is about to be placed
+// on. With a target, the caller must belong to it, and a Workspace asset
+// must live in or be granted into it (a Personal asset only ever into its
+// own workspace). GET /:id (the board picker's re-check) and the board's
+// "add asset" route (boards.ts POST /:id/items) both decide through this.
+export async function canUseAssetIn(row: AssetRow, roll: string, target?: string): Promise<boolean> {
+  if (row.visibility === 'community' && row.status === 'active') {
+    return !target || Boolean(await getWorkspaceMembership(target, roll));
+  }
+  const access = await pool.query(`SELECT 1 FROM workspace_members m
+    WHERE m.roll_number = $1 AND ($3::text IS NULL OR m.workspace_id = $3)
+    AND (m.workspace_id = $2 OR EXISTS (
+      SELECT 1 FROM asset_workspace_grants g WHERE g.asset_id = $4 AND g.workspace_id = m.workspace_id
+    )) LIMIT 1`, [roll, row.workspace_id, target ?? null, row.id]);
+  const sourceMember = (!target || target === row.workspace_id) && Boolean(await getWorkspaceMembership(row.workspace_id, roll));
+  return canSeeAsset(row, roll, sourceMember, access.rows.length > 0);
+}
+
+// The canonical original URL of an image asset — the same `url` the asset
+// API returns and the board picker places onto a canvas.
+export function assetImageUrl(row: Pick<AssetRow, 'kind' | 'storage_key'>): string | null {
+  return row.kind === 'image' && row.storage_key ? getStorage().getPublicUrl(row.storage_key) : null;
 }
 
 async function getWorkspaceMembership(workspaceId: string, roll: string): Promise<'owner' | 'admin' | 'member' | null> {
@@ -711,19 +747,7 @@ router.get('/:id', requireStudent, async (req: Request, res: Response) => {
     }
 
     const target = typeof req.query.workspace_id === 'string' ? req.query.workspace_id : undefined;
-    if (row.visibility === 'community' && row.status === 'active') {
-      if (target && !(await getWorkspaceMembership(target, roll))) {
-        return res.status(404).json({ error: 'Asset not found' });
-      }
-      return res.json(await toPublicAssetOne(row));
-    }
-    const access = await pool.query(`SELECT 1 FROM workspace_members m
-      WHERE m.roll_number = $1 AND ($3::text IS NULL OR m.workspace_id = $3)
-      AND (m.workspace_id = $2 OR EXISTS (
-        SELECT 1 FROM asset_workspace_grants g WHERE g.asset_id = $4 AND g.workspace_id = m.workspace_id
-      )) LIMIT 1`, [roll, row.workspace_id, target ?? null, row.id]);
-    const sourceMember = (!target || target === row.workspace_id) && Boolean(await getWorkspaceMembership(row.workspace_id, roll));
-    if (!canSeeAsset(row, roll, sourceMember, access.rows.length > 0)) {
+    if (!(await canUseAssetIn(row, roll, target))) {
       return res.status(404).json({ error: 'Asset not found' });
     }
 
