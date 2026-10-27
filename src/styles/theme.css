@@ -537,6 +537,15 @@
   .spotlight-magenta { background: var(--gradient-magenta); }
   .spotlight-orange  { background: var(--gradient-orange); }
   .spotlight-coral   { background: var(--gradient-coral); }
+  /* A secondary action on a spotlight card: a translucent tint of the
+     card's own gradient (the same white overlay its badge and countdown
+     use), so it reads below the high-contrast .btn-primary beside it. */
+  .spotlight .btn-on-spotlight {
+    background: rgba(255,255,255,0.14);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.24);
+  }
+  .spotlight .btn-on-spotlight:hover { background: rgba(255,255,255,0.22); }
 
   /* ── Card primitives ── */
   .card {

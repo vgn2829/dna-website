@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { applyRsvpResult, attachmentActionLabel, attachmentFieldState, attachmentMeta, attachmentTypeInfo, checkEventAttachment, checkGoogleFormUrl, eventCardActions, eventSavingLabel, formActionLabel, safeFormUrl } from './eventForm';
+import { applyRsvpResult, attachmentActionLabel, attachmentFieldState, attachmentMeta, attachmentTypeInfo, checkEventAttachment, checkGoogleFormUrl, eventCardActions, eventSavingLabel, formActionLabel, rsvpButtonState, safeFormUrl } from './eventForm';
 
 describe('checkGoogleFormUrl (mirrors the server allowlist)', () => {
   it.each([
@@ -252,5 +252,76 @@ describe('event form wiring (static)', () => {
           <span className="type-micro flex items-center gap-1"><Clock size={11} />{event.time}</span>
           <span className="type-micro flex items-center gap-1"><MapPin size={11} />{event.location}</span>
         </div>`);
+  });
+});
+
+describe('Register / Registered ✓ button state (Events card rules, reused by Home)', () => {
+  const ev = (o: Partial<{ isRegistered: boolean; registeredCount: number; capacity: number }> = {}) =>
+    ({ isRegistered: false, registeredCount: 3, capacity: 10, ...o });
+  it('not registered: the caller’s call to action, enabled', () => {
+    expect(rsvpButtonState(ev(), false)).toEqual({ registered: false, disabled: false, label: null });
+  });
+  it('pending: Registering… / Updating…, disabled so it can’t be sent twice', () => {
+    expect(rsvpButtonState(ev(), true)).toEqual({ registered: false, disabled: true, label: 'Registering…' });
+    expect(rsvpButtonState(ev({ isRegistered: true }), true)).toEqual({ registered: true, disabled: true, label: 'Updating…' });
+  });
+  it('registered: Registered ✓, still enabled (the toggle that cancels)', () => {
+    expect(rsvpButtonState(ev({ isRegistered: true }), false)).toEqual({ registered: true, disabled: false, label: 'Registered ✓' });
+  });
+  it('full: can’t join, but a registered student can still cancel', () => {
+    expect(rsvpButtonState(ev({ registeredCount: 10 }), false)).toEqual({ registered: false, disabled: true, label: 'Event full' });
+    expect(rsvpButtonState(ev({ registeredCount: 10, isRegistered: true }), false).disabled).toBe(false);
+  });
+});
+
+describe('Home spotlight event actions', () => {
+  const file = (name: string) => ({ name, size: 2048, url: `https://cdn.example/${name}` });
+  const base = { registrationFormUrl: null, attachment: null, isRegistered: false };
+  const FORM = 'https://forms.gle/abc123';
+
+  it('PDFs and images are viewed, DOCX/PPTX/ZIP downloaded — the Events page’s own list', () => {
+    for (const n of ['brief.pdf', 'brief.png', 'brief.jpg', 'brief.jpeg', 'brief.webp']) {
+      const a = eventCardActions({ ...base, attachment: file(n) }, false).attachment!;
+      expect([a.label, a.opensInBrowser, a.url]).toEqual(['View problem statement', true, `https://cdn.example/${n}`]);
+    }
+    for (const n of ['brief.docx', 'brief.pptx', 'brief.zip']) {
+      const a = eventCardActions({ ...base, attachment: file(n) }, false).attachment!;
+      expect([a.label, a.opensInBrowser]).toEqual(['Download problem statement', false]);
+    }
+  });
+  it('no attachment, no attachment action', () => {
+    expect(eventCardActions(base, false).attachment).toBeNull();
+  });
+  it('registration states: Register, Registered ✓ toggle, or form + Cancel registration', () => {
+    expect(eventCardActions(base, false)).toMatchObject({ primary: 'rsvp', showCancel: false });
+    expect(eventCardActions({ ...base, isRegistered: true }, false)).toMatchObject({ primary: 'rsvp', showCancel: false });
+    expect(eventCardActions({ ...base, registrationFormUrl: FORM }, false)).toMatchObject({ primary: 'rsvp', registersViaForm: true, showCancel: false });
+    expect(eventCardActions({ ...base, registrationFormUrl: FORM, isRegistered: true }, false)).toMatchObject({ primary: 'form', showCancel: true });
+  });
+  it('a past event offers no registration unless already registered', () => {
+    expect(eventCardActions(base, true).primary).toBe('none');
+    expect(eventCardActions({ ...base, attachment: file('brief.pdf') }, true).attachment).not.toBeNull();
+  });
+
+  // Static wiring guards (node-only tests; rendering is covered by browser QA).
+  const home = read('components/EventSpotlight.tsx');
+  it('reuses the Events decisions and context handlers — no second registration path', () => {
+    expect(home).toMatch(/eventCardActions\(nextEvent, nextStatus === 'past'\)/);
+    expect(home).toMatch(/rsvpButtonState\(nextEvent, pending\)/);
+    expect(home).toMatch(/const \{ events, rsvpEvent, cancelRegistration, rsvpPendingId \} = useAppData\(\)/);
+    expect(home).toMatch(/if \(!studentSession\) \{ openRollModal\(\); return; \}\n\s*rsvpEvent\(id\);/);
+    expect(home).toMatch(/onClick=\{\(\) => cancelRegistration\(nextEvent\.id\)\}/);
+    expect(home).not.toMatch(/api\.events|fetch\(/);
+  });
+  it('the attachment is the Events link: server URL, new tab, labelled; separate from registration', () => {
+    const link = home.slice(home.indexOf('{actions.attachment && ('), home.indexOf('{actions.showCancel && ('));
+    expect(link).toMatch(/<a\n\s*href=\{actions\.attachment\.url\}\n\s*target="_blank"\n\s*rel="noopener noreferrer"/);
+    expect(link).toMatch(/aria-label=\{`\$\{actions\.attachment\.label\} for \$\{nextEvent\.title\}/);
+    expect(link).toMatch(/\{actions\.attachment\.label\}/);
+    expect(link).not.toMatch(/onClick|handleRSVP|rsvpEvent/);
+  });
+  it('Cancel registration and Registered ✓ keep the Events page’s pending text', () => {
+    expect(home).toMatch(/\{pending \? 'Updating…' : 'Cancel registration'\}/);
+    expect(home).toMatch(/\{rsvp\.label \?\? 'Register Now'\}/);
   });
 });
