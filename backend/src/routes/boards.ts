@@ -10,6 +10,7 @@ import { getStorage } from '../storage';
 import { scheduleDerivative } from '../storage/derivatives';
 import { param } from '../routeParams';
 import { ensurePersonalWorkspace } from './workspaces';
+import { assetImageUrl, canUseAssetIn, type AssetRow } from './assets';
 import { getBoardRole, roleCanWriteCanvas } from '../realtime/roomAccess';
 import { notifyBoardShared } from '../services/notificationService';
 import { canvasSummaryColumns } from '../lib/canvasSummary';
@@ -942,11 +943,27 @@ router.delete('/:id/members/:roll', requireStudent, async (req: Request, res: Re
 
 // POST /api/boards/:id/items
 // Add item to board (owner + members)
+//
+// Two callers:
+//   - Gallery "Save to Moodboard": { image_url, note?, source_url? } —
+//     unchanged.
+//   - Assets "Add to Moodboard": { asset_id, source_url? } — the server
+//     resolves the library asset itself and never trusts a client URL for
+//     it: the asset must be an image the caller may use on THIS board's
+//     workspace (canUseAssetIn — the same rule as the board's own asset
+//     picker), else 404, as if it did not exist. The stored URL is the
+//     asset's existing original; nothing about the asset (visibility,
+//     grants, file) changes. A repeat add while the same image is still
+//     pending on the board (not yet placed on the canvas) returns that row
+//     with `duplicate: true` instead of a second copy — a double submit
+//     can't stack duplicates, while adding it again after placement still
+//     works, like the board's own picker.
 router.post('/:id/items', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
+    const boardId = param(req.params.id);
 
-    const access = await canEdit(param(req.params.id), roll);
+    const access = await canEdit(boardId, roll);
     if (!access) {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -961,13 +978,34 @@ router.post('/:id/items', requireStudent, async (req: Request, res: Response) =>
       } catch { return false; }
     }, 'URL must be http(s) or a data:image');
 
-    const schema = z.object({
-      image_url: safeUrl(true),
-      note: z.string().max(500).optional(),
-      source_url: safeUrl(false).optional(),
-    });
+    const schema = z.union([
+      z.object({
+        asset_id: z.string().min(1).max(100),
+        source_url: safeUrl(false).optional(),
+      }),
+      z.object({
+        image_url: safeUrl(true),
+        note: z.string().max(500).optional(),
+        source_url: safeUrl(false).optional(),
+      }),
+    ]);
 
     const parsed = schema.parse(req.body);
+
+    let item: { image_url: string; note: string | null; source_url: string | null };
+    if ('asset_id' in parsed) {
+      const assetResult = await pool.query('SELECT * FROM assets WHERE id = $1', [parsed.asset_id]);
+      const asset = assetResult.rows[0] as AssetRow | undefined;
+      const boardResult = await pool.query('SELECT workspace_id FROM boards WHERE id = $1', [boardId]);
+      const workspaceId = (boardResult.rows[0] as { workspace_id: string | null } | undefined)?.workspace_id;
+      const imageUrl = asset ? assetImageUrl(asset) : null;
+      if (!asset || !imageUrl || !workspaceId || !(await canUseAssetIn(asset, roll, workspaceId))) {
+        return res.status(404).json({ error: 'Asset not available on this board' });
+      }
+      item = { image_url: imageUrl, note: asset.filename.slice(0, 500), source_url: parsed.source_url ?? null };
+    } else {
+      item = { image_url: parsed.image_url, note: parsed.note ?? null, source_url: parsed.source_url ?? null };
+    }
 
     const studentResult = await pool.query(
       'SELECT name FROM student_sessions WHERE roll_number = $1',
@@ -977,24 +1015,50 @@ router.post('/:id/items', requireStudent, async (req: Request, res: Response) =>
 
     const id = uuidv4();
     const now = new Date().toISOString();
-
-    const result = await pool.query(`
+    const insert = (db: { query: typeof pool.query }) => db.query(`
       INSERT INTO board_items
         (id, board_id, image_url, note,
          source_url, added_by_roll, added_by_name, created_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `, [
-      id, req.params.id,
-      parsed.image_url,
-      parsed.note ?? null,
-      parsed.source_url ?? null,
+      id, boardId,
+      item.image_url,
+      item.note,
+      item.source_url,
       roll,
       addedByName,
       now,
     ]);
 
-    res.status(201).json(result.rows[0]);
+    if (!('asset_id' in parsed)) {
+      const result = await insert(pool);
+      return res.status(201).json(result.rows[0]);
+    }
+
+    // Serialize concurrent adds of the same image to the same board, so the
+    // pending-duplicate check below can't race itself.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`board-item:${boardId}:${item.image_url}`]);
+      const pending = await client.query(
+        'SELECT * FROM board_items WHERE board_id = $1 AND image_url = $2 AND placed_at IS NULL LIMIT 1',
+        [boardId, item.image_url]
+      );
+      if (pending.rows.length > 0) {
+        await client.query('COMMIT');
+        return res.status(200).json({ ...pending.rows[0], duplicate: true });
+      }
+      const result = await insert(client);
+      await client.query('COMMIT');
+      res.status(201).json(result.rows[0]);
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
   } catch (err) {
     if (err instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid request' });

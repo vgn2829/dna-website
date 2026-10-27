@@ -290,6 +290,10 @@ export interface Asset {
   // ready (null otherwise). For card/preview rendering ONLY — `url` stays
   // the original for opening, downloading and placing on a board.
   thumb_url?: string | null;
+  // Attachment (Content-Disposition) URL of the same stored object, for an
+  // explicit Download: equals `url` for files, null for links. Optional:
+  // fall back to `url` when absent.
+  download_url?: string | null;
 }
 
 export type AdminAsset = Asset & LibraryAdminExtra;
@@ -801,6 +805,12 @@ export const api = {
       request<BoardItem[]>('GET', `/boards/${id}/items`, { roll }),
     addItem: (boardId: string, roll: string, data: { image_url: string; note?: string; source_url?: string }) =>
       request<BoardItem>('POST', `/boards/${boardId}/items`, { body: data, roll }),
+    // Assets "Add to Moodboard": the server resolves the library asset and
+    // re-checks it may be used on this board's workspace (404 otherwise).
+    // duplicate: the same image was already pending on the board; the
+    // existing item is returned instead of a second one.
+    addAssetItem: (boardId: string, roll: string, assetId: string, sourceUrl?: string) =>
+      request<BoardItem & { duplicate?: boolean }>('POST', `/boards/${boardId}/items`, { body: { asset_id: assetId, source_url: sourceUrl }, roll }),
     deleteItem: (boardId: string, itemId: string, roll: string) =>
       request<{ success: boolean }>('DELETE', `/boards/${boardId}/items/${itemId}`, { roll }),
     addMember: (boardId: string, roll: string, memberRoll: string) =>
