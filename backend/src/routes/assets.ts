@@ -289,6 +289,13 @@ async function getWorkspaceMembership(workspaceId: string, roll: string): Promis
 // no corresponding row (see this file's own note on the reverse case,
 // under DELETE, for the other half of this consistency story).
 router.post('/', requireStudent, uploadAssetLimiter, diskUploadSingle('file'), async (req: Request, res: Response) => {
+  // Once multipart parsing has finished, the handler owns this file until
+  // hashing, storage and metadata settle. A response/socket close can happen
+  // during any await; the generic response cleanup must not unlink it then.
+  const tempPath = req.file?.path;
+  if (tempPath) claimTempFile(req, tempPath);
+  let derivativeOwnsTemp = false;
+  let stage: 'validation' | 'storage' | 'metadata' | 'response' = 'validation';
   try {
     const roll = req.studentRoll!;
     // A request that isn't multipart (no parser ran) has no body at all.
@@ -426,8 +433,14 @@ router.post('/', requireStudent, uploadAssetLimiter, diskUploadSingle('file'), a
       // The key is a fresh uuid that is never overwritten (rename and
       // publish touch only the row); cached for a day — see
       // ASSET_ORIGINAL_CACHE_SECONDS for why not longer.
+      stage = 'storage';
       await getStorage().uploadFile(storageKey, req.file.path, storedMime, { cacheControl: ASSET_ORIGINAL_CACHE_SECONDS });
     } catch (storageErr) {
+      // A failed acknowledgement can follow a successful object write.
+      // This request owns a fresh key and has not inserted metadata yet,
+      // so attempt removal even when storage reported failure.
+      await getStorage().delete(storageKey).catch(cleanupErr =>
+        console.error('Failed to clean up asset object after storage failure:', storageKey, cleanupErr));
       if (storageErr instanceof StorageTooLargeError) {
         return res.status(413).json({ error: 'This file is larger than the storage service currently accepts' });
       }
@@ -445,6 +458,7 @@ router.post('/', requireStudent, uploadAssetLimiter, diskUploadSingle('file'), a
     const now = new Date().toISOString();
 
     let row: AssetRow;
+    stage = 'metadata';
     try {
       const result = await pool.query(`
         INSERT INTO assets
@@ -480,20 +494,32 @@ router.post('/', requireStudent, uploadAssetLimiter, diskUploadSingle('file'), a
       throw dbErr;
     }
 
+    stage = 'response';
     // Original stored and its row persisted — now (best-effort, off the
     // response path) make its thumbnail derivative. Its outcome never
     // affects this upload; see storage/derivatives.ts.
     // The job reads the temp file from disk and removes it when it settles.
     if (kind === 'image') {
       const tempPath = req.file.path;
-      claimTempFile(req, tempPath);
       scheduleDerivative(storageKey, tempPath, undefined, () => removeTempFile(tempPath));
+      derivativeOwnsTemp = true;
     }
 
     res.status(201).json(await toPublicAssetOne(row));
   } catch (err) {
-    console.error('Asset upload error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Asset upload error:', { stage, sizeBytes: req.file?.size }, err);
+    const error = stage === 'storage'
+      ? 'The storage service could not confirm the upload'
+      : stage === 'metadata'
+        ? 'File transfer completed, but saving asset metadata failed'
+        : stage === 'response'
+          ? 'The asset was saved, but its response could not be completed'
+          : 'Internal server error';
+    res.status(stage === 'storage' ? 502 : 500).json({ error });
+  } finally {
+    // All validation/error paths release the claim too. Image derivatives
+    // keep their existing ownership and remove the file when they settle.
+    if (tempPath && !derivativeOwnsTemp) removeTempFile(tempPath);
   }
 });
 
