@@ -2,16 +2,21 @@
 // survives reloads / works offline afterwards. Runs inside the worker (the
 // Cache API is available there). Bump CACHE to invalidate everything.
 
-const CACHE = 'bg-models-v1';
+const CACHE = "bg-models-v1";
 
 export async function fetchModel(
   url: string,
   onProgress?: (pct?: number) => void,
 ): Promise<ArrayBuffer> {
-  const cache = 'caches' in globalThis ? await caches.open(CACHE) : null;
+  let cache: Cache | null = null;
+  try {
+    cache = "caches" in globalThis ? await caches.open(CACHE) : null;
+  } catch {
+    /* Cache is optional. */
+  }
 
   if (cache) {
-    const hit = await cache.match(url);
+    const hit = await cache.match(url).catch(() => undefined);
     if (hit) return hit.arrayBuffer(); // warm path — no network
   }
 
@@ -21,11 +26,11 @@ export async function fetchModel(
   // No streaming body available — fall back to a plain buffered download.
   if (!resp.body) {
     const buf = await resp.arrayBuffer();
-    if (cache) await cache.put(url, new Response(buf.slice(0)));
+    if (cache) await cache.put(url, new Response(buf.slice(0))).catch(() => {});
     return buf;
   }
 
-  const total = Number(resp.headers.get('content-length')) || 0;
+  const total = Number(resp.headers.get("content-length")) || 0;
   const reader = resp.body.getReader();
   const chunks: Uint8Array[] = [];
   let received = 0;
@@ -38,6 +43,6 @@ export async function fetchModel(
   }
 
   const blob = new Blob(chunks as BlobPart[]);
-  if (cache) await cache.put(url, new Response(blob));
+  if (cache) await cache.put(url, new Response(blob)).catch(() => {});
   return blob.arrayBuffer();
 }

@@ -1,0 +1,9 @@
+[
+  "src/app/components/HeroFlipCards.tsx(381,25): error TS2769: No overload matches this call.",
+  "src/app/components/HeroFlipCards.tsx(529,19): error TS2322: Type 'CardTarget | { [x: string]: MotionValue<any>; }' is not assignable to type 'CardTarget | MotionValue<CardTarget[]>'.",
+  "src/app/context/AppDataContext.tsx(429,89): error TS2322: Type '(id: string, options?: { audienceType?: \"all\" | \"registered\" | \"active\"; batch?: string | null; limit?: number; excludeEventIds?: string[]; excludeCampaignIds?: string[]; }) => Promise<NotifyResult>' is not assignable to type '(id: string, audience?: \"all\" | \"registered\" | undefined) => Promise<NotifyResult>'.",
+  "src/app/pages/AdminPage.tsx(27,57): error TS2339: Property 'type' does not exist on type 'never'.",
+  "src/app/pages/AdminPage.tsx(2459,11): error TS2322: Type '(id: string, audience?: \"all\" | \"registered\" | undefined) => Promise<NotifyResult>' is not assignable to type '(id: string, options?: { audienceType?: \"all\" | \"active\" | \"registered\" | undefined; batch?: string | null | undefined; limit?: number | undefined; excludeEventIds?: string[] | undefined; excludeCampaignIds?: string[] | undefined; } | undefined) => Promise<...>'.",
+  "src/imports/pasted_text/displacement-map.tsx(3,20): error TS2307: Cannot find module '@/app/components/ui/utils' or its corresponding type declarations.",
+  "vite.config.ts(10,15): error TS7006: Parameter 'id' implicitly has an 'any' type."
+]

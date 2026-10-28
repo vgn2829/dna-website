@@ -38,7 +38,9 @@ export function processHalftone(
     const r = imgData.data[idx];
     const g = imgData.data[idx + 1];
     const b = imgData.data[idx + 2];
-    let val = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    const alpha=imgData.data[idx+3]/255;
+    // Flatten transparent input onto white before tonal sampling.
+    let val = (0.299 * r + 0.587 * g + 0.114 * b) / 255 * alpha + (1-alpha);
     val = (val - 0.5) * (contrast / 100) + 0.5 + (brightness - 100) / 100;
     return Math.max(0, Math.min(1, val));
   };

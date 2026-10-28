@@ -1,0 +1,10 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+$ vitest run
+
+ RUN  v5.0.1 /private/tmp/dna-studio-audit-20261028
+
+
+ Test Files  16 passed (16)
+      Tests  234 passed (234)
+   Start at  18:01:28
+   Duration  548ms (transform 68%, import 16%, tests 12%, worker 5%)

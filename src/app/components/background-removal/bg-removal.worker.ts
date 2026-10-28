@@ -8,16 +8,22 @@
 
 // CPU WASM backend only — avoids pulling the ~27 MB WebGPU (jsep) WASM into the
 // build. We run single-thread + SIMD on the CPU backend.
-import * as ort from 'onnxruntime-web/wasm';
-import type { WorkerRequest, SegmentResult, SegmentError, SegmentProgress, ModelId } from './types';
-import { MODELS } from './models';
-import { fetchModel } from './model-cache';
-import { toInputTensor, toFullResMask } from './preprocess';
+import * as ort from "onnxruntime-web/wasm";
+import type {
+  WorkerRequest,
+  SegmentResult,
+  SegmentError,
+  SegmentProgress,
+  ModelId,
+} from "./types";
+import { MODELS } from "./models";
+import { fetchModel } from "./model-cache";
+import { toInputTensor, toFullResMask } from "./preprocess";
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
 let ortConfigured = false;
-const sessions = new Map<ModelId, ort.InferenceSession>();
+const sessions = new Map<ModelId, Promise<ort.InferenceSession>>();
 
 function post(msg: SegmentProgress | SegmentResult | SegmentError): void {
   ctx.postMessage(msg);
@@ -30,24 +36,31 @@ function configureOrt(): void {
   ortConfigured = true;
 }
 
-async function getSession(model: ModelId, id: number): Promise<ort.InferenceSession> {
+function getSession(model: ModelId, id: number): Promise<ort.InferenceSession> {
   const existing = sessions.get(model);
   if (existing) return existing;
-  const cfg = MODELS[model];
-  post({ type: 'progress', id, phase: 'download' });
-  const buf = await fetchModel(cfg.url, (pct) => post({ type: 'progress', id, phase: 'download', pct }));
-  post({ type: 'progress', id, phase: 'init' });
-  const session = await ort.InferenceSession.create(buf, {
-    executionProviders: ['wasm'],
-    graphOptimizationLevel: 'all',
+  const pending = (async () => {
+    const cfg = MODELS[model];
+    post({ type: "progress", id, phase: "download" });
+    const buf = await fetchModel(cfg.url, (pct) =>
+      post({ type: "progress", id, phase: "download", pct }),
+    );
+    post({ type: "progress", id, phase: "init" });
+    return ort.InferenceSession.create(buf, {
+      executionProviders: ["wasm"],
+      graphOptimizationLevel: "all",
+    });
+  })();
+  sessions.set(model, pending);
+  void pending.catch(() => {
+    if (sessions.get(model) === pending) sessions.delete(model);
   });
-  sessions.set(model, session);
-  return session;
+  return pending;
 }
 
 ctx.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   const msg = e.data;
-  if (msg.type !== 'segment') return;
+  if (msg.type !== "segment") return;
   try {
     if (!ortConfigured) configureOrt();
     const cfg = MODELS[msg.model];
@@ -55,20 +68,41 @@ ctx.onmessage = async (e: MessageEvent<WorkerRequest>) => {
 
     const rgba = new Uint8ClampedArray(msg.rgba);
     const inputData = toInputTensor(rgba, msg.width, msg.height, cfg);
-    const tensor = new ort.Tensor('float32', inputData, [1, 3, cfg.inputSize, cfg.inputSize]);
+    const tensor = new ort.Tensor("float32", inputData, [
+      1,
+      3,
+      cfg.inputSize,
+      cfg.inputSize,
+    ]);
 
-    post({ type: 'progress', id: msg.id, phase: 'infer' });
-    const outputs = await session.run({ [session.inputNames[0]]: tensor });
-    const first = outputs[session.outputNames[0]];
+    post({ type: "progress", id: msg.id, phase: "infer" });
+    let outputs: Awaited<ReturnType<typeof session.run>> | undefined;
+    try {
+      outputs = await session.run({ [session.inputNames[0]]: tensor });
+      const first = outputs[session.outputNames[0]];
 
-    const mask = toFullResMask(first.data as Float32Array, cfg.inputSize, msg.width, msg.height, cfg);
-    const res: SegmentResult = { type: 'result', id: msg.id, mask: mask.buffer };
-    ctx.postMessage(res, [mask.buffer]);
+      const mask = toFullResMask(
+        first.data as Float32Array,
+        cfg.inputSize,
+        msg.width,
+        msg.height,
+        cfg,
+      );
+      const res: SegmentResult = {
+        type: "result",
+        id: msg.id,
+        mask: mask.buffer as ArrayBuffer,
+      };
+      ctx.postMessage(res, [mask.buffer]);
+    } finally {
+      tensor.dispose();
+      for (const output of Object.values(outputs ?? {})) output.dispose();
+    }
   } catch (err) {
     const res: SegmentError = {
-      type: 'error',
+      type: "error",
       id: msg.id,
-      message: err instanceof Error ? err.message : 'Inference failed',
+      message: err instanceof Error ? err.message : "Inference failed",
     };
     ctx.postMessage(res);
   }

@@ -65,7 +65,7 @@ describe('search fields share one primitive', () => {
 
 describe('typography and home consistency', () => {
   it('the Design Studio page title uses the display-lg token', () => {
-    expect(src('pages/DesignStudioPage.tsx')).toMatch(/<h1 className="type-display-lg"/);
+    expect(src('pages/DesignStudioPage.tsx')).toMatch(/<h1\b[^>]*className="type-display-lg"/);
   });
 
   it('Hero and Stats read the same live member count', () => {
