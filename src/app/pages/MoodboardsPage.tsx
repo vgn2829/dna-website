@@ -389,11 +389,11 @@ function MoodboardsContent() {
   };
 
   const boardMenuItems = (board: Board) => [
-    { label: 'Rename', onSelect: () => openRename(board) },
+    { label: 'Rename', opensDialog: true, onSelect: () => openRename(board) },
     { label: 'Duplicate', onSelect: () => handleDuplicate(board), disabled: duplicatingId === board.id },
-    { label: 'Share & Invite', onSelect: () => setShowCardShare(board) },
+    { label: 'Share & Invite', opensDialog: true, onSelect: () => setShowCardShare(board) },
     { label: board.is_archived ? 'Restore' : 'Archive', onSelect: () => handleArchive(board, !board.is_archived), disabled: archivingId === board.id },
-    { label: 'Delete Board', danger: true, onSelect: () => setConfirmDeleteBoard(board) },
+    { label: 'Delete Board', danger: true, opensDialog: true, onSelect: () => setConfirmDeleteBoard(board) },
   ];
 
   const activeBoards = tab === 'mine' ? myBoards : tab === 'shared' ? sharedBoards : archivedBoards;

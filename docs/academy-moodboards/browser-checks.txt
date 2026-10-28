@@ -24,6 +24,10 @@ moodboards 1440 light no horizontal overflow true
 academy 1440 dark no horizontal overflow true
 moodboards 1440 dark no horizontal overflow true
 favorite deduplicated true
+rename dialog receives focus true
+dialog traps backward Tab true
+dialog traps forward Tab true
+rename restores menu trigger focus true
 board search empty results true
 shared scope true
 keyboard favorite stays in library true

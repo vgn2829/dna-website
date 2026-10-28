@@ -38,3 +38,5 @@ Run existing frontend suite and capture baseline TypeScript diagnostics. Browser
 ## Browser findings after implementation
 
 The initial code audit established missing semantics and states; visual contrast, overflow and actual focus behavior were hypotheses until browser QA. The fixture matrix now verifies both themes at the requested widths, keyboard favorite/menu operation and dialog Escape. A real tldraw shape edit revealed its page controls overlapping the narrow save alert (BoardPage.tsx base:834–840). The final alert has a local higher stacking level; a hit-test assertion and `screenshots/after-canvas-save-error-375.png` verify its text is unobscured. This changes only the alert, not the canvas engine or its layers. See VERIFICATION.md for explicitly unverified live/backend/accessibility checks.
+
+A final keyboard check exposed a focus handoff conflict introduced by the Radix migration: menu close restored focus after the rename dialog focused its input. BoardCard now records the persistent trigger before opening dialogs and suppresses the menu’s close autofocus for those actions. Browser assertions verify initial focus, Tab containment and restoration.

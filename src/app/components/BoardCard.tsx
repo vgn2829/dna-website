@@ -45,12 +45,14 @@ function verticalScrollRoot(el: Element): Element | null {
 export function BoardCard({ board, onClick, menuItems, onToggleFavorite, ownerRoll, favoriteBusy }: {
   board: Board;
   onClick: () => void;
-  menuItems?: { label: string; onSelect: () => void; danger?: boolean; disabled?: boolean }[];
+  menuItems?: { label: string; onSelect: () => void; danger?: boolean; disabled?: boolean; opensDialog?: boolean }[];
   onToggleFavorite?: (board: Board) => void;
   ownerRoll?: string | null;
   favoriteBusy?: boolean;
 }) {
   const isOwner = ownerRoll === board.owner_roll;
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const openingDialogRef = useRef(false);
 
   // Viewport gating (V3.2.5): the card and its preview always render, but
   // preview IMAGES only load once the cover is within PREVIEW_ROOT_MARGIN
@@ -156,10 +158,25 @@ export function BoardCard({ board, onClick, menuItems, onToggleFavorite, ownerRo
 
         {menuItems && isOwner && (
           <DropdownMenu.Root modal={false}>
-            <DropdownMenu.Trigger className="board-card-menu" aria-label={`More options for ${board.name}`} title="Board options">⋮</DropdownMenu.Trigger>
+            <DropdownMenu.Trigger ref={menuTriggerRef} className="board-card-menu" aria-label={`More options for ${board.name}`} title="Board options">⋮</DropdownMenu.Trigger>
             <DropdownMenu.Portal>
-              <DropdownMenu.Content className="dna-menu" align="end" sideOffset={6} collisionPadding={8} style={{ zIndex: 8001 }} aria-label={`Options for ${board.name}`}>
-                {menuItems.map(item => <DropdownMenu.Item key={item.label} className="dna-menu-item" data-danger={item.danger || undefined} disabled={item.disabled} onSelect={item.onSelect}>{item.label}</DropdownMenu.Item>)}
+              <DropdownMenu.Content className="dna-menu" align="end" sideOffset={6} collisionPadding={8} style={{ zIndex: 8001 }} onCloseAutoFocus={event => {
+                // Dialogs own focus after selection; the menu must not steal
+                // it back after the dialog's initial-focus frame.
+                if (openingDialogRef.current) {
+                  event.preventDefault();
+                  openingDialogRef.current = false;
+                }
+              }} aria-label={`Options for ${board.name}`}>
+                {menuItems.map(item => <DropdownMenu.Item key={item.label} className="dna-menu-item" data-danger={item.danger || undefined} disabled={item.disabled} onSelect={() => {
+                  if (item.opensDialog) {
+                    openingDialogRef.current = true;
+                    // Let the existing modal hook record a persistent opener,
+                    // rather than a menu item that is about to unmount.
+                    menuTriggerRef.current?.focus({ preventScroll: true });
+                  }
+                  item.onSelect();
+                }}>{item.label}</DropdownMenu.Item>)}
               </DropdownMenu.Content>
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
