@@ -220,7 +220,7 @@ function serverMessage(body: string): string | null {
 // browser's raw "Load failed" — and says whether retrying can help.
 export function describeUploadFailure(outcome: UploadOutcome): UploadFailure {
   if (outcome.type === 'network') {
-    return { message: 'Upload interrupted — the connection to the server was lost. Retry to finish it; nothing will be added twice.', retryable: true };
+    return { message: 'Upload interrupted — the connection to the server was lost. The server may still finish it. Retry sends the file again; nothing will be added twice.', retryable: true };
   }
   if (outcome.type === 'timeout') {
     return { message: 'Upload timed out before the server replied. Retry to upload it again.', retryable: true };

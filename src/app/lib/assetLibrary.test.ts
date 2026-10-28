@@ -144,6 +144,7 @@ describe('describeUploadFailure', () => {
     expect(f.retryable).toBe(true);
     expect(f.message).toMatch(/connection to the server was lost/);
     expect(f.message).not.toMatch(/load failed|failed to fetch/i);
+    expect(f.message).toContain('Retry sends the file again');
     expect(describeUploadFailure({ type: 'timeout' }).retryable).toBe(true);
   });
   it('treats a proxy error page (non-JSON 502/503) as a temporary, retryable outage', () => {
