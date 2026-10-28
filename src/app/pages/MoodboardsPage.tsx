@@ -1,21 +1,21 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, MotionConfig } from 'motion/react';
 import { toast } from 'sonner';
 import { api, type Board, type Project } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { favoriteShortcuts } from '../lib/boardShortcuts';
 import { workspaceContext } from '../lib/workspaceSearch';
 import { ShareBoardDialog } from '../components/ShareBoardDialog';
 import { AssetLibrary } from '../components/AssetLibrary';
-import { BoardCard, StarIcon, timeAgo } from '../components/BoardCard';
+import { BoardCard, StarIcon } from '../components/BoardCard';
+import '../../styles/academy-moodboards.css';
 import { useModalA11y } from '../components/hooks/useModalA11y';
 
-// Cache keys are workspace-qualified (workspace/organization layer):
-// `null` (the "All workspaces" default — see activeWorkspaceId below)
-// resolves to the same ':all' suffix every existing session already used
-// before workspaces existed, so a user who never touches the switcher
-// sees byte-identical caching behavior to before this feature shipped.
+// List caches are qualified by workspace here and by student at call sites.
+// null retains the all-workspaces selection; the five-minute cache stays
+// local to this browser tab and is never reused for another student.
 const CACHE_KEY_MY = (workspaceId: string | null) => `dna_boards_mine:${workspaceId ?? 'all'}`;
 const CACHE_KEY_SHARED = (workspaceId: string | null) => `dna_boards_shared:${workspaceId ?? 'all'}`;
 const CACHE_KEY_ARCHIVED = (workspaceId: string | null) => `dna_boards_archived:${workspaceId ?? 'all'}`;
@@ -102,10 +102,14 @@ function SkeletonCard() {
 }
 
 const CARD_GRID_STYLE: React.CSSProperties = {
-  display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16,
+  display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: 16,
 };
 
 export default function MoodboardsPage() {
+  return <MotionConfig reducedMotion="user"><MoodboardsContent /></MotionConfig>;
+}
+
+function MoodboardsContent() {
   const navigate = useNavigate();
   const { studentSession, openRollModal } = useStudent();
   // Workspace identity/switching (activeWorkspaceId, the workspaces list,
@@ -124,7 +128,6 @@ export default function MoodboardsPage() {
   const [myLoading, setMyLoading] = useState(false);
   const [sharedLoading, setSharedLoading] = useState(true);
   const [archivedLoading, setArchivedLoading] = useState(false);
-  const [archivedLoaded, setArchivedLoaded] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ name: '', description: '', visibility: 'private' as 'private' | 'shared', projectId: '' as string });
   // Projects for the active workspace — fetched only when a concrete
@@ -137,8 +140,11 @@ export default function MoodboardsPage() {
   const [projectOptions, setProjectOptions] = useState<Project[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
-  const [menuBoard, setMenuBoard] = useState<Board | null>(null);
-  const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
+  const [listErrors, setListErrors] = useState<Partial<Record<Tab, string>>>({});
+  const [retryLists, setRetryLists] = useState(0);
+  const scope = `${studentSession?.rollNumber ?? 'guest'}:${activeWorkspaceId ?? 'all'}`;
+  const [loadedScope, setLoadedScope] = useState('');
+  const [archivedScope, setArchivedScope] = useState('');
   const [showCardShare, setShowCardShare] = useState<Board | null>(null);
   const [confirmDeleteBoard, setConfirmDeleteBoard] = useState<Board | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -163,55 +169,31 @@ export default function MoodboardsPage() {
   const renameDialogRef = useModalA11y(!!renameBoard, () => setRenameBoard(null), { initialFocus: () => renameDialogRef.current?.querySelector<HTMLElement>('input') ?? null });
 
   useEffect(() => {
-    const cacheKey = CACHE_KEY_SHARED(activeWorkspaceId);
-    const cached = readCache<Board[]>(cacheKey);
-    if (cached) {
-      setSharedBoards(cached);
-      setSharedLoading(false);
-      // Still re-fetch in background to stay fresh
-      api.boards.getShared(studentSession?.rollNumber, activeWorkspaceId ?? undefined)
-        .then(data => { setSharedBoards(data); writeCache(cacheKey, data); })
-        .catch(() => {});
-      return;
-    }
-    setSharedLoading(true);
-    api.boards.getShared(studentSession?.rollNumber, activeWorkspaceId ?? undefined)
-      .then(data => { setSharedBoards(data); writeCache(cacheKey, data); })
-      .catch(() => {})
-      .finally(() => setSharedLoading(false));
-  }, [studentSession?.rollNumber, activeWorkspaceId]);
+    let cancelled = false;
+    setListErrors({});
+    setLoadedScope(scope);
+    const load = (key: Tab, cacheKey: string, fetcher: () => Promise<Board[]>, setBoards: React.Dispatch<React.SetStateAction<Board[]>>, setLoading: React.Dispatch<React.SetStateAction<boolean>>) => {
+      const cached = readCache<Board[]>(cacheKey);
+      setBoards(cached ?? []);
+      setLoading(!cached);
+      fetcher().then(data => {
+        if (cancelled) return;
+        setBoards(data); writeCache(cacheKey, data);
+      }).catch(() => {
+        if (!cancelled) setListErrors(prev => ({ ...prev, [key]: cached ? 'Could not refresh boards. Showing the last loaded list.' : 'Could not load boards. Please try again.' }));
+      }).finally(() => { if (!cancelled) setLoading(false); });
+    };
+    const roll = studentSession?.rollNumber;
+    load('shared', `${CACHE_KEY_SHARED(activeWorkspaceId)}:${roll ?? 'guest'}`, () => api.boards.getShared(roll, activeWorkspaceId ?? undefined), setSharedBoards, setSharedLoading);
+    if (roll) load('mine', `${CACHE_KEY_MY(activeWorkspaceId)}:${roll}`, () => api.boards.getMyBoards(roll, activeWorkspaceId ?? undefined), setMyBoards, setMyLoading);
+    else { setMyBoards([]); setMyLoading(false); }
+    return () => { cancelled = true; };
+  }, [scope, retryLists]);
 
   useEffect(() => {
-    if (!studentSession?.rollNumber) return;
-    const cacheKey = CACHE_KEY_MY(activeWorkspaceId);
-    const cached = readCache<Board[]>(cacheKey);
-    if (cached) {
-      setMyBoards(cached);
-      setMyLoading(false);
-      // Still re-fetch in background to stay fresh
-      api.boards.getMyBoards(studentSession.rollNumber, activeWorkspaceId ?? undefined)
-        .then(data => { setMyBoards(data); writeCache(cacheKey, data); })
-        .catch(() => {});
-      return;
-    }
-    setMyLoading(true);
-    api.boards.getMyBoards(studentSession.rollNumber, activeWorkspaceId ?? undefined)
-      .then(data => { setMyBoards(data); writeCache(cacheKey, data); })
-      .catch(() => {})
-      .finally(() => setMyLoading(false));
-  }, [studentSession?.rollNumber, activeWorkspaceId]);
-
-  // activeWorkspaceId now changes from OUTSIDE this component (the
-  // shell's WorkspaceSwitcher, via WorkspaceContext) rather than a local
-  // handler — this effect is what used to be handleWorkspaceSwitch's
-  // side-effect, now reacting to the context value instead of being
-  // called directly from a switcher onClick in this file. Resets
-  // archivedLoaded so the Archived tab's lazy-load-once effect below
-  // re-fetches for the new workspace instead of reusing a different
-  // workspace's already-loaded list.
-  useEffect(() => {
-    setArchivedLoaded(false);
-  }, [activeWorkspaceId]);
+    setForm(prev => ({ ...prev, projectId: '' }));
+    setProjectOptions([]);
+  }, [scope]);
 
   // Project options for the create-board form's picker — only fetchable
   // for a concrete workspace (activeWorkspaceId === null, "All
@@ -224,31 +206,29 @@ export default function MoodboardsPage() {
     if (!showCreate || !studentSession?.rollNumber) return;
     const workspaceId = activeWorkspaceId ?? personalWorkspace?.id;
     if (!workspaceId) { setProjectOptions([]); return; }
+    let cancelled = false;
     api.projects.list(studentSession.rollNumber, workspaceId)
-      .then(list => setProjectOptions(list.filter(p => !p.is_archived)))
-      .catch(() => setProjectOptions([]));
+      .then(list => { if (!cancelled) setProjectOptions(list.filter(p => !p.is_archived)); })
+      .catch(() => { if (!cancelled) setProjectOptions([]); });
+    return () => { cancelled = true; };
   }, [showCreate, studentSession?.rollNumber, activeWorkspaceId, personalWorkspace?.id]);
 
-  // Archived boards are fetched lazily — only once the user actually opens
-  // that tab — since most sessions never look at it.
+  // Archived boards load only while the Archived collection is open.
   useEffect(() => {
-    if (tab !== 'archived' || !studentSession?.rollNumber || archivedLoaded) return;
-    const cacheKey = CACHE_KEY_ARCHIVED(activeWorkspaceId);
+    if (tab !== 'archived' || !studentSession?.rollNumber) return;
+    let cancelled = false;
+    setListErrors(prev => ({ ...prev, archived: undefined }));
+    const cacheKey = `${CACHE_KEY_ARCHIVED(activeWorkspaceId)}:${studentSession.rollNumber}`;
     const cached = readCache<Board[]>(cacheKey);
-    if (cached) {
-      setArchivedBoards(cached);
-      setArchivedLoaded(true);
-      api.boards.getArchived(studentSession.rollNumber, activeWorkspaceId ?? undefined)
-        .then(data => { setArchivedBoards(data); writeCache(cacheKey, data); })
-        .catch(() => {});
-      return;
-    }
-    setArchivedLoading(true);
+    setArchivedBoards(cached ?? []);
+    setArchivedScope(scope);
+    setArchivedLoading(!cached);
     api.boards.getArchived(studentSession.rollNumber, activeWorkspaceId ?? undefined)
-      .then(data => { setArchivedBoards(data); writeCache(cacheKey, data); setArchivedLoaded(true); })
-      .catch(() => {})
-      .finally(() => setArchivedLoading(false));
-  }, [tab, studentSession?.rollNumber, archivedLoaded, activeWorkspaceId]);
+      .then(data => { if (!cancelled) { setArchivedBoards(data); writeCache(cacheKey, data); } })
+      .catch(() => { if (!cancelled) setListErrors(prev => ({ ...prev, archived: 'Could not load archived boards. Please try again.' })); })
+      .finally(() => { if (!cancelled) setArchivedLoading(false); });
+    return () => { cancelled = true; };
+  }, [tab, scope, retryLists]);
 
   // Keyboard shortcuts: "/" focuses search (unless already typing somewhere),
   // Escape clears search and closes any open card menu.
@@ -262,13 +242,12 @@ export default function MoodboardsPage() {
         e.preventDefault();
         searchInputRef.current?.focus();
       } else if (e.key === 'Escape') {
-        if (menuBoard) setMenuBoard(null);
-        else if (isTyping && search) setSearch('');
+        if (isTyping && search) setSearch('');
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [menuBoard, search]);
+  }, [search]);
 
   const handleCreate = async () => {
     if (!studentSession?.rollNumber || !form.name.trim()) return;
@@ -302,15 +281,6 @@ export default function MoodboardsPage() {
       setCreating(false);
     }
   };
-
-  const handleCardMenuOpen = (e: React.MouseEvent, board: Board) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setMenuPos({ x: rect.left, y: rect.bottom + 4 });
-    setMenuBoard(board);
-  };
-
 
   const handleCardDelete = async (board: Board) => {
     if (!studentSession?.rollNumber) return;
@@ -360,14 +330,15 @@ export default function MoodboardsPage() {
     try {
       const updated = await api.boards.update(board.id, studentSession.rollNumber, { is_archived: archived });
       if (archived) {
+        setSharedBoards(prev => prev.filter(b => b.id !== board.id));
         setMyBoards(prev => prev.filter(b => b.id !== board.id));
         setArchivedBoards(prev => [updated, ...prev.filter(b => b.id !== board.id)]);
       } else {
         setArchivedBoards(prev => prev.filter(b => b.id !== board.id));
         setMyBoards(prev => [updated, ...prev.filter(b => b.id !== board.id)]);
+        if (updated.visibility === 'shared') setSharedBoards(prev => [updated, ...prev.filter(b => b.id !== board.id)]);
       }
       clearBoardsCache();
-      setMenuBoard(null);
       toast.success(archived ? 'Board archived' : 'Board restored');
     } catch {
       toast.error(archived ? 'Failed to archive board' : 'Failed to restore board');
@@ -383,7 +354,6 @@ export default function MoodboardsPage() {
       const copy = await api.boards.duplicate(board.id, studentSession.rollNumber);
       setMyBoards(prev => [copy, ...prev]);
       clearBoardsCache();
-      setMenuBoard(null);
       toast.success('Board duplicated');
     } catch {
       toast.error('Failed to duplicate board');
@@ -395,7 +365,6 @@ export default function MoodboardsPage() {
   const openRename = (board: Board) => {
     setRenameBoard(board);
     setRenameValue(board.name);
-    setMenuBoard(null);
   };
 
   const handleRenameSubmit = async () => {
@@ -419,8 +388,17 @@ export default function MoodboardsPage() {
     }
   };
 
+  const boardMenuItems = (board: Board) => [
+    { label: 'Rename', onSelect: () => openRename(board) },
+    { label: 'Duplicate', onSelect: () => handleDuplicate(board), disabled: duplicatingId === board.id },
+    { label: 'Share & Invite', onSelect: () => setShowCardShare(board) },
+    { label: board.is_archived ? 'Restore' : 'Archive', onSelect: () => handleArchive(board, !board.is_archived), disabled: archivingId === board.id },
+    { label: 'Delete Board', danger: true, onSelect: () => setConfirmDeleteBoard(board) },
+  ];
+
   const activeBoards = tab === 'mine' ? myBoards : tab === 'shared' ? sharedBoards : archivedBoards;
-  const activeLoading = tab === 'mine' ? myLoading : tab === 'shared' ? sharedLoading : archivedLoading;
+  const activeLoading = loadedScope !== scope || (tab === 'archived' && archivedScope !== scope) || (tab === 'mine' ? myLoading : tab === 'shared' ? sharedLoading : archivedLoading);
+  const collectionLabel = tab === 'mine' ? 'My Boards' : tab === 'shared' ? 'Shared Boards' : 'Archived';
   const activeWorkspace = activeWorkspaceId ? workspaces.find(w => w.id === activeWorkspaceId) ?? null : null;
   const activeWorkspaceLabel = activeWorkspace ? (activeWorkspace.is_personal ? 'Personal' : activeWorkspace.name) : null;
 
@@ -449,7 +427,7 @@ export default function MoodboardsPage() {
   }, [activeBoards, search, sort]);
 
   const favoriteBoards = useMemo(
-    () => sortBoards([...myBoards, ...sharedBoards].filter(b => b.is_favorite), 'edited'),
+    () => favoriteShortcuts(myBoards, sharedBoards),
     [myBoards, sharedBoards]
   );
 
@@ -458,10 +436,11 @@ export default function MoodboardsPage() {
     [myBoards]
   );
 
-  const showRecentRail = tab === 'mine' && !search.trim() && recentBoards.length > 0;
+  const showShortcuts = !activeLoading && !listErrors[tab] && tab !== 'archived' && !search.trim();
+  const showRecentRail = showShortcuts && tab === 'mine' && recentBoards.length > 0;
 
   return (
-    <div>
+    <div className="moodboards-page">
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 'var(--space-xl)' }}>
         <p className="type-caption" style={{ marginBottom: 8 }}>
@@ -532,11 +511,11 @@ export default function MoodboardsPage() {
               ref={searchInputRef}
               className="input-base"
               type="text"
-              placeholder="Search boards…"
-              aria-label="Search boards"
+              placeholder={`Search ${collectionLabel.toLowerCase()}…`}
+              aria-label={`Search ${collectionLabel}`}
               value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{ width: 200 }}
+              style={{ width: '100%', minWidth: 0 }}
             />
             {search && (
               <button
@@ -570,6 +549,8 @@ export default function MoodboardsPage() {
         </div>
       </div>
 
+      <p className="type-caption" role="status">{collectionLabel} · {activeWorkspaceLabel ?? 'All your workspaces'}{!activeLoading && !listErrors[tab] ? ` · ${filteredSortedBoards.length} boards` : ''}. Search and sort apply to this collection.</p>
+      {showShortcuts && (favoriteBoards.length > 0 || showRecentRail) && <p className="type-caption">Favorites and Recent are shortcuts to boards in the collections below.</p>}
       {/* Content */}
       {tab === 'mine' && !studentSession ? (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', padding: '80px 0' }}>
@@ -586,7 +567,7 @@ export default function MoodboardsPage() {
       ) : (
         <>
           {/* Favorites rail */}
-          {favoriteBoards.length > 0 && !search.trim() && (
+          {favoriteBoards.length > 0 && showShortcuts && (
             <div style={{ marginBottom: 'var(--space-xxl)' }}>
               <h2 className="type-headline" style={{ margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ color: '#ffd54a' }}><StarIcon filled /></span> Favorites
@@ -597,7 +578,7 @@ export default function MoodboardsPage() {
                     key={board.id}
                     board={board}
                     onClick={() => navigate(`/moodboards/${board.id}`)}
-                    onMenuOpen={board.owner_roll === studentSession?.rollNumber ? handleCardMenuOpen : undefined}
+                    menuItems={board.owner_roll === studentSession?.rollNumber ? boardMenuItems(board) : undefined}
                     onToggleFavorite={handleToggleFavorite}
                     favoriteBusy={favoriteBusyId === board.id}
                     ownerRoll={studentSession?.rollNumber}
@@ -619,7 +600,7 @@ export default function MoodboardsPage() {
                     <BoardCard
                       board={board}
                       onClick={() => navigate(`/moodboards/${board.id}`)}
-                      onMenuOpen={handleCardMenuOpen}
+                      menuItems={boardMenuItems(board)}
                       onToggleFavorite={handleToggleFavorite}
                       favoriteBusy={favoriteBusyId === board.id}
                       ownerRoll={studentSession?.rollNumber}
@@ -630,17 +611,16 @@ export default function MoodboardsPage() {
             </div>
           )}
 
-          {(showRecentRail || (favoriteBoards.length > 0 && !search.trim())) && (
-            <h2 className="type-headline" style={{ margin: '0 0 14px' }}>
-              {tab === 'mine' ? 'All Boards' : tab === 'shared' ? 'Shared Boards' : 'Archived'}
-            </h2>
-          )}
+          <h2 className="type-headline" style={{ margin: '0 0 14px' }}>
+            {collectionLabel}
+          </h2>
 
+          {listErrors[tab] && <div className="card p-5" role="alert"><p className="type-body-sm">{listErrors[tab]}</p><button className="btn-secondary" onClick={() => setRetryLists(n => n + 1)}>Retry loading boards</button></div>}
           {activeLoading ? (
             <div className="moodboards-card-grid" style={CARD_GRID_STYLE}>
               {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
             </div>
-          ) : filteredSortedBoards.length === 0 ? (
+          ) : listErrors[tab] && activeBoards.length === 0 ? null : filteredSortedBoards.length === 0 ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', padding: '80px 0' }}>
               <p className="type-body" style={{ color: 'var(--color-ink-muted)', marginBottom: 20 }}>
                 {search.trim()
@@ -667,7 +647,7 @@ export default function MoodboardsPage() {
                   <BoardCard
                     board={board}
                     onClick={() => navigate(`/moodboards/${board.id}`)}
-                    onMenuOpen={tab !== 'shared' && board.owner_roll === studentSession?.rollNumber ? handleCardMenuOpen : undefined}
+                    menuItems={tab !== 'shared' && board.owner_roll === studentSession?.rollNumber ? boardMenuItems(board) : undefined}
                     onToggleFavorite={handleToggleFavorite}
                     favoriteBusy={favoriteBusyId === board.id}
                     ownerRoll={studentSession?.rollNumber}
@@ -698,11 +678,12 @@ export default function MoodboardsPage() {
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
               onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 440, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', boxShadow: 'var(--shadow-level-2)', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
+              style={{ width: '100%', maxWidth: 440, maxHeight: 'calc(100dvh - 48px)', overflowY: 'auto', background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', boxShadow: 'var(--shadow-level-2)', display: 'flex', flexDirection: 'column', gap: 16, outline: 'none' }}
             >
               <h3 className="type-headline" style={{ margin: 0 }}>
                 New Moodboard
               </h3>
+              <p className="type-caption">Destination: {activeWorkspaceLabel ?? assetsWorkspaceName ?? 'Personal workspace'}. {form.projectId ? 'Board will be added to the selected project.' : 'No project selected.'}</p>
 
               {([
                 { label: 'Board Name', key: 'name', placeholder: 'e.g. Typography Inspo' },
@@ -785,63 +766,6 @@ export default function MoodboardsPage() {
               </div>
             </motion.div>
           </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* 3-dot dropdown menu */}
-      <AnimatePresence>
-        {menuBoard && (
-          <>
-            <div style={{ position: 'fixed', inset: 0, zIndex: 8000 }} onClick={() => setMenuBoard(null)} />
-            <motion.div
-              role="menu"
-              aria-label={`Options for ${menuBoard.name}`}
-              initial={{ opacity: 0, scale: 0.95, y: -4 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -4 }}
-              transition={{ duration: 0.15 }}
-              style={{
-                position: 'fixed',
-                top: menuPos.y,
-                left: menuPos.x,
-                zIndex: 8001,
-                background: 'var(--color-surface-1)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                padding: 6,
-                minWidth: 160,
-                boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-              }}
-            >
-              {[
-                { label: 'Rename', onClick: () => openRename(menuBoard), danger: false },
-                { label: 'Duplicate', onClick: () => handleDuplicate(menuBoard), danger: false },
-                { label: 'Share & Invite', onClick: () => { setShowCardShare(menuBoard); setMenuBoard(null); }, danger: false },
-                menuBoard.is_archived
-                  ? { label: 'Restore', onClick: () => handleArchive(menuBoard, false), danger: false }
-                  : { label: 'Archive', onClick: () => handleArchive(menuBoard, true), danger: false },
-                { label: 'Delete Board', onClick: () => { setConfirmDeleteBoard(menuBoard); setMenuBoard(null); }, danger: true },
-              ].map(item => (
-                <button
-                  key={item.label}
-                  role="menuitem"
-                  onClick={item.onClick}
-                  style={{
-                    width: '100%', textAlign: 'left',
-                    padding: '8px 12px', background: 'none',
-                    border: 'none', borderRadius: 'var(--radius-sm)',
-                    fontSize: 13,
-                    color: item.danger ? 'var(--color-error)' : 'var(--color-ink)',
-                    fontFamily: 'var(--font-body)', cursor: 'pointer',
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = item.danger ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.06)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </motion.div>
-          </>
         )}
       </AnimatePresence>
 

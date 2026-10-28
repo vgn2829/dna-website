@@ -1,0 +1,49 @@
+
+> @figma/my-make-file@0.0.1 build
+> vite build
+
+vite v6.4.3 building for production...
+transforming...
+
+new URL('vtracer_bg.wasm', import.meta.url) doesn't exist at build time, it will remain unchanged to be resolved at runtime. If this is intended, you can use the /* @vite-ignore */ comment to suppress this warning.
+✓ 3714 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                        4.10 kB │ gzip:     1.37 kB
+dist/static/vectorize.worker-lLqv4S3T.js               7.25 kB
+dist/static/bg-removal.worker-D81s6KRu.js             75.86 kB
+dist/static/vtracer-CMOpYs3R.wasm                    136.86 kB │ gzip:    59.63 kB
+dist/static/pdf.worker.min-DEtVeC4l.mjs            1,255.07 kB
+dist/static/ort-wasm-simd-threaded-Cpm-ox6i.wasm  13,479.98 kB │ gzip: 3,461.77 kB
+dist/static/AdminPage-DDbXBANV.css                     5.02 kB │ gzip:     1.19 kB
+dist/static/CommentsOverlay-DjABIUTS.css              67.68 kB │ gzip:    12.94 kB
+dist/static/index-D2g9YTgL.css                       110.83 kB │ gzip:    18.84 kB
+dist/static/pdf.worker.min-CWLy4k9d.js                 0.07 kB │ gzip:     0.09 kB
+dist/static/info-txZbS26S.js                           0.37 kB │ gzip:     0.28 kB
+dist/static/upload-C6q_I6h7.js                         0.43 kB │ gzip:     0.32 kB
+dist/static/triangle-alert-4G3t4D3P.js                 0.44 kB │ gzip:     0.31 kB
+dist/static/PalettePage-Bch_uwXs.js                    0.68 kB │ gzip:     0.47 kB
+dist/static/TldrawCanvas-Dk1Ej5pK.js                   2.81 kB │ gzip:     1.27 kB
+dist/static/index-wmAP0ZgV.js                          2.89 kB │ gzip:     1.12 kB
+dist/static/VersionHistoryPanel-DlHapvoR.js            7.09 kB │ gzip:     2.51 kB
+dist/static/BackgroundRemover-zECByPY7.js             19.42 kB │ gzip:     6.85 kB
+dist/static/SvgConverter-CPXknx-4.js                  22.67 kB │ gzip:     5.85 kB
+dist/static/is-regexp-DC6JGybQ.js                     24.03 kB │ gzip:     9.95 kB
+dist/static/purify.es-Jn2rvFN8.js                     28.91 kB │ gzip:    10.90 kB
+dist/static/TldrawCanvasSync-0ieubQDc.js              36.41 kB │ gzip:    11.17 kB
+dist/static/PaletteStudio-iRMxntY2.js                 40.28 kB │ gzip:    12.23 kB
+dist/static/DesignStudioPage-BN7JN86_.js              86.69 kB │ gzip:    24.61 kB
+dist/static/CommentsOverlay-BTK-LAhs.js              124.88 kB │ gzip:    29.35 kB
+dist/static/index.es-D0uZtAAZ.js                     136.50 kB │ gzip:    44.71 kB
+dist/static/html2canvas.esm-QH1iLAAe.js              202.38 kB │ gzip:    48.04 kB
+dist/static/jspdf.es.min-mgNwqysQ.js                 390.80 kB │ gzip:   128.84 kB
+dist/static/pdf-Y4YPUwDk.js                          476.81 kB │ gzip:   142.04 kB
+dist/static/AdminPage-C7_BDpmE.js                    599.97 kB │ gzip:   162.46 kB
+dist/static/tldrawCanvasShared-Ca9_F1jG.js           794.26 kB │ gzip:   243.69 kB
+dist/static/index-DsFvpTtl.js                        916.65 kB │ gzip:   262.25 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 7.27s

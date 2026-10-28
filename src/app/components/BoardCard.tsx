@@ -1,17 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import '../../styles/academy-moodboards.css';
 import type { Board } from '../lib/api';
 import { PREVIEW_ROOT_MARGIN, shouldLoadPreviewImages } from '../lib/boardPreview';
 import { BoardPreview } from './BoardPreview';
 
-// ─────────────────────────────────────────────────────────────────────────
-// BoardCard (V2.2) — extracted, unchanged, from MoodboardsPage.tsx, where
-// it was a private local component. Now shared with ProjectDetailPage.tsx
-// (V2.2 Phase 6) so the two board-grid surfaces render identically rather
-// than duplicating this markup — per the V2.2 brief's own "prefer reusing
-// existing board-card/list components where practical" instruction.
-// Behavior-identical to its pre-extraction form: same props, same visual
-// output, same favorite/menu affordances gated the same way.
-// ─────────────────────────────────────────────────────────────────────────
+// Shared preview card; open, favorite and menu are sibling native controls.
 
 export function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -48,10 +42,10 @@ function verticalScrollRoot(el: Element): Element | null {
   return null;
 }
 
-export function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerRoll, favoriteBusy }: {
+export function BoardCard({ board, onClick, menuItems, onToggleFavorite, ownerRoll, favoriteBusy }: {
   board: Board;
   onClick: () => void;
-  onMenuOpen?: (e: React.MouseEvent, board: Board) => void;
+  menuItems?: { label: string; onSelect: () => void; danger?: boolean; disabled?: boolean }[];
   onToggleFavorite?: (board: Board) => void;
   ownerRoll?: string | null;
   favoriteBusy?: boolean;
@@ -82,31 +76,17 @@ export function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerR
 
   return (
     <div
-      onClick={onClick}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
-      role="button"
-      tabIndex={0}
-      aria-label={`Open board ${board.name}`}
       className="board-card"
       style={{
         border: '1px solid var(--color-border)',
         borderRadius: 'var(--radius-lg)',
         overflow: 'hidden',
         background: 'var(--color-surface-1)',
-        cursor: 'pointer',
+        position: 'relative',
         transition: 'background 0.15s, transform 0.15s, box-shadow 0.15s',
       }}
-      onMouseEnter={e => {
-        e.currentTarget.style.background = 'var(--color-surface-2)';
-        e.currentTarget.style.transform = 'translateY(-2px)';
-        e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.12)';
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.background = 'var(--color-surface-1)';
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = 'none';
-      }}
     >
+      <button className="board-card-open" onClick={onClick} aria-label={`Open board ${board.name}`} />
       {/* Cover — a real preview of the board's content (BoardPreview, from
           the server-derived canvas_preview; no board document is loaded),
           or the original placeholder for a board with nothing to show. */}
@@ -156,7 +136,7 @@ export function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerR
             style={{
               position: 'absolute',
               top: 8, left: 8,
-              width: 28, height: 28,
+              width: 44, height: 44,
               borderRadius: '50%',
               background: 'rgba(0,0,0,0.5)',
               backdropFilter: 'blur(4px)',
@@ -174,32 +154,15 @@ export function BoardCard({ board, onClick, onMenuOpen, onToggleFavorite, ownerR
           </button>
         )}
 
-        {onMenuOpen && isOwner && (
-          <button
-            onClick={e => { e.stopPropagation(); onMenuOpen(e, board); }}
-            aria-label={`More options for ${board.name}`}
-            aria-haspopup="menu"
-            style={{
-              position: 'absolute',
-              top: 8, right: 8,
-              width: 28, height: 28,
-              borderRadius: '50%',
-              background: 'rgba(0,0,0,0.5)',
-              backdropFilter: 'blur(4px)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              color: '#fff',
-              fontSize: 16,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              lineHeight: 1,
-              zIndex: 2,
-            }}
-            className="touch-target"
-          >
-            ⋮
-          </button>
+        {menuItems && isOwner && (
+          <DropdownMenu.Root modal={false}>
+            <DropdownMenu.Trigger className="board-card-menu" aria-label={`More options for ${board.name}`} title="Board options">⋮</DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content className="dna-menu" align="end" sideOffset={6} collisionPadding={8} style={{ zIndex: 8001 }} aria-label={`Options for ${board.name}`}>
+                {menuItems.map(item => <DropdownMenu.Item key={item.label} className="dna-menu-item" data-danger={item.danger || undefined} disabled={item.disabled} onSelect={item.onSelect}>{item.label}</DropdownMenu.Item>)}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
         )}
       </div>
 
