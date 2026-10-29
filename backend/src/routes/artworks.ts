@@ -57,6 +57,7 @@ type ArtworkRow = {
   original_filename: string | null; mime_type: string | null; file_size: number | null;
   likes: number; featured: boolean; cover_url: string | null;
   notified_at: string | null;
+  creator_designer_id: string | null;
 };
 type CommentRow = { id: string; sender: string; text: string; created_at: string };
 
@@ -87,6 +88,7 @@ function formatArtwork(row: ArtworkRow, likedByUser: boolean, comments: CommentR
 
   return {
     id: row.id, title: row.title, artist: row.artist, domain: row.domain,
+    creatorDesignerId: row.creator_designer_id ?? null,
     mediaUrl,
     mediaType: row.media_type as 'image' | 'pdf' | 'video',
     originalFilename: row.original_filename,
@@ -325,6 +327,53 @@ artworksRouter.put('/:id', requireAdmin, upload, async (req, res) => {
   );
   const rows = await query<ArtworkRow>('SELECT * FROM artworks WHERE id=$1', [req.params.id]);
   res.json(formatArtwork(rows[0], false, allComments));
+});
+
+// Explicit admin-only attribution, independent of student verification.
+// Row locking serializes concurrent attribution changes. Repeating the same
+// value is a no-op (no audit spam); every actual transition is recorded in
+// the SAME transaction. There is no profile self-claim endpoint.
+artworksRouter.patch('/:id/attribution', requireAdmin, async (req, res) => {
+  const parsed = z.object({ creatorDesignerId: z.string().uuid().nullable() }).strict().safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid artwork attribution' });
+  const artworkId = String(req.params.id);
+  const creatorDesignerId = parsed.data.creatorDesignerId;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const existing = await client.query<{ creator_designer_id: string | null }>(
+      'SELECT creator_designer_id FROM artworks WHERE id = $1 FOR UPDATE', [artworkId]
+    );
+    if (!existing.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Artwork not found' });
+    }
+    if (creatorDesignerId !== null) {
+      const profile = await client.query('SELECT id FROM designer_profiles WHERE id = $1 FOR KEY SHARE', [creatorDesignerId]);
+      if (!profile.rows.length) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Designer profile not found' });
+      }
+    }
+    const previous = existing.rows[0].creator_designer_id;
+    const changed = previous !== creatorDesignerId;
+    if (changed) {
+      await client.query('UPDATE artworks SET creator_designer_id = $2 WHERE id = $1', [artworkId, creatorDesignerId]);
+      // requireAdmin verifies the signature and role. The existing auth model
+      // has one shared admin principal; never accept an actor from the body.
+      await client.query(
+        `INSERT INTO artwork_attribution_audit(artwork_id, previous_designer_id, new_designer_id, actor)
+         VALUES($1, $2, $3, 'admin')`, [artworkId, previous, creatorDesignerId]
+      );
+    }
+    await client.query('COMMIT');
+    return res.json({ artworkId, creatorDesignerId, changed });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 });
 
 artworksRouter.post('/:id/like', likeLimiter, requireStudent, async (req, res) => {

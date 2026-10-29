@@ -36,6 +36,7 @@ export interface Artwork {
   id: string;
   title: string;
   artist: string;
+  creatorDesignerId?: string | null;
   domain: string;
   mediaUrl: string;
   mediaType: 'image' | 'pdf' | 'video';
