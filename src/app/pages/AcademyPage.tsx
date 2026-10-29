@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, MotionConfig } from 'motion/react';
 import { CheckCircle2, Circle, Trophy, Play, ChevronRight, ArrowRight } from 'lucide-react';
 import { useStudent } from '../context/StudentContext';
 import { useAppData } from '../context/AppDataContext';
 import { api } from '../lib/api';
 import { usePageMeta } from '../components/hooks/use-page-meta';
+import { lessonProgress, suggestedLesson, filterLessons } from '../lib/academyProgress';
+import '../../styles/academy-moodboards.css';
 import { getDomainIcon } from '../lib/domain-icons';
 
 const DIFF_COLORS: Record<string, string> = {
@@ -18,7 +20,7 @@ function ProgressRing({ pct, color, size = 64 }: { pct: number; color: string; s
   const circ = 2 * Math.PI * r;
   const dash = circ * (pct / 100);
   return (
-    <svg width={size} height={size} className="-rotate-90" style={{ flexShrink: 0 }}>
+    <svg aria-hidden="true" width={size} height={size} className="-rotate-90" style={{ flexShrink: 0 }}>
       <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-surface-2)" strokeWidth={4} />
       <motion.circle
         cx={size / 2} cy={size / 2} r={r} fill="none"
@@ -73,8 +75,7 @@ function QuizCard({ domainId, questions }: {
         reset();
       }
     } catch {
-      setResultMsg('Could not submit — please try again.');
-      reset();
+      setResultMsg('Could not submit — please try again. Your answers are kept.');
     } finally {
       setSubmitting(false);
     }
@@ -88,7 +89,7 @@ function QuizCard({ domainId, questions }: {
           <Trophy size={22} />
         </div>
         <p className="type-headline">Domain Badge Unlocked!</p>
-        <p className="type-caption">You've mastered this module.</p>
+        <p className="type-caption">You passed this domain’s knowledge check.</p>
       </div>
     );
   }
@@ -97,9 +98,10 @@ function QuizCard({ domainId, questions }: {
   return (
     <div className="card p-6 space-y-5">
       <div className="flex items-center justify-between">
-        <p className="type-caption">Knowledge Check</p>
+        <h2 className="type-headline">Knowledge check</h2>
         <span className="type-micro">{idx + 1} / {questions.length}</span>
       </div>
+      <p className="type-caption">Answer every question correctly to earn this domain’s badge and 20 XP. You can retry; watching every lesson is optional. Sign in to submit.</p>
       <p className="type-body" style={{ color: 'var(--color-ink)' }}>{q.q}</p>
       <div className="space-y-2">
         {q.options.map((opt, i) => {
@@ -109,6 +111,7 @@ function QuizCard({ domainId, questions }: {
               key={i}
               onClick={() => setSelected(i)}
               disabled={submitting}
+              aria-pressed={isSel}
               className="w-full text-left px-4 py-3 rounded-xl type-body-sm transition-all"
               style={{
                 background: 'var(--color-surface-2)',
@@ -123,7 +126,7 @@ function QuizCard({ domainId, questions }: {
         })}
       </div>
       {resultMsg && (
-        <p className="type-caption" style={{ color: '#e5484d' }}>{resultMsg}</p>
+        <p role="status" className="type-caption" style={{ color: 'var(--color-error)' }}>{resultMsg}</p>
       )}
       <button
         onClick={handleSubmit}
@@ -138,6 +141,10 @@ function QuizCard({ domainId, questions }: {
 }
 
 export function AcademyPage() {
+  return <MotionConfig reducedMotion="user"><AcademyContent /></MotionConfig>;
+}
+
+function AcademyContent() {
   usePageMeta({
     title: 'Creative Academy | DnA Club, IIT Kanpur',
     description: 'Free video courses and quizzes in UI/UX, Photoshop, Illustrator, and 3D animation — learn design at your own pace.',
@@ -147,6 +154,10 @@ export function AcademyPage() {
   const { studentSession, studentProgress, openRollModal, markVideoWatched, unmarkVideoWatched, totalXP } = useStudent();
   const { domains, loading, error } = useAppData();
   const domainKeys = Object.keys(domains);
+  const [query, setQuery] = useState('');
+  const [difficulty, setDifficulty] = useState('');
+  const [status, setStatus] = useState('');
+  const resetFilters = () => { setQuery(''); setDifficulty(''); setStatus(''); };
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   // On a direct load the domains arrive after the first render, so the
@@ -201,6 +212,7 @@ export function AcademyPage() {
       <div style={{ minHeight: '100vh', background: 'var(--color-canvas)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, paddingTop: '5rem' }}>
         <div style={{ color: 'var(--color-ink)', fontSize: 16, fontWeight: 600 }}>Could not load academy</div>
         <div style={{ color: 'var(--color-ink-muted)', fontSize: 13 }}>Please check your connection and try again.</div>
+        <button className="btn-primary" onClick={() => window.location.reload()}>Retry loading academy</button>
       </div>
     );
   }
@@ -210,14 +222,19 @@ export function AcademyPage() {
   };
 
   const domain = domains[activeDomainId];
-  const activeVideo = domain?.videos.find(v => v.id === activeVideoId) ?? domain?.videos[0] ?? null;
-  const watchedInDomain = domain?.videos.filter(v => studentProgress.watchedVideos.includes(v.id)).length ?? 0;
-  const domainPct = domain?.videos.length ? Math.round((watchedInDomain / domain.videos.length) * 100) : 0;
-  const totalVideos = Object.values(domains).reduce((a, d) => a + d.videos.length, 0);
-  const globalPct = totalVideos ? Math.round((studentProgress.watchedVideos.length / totalVideos) * 100) : 0;
+  const activeVideo = domain?.videos.find(v => v.id === activeVideoId) ?? suggestedLesson(domain?.videos ?? [], studentProgress.watchedVideos);
+  const progress = lessonProgress(domain?.videos ?? [], studentProgress.watchedVideos);
+  const domainPct = progress.pct;
+  const globalProgress = lessonProgress(Object.values(domains).flatMap(d => d.videos), studentProgress.watchedVideos);
+  const totalVideos = globalProgress.total;
+  const globalPct = globalProgress.pct;
+  const activeIndex = domain?.videos.findIndex(v => v.id === activeVideo?.id) ?? -1;
+  const visibleVideos = filterLessons(domain?.videos ?? [], studentProgress.watchedVideos, query, difficulty, status);
+  const nextUnfinished = suggestedLesson(domain?.videos ?? [], studentProgress.watchedVideos);
 
   const handleWatchToggle = (videoId: string) => {
     if (!studentSession) { openRollModal(); return; }
+    setActiveVideoId(videoId);
     if (studentProgress.watchedVideos.includes(videoId)) unmarkVideoWatched(videoId);
     else markVideoWatched(videoId);
   };
@@ -238,12 +255,13 @@ export function AcademyPage() {
                 const isActive = activeDomainId === key;
                 const watched = d.videos.filter(v => studentProgress.watchedVideos.includes(v.id)).length;
                 const pct = d.videos.length ? Math.round((watched / d.videos.length) * 100) : 0;
-                const c = DOMAIN_COLORS[key] ?? '#fff';
+                const c = DOMAIN_COLORS[key] ?? '#007AFF';
                 const DomainIcon = getDomainIcon(d.icon);
                 return (
                   <button
                     key={key}
-                    onClick={() => { setSelectedDomainId(key); setActiveVideoId(null); }}
+                    aria-pressed={isActive}
+                    onClick={() => { setSelectedDomainId(key); setActiveVideoId(null); resetFilters(); }}
                     className="w-full text-left p-3 rounded-xl transition-all"
                     style={{
                       background: isActive ? 'var(--color-surface-2)' : 'transparent',
@@ -276,7 +294,7 @@ export function AcademyPage() {
                       <span className="absolute type-micro font-bold">{globalPct}%</span>
                     </div>
                     <div>
-                      <p className="type-body font-semibold">{studentProgress.watchedVideos.length}/{totalVideos}</p>
+                      <p className="type-body font-semibold">{globalProgress.completed}/{totalVideos}</p>
                       <p className="type-micro">videos watched</p>
                       <p className="type-headline mt-1">{totalXP} <span className="type-caption">XP</span></p>
                     </div>
@@ -287,7 +305,7 @@ export function AcademyPage() {
                       {domainKeys.map(key => {
                         const d = domains[key];
                         const earned = studentProgress.completedQuizzes.includes(key);
-                        const c = DOMAIN_COLORS[key] ?? '#fff';
+                        const c = DOMAIN_COLORS[key] ?? '#007AFF';
                         const DomainIcon = getDomainIcon(d.icon);
                         return (
                           <div key={key} title={d.title}
@@ -312,10 +330,25 @@ export function AcademyPage() {
           </aside>
 
           {/* Main */}
-          <div className="lg:col-span-9 space-y-5">
+          <div className="lg:col-span-9 space-y-5 min-w-0">
+            <section className="card p-5 space-y-3" aria-label="Learning overview">
+              <p className="type-caption">Current domain</p>
+              <h2 className="type-headline">{domain?.title ?? 'Learning tracks are on their way'}</h2>
+              {domain?.description && <p className="type-body-sm" style={{ color: 'var(--color-ink-muted)' }}>{domain.description}</p>}
+              <p className="type-caption" role="status">{progress.completed} of {progress.total} lessons completed · {progress.remaining} remaining</p>
+              {!studentSession && <p className="type-caption">Explore freely. Link your roll number to save watched lessons and earn badges.</p>}
+              {progress.remaining > 0 && nextUnfinished && <button className="btn-primary" onClick={() => {
+                setActiveVideoId(nextUnfinished.id);
+                document.getElementById('academy-player')?.scrollIntoView({ block: 'start', behavior: 'instant' });
+              }}>
+                {progress.completed ? 'Continue learning' : 'Start learning'} <ArrowRight size={14} />
+              </button>}
+              {progress.total > 0 && progress.remaining === 0 && <p className="type-body-sm">All lessons watched. Revisit a lesson{domain?.quizzes.length ? ' or try the knowledge check below' : ''}.</p>}
+              {domain?.quizzes.length ? <a className="btn-secondary" href="#academy-quiz">Go to knowledge check</a> : null}
+            </section>
             {/* Video theater */}
             {activeVideo && (
-              <motion.div key={activeVideo.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              <motion.div id="academy-player" key={activeVideo.id} style={{ scrollMarginTop: 90 }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                 className="card overflow-hidden">
                 <div className="aspect-video" style={{ background: 'var(--color-canvas)' }}>
                   <iframe
@@ -334,16 +367,19 @@ export function AcademyPage() {
                       </span>
                       <span className="type-micro">{activeVideo.duration}</span>
                     </div>
+                    <p className="type-caption">{domain?.title} · Lesson {activeIndex + 1} of {domain?.videos.length}</p>
                     <h2 className="type-headline">{activeVideo.title}</h2>
                   </div>
                   <button
                     onClick={() => handleWatchToggle(activeVideo.id)}
+                    aria-pressed={studentProgress.watchedVideos.includes(activeVideo.id)}
+                    aria-label={studentProgress.watchedVideos.includes(activeVideo.id) ? 'Mark as unwatched' : 'Mark Watched'}
                     className="shrink-0"
                     style={studentProgress.watchedVideos.includes(activeVideo.id)
                       ? { } : { }}
                   >
                     {studentProgress.watchedVideos.includes(activeVideo.id) ? (
-                      <span className="flex items-center gap-2 btn-secondary" style={{ color: '#3ecf5f', background: 'rgba(62,207,95,0.10)' }}>
+                      <span className="flex items-center gap-2 btn-secondary" style={{ color: 'var(--color-success)', background: 'rgba(62,207,95,0.10)' }}>
                         <CheckCircle2 size={14} /> Watched
                       </span>
                     ) : (
@@ -353,25 +389,40 @@ export function AcademyPage() {
                     )}
                   </button>
                 </div>
+                <nav aria-label="Lesson navigation" className="academy-navigation">
+                  <button className="btn-secondary" aria-label="Previous lesson" disabled={activeIndex <= 0} onClick={() => setActiveVideoId(domain.videos[activeIndex - 1].id)}>Previous lesson</button>
+                  <span className="type-caption">{studentProgress.watchedVideos.includes(activeVideo.id) ? 'Watched' : 'Not watched yet'}</span>
+                  <button className="btn-secondary" aria-label="Next lesson" disabled={activeIndex >= domain.videos.length - 1} onClick={() => setActiveVideoId(domain.videos[activeIndex + 1].id)}>Next lesson</button>
+                </nav>
               </motion.div>
             )}
 
             {/* Playlist */}
-            <div className="card p-5 space-y-2">
+            <details open className="card p-5 space-y-2 academy-lessons">
+              <summary className="type-headline">Lessons · {progress.completed}/{progress.total} completed</summary>
               <div className="flex items-center justify-between mb-3">
-                <p className="type-caption">{domain?.title} — Playlist</p>
+                <p className="type-caption">{domain?.title} · Course order</p>
                 <div className="relative flex items-center justify-center">
-                  <ProgressRing pct={domainPct} color={DOMAIN_COLORS[activeDomainId] ?? '#fff'} size={36} />
+                  <ProgressRing pct={domainPct} color={DOMAIN_COLORS[activeDomainId] ?? 'var(--color-ink)'} size={36} />
                   <span className="absolute" style={{ fontSize: 8, fontWeight: 700 }}>{domainPct}%</span>
                 </div>
               </div>
-              {domain?.videos.map(v => {
+              <div className="academy-filters">
+                <label className="type-caption">Search lessons<input className="input-base" type="search" aria-label="Search lessons" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search lesson titles…" /></label>
+                <label className="type-caption">Difficulty<select className="input-base" aria-label="Lesson difficulty" value={difficulty} onChange={e => setDifficulty(e.target.value)}><option value="">All difficulties</option>{[...new Set(domain?.videos.map(v => v.difficulty))].map(d => <option key={d}>{d}</option>)}</select></label>
+                <label className="type-caption">Progress<select className="input-base" aria-label="Lesson progress" value={status} onChange={e => setStatus(e.target.value)}><option value="">All lessons</option><option value="unfinished">Unfinished</option><option value="watched">Watched</option></select></label>
+              </div>
+              <p className="type-caption" role="status">{visibleVideos.length} of {progress.total} lessons shown</p>
+              {(query || difficulty || status) && <button className="btn-secondary" onClick={resetFilters}>Clear lesson filters</button>}
+              {domain?.videos.length === 0 && <p className="type-body-sm">Lessons will appear here when they are added.</p>}
+              {domain?.videos.length > 0 && visibleVideos.length === 0 && <p className="type-body-sm">No lessons match these filters.</p>}
+              {visibleVideos.map(v => {
                 const isActive = (activeVideo?.id ?? domain.videos[0]?.id) === v.id;
                 const watched = studentProgress.watchedVideos.includes(v.id);
-                const c = DOMAIN_COLORS[activeDomainId] ?? '#fff';
+                const c = DOMAIN_COLORS[activeDomainId] ?? '#007AFF';
                 return (
-                  <button key={v.id} onClick={() => setActiveVideoId(v.id)}
-                    className="w-full flex items-center gap-4 p-3 rounded-xl text-left transition-all"
+                  <button key={v.id} aria-current={isActive ? 'step' : undefined} aria-label={`${v.title}, ${v.duration}, ${v.difficulty}, ${watched ? 'watched' : 'not watched'}`} onClick={() => setActiveVideoId(v.id)}
+                    className="academy-lesson w-full flex items-center gap-4 p-3 rounded-xl text-left transition-all"
                     style={{
                       background: isActive ? 'var(--color-surface-2)' : 'transparent',
                       borderRadius: 'var(--radius-md)',
@@ -383,7 +434,7 @@ export function AcademyPage() {
                         : <Play size={13} style={{ color: isActive ? c : 'var(--color-ink-muted)' }} />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="type-body-sm truncate" style={{ color: isActive ? 'var(--color-ink)' : 'var(--color-ink-muted)' }}>{v.title}</p>
+                      <p className="type-body-sm" style={{ color: isActive ? 'var(--color-ink)' : 'var(--color-ink-muted)' }}>{v.title}</p>
                       <p className="type-micro mt-0.5">{v.duration}</p>
                     </div>
                     <span className="type-micro px-2 py-0.5 rounded-full shrink-0"
@@ -394,11 +445,11 @@ export function AcademyPage() {
                   </button>
                 );
               })}
-            </div>
+            </details>
 
             {/* Quiz */}
             <AnimatePresence mode="wait">
-              <motion.div key={activeDomainId} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+              <motion.div id="academy-quiz" key={activeDomainId} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
                 {domain?.quizzes && domain.quizzes.length > 0 && (
                   <QuizCard
                     domainId={activeDomainId}
