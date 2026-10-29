@@ -3,7 +3,7 @@
 // No React, no worker. Kept local to this feature — the rest of Design Studio
 // duplicates similar inline helpers, but consolidating those is out of scope.
 
-import type { Backdrop, SourceImage } from './types';
+import type { Backdrop, SourceImage } from "./types";
 
 const ACCEPTED = /^image\/(png|jpeg|jpg|webp|gif|bmp)$/;
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB guardrail for a browser tool.
@@ -25,26 +25,42 @@ export function isAcceptableImage(file: File | Blob): boolean {
 }
 
 /** Decode a Blob into a SourceImage, downscaling to the working-resolution cap. */
-export async function loadSourceImage(file: File | Blob, name = 'image'): Promise<SourceImage> {
+export async function loadSourceImage(
+  file: File | Blob,
+  name = "image",
+): Promise<SourceImage> {
   const decoded = await createImageBitmap(file);
   const long = Math.max(decoded.width, decoded.height);
   if (long <= MAX_WORKING_EDGE) {
-    return { bitmap: decoded, width: decoded.width, height: decoded.height, name, downscaled: false };
+    return {
+      bitmap: decoded,
+      width: decoded.width,
+      height: decoded.height,
+      name,
+      downscaled: false,
+    };
   }
   const scale = MAX_WORKING_EDGE / long;
   const w = Math.round(decoded.width * scale);
   const h = Math.round(decoded.height * scale);
-  const bitmap = await createImageBitmap(decoded, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' });
-  decoded.close();
-  return { bitmap, width: w, height: h, name, downscaled: true };
+  try {
+    const bitmap = await createImageBitmap(decoded, {
+      resizeWidth: w,
+      resizeHeight: h,
+      resizeQuality: "high",
+    });
+    return { bitmap, width: w, height: h, name, downscaled: true };
+  } finally {
+    decoded.close();
+  }
 }
 
 /** Draw a source bitmap to a canvas and return its RGBA ImageData. */
 export function bitmapToImageData(src: SourceImage): ImageData {
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = src.width;
   canvas.height = src.height;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   ctx.drawImage(src.bitmap, 0, 0);
   return ctx.getImageData(0, 0, src.width, src.height);
 }
@@ -53,27 +69,37 @@ export function bitmapToImageData(src: SourceImage): ImageData {
  * Apply a single-channel alpha mask to RGBA pixels, returning NEW ImageData
  * whose alpha channel is the mask. The input is left untouched.
  */
-export function applyMask(image: ImageData, mask: Uint8ClampedArray): ImageData {
+export function applyMask(
+  image: ImageData,
+  mask: Uint8ClampedArray,
+): ImageData {
   const out = new Uint8ClampedArray(image.data); // copy RGB(A)
-  const px = Math.min(mask.length, out.length / 4);
+  if (mask.length !== image.width * image.height)
+    throw new Error("Mask dimensions do not match image.");
+  const px = mask.length;
   for (let i = 0; i < px; i++) {
-    out[i * 4 + 3] = mask[i];
+    out[i * 4 + 3] = Math.round((out[i * 4 + 3] * mask[i]) / 255);
   }
   return new ImageData(out, image.width, image.height);
 }
 
 /** Put ImageData onto a fresh canvas so it can be alpha-composited via drawImage. */
 export function imageDataToCanvas(img: ImageData): HTMLCanvasElement {
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = img.width;
   canvas.height = img.height;
-  canvas.getContext('2d')!.putImageData(img, 0, 0);
+  canvas.getContext("2d")!.putImageData(img, 0, 0);
   return canvas;
 }
 
 /** Paint the chosen backdrop (transparent checkerboard or solid colour). */
-export function paintBackdrop(ctx: CanvasRenderingContext2D, w: number, h: number, backdrop: Backdrop): void {
-  if (backdrop.kind === 'color') {
+export function paintBackdrop(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  backdrop: Backdrop,
+): void {
+  if (backdrop.kind === "color") {
     ctx.fillStyle = backdrop.color;
     ctx.fillRect(0, 0, w, h);
     return;
@@ -82,13 +108,19 @@ export function paintBackdrop(ctx: CanvasRenderingContext2D, w: number, h: numbe
 }
 
 /** Classic transparency checkerboard (display only — never baked into exports). */
-export function drawCheckerboard(ctx: CanvasRenderingContext2D, w: number, h: number, cell = 12): void {
-  ctx.fillStyle = '#ffffff';
+export function drawCheckerboard(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  cell = 12,
+): void {
+  ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = 'rgba(0,0,0,0.08)';
+  ctx.fillStyle = "rgba(0,0,0,0.08)";
   for (let y = 0; y < h; y += cell) {
     for (let x = 0; x < w; x += cell) {
-      if ((Math.floor(x / cell) + Math.floor(y / cell)) % 2 === 0) ctx.fillRect(x, y, cell, cell);
+      if ((Math.floor(x / cell) + Math.floor(y / cell)) % 2 === 0)
+        ctx.fillRect(x, y, cell, cell);
     }
   }
 }
@@ -97,12 +129,15 @@ export function drawCheckerboard(ctx: CanvasRenderingContext2D, w: number, h: nu
  * Build the canvas to export: the raw transparent cut-out, or the cut-out
  * flattened onto a solid colour. The checkerboard is never included.
  */
-export function buildExportCanvas(cutout: HTMLCanvasElement, backdrop: Backdrop): HTMLCanvasElement {
-  if (backdrop.kind === 'transparent') return cutout;
-  const canvas = document.createElement('canvas');
+export function buildExportCanvas(
+  cutout: HTMLCanvasElement,
+  backdrop: Backdrop,
+): HTMLCanvasElement {
+  if (backdrop.kind === "transparent") return cutout;
+  const canvas = document.createElement("canvas");
   canvas.width = cutout.width;
   canvas.height = cutout.height;
-  const ctx = canvas.getContext('2d')!;
+  const ctx = canvas.getContext("2d")!;
   ctx.fillStyle = backdrop.color;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(cutout, 0, 0);
@@ -112,14 +147,17 @@ export function buildExportCanvas(cutout: HTMLCanvasElement, backdrop: Backdrop)
 /** Export a canvas to a PNG Blob (PNG preserves the alpha channel). */
 export function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Canvas export failed'))), 'image/png');
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("Canvas export failed"))),
+      "image/png",
+    );
   });
 }
 
 /** Trigger a browser download of a Blob. */
 export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   a.click();

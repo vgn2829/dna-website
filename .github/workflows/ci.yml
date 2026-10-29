@@ -127,21 +127,10 @@ jobs:
       - name: Frontend tests
         run: pnpm vitest run
 
-      # The repository has a documented baseline of 16 pre-existing
-      # typecheck errors. The gate is "no NEW errors", so this asserts the
-      # count rather than requiring a clean exit that has never been true.
-      - name: Frontend typecheck (baseline 16 pre-existing, 0 new)
-        run: |
-          set +e
-          pnpm tsc --noEmit -p tsconfig.json > tsc.log 2>&1
-          set -e
-          COUNT=$(grep -c "error TS" tsc.log || true)
-          echo "typecheck errors: $COUNT (documented baseline: 16)"
-          cat tsc.log
-          if [ "$COUNT" -gt 16 ]; then
-            echo "::error::$COUNT typecheck errors exceeds the documented baseline of 16"
-            exit 1
-          fi
+      # Unrelated diagnostic identities are pinned; replacing one with a new
+      # error fails even when the count is unchanged. Scoped tools must be clean.
+      - name: Frontend typecheck (exact unrelated baseline)
+        run: pnpm run typecheck:studio
 
       - name: Production build
         run: pnpm vite build
