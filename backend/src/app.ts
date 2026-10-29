@@ -6,6 +6,7 @@ import path from 'path';
 import { authRouter }    from './routes/auth';
 import { eventsRouter }  from './routes/events';
 import { artworksRouter } from './routes/artworks';
+import { designersRouter } from './routes/designers';
 import { domainsRouter } from './routes/domains';
 import { studentsRouter } from './routes/students';
 import { teamRouter }    from './routes/team';
@@ -147,6 +148,7 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
   app.use('/api/auth',     authRouter);
   app.use('/api/events',   eventsRouter);
   app.use('/api/artworks', artworksRouter);
+  app.use('/api/designers', designersRouter);
   app.use('/api/domains',  domainsRouter);
   app.use('/api/students', studentsRouter);
   app.use('/api/team',     teamRouter);

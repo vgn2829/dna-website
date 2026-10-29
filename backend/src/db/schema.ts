@@ -1,4 +1,5 @@
 import { initAssetSharingSchema } from './assetSharingSchema';
+import { initDesignerSchema } from './designerSchema';
 import { pool } from './client';
 import { canvasSummaryColumns } from '../lib/canvasSummary';
 import { MARK_PLACED_BOARD_ITEMS_SQL } from '../lib/boardRows';
@@ -1712,6 +1713,7 @@ export async function initSchema(): Promise<void> {
   `);
 
   await initAssetSharingSchema(pool);
+  await initDesignerSchema(pool);
   console.log('library visibility migration done');
 }
 

@@ -4,6 +4,21 @@ import type { RsvpResult } from './eventForm';
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '') + '/api';
 export const API_BASE = BASE;
 
+export interface DesignerProfile {
+  id: string;
+  handle: string;
+  displayName: string;
+  bio: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DesignerProfileInput {
+  handle: string;
+  displayName: string;
+  bio?: string | null;
+}
+
 export interface LiveSession {
   id: string;
   title: string;
@@ -588,7 +603,18 @@ export const api = {
     patchVideoSequence: (domainId: string, videoId: string, sequence: number) =>
       request<unknown>('PATCH', `/domains/${domainId}/videos/${videoId}`, { body: { sequence }, admin: true }),
   },
+  designers: {
+    getMe: (roll: string) => request<DesignerProfile | null>('GET', '/designers/me', { roll }),
+    createMe: (roll: string, body: DesignerProfileInput) =>
+      request<DesignerProfile>('POST', '/designers/me', { roll, body }),
+    updateMe: (roll: string, body: Partial<DesignerProfileInput>) =>
+      request<DesignerProfile>('PATCH', '/designers/me', { roll, body }),
+    getByHandle: (handle: string) => request<DesignerProfile>('GET', `/designers/${encodeURIComponent(handle)}`),
+  },
   artworks: {
+    setAttribution: (id: string, creatorDesignerId: string | null) =>
+      request<{ artworkId: string; creatorDesignerId: string | null; changed: boolean }>(
+        'PATCH', `/artworks/${encodeURIComponent(id)}/attribution`, { admin: true, body: { creatorDesignerId } }),
     list:    (roll?: string) => request<unknown[]>('GET', '/artworks', { roll }),
     upload:  (formData: FormData) => uploadRequest<unknown>('/artworks', formData),
     update:  (id: string, formData: FormData) => uploadPutRequest<unknown>(`/artworks/${id}`, formData),

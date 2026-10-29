@@ -5,7 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { query } from '../db/client';
-import { signStudentToken, signBypassStudentToken, requireStudent } from '../middleware/studentAuth';
+import { signStudentToken, signBypassStudentToken, requireVerifiedStudent } from '../middleware/studentAuth';
 import { sendOtpEmail, sendWelcomeEmail } from '../services/mailer';
 
 export const authRouter = Router();
@@ -309,8 +309,9 @@ authRouter.post('/student/bypass-login', bypassLoginLimiter, async (req, res) =>
 });
 
 // ── Student email change (OTP-gated, sent to the NEW address) ─────────────────
-// Identity comes from the verified student JWT (requireStudent), never a
-// client-supplied roll number, so only the session owner can change the email.
+// Require an explicitly OTP-verified session on BOTH operations. Bypass and
+// legacy sessions must not replace the login mailbox, including by consuming
+// a challenge created before this guard existed.
 
 const changeEmailRequestLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -330,7 +331,7 @@ const changeEmailSchema = z.object({
     .transform(e => e.toLowerCase()),
 });
 
-authRouter.post('/student/change-email/request', changeEmailRequestLimiter, requireStudent, async (req, res) => {
+authRouter.post('/student/change-email/request', changeEmailRequestLimiter, requireVerifiedStudent, async (req, res) => {
   const roll = req.studentRoll!;
   const parsed = changeEmailSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Enter a valid @iitk.ac.in email' }); return; }
@@ -370,7 +371,7 @@ authRouter.post('/student/change-email/request', changeEmailRequestLimiter, requ
 
 const verifyChangeEmailSchema = z.object({ code: z.string().regex(/^[0-9]{6}$/, 'Invalid code') });
 
-authRouter.post('/student/change-email/verify', changeEmailVerifyLimiter, requireStudent, async (req, res) => {
+authRouter.post('/student/change-email/verify', changeEmailVerifyLimiter, requireVerifiedStudent, async (req, res) => {
   const roll = req.studentRoll!;
   const parsed = verifyChangeEmailSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid code' }); return; }

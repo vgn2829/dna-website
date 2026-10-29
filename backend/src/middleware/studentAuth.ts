@@ -23,11 +23,14 @@ export interface StudentClaims {
   typ: 'student';
   roll: string;
   bypass?: true;
+  identityVerified?: true;
 }
 
 export function signStudentToken(roll: string): string {
   return jwt.sign(
-    { typ: 'student', roll: roll.trim().toUpperCase() } satisfies StudentClaims,
+    // Production caller: successful /student/verify-otp only. Legacy tokens
+    // remain valid for ordinary routes, but cannot mutate designer identity.
+    { typ: 'student', roll: roll.trim().toUpperCase(), identityVerified: true } satisfies StudentClaims,
     process.env.JWT_SECRET!,
     { algorithm: 'HS256', expiresIn: STUDENT_TOKEN_TTL }
   );
@@ -45,14 +48,42 @@ export function signBypassStudentToken(roll: string): string {
 // currently the realtime WS upgrade handler, which has no req/res and no
 // Express middleware chain to run requireStudent through — can verify the
 // same token the same way, rather than reimplementing JWT verification.
-export function verifyStudentToken(token: string): string | null {
+export function verifyStudentClaims(token: string): StudentClaims | null {
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ['HS256'] }) as Partial<StudentClaims>;
     if (payload.typ !== 'student' || typeof payload.roll !== 'string') return null;
-    return payload.roll.trim().toUpperCase();
+    const roll = payload.roll.trim().toUpperCase();
+    if (!roll) return null;
+    // Copy only understood, signature-verified claims. Never infer OTP
+    // verification merely from the absence of the bypass marker.
+    return {
+      typ: 'student', roll,
+      ...(payload.bypass === true ? { bypass: true as const } : {}),
+      ...(payload.identityVerified === true ? { identityVerified: true as const } : {}),
+    };
   } catch {
     return null;
   }
+}
+
+export function verifyStudentToken(token: string): string | null {
+  return verifyStudentClaims(token)?.roll ?? null;
+}
+
+/** Identity mutations require an explicit OTP-issued claim, not account flags. */
+export function requireVerifiedStudent(req: Request, res: Response, next: NextFunction): void {
+  const auth = req.headers.authorization;
+  const claims = auth?.startsWith('Bearer ') ? verifyStudentClaims(auth.slice(7)) : null;
+  if (!claims) {
+    res.status(401).json({ error: 'Sign in required' });
+    return;
+  }
+  if (claims.identityVerified !== true || claims.bypass === true) {
+    res.status(403).json({ error: 'Verify your identity with email OTP before changing account identity' });
+    return;
+  }
+  req.studentRoll = claims.roll;
+  next();
 }
 
 function extractRoll(req: Request): string | null {
