@@ -10,7 +10,7 @@ it("closes the original bitmap when downscale allocation fails", async () => {
       .mockResolvedValueOnce(original)
       .mockRejectedValueOnce(new Error("allocation failed")),
   );
-  await expect(loadSourceImage(new Blob(), "fixture")).rejects.toThrow(
+  await expect(loadSourceImage(new Blob([], {type: "image/png"}), "fixture")).rejects.toThrow(
     "allocation failed",
   );
   expect(original.close).toHaveBeenCalledOnce();

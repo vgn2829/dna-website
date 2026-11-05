@@ -1,0 +1,25 @@
+{
+  "capabilities": {
+    "gpu": true,
+    "float16": true,
+    "adapterMaxStorageBuffers": 10,
+    "defaultDeviceStorageBuffers": 8
+  },
+  "downloadMs": 183.40000000596046,
+  "results": [
+    {
+      "backend": "webgpu",
+      "initMs": 3495.199999988079,
+      "timings": [
+        3987,
+        2059.899999976158,
+        2028.7000000178814
+      ]
+    }
+  ],
+  "hardware": {
+    "cpu": "Apple M2",
+    "memoryGB": 8,
+    "correction": "Fixed probe unit divisor 512^3 to 1024^3; independently confirmed 8 GB with system_profiler."
+  }
+}

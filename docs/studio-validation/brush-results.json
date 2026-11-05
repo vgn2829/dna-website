@@ -1,0 +1,9 @@
+{
+  "checks": [
+    "real portrait inference",
+    "manual erase",
+    "undo/redo history and brush settings survive tool switch",
+    "edited mask survives opted-in refresh",
+    "clear commits before immediate refresh"
+  ]
+}

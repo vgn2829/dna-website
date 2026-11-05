@@ -1,0 +1,221 @@
+[
+  {
+    "repo": "Xenova/modnet",
+    "revision": "fa2fa546052fba4c08921230a26cc69a333fca12",
+    "artifacts": [
+      {
+        "type": "file",
+        "oid": "000bf52de7271bc15c026a124df5565419f2af40",
+        "size": 25888640,
+        "lfs": {
+          "oid": "07c308cf0fc7e6e8b2065a12ed7fc07e1de8febb7dc7839d7b7f15dd66584df9",
+          "size": 25888640,
+          "pointerSize": 133
+        },
+        "xetHash": "ee925c6fd7d129b61aa53d120cbe1ea9e175dec73ca08711ec9ff2e6347cc788",
+        "path": "onnx/model.onnx"
+      },
+      {
+        "type": "file",
+        "oid": "a3a9a425e012459ba30af26fad6448dc3387a587",
+        "size": 23080899,
+        "lfs": {
+          "oid": "acfa94a3b90259d00aed9355be69def816837476307adf59cb5631006946a461",
+          "size": 23080899,
+          "pointerSize": 133
+        },
+        "xetHash": "07f97da38e1df78581c19ed9022a91bbf7e076aa7da89e3fd60c61be404c8113",
+        "path": "onnx/model_bnb4.onnx"
+      },
+      {
+        "type": "file",
+        "oid": "0eb487f563a9d498ff0a56d80ff47ffa5eab93a2",
+        "size": 12984781,
+        "lfs": {
+          "oid": "25f165da9bfd30830a575f1f0490f1acd995975cb349bc02f3d79332e1fe5cf6",
+          "size": 12984781,
+          "pointerSize": 133
+        },
+        "xetHash": "0a03607c1de5bf7e1f02f4a5d39431994595acfac902225573c3f76bd29d0c50",
+        "path": "onnx/model_fp16.onnx"
+      },
+      {
+        "type": "file",
+        "oid": "0a18d7d7ae86f70d105f9e52e38eaea25d0272ca",
+        "size": 23132083,
+        "lfs": {
+          "oid": "74b7b569f8697e220b82986ca85c2226bec93c67e748276e2cec4e8e742a312a",
+          "size": 23132083,
+          "pointerSize": 133
+        },
+        "xetHash": "c4ca9ec8e1bb8f3a3b207827904e05dadecc537126a53d62a845c73dd8483e13",
+        "path": "onnx/model_q4.onnx"
+      },
+      {
+        "type": "file",
+        "oid": "332f2c08afb8e12cb5da6033399432c694747f4f",
+        "size": 11801931,
+        "lfs": {
+          "oid": "f582407530e8c5f2f4adc969d894cce82a2ae3a6b6b0571fe25ebb4c5a8ffa5c",
+          "size": 11801931,
+          "pointerSize": 133
+        },
+        "xetHash": "4b078d6ffa4ace3aa5fa482919060e38f893559898239157d2db4d7a391469f6",
+        "path": "onnx/model_q4f16.onnx"
+      },
+      {
+        "type": "file",
+        "oid": "b2bdf302eb418fd449526d8d0d8d82e35f8be66f",
+        "size": 6632188,
+        "lfs": {
+          "oid": "92e49898c3e05a6d7a944fc67a8cb87c4aad754ffb6ebd949528c7d1105fee3a",
+          "size": 6632188,
+          "pointerSize": 132
+        },
+        "xetHash": "849cc3046229f8ce3b8c85746d235cd93fe2bc64e25fbdbbd02b727083fb2b05",
+        "path": "onnx/model_quantized.onnx"
+      },
+      {
+        "type": "file",
+        "oid": "a7aef4f8818c9943a6a247eab8ed7eabab128486",
+        "size": 6627048,
+        "lfs": {
+          "oid": "7bad6522b3cde60246e69e234b7786337ef9c88abc790ee5c1aaa6e535b0c61d",
+          "size": 6627048,
+          "pointerSize": 132
+        },
+        "xetHash": "90123ed89c525a24428ef7ece9079fd2bc5eec94749c7d5cff980ec2fbca0bed",
+        "path": "onnx/model_uint8.onnx"
+      }
+    ],
+    "preprocessor": {
+      "do_normalize": true,
+      "do_pad": false,
+      "do_rescale": true,
+      "do_resize": true,
+      "image_mean": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "feature_extractor_type": "ImageFeatureExtractor",
+      "image_std": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "resample": 2,
+      "rescale_factor": 0.00392156862745098,
+      "size": {
+        "shortest_edge": 512
+      },
+      "size_divisibility": 32
+    }
+  },
+  {
+    "repo": "onnx-community/BiRefNet_lite-ONNX",
+    "revision": "de15b22ba131738a16dff04aab8bdf8dc32e3ac1",
+    "artifacts": [
+      {
+        "type": "file",
+        "oid": "9fb9019eb81662c970f6d05314ecd97d1d351e35",
+        "size": 224005088,
+        "lfs": {
+          "oid": "5600024376f572a557870a5eb0afb1e5961636bef4e1e22132025467d0f03333",
+          "size": 224005088,
+          "pointerSize": 134
+        },
+        "xetHash": "917a4cd3931af9b7855c779fc4627ac742ebfa29b26f06ddee70d2ca567805df",
+        "path": "onnx/model.onnx"
+      },
+      {
+        "type": "file",
+        "oid": "22aa1ff81808a93722395a509d5da3bb7a8788c6",
+        "size": 114538221,
+        "lfs": {
+          "oid": "d39b897ceb16ae654c1731f3dba0cf9b368d9cae74b5a57459b455cc8bfec402",
+          "size": 114538221,
+          "pointerSize": 134
+        },
+        "xetHash": "3577c6271cc2333089950dd91a4eca03818d636514ef03557a9678db61644821",
+        "path": "onnx/model_fp16.onnx"
+      }
+    ],
+    "preprocessor": {
+      "do_normalize": true,
+      "do_rescale": true,
+      "do_resize": true,
+      "feature_extractor_type": "ViTFeatureExtractor",
+      "image_mean": [
+        0.485,
+        0.456,
+        0.406
+      ],
+      "image_processor_type": "ViTFeatureExtractor",
+      "image_std": [
+        0.229,
+        0.224,
+        0.225
+      ],
+      "resample": 2,
+      "rescale_factor": 0.00392156862745098,
+      "size": {
+        "height": 1024,
+        "width": 1024
+      }
+    }
+  },
+  {
+    "repo": "onnx-community/BiRefNet-ONNX",
+    "revision": "534d3c82d3bb8b2f0867db6dfbc3a525b8e42f67",
+    "artifacts": [
+      {
+        "type": "file",
+        "oid": "3c32570d9ecfc73b92782e3786278e6b5f1ade3a",
+        "size": 972666916,
+        "lfs": {
+          "oid": "58f621f00f5d756097615970a88a791584600dcf7c45b18a0a6267535a1ebd3c",
+          "size": 972666916,
+          "pointerSize": 134
+        },
+        "xetHash": "30fa5394b4fc5c84bd6712d967f25e335da89807f3e217225d8d6a7336515d7b",
+        "path": "onnx/model.onnx"
+      },
+      {
+        "type": "file",
+        "oid": "0bd1330bbc16814d76ca978d02dab34d4ad2e4d0",
+        "size": 489666272,
+        "lfs": {
+          "oid": "3654c741eb80bd926ada8fed1713b506ccf8d30eb1f6487e87eb9f234f33df09",
+          "size": 489666272,
+          "pointerSize": 134
+        },
+        "xetHash": "c3184fed670ebb8d3f36ee41034e89163d56f4304d47ff77f0a23238afce4a0e",
+        "path": "onnx/model_fp16.onnx"
+      }
+    ],
+    "preprocessor": {
+      "do_normalize": true,
+      "do_rescale": true,
+      "do_resize": true,
+      "feature_extractor_type": "ViTFeatureExtractor",
+      "image_mean": [
+        0.485,
+        0.456,
+        0.406
+      ],
+      "image_processor_type": "ViTFeatureExtractor",
+      "image_std": [
+        0.229,
+        0.224,
+        0.225
+      ],
+      "resample": 2,
+      "rescale_factor": 0.00392156862745098,
+      "size": {
+        "height": 1024,
+        "width": 1024
+      }
+    }
+  }
+]

@@ -1,3 +1,4 @@
+import {readImageDraft,saveImageDraft,clearImageDraft} from "../../lib/image-drafts";
 import { useState, useRef, useEffect } from "react";
 import type {
   PDFDocumentProxy,
@@ -41,6 +42,8 @@ export function ImageConverter() {
     doc = useRef<PDFDocumentProxy | null>(null),
     loading = useRef<PDFDocumentLoadingTask | null>(null),
     render = useRef<RenderTask | null>(null);
+  const sourceRevision=useRef(0);
+  useEffect(()=>{let active=true;void readImageDraft('converter').then(draft=>{if(active && sourceRevision.current===0 && draft)void loadFile(new File([draft.file],draft.name,{type:draft.file.type}));});return ()=>{active=false;};},[]);
   const config = JSON.stringify([format, quality, scale, page]);
   const stop = () => {
     jobs.current.cancel();
@@ -67,6 +70,7 @@ export function ImageConverter() {
     [output],
   );
   const reset = () => {
+    ++sourceRevision.current;void clearImageDraft("converter");
     destroy();
     setSource(null);
     setOutput(null);
@@ -93,6 +97,7 @@ export function ImageConverter() {
     return { url: c.toDataURL("image/png"), ...size };
   };
   async function loadFile(file: File) {
+    ++sourceRevision.current;
     if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
       setError("Choose a supported image or PDF.");
       return;
@@ -147,6 +152,7 @@ export function ImageConverter() {
         });
         url = undefined;
       }
+      if(jobs.current.current(id))void saveImageDraft("converter",{version:1,file,name:file.name,retain:false,saved:Date.now()});
     } catch (err) {
       if (jobs.current.current(id))
         setError((err as Error).message || "Could not read file.");

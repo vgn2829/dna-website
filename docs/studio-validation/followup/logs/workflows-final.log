@@ -1,0 +1,305 @@
+[
+  {
+    "engine": "chromium",
+    "version": "145.0.7632.6",
+    "checks": [
+      "font face count bounded after 8 changes; missing file and offline errors recover on retry",
+      "actual browser SVG raster vs PNG: rotated black, ramp, portrait, fine texture and transparent fixtures",
+      "real helper inference/export; no upload on check/select/reload; provider resets to browser; explicit source-alpha bypass"
+    ],
+    "exports": [
+      {
+        "fixture": "black",
+        "type": "squares",
+        "meanAbsoluteChannelDifference": 0,
+        "svgMean": 0.0027591836734693876
+      },
+      {
+        "fixture": "black",
+        "type": "lines",
+        "meanAbsoluteChannelDifference": 0,
+        "svgMean": 0.005612244897959183
+      },
+      {
+        "fixture": "black",
+        "type": "dots",
+        "meanAbsoluteChannelDifference": 0.004195918367346939,
+        "svgMean": 0.11443265306122449
+      },
+      {
+        "fixture": "ramp",
+        "type": "squares",
+        "meanAbsoluteChannelDifference": 0.003085714285714286,
+        "svgMean": 79.06964489795918
+      },
+      {
+        "fixture": "ramp",
+        "type": "lines",
+        "meanAbsoluteChannelDifference": 0.003922448979591837,
+        "svgMean": 79.62988163265307
+      },
+      {
+        "fixture": "ramp",
+        "type": "dots",
+        "meanAbsoluteChannelDifference": 0.12881632653061226,
+        "svgMean": 80.34107346938775
+      },
+      {
+        "fixture": "portrait",
+        "type": "squares",
+        "meanAbsoluteChannelDifference": 0.0045877551020408166,
+        "svgMean": 68.23016734693877
+      },
+      {
+        "fixture": "portrait",
+        "type": "lines",
+        "meanAbsoluteChannelDifference": 0.002963265306122449,
+        "svgMean": 68.58989795918367
+      },
+      {
+        "fixture": "portrait",
+        "type": "dots",
+        "meanAbsoluteChannelDifference": 0.1226204081632653,
+        "svgMean": 67.79052653061224
+      },
+      {
+        "fixture": "texture",
+        "type": "squares",
+        "meanAbsoluteChannelDifference": 0.002636734693877551,
+        "svgMean": 127.65118775510204
+      },
+      {
+        "fixture": "texture",
+        "type": "lines",
+        "meanAbsoluteChannelDifference": 0.001436734693877551,
+        "svgMean": 127.94514693877551
+      },
+      {
+        "fixture": "texture",
+        "type": "dots",
+        "meanAbsoluteChannelDifference": 0.2028,
+        "svgMean": 123.851
+      },
+      {
+        "fixture": "transparent",
+        "type": "squares",
+        "meanAbsoluteChannelDifference": 0,
+        "svgMean": 255
+      },
+      {
+        "fixture": "transparent",
+        "type": "lines",
+        "meanAbsoluteChannelDifference": 0,
+        "svgMean": 255
+      },
+      {
+        "fixture": "transparent",
+        "type": "dots",
+        "meanAbsoluteChannelDifference": 0,
+        "svgMean": 255
+      }
+    ]
+  },
+  {
+    "engine": "firefox",
+    "version": "146.0.1",
+    "checks": [
+      "font face count bounded after 8 changes; missing file and offline errors recover on retry",
+      "actual browser SVG raster vs PNG: rotated black, ramp, portrait, fine texture and transparent fixtures",
+      "real helper inference/export; no upload on check/select/reload; provider resets to browser; explicit source-alpha bypass"
+    ],
+    "exports": [
+      {
+        "fixture": "black",
+        "type": "squares",
+        "meanAbsoluteChannelDifference": 0,
+        "svgMean": 0.002910204081632653
+      },
+      {
+        "fixture": "black",
+        "type": "lines",
+        "meanAbsoluteChannelDifference": 0,
+        "svgMean": 0.005636734693877551
+      },
+      {
+        "fixture": "black",
+        "type": "dots",
+        "meanAbsoluteChannelDifference": 0.0064285714285714285,
+        "svgMean": 0.09660408163265306
+      },
+      {
+        "fixture": "ramp",
+        "type": "squares",
+        "meanAbsoluteChannelDifference": 0.0018448979591836735,
+        "svgMean": 79.06914285714285
+      },
+      {
+        "fixture": "ramp",
+        "type": "lines",
+        "meanAbsoluteChannelDifference": 0.004285714285714286,
+        "svgMean": 79.61660408163266
+      },
+      {
+        "fixture": "ramp",
+        "type": "dots",
+        "meanAbsoluteChannelDifference": 0.12520408163265306,
+        "svgMean": 81.14568571428572
+      },
+      {
+        "fixture": "portrait",
+        "type": "squares",
+        "meanAbsoluteChannelDifference": 0.0009877551020408164,
+        "svgMean": 68.2212081632653
+      },
+      {
+        "fixture": "portrait",
+        "type": "lines",
+        "meanAbsoluteChannelDifference": 0.0037346938775510204,
+        "svgMean": 68.59095918367348
+      },
+      {
+        "fixture": "portrait",
+        "type": "dots",
+        "meanAbsoluteChannelDifference": 0.13712244897959183,
+        "svgMean": 68.76301632653062
+      },
+      {
+        "fixture": "texture",
+        "type": "squares",
+        "meanAbsoluteChannelDifference": 0.005571428571428572,
+        "svgMean": 127.59839591836734
+      },
+      {
+        "fixture": "texture",
+        "type": "lines",
+        "meanAbsoluteChannelDifference": 0.0019142857142857143,
+        "svgMean": 127.94506122448979
+      },
+      {
+        "fixture": "texture",
+        "type": "dots",
+        "meanAbsoluteChannelDifference": 0.10433877551020408,
+        "svgMean": 130.14187346938775
+      },
+      {
+        "fixture": "transparent",
+        "type": "squares",
+        "meanAbsoluteChannelDifference": 0,
+        "svgMean": 255
+      },
+      {
+        "fixture": "transparent",
+        "type": "lines",
+        "meanAbsoluteChannelDifference": 0,
+        "svgMean": 255
+      },
+      {
+        "fixture": "transparent",
+        "type": "dots",
+        "meanAbsoluteChannelDifference": 0,
+        "svgMean": 255
+      }
+    ]
+  },
+  {
+    "engine": "webkit",
+    "version": "26.0",
+    "checks": [
+      "font face count bounded after 8 changes; missing file and offline errors recover on retry",
+      "actual browser SVG raster vs PNG: rotated black, ramp, portrait, fine texture and transparent fixtures",
+      "real helper inference/export; no upload on check/select/reload; provider resets to browser; explicit source-alpha bypass"
+    ],
+    "exports": [
+      {
+        "fixture": "black",
+        "type": "squares",
+        "meanAbsoluteChannelDifference": 0,
+        "svgMean": 0.002906122448979592
+      },
+      {
+        "fixture": "black",
+        "type": "lines",
+        "meanAbsoluteChannelDifference": 0,
+        "svgMean": 0.006081632653061225
+      },
+      {
+        "fixture": "black",
+        "type": "dots",
+        "meanAbsoluteChannelDifference": 0.00002448979591836735,
+        "svgMean": 0.09673061224489796
+      },
+      {
+        "fixture": "ramp",
+        "type": "squares",
+        "meanAbsoluteChannelDifference": 0.0028081632653061224,
+        "svgMean": 79.18768979591837
+      },
+      {
+        "fixture": "ramp",
+        "type": "lines",
+        "meanAbsoluteChannelDifference": 0.001946938775510204,
+        "svgMean": 79.1131918367347
+      },
+      {
+        "fixture": "ramp",
+        "type": "dots",
+        "meanAbsoluteChannelDifference": 0.0011469387755102041,
+        "svgMean": 79.12639591836735
+      },
+      {
+        "fixture": "portrait",
+        "type": "squares",
+        "meanAbsoluteChannelDifference": 0.002669387755102041,
+        "svgMean": 68.49803673469388
+      },
+      {
+        "fixture": "portrait",
+        "type": "lines",
+        "meanAbsoluteChannelDifference": 0.0018816326530612245,
+        "svgMean": 68.41524081632653
+      },
+      {
+        "fixture": "portrait",
+        "type": "dots",
+        "meanAbsoluteChannelDifference": 0.0013714285714285714,
+        "svgMean": 66.82276326530612
+      },
+      {
+        "fixture": "texture",
+        "type": "squares",
+        "meanAbsoluteChannelDifference": 0.004514285714285715,
+        "svgMean": 127.49051020408163
+      },
+      {
+        "fixture": "texture",
+        "type": "lines",
+        "meanAbsoluteChannelDifference": 0.0004,
+        "svgMean": 127.40735102040816
+      },
+      {
+        "fixture": "texture",
+        "type": "dots",
+        "meanAbsoluteChannelDifference": 0.0017224489795918368,
+        "svgMean": 126.41698367346939
+      },
+      {
+        "fixture": "transparent",
+        "type": "squares",
+        "meanAbsoluteChannelDifference": 0,
+        "svgMean": 255
+      },
+      {
+        "fixture": "transparent",
+        "type": "lines",
+        "meanAbsoluteChannelDifference": 0,
+        "svgMean": 255
+      },
+      {
+        "fixture": "transparent",
+        "type": "dots",
+        "meanAbsoluteChannelDifference": 0,
+        "svgMean": 255
+      }
+    ]
+  }
+]

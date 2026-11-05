@@ -1,0 +1,9 @@
+{
+  "model": {
+    "checker": "pass"
+  },
+  "model_fp16": {
+    "checker": "fail",
+    "error": "Nodes in a graph must be topologically sorted, however input 'graph_input_cast_0' of node: \nname: /bb/patch_embed/proj/Conv OpType: Conv\n is not output of any previous nodes."
+  }
+}

@@ -1,3 +1,4 @@
+import * as quality from "../palette-engine";
 // Pure colour domain. Reference provenance and limitations: palette/references.md.
 import { simulateCB } from "./simulation";
 export { simulateCB } from "./simulation";
@@ -161,7 +162,7 @@ export function oklchToHex(color: OKLCH) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ACCESSIBILITY — WCAG luminance, contrast ratio, APCA
+// ACCESSIBILITY — WCAG luminance and contrast ratio
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function wcagLuminance(rgb: RGB) {
@@ -177,26 +178,8 @@ export function contrastRatio(fg: RGB, bg: RGB) {
   return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
 }
 
-// APCA 0.0.98G / apca-w3 0.1.9, signed Lc. See references.md.
-export function apcaContrast(textRgb: RGB, bgRgb: RGB): number {
-  const luminance = (c: RGB) =>
-    0.2126729 * c.r ** 2.4 + 0.7151522 * c.g ** 2.4 + 0.072175 * c.b ** 2.4;
-  const soft = (v: number) => (v > 0.022 ? v : v + (0.022 - v) ** 1.414);
-  const text = soft(luminance(textRgb)),
-    bg = soft(luminance(bgRgb));
-  if (Math.abs(bg - text) < 0.0005) return 0;
-  const sapc =
-    bg > text
-      ? (bg ** 0.56 - text ** 0.57) * 1.14
-      : (bg ** 0.65 - text ** 0.62) * 1.14;
-  return bg > text
-    ? sapc < 0.1
-      ? 0
-      : (sapc - 0.027) * 100
-    : sapc > -0.1
-      ? 0
-      : (sapc + 0.027) * 100;
-}
+// APCA removed from the product; no unresolved licensed algorithm is exposed.
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONTRAST-SEEKING LIGHTNESS
@@ -398,189 +381,12 @@ export function getSeedSymbolism(hex: string) {
 // PALETTE DERIVATION ENGINE
 // ─────────────────────────────────────────────────────────────────────────────
 
-const nudgeLightnessForContrast = findAccessibleLightness;
-// Retained aesthetic tuning, not validated quality statistics.
-const FIGMA_MEDIAN_CHROMA = 0.092;
-const FIGMA_LIGHTNESS_SPREAD = 0.45;
 
-export function derivePalette(
-  seedHex: string,
-  darkMode: boolean,
-  harmonyKey: Harmony,
-  lockedColors: Partial<Palette> = {},
-) {
+export function derivePalette(seedHex: string, darkMode: boolean, harmonyKey: Harmony, lockedColors: Partial<Palette> = {}, variation = seedHex): Palette {
   if (!HARMONY_MODES[harmonyKey]) throw new Error("Unknown harmony mode.");
-  for (const value of Object.values(lockedColors))
-    if (value) normalizeHex(value);
-  const seedRgb = hexToRgb(seedHex);
-  const seed = rgbToOKLCH(seedRgb);
-  const seedChroma = seed.C;
-  const seedHue = seed.H;
-
-  const isWarmSeed = (seedHue >= 0 && seedHue <= 100) || seedHue >= 300;
-  const neutralHue = isWarmSeed ? 230 : 65;
-
-  const bgHex = oklchToHex(
-    gamutMap({ L: darkMode ? 0.09 : 0.985, C: 0.004, H: neutralHue }),
-  );
-  const surfHex = oklchToHex(
-    gamutMap({ L: darkMode ? 0.13 : 0.955, C: 0.005, H: neutralHue }),
-  );
-  const surf2Hex = oklchToHex(
-    gamutMap({ L: darkMode ? 0.17 : 0.92, C: 0.006, H: neutralHue }),
-  );
-
-  const textHex = oklchToHex(
-    gamutMap({ L: darkMode ? 0.94 : 0.11, C: 0.003, H: neutralHue }),
-  );
-  const textMHex = oklchToHex(
-    gamutMap({ L: darkMode ? 0.58 : 0.44, C: 0.006, H: neutralHue }),
-  );
-  const borderHex = oklchToHex(
-    gamutMap({ L: darkMode ? 0.26 : 0.83, C: 0.005, H: neutralHue }),
-  );
-
-  const { secondary: secondaryHue, accent: accentHue } =
-    HARMONY_MODES[harmonyKey].getHues(seedHue);
-  const [cs0, cs1, cs2] = [1, 0.8, 0.7];
-
-  const primaryChroma = Math.min(seedChroma * cs0 * 1.05, 0.38);
-
-  const secondaryChroma = Math.min(
-    seedChroma * cs1,
-    Math.max(FIGMA_MEDIAN_CHROMA * 2.2, seedChroma * 0.65),
-  );
-
-  const accentChroma = Math.min(
-    seedChroma * cs2 * 1.1,
-    Math.max(FIGMA_MEDIAN_CHROMA * 2.8, seedChroma * 0.8),
-  );
-
-  const lightnessBudget = FIGMA_LIGHTNESS_SPREAD;
-
-  const primaryL = nudgeLightnessForContrast(
-    seedHue,
-    primaryChroma,
-    bgHex,
-    seed.L,
-  );
-
-  const secondaryTargetL = darkMode
-    ? Math.min(seed.L + lightnessBudget * 0.4, 0.88)
-    : Math.max(seed.L - lightnessBudget * 0.4, 0.12);
-  const secondaryL = nudgeLightnessForContrast(
-    secondaryHue,
-    secondaryChroma,
-    bgHex,
-    secondaryTargetL,
-  );
-
-  const accentTargetL = darkMode
-    ? Math.min(seed.L + lightnessBudget * 0.7, 0.92)
-    : Math.max(seed.L - lightnessBudget * 0.7, 0.08);
-  const accentL = nudgeLightnessForContrast(
-    accentHue,
-    accentChroma,
-    bgHex,
-    accentTargetL,
-  );
-
-  const primaryHex = oklchToHex(
-    gamutMap({ L: primaryL, C: primaryChroma, H: seedHue }),
-  );
-  const primaryFgHex =
-    contrastRatio(hexToRgb(primaryHex), hexToRgb("#000000")) >=
-    contrastRatio(hexToRgb(primaryHex), hexToRgb("#FFFFFF"))
-      ? "#000000"
-      : "#FFFFFF";
-  const secondaryHex = oklchToHex(
-    gamutMap({ L: secondaryL, C: secondaryChroma, H: secondaryHue }),
-  );
-  const accentHex = oklchToHex(
-    gamutMap({ L: accentL, C: accentChroma, H: accentHue }),
-  );
-
-  // Near-neutral anchor (internal — no new palette key)
-  const neutralAnchorChroma = Math.min(
-    seedChroma * 0.12,
-    FIGMA_MEDIAN_CHROMA * 1.3,
-  );
-  const neutralAnchorL = darkMode ? 0.35 : 0.65;
-
-  const successL = nudgeLightnessForContrast(
-    145,
-    0.2,
-    bgHex,
-    darkMode ? 0.75 : 0.35,
-    4.5,
-  );
-  const warningL = nudgeLightnessForContrast(
-    75,
-    0.22,
-    bgHex,
-    darkMode ? 0.82 : 0.5,
-    4.5,
-  );
-  const errorL = nudgeLightnessForContrast(
-    25,
-    0.26,
-    bgHex,
-    darkMode ? 0.72 : 0.4,
-    4.5,
-  );
-  const infoL = nudgeLightnessForContrast(
-    240,
-    0.2,
-    bgHex,
-    darkMode ? 0.72 : 0.4,
-    4.5,
-  );
-
-  const successHex = oklchToHex(gamutMap({ L: successL, C: 0.2, H: 145 }));
-  const warningHex = oklchToHex(gamutMap({ L: warningL, C: 0.22, H: 75 }));
-  const errorHex = oklchToHex(gamutMap({ L: errorL, C: 0.26, H: 25 }));
-  const infoHex = oklchToHex(gamutMap({ L: infoL, C: 0.2, H: 240 }));
-
-  const base: Palette = {
-    bg: bgHex,
-    surface: surfHex,
-    surfaceElevated: surf2Hex,
-    text: textHex,
-    textMuted: textMHex,
-    border: borderHex,
-    primary: primaryHex,
-    primaryFg: primaryFgHex,
-    secondary: secondaryHex,
-    accent: accentHex,
-    success: successHex,
-    successBg: oklchToHex(
-      gamutMap({ L: darkMode ? 0.15 : 0.94, C: 0.04, H: 145 }),
-    ),
-    warning: warningHex,
-    warningBg: oklchToHex(
-      gamutMap({ L: darkMode ? 0.15 : 0.95, C: 0.04, H: 75 }),
-    ),
-    error: errorHex,
-    errorBg: oklchToHex(
-      gamutMap({ L: darkMode ? 0.15 : 0.95, C: 0.05, H: 25 }),
-    ),
-    info: infoHex,
-    infoBg: oklchToHex(
-      gamutMap({ L: darkMode ? 0.15 : 0.95, C: 0.04, H: 240 }),
-    ),
-  };
-
-  (Object.keys(lockedColors) as Role[]).forEach((k) => {
-    if (lockedColors[k] && base[k] !== undefined) base[k] = lockedColors[k];
-  });
-
-  if (!lockedColors.primaryFg)
-    base.primaryFg =
-      contrastRatio(hexToRgb(base.primary), hexToRgb("#000000")) >=
-      contrastRatio(hexToRgb(base.primary), hexToRgb("#FFFFFF"))
-        ? "#000000"
-        : "#FFFFFF";
-  return base;
+  const locks: Record<string,string> = {};
+  for (const [key,value] of Object.entries(lockedColors)) { if (value) locks[key]=normalizeHex(value); }
+  return checkedPalette(quality.derivePalette(normalizeHex(seedHex), darkMode, harmonyKey, locks, variation));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -620,16 +426,14 @@ export function scorePalette(palette: Palette) {
 
   let total = 0,
     wSum = 0;
-  const pairData: Record<string, { cr: number; apca: number; score: number }> =
+  const pairData: Record<string, { cr: number; score: number }> =
     {};
   for (const p of pairs) {
     const fg = hexToRgb(palette[p.fg]),
       bg = hexToRgb(palette[p.bg]);
     const cr = contrastRatio(fg, bg);
-    const ap = apcaContrast(fg, bg);
     let s = cr >= 7 ? 1.0 : cr >= 4.5 ? 0.78 : cr >= 3 ? 0.42 : 0.12;
-    if (Math.abs(ap) >= 75) s = Math.min(1.0, s + 0.08);
-    pairData[p.name] = { cr, apca: ap, score: s };
+    pairData[p.name] = { cr, score: s };
     total += s * p.w;
     wSum += p.w;
   }
@@ -726,124 +530,29 @@ function jitter(value: number, amount = 0.04, min = 0, max = 1) {
   return Math.max(min, Math.min(max, value + (Math.random() - 0.5) * amount));
 }
 
-export function deriveVisualPalette(
-  seedHex: string,
-  harmonyKey: Harmony = "complementary",
-  paletteMode: Mood = "visual",
-  random: () => number = Math.random,
-) {
-  const jitter = (value: number, amount = 0.04, min = 0, max = 1) =>
-    clamp(value + (random() - 0.5) * amount, min, max);
-  const { L, C, H } = rgbToOKLCH(hexToRgb(seedHex));
+export function deriveVisualPalette(seedHex: string, harmonyKey: Harmony = "complementary", paletteMode: Mood = "visual", random: () => number = Math.random) {
+  if (!HARMONY_MODES[harmonyKey]) throw new Error("Unknown harmony mode.");
+  return quality.deriveVisualPalette(normalizeHex(seedHex), harmonyKey, paletteMode, String(random()));
+}
 
-  const harmony = HARMONY_MODES[harmonyKey] || HARMONY_MODES.complementary;
-  const { secondary: H2, accent: H3 } = harmony.getHues(H);
-
-  // Softened harmony angles — break rigid geometry
-  const H2soft = (H2 + (random() - 0.5) * 60 + 360) % 360;
-  const H3soft = (H3 + (random() - 0.5) * 50 + 360) % 360;
-
-  // Adaptive chroma cap — yellow-green stays clean, blue-purple gets headroom
-  const chromaCap =
-    H >= 60 && H <= 110 ? 0.22 : H >= 240 && H <= 280 ? 0.32 : 0.28;
-
-  // Temperature-skewed neutrals — warm seed → cool slate, cool seed → warm amber
-  const isWarmSeed = (H >= 0 && H <= 100) || H >= 300;
-  const neutralH = isWarmSeed ? 250 : 70;
-
-  const profiles = {
-    visual: [
-      {
-        L: jitter(L, 0.06),
-        C: jitter(C, 0.03, 0, chromaCap),
-        H: (H + (random() - 0.5) * 12 + 360) % 360,
-      },
-      {
-        L: jitter(Math.min(L + 0.15, 0.85), 0.1),
-        C: jitter(C * 0.65, 0.04, 0, chromaCap),
-        H: H2soft,
-      },
-      {
-        L: jitter(Math.max(L - 0.15, 0.15), 0.1),
-        C: jitter(C * 0.5, 0.04, 0, chromaCap),
-        H,
-      },
-      { L: jitter(L, 0.1), C: jitter(C * 0.8, 0.04, 0, chromaCap), H: H3soft },
-      {
-        L: jitter(Math.min(L + 0.28, 0.93), 0.1),
-        C: jitter(C * 0.18, 0.04, 0, chromaCap),
-        H: H2soft,
-      },
-    ],
-    poster: [
-      {
-        L: jitter(0.52, 0.1),
-        C: jitter(Math.min(C * 1.1, chromaCap), 0.04, 0, chromaCap),
-        H,
-      },
-      {
-        L: jitter(0.6, 0.1),
-        C: jitter(Math.min(C * 1.1, chromaCap), 0.04, 0, chromaCap),
-        H: H2soft,
-      },
-      {
-        L: jitter(0.42, 0.1),
-        C: jitter(Math.min(C * 1.1, chromaCap), 0.04, 0, chromaCap),
-        H: H3soft,
-      },
-      { L: jitter(0.15, 0.06), C: jitter(0.01, 0.02, 0, 0.05), H },
-      { L: jitter(0.95, 0.06), C: jitter(0.006, 0.02, 0, 0.03), H },
-    ],
-    luxury: [
-      { L: jitter(0.12, 0.05), C: jitter(0.015, 0.03, 0, 0.06), H: neutralH },
-      {
-        L: jitter(0.28, 0.05),
-        C: jitter(Math.min(C * 0.5, 0.14), 0.03, 0, chromaCap),
-        H,
-      },
-      {
-        L: jitter(0.48, 0.05),
-        C: jitter(Math.min(C * 0.35, 0.1), 0.03, 0, chromaCap),
-        H,
-      },
-      { L: jitter(0.72, 0.05), C: jitter(0.018, 0.03, 0, 0.06), H: neutralH },
-      { L: jitter(0.88, 0.05), C: jitter(0.012, 0.03, 0, 0.05), H: neutralH },
-    ],
-    minimal: [
-      { L: jitter(0.97, 0.05), C: jitter(0.004, 0.02, 0, 0.03), H: neutralH },
-      { L: jitter(0.88, 0.05), C: jitter(0.007, 0.02, 0, 0.04), H: neutralH },
-      { L: jitter(0.68, 0.05), C: jitter(0.01, 0.02, 0, 0.05), H: neutralH },
-      { L: jitter(0.32, 0.05), C: jitter(0.012, 0.02, 0, 0.05), H: neutralH },
-      {
-        L: jitter(L, 0.05),
-        C: jitter(Math.min(C * 0.7, 0.2), 0.03, 0, chromaCap),
-        H,
-      },
-    ],
-    cyberpunk: [
-      { L: jitter(0.07, 0.04), C: jitter(0.008, 0.02, 0, 0.04), H },
-      { L: jitter(0.11, 0.04), C: jitter(0.012, 0.02, 0, 0.05), H },
-      {
-        L: jitter(0.72, 0.05),
-        C: jitter(Math.min(C * 1.4, chromaCap), 0.03, 0, chromaCap),
-        H,
-      },
-      {
-        L: jitter(0.68, 0.05),
-        C: jitter(Math.min(C * 1.3, chromaCap), 0.03, 0, chromaCap),
-        H: H2soft,
-      },
-      {
-        L: jitter(0.65, 0.05),
-        C: jitter(Math.min(C * 1.2, chromaCap), 0.03, 0, chromaCap),
-        H: H3soft,
-      },
-    ],
-  };
-
-  const swatchDefs = profiles[paletteMode] || profiles.visual;
-  return swatchDefs.map((p, i) => {
-    const hex = oklchToHex(gamutMap({ L: p.L, C: p.C, H: p.H }));
-    return { index: i, hex, name: simpleColorName(hex) };
-  });
+export function checkedPalette(value: Record<string,string>): Palette {
+  if (!/^#[0-9a-f]{6}$/i.test(value.bg || "")) throw new Error("Invalid palette role: bg");
+  if (!/^#[0-9a-f]{6}$/i.test(value.surface || "")) throw new Error("Invalid palette role: surface");
+  if (!/^#[0-9a-f]{6}$/i.test(value.surfaceElevated || "")) throw new Error("Invalid palette role: surfaceElevated");
+  if (!/^#[0-9a-f]{6}$/i.test(value.text || "")) throw new Error("Invalid palette role: text");
+  if (!/^#[0-9a-f]{6}$/i.test(value.textMuted || "")) throw new Error("Invalid palette role: textMuted");
+  if (!/^#[0-9a-f]{6}$/i.test(value.border || "")) throw new Error("Invalid palette role: border");
+  if (!/^#[0-9a-f]{6}$/i.test(value.primary || "")) throw new Error("Invalid palette role: primary");
+  if (!/^#[0-9a-f]{6}$/i.test(value.primaryFg || "")) throw new Error("Invalid palette role: primaryFg");
+  if (!/^#[0-9a-f]{6}$/i.test(value.secondary || "")) throw new Error("Invalid palette role: secondary");
+  if (!/^#[0-9a-f]{6}$/i.test(value.accent || "")) throw new Error("Invalid palette role: accent");
+  if (!/^#[0-9a-f]{6}$/i.test(value.success || "")) throw new Error("Invalid palette role: success");
+  if (!/^#[0-9a-f]{6}$/i.test(value.successBg || "")) throw new Error("Invalid palette role: successBg");
+  if (!/^#[0-9a-f]{6}$/i.test(value.warning || "")) throw new Error("Invalid palette role: warning");
+  if (!/^#[0-9a-f]{6}$/i.test(value.warningBg || "")) throw new Error("Invalid palette role: warningBg");
+  if (!/^#[0-9a-f]{6}$/i.test(value.error || "")) throw new Error("Invalid palette role: error");
+  if (!/^#[0-9a-f]{6}$/i.test(value.errorBg || "")) throw new Error("Invalid palette role: errorBg");
+  if (!/^#[0-9a-f]{6}$/i.test(value.info || "")) throw new Error("Invalid palette role: info");
+  if (!/^#[0-9a-f]{6}$/i.test(value.infoBg || "")) throw new Error("Invalid palette role: infoBg");
+  return { bg: value.bg, surface: value.surface, surfaceElevated: value.surfaceElevated, text: value.text, textMuted: value.textMuted, border: value.border, primary: value.primary, primaryFg: value.primaryFg, secondary: value.secondary, accent: value.accent, success: value.success, successBg: value.successBg, warning: value.warning, warningBg: value.warningBg, error: value.error, errorBg: value.errorBg, info: value.info, infoBg: value.infoBg };
 }

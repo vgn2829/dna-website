@@ -1,0 +1,14 @@
+[
+  {
+    "serverTiming": "preprocess;dur=11.063, inference;dur=2183.193, postprocess;dur=3.989",
+    "peakSampledChildRssBytes": "2042249216"
+  },
+  {
+    "serverTiming": "preprocess;dur=12.103, inference;dur=1826.727, postprocess;dur=3.175",
+    "peakSampledChildRssBytes": "1846378496"
+  },
+  {
+    "serverTiming": "preprocess;dur=10.589, inference;dur=1767.698, postprocess;dur=3.072",
+    "peakSampledChildRssBytes": "1846804480"
+  }
+]

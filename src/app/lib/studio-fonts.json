@@ -1,0 +1,150 @@
+[
+  {
+    "id": "inter",
+    "family": "Inter",
+    "revision": "f60b457bc90062c17f9bf80a882da25a86f56200",
+    "source": "https://raw.githubusercontent.com/google/fonts/f60b457bc90062c17f9bf80a882da25a86f56200/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf",
+    "sourceSha256": "29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031",
+    "sha256": "943ede38e966254762cd6940be0b127021984df9abcd9ce285f83ee58e3a0ad8",
+    "url": "/fonts/studio/inter.woff2",
+    "license": "OFL-1.1",
+    "licenseUrl": "/fonts/studio/inter-OFL.txt",
+    "weights": [
+      100.0,
+      900.0
+    ],
+    "axes": {
+      "opsz": [
+        14.0,
+        32.0
+      ],
+      "wght": [
+        100.0,
+        900.0
+      ]
+    },
+    "xHeightEm": 0.5459,
+    "capHeightEm": 0.7275,
+    "scripts": [
+      "Latin"
+    ]
+  },
+  {
+    "id": "sourceserif4",
+    "family": "Source Serif 4",
+    "revision": "f60b457bc90062c17f9bf80a882da25a86f56200",
+    "source": "https://raw.githubusercontent.com/google/fonts/f60b457bc90062c17f9bf80a882da25a86f56200/ofl/sourceserif4/SourceSerif4%5Bopsz%2Cwght%5D.ttf",
+    "sourceSha256": "97b2d4da6e3cb494b5a1e66ae176914d852ccabef49e0c02c0df25f3e39aca0b",
+    "sha256": "719e33266a0f194ffb8085c39598904af5f8127ca020ea267c9055fb2e3aa6bf",
+    "url": "/fonts/studio/sourceserif4.woff2",
+    "license": "OFL-1.1",
+    "licenseUrl": "/fonts/studio/sourceserif4-OFL.txt",
+    "weights": [
+      200.0,
+      900.0
+    ],
+    "axes": {
+      "wght": [
+        200.0,
+        900.0
+      ],
+      "opsz": [
+        8.0,
+        60.0
+      ]
+    },
+    "xHeightEm": 0.475,
+    "capHeightEm": 0.67,
+    "scripts": [
+      "Latin"
+    ]
+  },
+  {
+    "id": "jetbrainsmono",
+    "family": "JetBrains Mono",
+    "revision": "f60b457bc90062c17f9bf80a882da25a86f56200",
+    "source": "https://raw.githubusercontent.com/google/fonts/f60b457bc90062c17f9bf80a882da25a86f56200/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf",
+    "sourceSha256": "48715a42ec242c21e9f02692891e147d022299a52e48d5e413e1a942193ffeda",
+    "sha256": "7e83ca98dc11d76b93edbea932fcf8acbff36028e443d53f9fdd727609f2d0c6",
+    "url": "/fonts/studio/jetbrainsmono.woff2",
+    "license": "OFL-1.1",
+    "licenseUrl": "/fonts/studio/jetbrainsmono-OFL.txt",
+    "weights": [
+      100.0,
+      800.0
+    ],
+    "axes": {
+      "wght": [
+        100.0,
+        800.0
+      ]
+    },
+    "xHeightEm": 0.55,
+    "capHeightEm": 0.73,
+    "scripts": [
+      "Latin"
+    ]
+  },
+  {
+    "id": "notosansdevanagari",
+    "family": "Noto Sans Devanagari",
+    "revision": "f60b457bc90062c17f9bf80a882da25a86f56200",
+    "source": "https://raw.githubusercontent.com/google/fonts/f60b457bc90062c17f9bf80a882da25a86f56200/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf",
+    "sourceSha256": "14ec4af41f27482216d1c2229f417ff9b1425e1babb014e57d1d40d03229853e",
+    "sha256": "08bfae320bf09f87b39457c45374dc3fdc79443942492991132e42f993de7a26",
+    "url": "/fonts/studio/notosansdevanagari.woff2",
+    "license": "OFL-1.1",
+    "licenseUrl": "/fonts/studio/notosansdevanagari-OFL.txt",
+    "weights": [
+      100.0,
+      900.0
+    ],
+    "axes": {
+      "wght": [
+        100.0,
+        900.0
+      ],
+      "wdth": [
+        62.5,
+        100.0
+      ]
+    },
+    "xHeightEm": 0.536,
+    "capHeightEm": 0.622,
+    "scripts": [
+      "Latin",
+      "Devanagari"
+    ]
+  },
+  {
+    "id": "notoserifdevanagari",
+    "family": "Noto Serif Devanagari",
+    "revision": "f60b457bc90062c17f9bf80a882da25a86f56200",
+    "source": "https://raw.githubusercontent.com/google/fonts/f60b457bc90062c17f9bf80a882da25a86f56200/ofl/notoserifdevanagari/NotoSerifDevanagari%5Bwdth%2Cwght%5D.ttf",
+    "sourceSha256": "1191e07bfeb062d80e252eb85b0eafdfbda1e350707a2a60628668e8f677dbbb",
+    "sha256": "7d69e403e309795fcb96e5197e9aea395b66d4868340bb0ec18f5914a9ae8463",
+    "url": "/fonts/studio/notoserifdevanagari.woff2",
+    "license": "OFL-1.1",
+    "licenseUrl": "/fonts/studio/notoserifdevanagari-OFL.txt",
+    "weights": [
+      100.0,
+      900.0
+    ],
+    "axes": {
+      "wght": [
+        100.0,
+        900.0
+      ],
+      "wdth": [
+        62.5,
+        100.0
+      ]
+    },
+    "xHeightEm": 0.623,
+    "capHeightEm": 0.715,
+    "scripts": [
+      "Latin",
+      "Devanagari"
+    ]
+  }
+]

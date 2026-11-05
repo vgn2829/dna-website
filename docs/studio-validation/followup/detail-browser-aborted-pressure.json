@@ -1,0 +1,7 @@
+{
+  "firstUiJobMs": 23521,
+  "checks": [
+    "real pinned remote model download, integrity check, WebGPU inference and PNG export"
+  ],
+  "failure": "page.evaluate: Target page, context or browser has been closed\n    at /Users/venugopal/Downloads/dna_website/scripts/studio-detail-check.mjs:17:27"
+}

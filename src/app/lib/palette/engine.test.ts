@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  apcaContrast,
   contrastRatio,
   deltaOK,
   derivePalette,
@@ -24,16 +23,10 @@ describe("independent colour reference fixtures", () => {
   ] as const)("WCAG %s / %s", (a, b, expected) =>
     expect(contrastRatio(rgb(a), rgb(b))).toBeCloseTo(expected, 10),
   );
-  // apca-w3 upstream SHA256 and fixture-generation method: references.md.
-  it.each([
-    ["#000000", "#FFFFFF", 106.04067321268862],
-    ["#FFFFFF", "#000000", -107.88473318309848],
-    ["#777777", "#FFFFFF", 71.11110332561125],
-    ["#0C0C0C", "#0E0E0E", 0],
-    ["#C8C8C8", "#1E1E1E", -71.45797894427486],
-  ] as const)("APCA %s / %s", (a, b, expected) =>
-    expect(apcaContrast(rgb(a), rgb(b))).toBeCloseTo(expected, 9),
-  );
+  it("does not attach APCA values to palette reports", () => {
+    const report = scorePalette(derivePalette("#6366F1",false,"complementary"));
+    expect(Object.values(report.pairs).every(pair => !("apca" in pair))).toBe(true);
+  });
   it("uses Euclidean OKLab distance with native units, not CIEDE2000", () => {
     expect(deltaOK({ L: 0, a: 0, b: 0 }, { L: 1, a: 0, b: 0 })).toBe(1);
     expect(

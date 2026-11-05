@@ -15,6 +15,7 @@ vi.mock("onnxruntime-web/wasm", () => ({
 }));
 vi.mock("./model-cache", () => ({ fetchModel: fixture.fetch }));
 vi.mock("./preprocess", () => ({
+  modelInputDimensions: () => ({width:1,height:1}),
   toInputTensor: () => new Float32Array(3),
   toFullResMask: () => new Uint8ClampedArray([255]),
 }));
@@ -23,7 +24,7 @@ afterEach(() => {
   vi.resetAllMocks();
   vi.resetModules();
 });
-it("shares in-flight model initialization and disposes tensors for every request", async () => {
+it("rejects overlapping inference, reuses the warm session, and disposes tensors", async () => {
   const context = { postMessage: vi.fn(), onmessage: null as any };
   vi.stubGlobal("self", context);
   let loaded!: (v: ArrayBuffer) => void;
@@ -52,6 +53,7 @@ it("shares in-flight model initialization and disposes tensors for every request
   expect(fixture.fetch).toHaveBeenCalledOnce();
   loaded(new ArrayBuffer(1));
   await Promise.all([a, b]);
+  await context.onmessage(message(3));
   expect(fixture.create).toHaveBeenCalledOnce();
   expect(fixture.run).toHaveBeenCalledTimes(2);
   expect(fixture.inputDispose).toHaveBeenCalledTimes(2);
@@ -60,5 +62,6 @@ it("shares in-flight model initialization and disposes tensors for every request
     context.postMessage.mock.calls
       .filter(([m]) => m.type === "result")
       .map(([m]) => m.id),
-  ).toEqual([1, 2]);
+  ).toEqual([1, 3]);
+  expect(context.postMessage.mock.calls.some(([m])=>m.type === "error" && m.id === 2 && m.message === "Processor busy")).toBe(true);
 });

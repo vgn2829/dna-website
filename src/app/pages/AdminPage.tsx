@@ -15,7 +15,7 @@ import { LibraryModerationTab } from '../components/admin/LibraryModerationTab';
 async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith('image/')) return file;
   try {
-    const result = await imageCompression(file, {
+    const result: Blob = await imageCompression(file, {
       maxSizeMB: 0.5,
       maxWidthOrHeight: 1920,
       useWebWorker: true,

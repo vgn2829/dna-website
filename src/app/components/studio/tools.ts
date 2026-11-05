@@ -12,7 +12,7 @@ export const TOOLS = [
     id: "font",
     label: "Font Pairing",
     description:
-      "Explore curated font pairings, preview text, and revisit recent choices.",
+      "Preview six licensed, self-hosted pairings in Latin and Devanagari; export typography CSS.",
     comp: lazy(() =>
       import("./FontPairing").then((m) => ({ default: m.FontPairing })),
     ),
@@ -48,7 +48,7 @@ export const TOOLS = [
     id: "halftone",
     label: "Halftone",
     description:
-      "Create line, dot, and square patterns. Working output is capped at a 700px long edge.",
+      "Create calibrated line, dot and square patterns with independent source-resolution PNG/SVG exports.",
     comp: lazy(() =>
       import("../HalftoneStudio").then((m) => ({ default: m.HalftoneStudio })),
     ),
@@ -66,7 +66,7 @@ export const TOOLS = [
     id: "bg",
     label: "Background Remover",
     description:
-      "Remove backgrounds with on-device models, refine the mask, and export PNG.",
+      "Remove backgrounds in your browser, refine the mask and export PNG. An optional local Python helper requires explicit selection.",
     comp: lazy(() => import("../background-removal/BackgroundRemover")),
   },
 ];

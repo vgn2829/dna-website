@@ -1,8 +1,10 @@
+import {loadEditor,persistEditor,serializeEditor} from "../lib/palette/persistence";
 import { studioDrafts } from "./studio/drafts";
 /**
  * PaletteStudio
  * Self-contained palette generator.
- * No external dependencies required (uses only React hooks).
+ * Colour generation uses the verified Color.js-backed domain; the existing
+ * editor retains both themes, exact locks, comparison and mood exploration.
  *
  * Tabler Icons (outline) loaded dynamically by PalettePage on mount.
  */
@@ -109,22 +111,25 @@ const GROUP_LABELS = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function PaletteStudio() {
-  const [editor, dispatch] = useReducer(
-    paletteReducer,
-    undefined,
-    () =>
-      (studioDrafts.get("palette.editor") as ReturnType<typeof createEditor>) ||
-      createEditor(),
-  );
+  const [initial] = useState(()=>loadEditor(studioDrafts.get("palette.editor") as ReturnType<typeof createEditor> | undefined));
+  const [editor,dispatch]=useReducer(paletteReducer,initial.editor);
+  const [variation,setVariation]=useState(editor.variation);
   useEffect(() => {
     studioDrafts.set("palette.editor", editor);
+    persistEditor(editor);
   }, [editor]);
+  useEffect(() => {
+    if (!initial.shared) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("palette");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  }, [initial.shared]);
   const [seed, setSeed] = useState(editor.seed),
     [harmony, setHarmony] = useState<Harmony>(editor.harmony);
   const [theme, setTheme] = useState<Theme>("light"),
     [tab, setTab] = useState("palette");
-  const [error, setError] = useState<string | null>(null),
-    [message, setMessage] = useState("");
+  const [error, setError] = useState<string | null>(initial.error || null),
+    [message, setMessage] = useState(initial.shared ? "Shared palette recipe loaded." : "");
   const [compare, setCompare] = useState(false),
     [visualMode, setVisualMode] = useState<Mood>("visual");
   const [visualPalette, setVisualPalette] = useState(() =>
@@ -135,12 +140,13 @@ export default function PaletteStudio() {
     cbData = useMemo(() => analyzeCB(palette), [palette]);
   const symbolism = getSeedSymbolism(editor.seed);
   const dirty =
-    seed.toUpperCase() !== editor.seed || harmony !== editor.harmony;
+    seed.toUpperCase() !== editor.seed || harmony !== editor.harmony || variation !== editor.variation;
   const failed = Object.values(fitness.pairs).filter((p) => p.cr < 4.5).length;
   const generate = () => {
     try {
       const valid = normalizeHex(seed);
-      dispatch({ type: "generate", seed: valid, harmony });
+      if(variation.length>128)throw new Error("Variation seed exceeds 128 characters");
+      dispatch({ type: "generate", seed: valid, harmony, variation });
       setSeed(valid);
       setVisualPalette(deriveVisualPalette(valid, harmony, visualMode));
       setError(null);
@@ -202,6 +208,7 @@ export default function PaletteStudio() {
             ))}
           </select>
         </label>
+        <label className="studio-field">Variation seed<input aria-label="Palette variation seed" className="input-base" maxLength={128} value={variation} onChange={e=>setVariation(e.target.value)}/></label>
         <button className="btn-primary" onClick={generate}>
           Generate
         </button>
@@ -275,6 +282,7 @@ export default function PaletteStudio() {
           Download CSS
         </button>
       </div>
+      <button className="btn-secondary" onClick={async()=>{try{normalizeHex(seed);if(dirty)throw new Error("Generate the changed settings before sharing");const url=new URL(window.location.href);url.searchParams.set("tab","palette");url.searchParams.set("palette",serializeEditor(editor));await copy(url.toString());}catch(error){setError(error instanceof Error?error.message:"Sharing failed");}}}>Copy palette link</button>
       <div className="segmented" role="group" aria-label="Palette views">
         {["palette", "accessibility", "colorblind", "mood"].map((t) => (
           <button
@@ -394,9 +402,7 @@ export default function PaletteStudio() {
         <>
           <p className="studio-help">
             Normal AA ≥4.5:1; large AA ≥3:1 (24px regular or about 19px bold).
-            Results use unrounded ratios. APCA 0.0.98G is signed, informational,
-            and requires font-size/weight interpretation; it is separate from
-            WCAG 2 conformance.
+            Results use unrounded WCAG ratios. Inspect the criteria for each intended foreground/background usage.
           </p>
           <AccessibilityTab palette={palette} fitness={fitness} />
         </>
@@ -840,13 +846,6 @@ function AccessibilityTab({
         const fgHex = palette[keyMap[parts[0]]] || palette.text;
         const bgHex = palette[keyMap[parts[1]]] || palette.bg;
         const g = GRADE(data.cr);
-        const ap = Math.abs(data.apca);
-        const apColor =
-          ap >= 75
-            ? "var(--color-success)"
-            : ap >= 60
-              ? "#eab308"
-              : "var(--color-error)";
         return (
           <div
             key={name}
@@ -899,12 +898,7 @@ function AccessibilityTab({
                 >
                   {name}
                 </div>
-                <div style={{ fontSize: 10, color: "var(--color-ink-muted)" }}>
-                  APCA{" "}
-                  <span style={{ color: apColor, fontWeight: 700 }}>
-                    {data.apca.toFixed(1)} Lc
-                  </span>
-                </div>
+
               </div>
               <div
                 style={{

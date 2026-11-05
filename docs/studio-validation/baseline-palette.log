@@ -1,0 +1,181 @@
+TAP version 13
+# ── HARMONY CORRECTNESS ───────────────────────────────────
+#   ✗  [complementary] secondary hue ±5° of +180°
+#        → actual=33.35°  expected≈97.12°  diff=63.77°
+#   ✗  [complementary] accent hue ±5° of +150°
+#        → actual=163.02°  expected≈67.12°  diff=95.91°
+#   ✗  [analogous] secondary hue ±5° of +30°
+#        → actual=66.98°  expected≈307.12°  diff=119.86°
+#   ✗  [analogous] accent hue ±5° of +330°
+#        → actual=130.90°  expected≈247.12°  diff=116.22°
+#   ✗  [triadic] secondary hue ±5° of +120°
+#        → actual=330.97°  expected≈37.12°  diff=66.15°
+#   ✗  [triadic] accent hue ±5° of +240°
+#        → actual=36.71°  expected≈157.12°  diff=120.40°
+#   ✗  [splitComplementary] secondary hue ±5° of +150°
+#        → actual=60.95°  expected≈67.12°  diff=6.16°
+#   ✗  [splitComplementary] accent hue ±5° of +210°
+#        → actual=132.76°  expected≈127.12°  diff=5.64°
+#   ✗  [tetradic] secondary hue ±5° of +90°
+#        → actual=0.30°  expected≈7.12°  diff=6.82°
+#   ✗  [tetradic] accent hue ±5° of +270°
+#        → actual=100.51°  expected≈187.12°  diff=86.61°
+# ── CONTRAST CORRECTNESS ──────────────────────────────────
+#   ✓  [complementary/light] text/bg ≥4.5 (WCAG AA)
+#   ✓  [complementary/light] primary/bg ≥4.5 (WCAG AA)
+#   ✗  [complementary/light] primaryFg/primary ≥4.5 (WCAG AA)
+#        → got 1.79
+#   ✓  [complementary/light] textMuted/bg ≥3.0 (AA Large)
+#   ✓  [complementary/dark] text/bg ≥4.5 (WCAG AA)
+#   ✓  [complementary/dark] primary/bg ≥4.5 (WCAG AA)
+#   ✗  [complementary/dark] primaryFg/primary ≥4.5 (WCAG AA)
+#        → got 4.11
+#   ✓  [complementary/dark] textMuted/bg ≥3.0 (AA Large)
+#   ✓  [analogous/light] text/bg ≥4.5 (WCAG AA)
+#   ✓  [analogous/light] primary/bg ≥4.5 (WCAG AA)
+#   ✗  [analogous/light] primaryFg/primary ≥4.5 (WCAG AA)
+#        → got 1.79
+#   ✓  [analogous/light] textMuted/bg ≥3.0 (AA Large)
+#   ✓  [analogous/dark] text/bg ≥4.5 (WCAG AA)
+#   ✓  [analogous/dark] primary/bg ≥4.5 (WCAG AA)
+#   ✗  [analogous/dark] primaryFg/primary ≥4.5 (WCAG AA)
+#        → got 4.11
+#   ✓  [analogous/dark] textMuted/bg ≥3.0 (AA Large)
+#   ✓  [triadic/light] text/bg ≥4.5 (WCAG AA)
+#   ✓  [triadic/light] primary/bg ≥4.5 (WCAG AA)
+#   ✗  [triadic/light] primaryFg/primary ≥4.5 (WCAG AA)
+#        → got 1.79
+#   ✓  [triadic/light] textMuted/bg ≥3.0 (AA Large)
+#   ✓  [triadic/dark] text/bg ≥4.5 (WCAG AA)
+#   ✓  [triadic/dark] primary/bg ≥4.5 (WCAG AA)
+#   ✗  [triadic/dark] primaryFg/primary ≥4.5 (WCAG AA)
+#        → got 4.11
+#   ✓  [triadic/dark] textMuted/bg ≥3.0 (AA Large)
+#   ✓  [splitComplementary/light] text/bg ≥4.5 (WCAG AA)
+#   ✓  [splitComplementary/light] primary/bg ≥4.5 (WCAG AA)
+#   ✗  [splitComplementary/light] primaryFg/primary ≥4.5 (WCAG AA)
+#        → got 1.79
+#   ✓  [splitComplementary/light] textMuted/bg ≥3.0 (AA Large)
+#   ✓  [splitComplementary/dark] text/bg ≥4.5 (WCAG AA)
+#   ✓  [splitComplementary/dark] primary/bg ≥4.5 (WCAG AA)
+#   ✗  [splitComplementary/dark] primaryFg/primary ≥4.5 (WCAG AA)
+#        → got 4.11
+#   ✓  [splitComplementary/dark] textMuted/bg ≥3.0 (AA Large)
+#   ✓  [tetradic/light] text/bg ≥4.5 (WCAG AA)
+#   ✓  [tetradic/light] primary/bg ≥4.5 (WCAG AA)
+#   ✗  [tetradic/light] primaryFg/primary ≥4.5 (WCAG AA)
+#        → got 1.87
+#   ✓  [tetradic/light] textMuted/bg ≥3.0 (AA Large)
+#   ✓  [tetradic/dark] text/bg ≥4.5 (WCAG AA)
+#   ✓  [tetradic/dark] primary/bg ≥4.5 (WCAG AA)
+#   ✗  [tetradic/dark] primaryFg/primary ≥4.5 (WCAG AA)
+#        → got 4.11
+#   ✓  [tetradic/dark] textMuted/bg ≥3.0 (AA Large)
+# ── GAMUT CORRECTNESS  (5 seeds × 5 modes × light+dark) ───
+#   ✓  [\#6366F1/complementary/light] all 18 slots valid + in-gamut
+#   ✓  [\#6366F1/complementary/dark] all 18 slots valid + in-gamut
+#   ✓  [\#6366F1/analogous/light] all 18 slots valid + in-gamut
+#   ✓  [\#6366F1/analogous/dark] all 18 slots valid + in-gamut
+#   ✓  [\#6366F1/triadic/light] all 18 slots valid + in-gamut
+#   ✓  [\#6366F1/triadic/dark] all 18 slots valid + in-gamut
+#   ✓  [\#6366F1/splitComplementary/light] all 18 slots valid + in-gamut
+#   ✓  [\#6366F1/splitComplementary/dark] all 18 slots valid + in-gamut
+#   ✓  [\#6366F1/tetradic/light] all 18 slots valid + in-gamut
+#   ✓  [\#6366F1/tetradic/dark] all 18 slots valid + in-gamut
+#   ✓  [\#FF006E/complementary/light] all 18 slots valid + in-gamut
+#   ✓  [\#FF006E/complementary/dark] all 18 slots valid + in-gamut
+#   ✓  [\#FF006E/analogous/light] all 18 slots valid + in-gamut
+#   ✓  [\#FF006E/analogous/dark] all 18 slots valid + in-gamut
+#   ✓  [\#FF006E/triadic/light] all 18 slots valid + in-gamut
+#   ✓  [\#FF006E/triadic/dark] all 18 slots valid + in-gamut
+#   ✓  [\#FF006E/splitComplementary/light] all 18 slots valid + in-gamut
+#   ✓  [\#FF006E/splitComplementary/dark] all 18 slots valid + in-gamut
+#   ✓  [\#FF006E/tetradic/light] all 18 slots valid + in-gamut
+#   ✓  [\#FF006E/tetradic/dark] all 18 slots valid + in-gamut
+#   ✓  [\#00C853/complementary/light] all 18 slots valid + in-gamut
+#   ✓  [\#00C853/complementary/dark] all 18 slots valid + in-gamut
+#   ✓  [\#00C853/analogous/light] all 18 slots valid + in-gamut
+#   ✓  [\#00C853/analogous/dark] all 18 slots valid + in-gamut
+#   ✓  [\#00C853/triadic/light] all 18 slots valid + in-gamut
+#   ✓  [\#00C853/triadic/dark] all 18 slots valid + in-gamut
+#   ✓  [\#00C853/splitComplementary/light] all 18 slots valid + in-gamut
+#   ✓  [\#00C853/splitComplementary/dark] all 18 slots valid + in-gamut
+#   ✓  [\#00C853/tetradic/light] all 18 slots valid + in-gamut
+#   ✓  [\#00C853/tetradic/dark] all 18 slots valid + in-gamut
+#   ✓  [\#FF6B00/complementary/light] all 18 slots valid + in-gamut
+#   ✓  [\#FF6B00/complementary/dark] all 18 slots valid + in-gamut
+#   ✓  [\#FF6B00/analogous/light] all 18 slots valid + in-gamut
+#   ✓  [\#FF6B00/analogous/dark] all 18 slots valid + in-gamut
+#   ✓  [\#FF6B00/triadic/light] all 18 slots valid + in-gamut
+#   ✓  [\#FF6B00/triadic/dark] all 18 slots valid + in-gamut
+#   ✓  [\#FF6B00/splitComplementary/light] all 18 slots valid + in-gamut
+#   ✓  [\#FF6B00/splitComplementary/dark] all 18 slots valid + in-gamut
+#   ✓  [\#FF6B00/tetradic/light] all 18 slots valid + in-gamut
+#   ✓  [\#FF6B00/tetradic/dark] all 18 slots valid + in-gamut
+#   ✓  [\#0EA5E9/complementary/light] all 18 slots valid + in-gamut
+#   ✓  [\#0EA5E9/complementary/dark] all 18 slots valid + in-gamut
+#   ✓  [\#0EA5E9/analogous/light] all 18 slots valid + in-gamut
+#   ✓  [\#0EA5E9/analogous/dark] all 18 slots valid + in-gamut
+#   ✓  [\#0EA5E9/triadic/light] all 18 slots valid + in-gamut
+#   ✓  [\#0EA5E9/triadic/dark] all 18 slots valid + in-gamut
+#   ✓  [\#0EA5E9/splitComplementary/light] all 18 slots valid + in-gamut
+#   ✓  [\#0EA5E9/splitComplementary/dark] all 18 slots valid + in-gamut
+#   ✓  [\#0EA5E9/tetradic/light] all 18 slots valid + in-gamut
+#   ✓  [\#0EA5E9/tetradic/dark] all 18 slots valid + in-gamut
+# ── LOCK CORRECTNESS ──────────────────────────────────────
+#   ✓  locked primary byte-identical after seed+mode change
+#   ✓  locked accent byte-identical after seed+mode change
+#   ✓  all non-locked slots changed after seed+darkMode+mode change
+# ── SCORE SANITY ──────────────────────────────────────────
+#   ✓  [complementary] score in [0,100]
+#   ✓  [complementary] dScore in [0,100]
+#   ✓  [analogous] score in [0,100]
+#   ✓  [analogous] dScore in [0,100]
+#   ✓  [triadic] score in [0,100]
+#   ✓  [triadic] dScore in [0,100]
+#   ✓  [splitComplementary] score in [0,100]
+#   ✓  [splitComplementary] dScore in [0,100]
+#   ✓  [tetradic] score in [0,100]
+#   ✓  [tetradic] dScore in [0,100]
+#   ✓  AA-compliant palette scores ≥70
+#   ✓  scorePalette returns pairs object with ≥6 entries
+# ── COLOR BLIND ANALYSIS ──────────────────────────────────
+#   ✓  analyzeCB returns protanopia
+#   ✓  analyzeCB returns deuteranopia
+#   ✓  analyzeCB returns tritanopia
+#   ✓  [protanopia] has textBgCR field
+#   ✓  [protanopia] has primaryBgCR field
+#   ✓  [protanopia] textBgCR numeric ≥1.0
+#   ✓  [protanopia] primaryBgCR numeric ≥1.0
+#   ✓  [deuteranopia] has textBgCR field
+#   ✓  [deuteranopia] has primaryBgCR field
+#   ✓  [deuteranopia] textBgCR numeric ≥1.0
+#   ✓  [deuteranopia] primaryBgCR numeric ≥1.0
+#   ✓  [tritanopia] has textBgCR field
+#   ✓  [tritanopia] has primaryBgCR field
+#   ✓  [tritanopia] textBgCR numeric ≥1.0
+#   ✓  [tritanopia] primaryBgCR numeric ≥1.0
+# ══════════════════════════════════════════════════════════
+#   110/130 tests passed  (20 FAILED)
+# ══════════════════════════════════════════════════════════
+# Subtest: tests/palette-engine.test.js
+not ok 1 - tests/palette-engine.test.js
+  ---
+  duration_ms: 329.624875
+  type: 'test'
+  location: '/Users/venugopal/Downloads/dna_website/tests/palette-engine.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 336.065709

@@ -1,0 +1,10 @@
+{
+  "baselineCount": 16,
+  "finalCount": 13,
+  "newDiagnostics": [],
+  "resolvedDiagnostics": [
+    "src/app/components/background-removal/bg-removal.worker.ts: error TS2322: Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.",
+    "src/app/pages/PalettePage.tsx: error TS2345: Argument of type '() => () => HTMLLinkElement' is not assignable to parameter of type 'EffectCallback'.",
+    "vite.config.ts: error TS7006: Parameter 'id' implicitly has an 'any' type."
+  ]
+}

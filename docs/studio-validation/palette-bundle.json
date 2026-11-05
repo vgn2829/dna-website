@@ -1,0 +1,194 @@
+{
+  "bundleBytes": 42878,
+  "apcaModules": [],
+  "colorModules": [
+    {
+      "path": "node_modules/colorjs.io/src/multiply-matrices.js",
+      "bytes": 153
+    },
+    {
+      "path": "node_modules/colorjs.io/src/util.js",
+      "bytes": 1049
+    },
+    {
+      "path": "node_modules/colorjs.io/src/Type.js",
+      "bytes": 1247
+    },
+    {
+      "path": "node_modules/colorjs.io/src/Format.js",
+      "bytes": 1125
+    },
+    {
+      "path": "node_modules/colorjs.io/src/hooks.js",
+      "bytes": 349
+    },
+    {
+      "path": "node_modules/colorjs.io/src/adapt.js",
+      "bytes": 961
+    },
+    {
+      "path": "node_modules/colorjs.io/src/defaults.js",
+      "bytes": 182
+    },
+    {
+      "path": "node_modules/colorjs.io/src/parse.js",
+      "bytes": 2767
+    },
+    {
+      "path": "node_modules/colorjs.io/src/getColor.js",
+      "bytes": 232
+    },
+    {
+      "path": "node_modules/colorjs.io/src/ColorSpace.js",
+      "bytes": 4256
+    },
+    {
+      "path": "node_modules/colorjs.io/src/spaces/xyz-d65.js",
+      "bytes": 204
+    },
+    {
+      "path": "node_modules/colorjs.io/src/RGBColorSpace.js",
+      "bytes": 404
+    },
+    {
+      "path": "node_modules/colorjs.io/src/getAll.js",
+      "bytes": 155
+    },
+    {
+      "path": "node_modules/colorjs.io/src/get.js",
+      "bytes": 121
+    },
+    {
+      "path": "node_modules/colorjs.io/src/setAll.js",
+      "bytes": 180
+    },
+    {
+      "path": "node_modules/colorjs.io/src/set.js",
+      "bytes": 299
+    },
+    {
+      "path": "node_modules/colorjs.io/src/spaces/xyz-d50.js",
+      "bytes": 123
+    },
+    {
+      "path": "node_modules/colorjs.io/src/spaces/lab.js",
+      "bytes": 670
+    },
+    {
+      "path": "node_modules/colorjs.io/src/angles.js",
+      "bytes": 58
+    },
+    {
+      "path": "node_modules/colorjs.io/src/spaces/lch.js",
+      "bytes": 657
+    },
+    {
+      "path": "node_modules/colorjs.io/src/deltaE/deltaE2000.js",
+      "bytes": 1143
+    },
+    {
+      "path": "node_modules/colorjs.io/src/spaces/oklab.js",
+      "bytes": 1097
+    },
+    {
+      "path": "node_modules/colorjs.io/src/deltaE/deltaEOK.js",
+      "bytes": 122
+    },
+    {
+      "path": "node_modules/colorjs.io/src/inGamut.js",
+      "bytes": 154
+    },
+    {
+      "path": "node_modules/colorjs.io/src/clone.js",
+      "bytes": 75
+    },
+    {
+      "path": "node_modules/colorjs.io/src/distance.js",
+      "bytes": 147
+    },
+    {
+      "path": "node_modules/colorjs.io/src/deltaE/deltaE76.js",
+      "bytes": 38
+    },
+    {
+      "path": "node_modules/colorjs.io/src/deltaE/deltaECMC.js",
+      "bytes": 532
+    },
+    {
+      "path": "node_modules/colorjs.io/src/spaces/xyz-abs-d65.js",
+      "bytes": 270
+    },
+    {
+      "path": "node_modules/colorjs.io/src/spaces/jzazbz.js",
+      "bytes": 1275
+    },
+    {
+      "path": "node_modules/colorjs.io/src/spaces/jzczhz.js",
+      "bytes": 308
+    },
+    {
+      "path": "node_modules/colorjs.io/src/deltaE/deltaEJz.js",
+      "bytes": 217
+    },
+    {
+      "path": "node_modules/colorjs.io/src/spaces/ictcp.js",
+      "bytes": 1273
+    },
+    {
+      "path": "node_modules/colorjs.io/src/deltaE/deltaEITP.js",
+      "bytes": 126
+    },
+    {
+      "path": "node_modules/colorjs.io/src/deltaE/deltaEOK2.js",
+      "bytes": 135
+    },
+    {
+      "path": "node_modules/colorjs.io/src/spaces/cam16.js",
+      "bytes": 3475
+    },
+    {
+      "path": "node_modules/colorjs.io/src/spaces/hct.js",
+      "bytes": 1150
+    },
+    {
+      "path": "node_modules/colorjs.io/src/deltaE/deltaEHCT.js",
+      "bytes": 347
+    },
+    {
+      "path": "node_modules/colorjs.io/src/deltaE/index.js",
+      "bytes": 111
+    },
+    {
+      "path": "node_modules/colorjs.io/src/toGamut.js",
+      "bytes": 2371
+    },
+    {
+      "path": "node_modules/colorjs.io/src/to.js",
+      "bytes": 155
+    },
+    {
+      "path": "node_modules/colorjs.io/src/spaces/srgb-linear.js",
+      "bytes": 447
+    },
+    {
+      "path": "node_modules/colorjs.io/src/keywords.js",
+      "bytes": 4651
+    },
+    {
+      "path": "node_modules/colorjs.io/src/spaces/srgb.js",
+      "bytes": 1199
+    },
+    {
+      "path": "node_modules/colorjs.io/src/luminance.js",
+      "bytes": 35
+    },
+    {
+      "path": "node_modules/colorjs.io/src/contrast/WCAG21.js",
+      "bytes": 117
+    },
+    {
+      "path": "node_modules/colorjs.io/src/spaces/oklch.js",
+      "bytes": 319
+    }
+  ]
+}

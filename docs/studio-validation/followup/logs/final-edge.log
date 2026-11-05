@@ -1,0 +1,117 @@
+[
+  {
+    "engine": "chromium",
+    "checks": [
+      "rotated full-coverage fields, transparent coloured paper, export cancellation",
+      "16 megapixel source-resolution PNG",
+      "storage denial preserves session fallback and reports persistence failure",
+      "reset during background processing rejects stale result"
+    ],
+    "rendering": {
+      "out": [
+        {
+          "type": "squares",
+          "blackFieldMean": 0.0027591836734693876
+        },
+        {
+          "type": "dots",
+          "blackFieldMean": 0.11468571428571428
+        },
+        {
+          "type": "lines",
+          "blackFieldMean": 0.005612244897959183
+        }
+      ],
+      "pixel": [
+        255,
+        0,
+        255,
+        255
+      ],
+      "large": {
+        "width": 4000,
+        "height": 4000,
+        "ms": 540.1999999880791,
+        "bytes": 5449924
+      },
+      "cancelled": true
+    },
+    "deniedStorage": {
+      "saved": false,
+      "memory": true,
+      "cleared": false
+    }
+  },
+  {
+    "engine": "firefox",
+    "checks": [
+      "rotated full-coverage fields, transparent coloured paper, export cancellation",
+      "storage denial preserves session fallback and reports persistence failure",
+      "reset during background processing rejects stale result"
+    ],
+    "rendering": {
+      "out": [
+        {
+          "type": "squares",
+          "blackFieldMean": 0.002910204081632653
+        },
+        {
+          "type": "dots",
+          "blackFieldMean": 0.09655102040816327
+        },
+        {
+          "type": "lines",
+          "blackFieldMean": 0.005636734693877551
+        }
+      ],
+      "pixel": [
+        255,
+        0,
+        255,
+        255
+      ],
+      "cancelled": true
+    },
+    "deniedStorage": {
+      "saved": false,
+      "memory": true,
+      "cleared": false
+    }
+  },
+  {
+    "engine": "webkit",
+    "checks": [
+      "rotated full-coverage fields, transparent coloured paper, export cancellation",
+      "storage denial preserves session fallback and reports persistence failure",
+      "reset during background processing rejects stale result"
+    ],
+    "rendering": {
+      "out": [
+        {
+          "type": "squares",
+          "blackFieldMean": 0.002906122448979592
+        },
+        {
+          "type": "dots",
+          "blackFieldMean": 0.09675510204081633
+        },
+        {
+          "type": "lines",
+          "blackFieldMean": 0.006081632653061225
+        }
+      ],
+      "pixel": [
+        255,
+        0,
+        255,
+        255
+      ],
+      "cancelled": true
+    },
+    "deniedStorage": {
+      "saved": false,
+      "memory": true,
+      "cleared": false
+    }
+  }
+]

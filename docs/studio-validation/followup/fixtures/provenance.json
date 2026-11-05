@@ -1,0 +1,51 @@
+[
+  {
+    "file": "chelsea.png",
+    "license": "CC0-1.0, Stefan van der Walt",
+    "source": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.25.2/skimage/data/chelsea.png",
+    "sha256": "596aa1e7cb875eb79f437e310381d26b338a81c2da23439704a73c4651e8c4bb",
+    "referenceSemanticMask": false
+  },
+  {
+    "file": "illustrated-fine-edges.png",
+    "license": "CC0-1.0, original project synthetic geometry",
+    "source": "scripts/generate-studio-fixtures.py",
+    "sha256": "ed859c0da50bfb52bf2d60861b62827985818d5ec7c503d372abf314c745e558",
+    "referenceSemanticMask": false
+  },
+  {
+    "file": "motion-soft.png",
+    "license": "NASA public domain; original image or disclosed synthetic image-only derivative",
+    "source": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.25.2/skimage/data/astronaut.png",
+    "sha256": "06ac799b94219fa7241f39d5b6898829ba95c5cc239eeb9c885a50de45b5ce4c",
+    "referenceSemanticMask": false
+  },
+  {
+    "file": "portrait.png",
+    "license": "NASA public domain; original image or disclosed synthetic image-only derivative",
+    "source": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.25.2/skimage/data/astronaut.png",
+    "sha256": "23b4b7ea9402329fb0cff9e5755f445622d263d6d03a715546c1ce2d055e5c57",
+    "referenceSemanticMask": false
+  },
+  {
+    "file": "product-holes.png",
+    "license": "CC0-1.0, original project synthetic geometry",
+    "source": "scripts/generate-studio-fixtures.py",
+    "sha256": "e60cde62e70356a73ee42433117807ce2df02122ad4511c7ba6073085ed74e15",
+    "referenceSemanticMask": false
+  },
+  {
+    "file": "similar-colours.png",
+    "license": "NASA public domain; original image or disclosed synthetic image-only derivative",
+    "source": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.25.2/skimage/data/astronaut.png",
+    "sha256": "85d5abdb867862c2e3edbdbe9cd2df5a9988649ab2555ebf48af0765d08e2446",
+    "referenceSemanticMask": false
+  },
+  {
+    "file": "soft-transparent.png",
+    "license": "CC0-1.0, original project synthetic geometry",
+    "source": "scripts/generate-studio-fixtures.py",
+    "sha256": "5cd7ce1f3e1840ca5cd5fb19165b5b73e07de417e3dfc3f7af04a598a0cc614d",
+    "referenceSemanticMask": false
+  }
+]
