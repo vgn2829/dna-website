@@ -1,0 +1,4 @@
+{
+  "pass": true,
+  "check": "Existing VTracer module worker still produces an SVG in production"
+}

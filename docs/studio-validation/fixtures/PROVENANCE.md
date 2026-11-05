@@ -1,0 +1,3 @@
+These fixtures were created by scripts/generate-studio-fixtures.py for this project and are dedicated to the public domain under CC0-1.0. They are synthetic geometry and gradients, not representative photographic hair/fur/product validation. No semantic quality benchmark is implied. soft-transparent.png uses deliberately soft source alpha.
+
+NASA Eileen Collins photograph: astronaut.png, 512×512, downloaded unchanged from scikit-image v0.25.2: https://raw.githubusercontent.com/scikit-image/scikit-image/v0.25.2/skimage/data/astronaut.png . Public-domain provenance: https://scikit-image.org/docs/stable/api/skimage.data.html#skimage.data.astronaut (NASA Great Images database). No reference segmentation mask is available.

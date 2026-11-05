@@ -1,3 +1,7 @@
+# Release update
+
+The current generation path delegates to the pinned Color.js 0.6.1-backed engine in `../palette-engine.ts`, including gamut mapping, bidirectional contrast repair and deterministic variation. The existing editor and Brettel simulation remain active. APCA code, UI and score contribution have been removed; APCA references below describe historical audit work only. See `docs/studio-validation/release/README.md` and `THIRD_PARTY_NOTICES.md` for the combined release.
+
 # Colour calculation contracts
 
 - WCAG 2.2 relative luminance and contrast: https://www.w3.org/TR/WCAG22/#dfn-relative-luminance . Black/white=21, identical=1, #777777/white=4.478089453577214. Evaluate unrounded values; normal AA 4.5, large AA 3, normal AAA 7. No palette-wide conformance claim.

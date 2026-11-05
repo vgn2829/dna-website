@@ -1,0 +1,22 @@
+# Release assembly and validation
+
+Prepared on 5 November 2026 from current `origin/main` commit `3548277a22d2354c376c2565f7cf995e47025b93`, in an isolated worktree. The original checkout remains untouched. Main already contained PR #82's Studio safety/editor audit and PR #83's Academy/Moodboards work; those changes are retained.
+
+Integration keeps main's page shell, tool queries, palette comparison and 18 roles, exact cross-theme locks, independent mood view, Brettel simulation/reference tests, safe SVG handling, JobOwner-based image/PDF cleanup, grid and contrast tools. The completed processing engines, six self-hosted licensed font pairings, image recovery and opt-in Detail model are integrated into those boundaries. APCA is removed from computation/UI; its obsolete algorithm-only tests are replaced by absence checks, while independent WCAG/OKLab/Brettel fixtures remain. Worker concurrency tests now verify one admitted request, explicit rejection of overlap, warm reuse and disposal. Cache-denial tests hash real pinned bytes rather than accepting arbitrary unverified fixture content.
+
+- `pnpm test`: **483 tests, 37 files pass** (the previous isolated-checkout count of 222 is historical).
+- `pnpm typecheck`: **zero diagnostics**. The existing exact-identity CI gate now has an empty baseline, so new errors cannot pass using the old allowance.
+- `pnpm build`: pass; existing large-chunk and vtracer asset-URL warnings remain.
+- Route collision guard: pass, 13 client routes and 9 output-root entries.
+- `production-results.json`: real built-site processing in Chromium 145, Firefox 146 and WebKit 26: Portrait inference/export, halftone worker/full-resolution PNG, fonts, palette, image conversion and source recovery.
+- `smoke-preview.json`: all three engines pass direct query/refresh, palette sharing/lock/edit recovery and invalid input, actual font weight/licence, PNG/SVG dimensions, tool switching, and default General inference with **zero loopback requests**. No segmentation/export success is mocked. Clipboard capture only reads the generated sharing URL.
+
+Preview-only environment finding: without a configured site-data backend, WebKit reports six access-control errors for the unchanged public app-data APIs. They are retained under `environmentErrors`, classified by exact localhost endpoint/message, and are not tool failures. Worker, WASM, model and font requests succeed. Live smoke tests do not apply this localhost exception. The first unclassified preview result is preserved separately.
+
+Production uses the repository's existing Vercel integration, `vercel.json` SPA rewrite and main branch. No hosting configuration, environment, secret, paid service or infrastructure is changed. Python helper code is only a loopback opt-in utility: no public route/proxy/deployment is added. Ordinary visitors need neither Python nor the helper, and the UI never auto-connects to localhost.
+
+The exact Detail checkpoint, SHA, MIT conversion notice and quality limitations remain in ../IMPLEMENTATION.md and ../../../THIRD_PARTY_NOTICES.md. Detail is a 192 MB opt-in WebGPU model; General/Portrait remain the small default choices. Native Safari, physical phones, broad real flyaway-hair quality and GPU peak allocation remain unvalidated for this release. Historical reports from other PRs do not certify this combined revision.
+
+Reproduce with Node 22.22.3 and pnpm 11.6.0: `pnpm install --frozen-lockfile`, `pnpm test`, `pnpm typecheck`, `pnpm build`, `node scripts/check-route-collisions.mjs`; then `pnpm exec vite preview --host 127.0.0.1 --port 4175` and `STUDIO_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs node scripts/studio-release-smoke.mjs`. Playwright is an external test-only dependency. For live checks set `STUDIO_BASE_URL` and `STUDIO_RESULT_FILE`; the script uses real local lawful fixture files and processes them in the browser. Optional helper setup is documented in services/studio-helper/README.md.
+
+Excluded: original checkout backend sharp edits, App analytics imports, Vercel dependency additions and root npm lock; installed skills, personal audits, videos, caches/profiles/environments/builds/bytecode; downloaded experimental weights. Validation PNGs are limited to fixture inputs and before/current/candidate outputs needed by the comparison page; duplicate composite/UI screenshots are omitted. No new file exceeds 1 MiB; no LFS migration is needed.

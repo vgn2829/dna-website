@@ -1,0 +1,246 @@
+{
+  "model": "studioludens/birefnet-lite-512",
+  "revision": "962e67969ec6acec9c19fab76acee4f5e22e990c",
+  "sha256": "1cb0fb360dadd15af77c639085d77a9df67db0c64315560c3de005f676345ac2",
+  "precision": "float32",
+  "input": [
+    1,
+    3,
+    512,
+    512
+  ],
+  "runtime": "1.24.2",
+  "provider": [
+    "CPUExecutionProvider"
+  ],
+  "initMs": 1663.4035829920322,
+  "peakSampledRssBytes": 1965981696,
+  "hardware": "macOS-27.2-arm64-arm-64bit-Mach-O",
+  "results": [
+    {
+      "fixture": "chelsea.png",
+      "dimensions": [
+        451,
+        300
+      ],
+      "runs": [
+        {
+          "preprocessMs": 14.94145899778232,
+          "inferenceMs": 5795.108541002264,
+          "postprocessMs": 72.12733299820684,
+          "exportMs": 489.32399999466725,
+          "rssBytes": 490913792
+        },
+        {
+          "preprocessMs": 29.154541000025347,
+          "inferenceMs": 8421.84641698259,
+          "postprocessMs": 98.88612499344163,
+          "exportMs": 52.4342919816263,
+          "rssBytes": 548257792
+        },
+        {
+          "preprocessMs": 12.270916980924085,
+          "inferenceMs": 6021.406916988781,
+          "postprocessMs": 59.36004198156297,
+          "exportMs": 1454.5184999878984,
+          "rssBytes": 366166016
+        }
+      ],
+      "medianInferenceMs": 6021.406916988781,
+      "slowInferenceMs": 8421.84641698259
+    },
+    {
+      "fixture": "illustrated-fine-edges.png",
+      "dimensions": [
+        960,
+        720
+      ],
+      "runs": [
+        {
+          "preprocessMs": 55.468125006882474,
+          "inferenceMs": 5264.8532500024885,
+          "postprocessMs": 80.3087500098627,
+          "exportMs": 65.7487080025021,
+          "rssBytes": 639909888
+        },
+        {
+          "preprocessMs": 18.71983299497515,
+          "inferenceMs": 5069.215374998748,
+          "postprocessMs": 518.6680000042543,
+          "exportMs": 249.8295420082286,
+          "rssBytes": 11730944
+        },
+        {
+          "preprocessMs": 211.6739590128418,
+          "inferenceMs": 5610.457834001863,
+          "postprocessMs": 321.3963329908438,
+          "exportMs": 128.0396660149563,
+          "rssBytes": 207896576
+        }
+      ],
+      "medianInferenceMs": 5264.8532500024885,
+      "slowInferenceMs": 5610.457834001863
+    },
+    {
+      "fixture": "motion-soft.png",
+      "dimensions": [
+        512,
+        512
+      ],
+      "runs": [
+        {
+          "preprocessMs": 20.698249980341643,
+          "inferenceMs": 3591.6106660151854,
+          "postprocessMs": 73.51920800283551,
+          "exportMs": 62.30345799122006,
+          "rssBytes": 486326272
+        },
+        {
+          "preprocessMs": 13.95095800398849,
+          "inferenceMs": 2563.181082980009,
+          "postprocessMs": 4.364957974757999,
+          "exportMs": 328.26554198982194,
+          "rssBytes": 1281294336
+        },
+        {
+          "preprocessMs": 9.950332983862609,
+          "inferenceMs": 3304.3763330206275,
+          "postprocessMs": 4.418958007590845,
+          "exportMs": 393.84533400880173,
+          "rssBytes": 636026880
+        }
+      ],
+      "medianInferenceMs": 3304.3763330206275,
+      "slowInferenceMs": 3591.6106660151854
+    },
+    {
+      "fixture": "portrait.png",
+      "dimensions": [
+        512,
+        512
+      ],
+      "runs": [
+        {
+          "preprocessMs": 9.863374987617135,
+          "inferenceMs": 3980.408833012916,
+          "postprocessMs": 86.81800001068041,
+          "exportMs": 36.30858298856765,
+          "rssBytes": 693944320
+        },
+        {
+          "preprocessMs": 49.247332994127646,
+          "inferenceMs": 4189.337166986661,
+          "postprocessMs": 57.61979200178757,
+          "exportMs": 46.47249999106862,
+          "rssBytes": 576290816
+        },
+        {
+          "preprocessMs": 27.587416989263147,
+          "inferenceMs": 2923.4060419839807,
+          "postprocessMs": 2.288874995429069,
+          "exportMs": 45.77470800722949,
+          "rssBytes": 1944027136
+        }
+      ],
+      "medianInferenceMs": 3980.408833012916,
+      "slowInferenceMs": 4189.337166986661
+    },
+    {
+      "fixture": "product-holes.png",
+      "dimensions": [
+        1400,
+        900
+      ],
+      "runs": [
+        {
+          "preprocessMs": 14.830667001660913,
+          "inferenceMs": 1839.0538330131676,
+          "postprocessMs": 9.595250012353063,
+          "exportMs": 20.833332993788645,
+          "rssBytes": 1937801216
+        },
+        {
+          "preprocessMs": 9.58520799758844,
+          "inferenceMs": 1793.398417008575,
+          "postprocessMs": 8.260874979896471,
+          "exportMs": 17.3978749953676,
+          "rssBytes": 1728282624
+        },
+        {
+          "preprocessMs": 9.253791009541601,
+          "inferenceMs": 1990.6043329974636,
+          "postprocessMs": 14.01824998902157,
+          "exportMs": 17.009083996526897,
+          "rssBytes": 1512587264
+        }
+      ],
+      "medianInferenceMs": 1839.0538330131676,
+      "slowInferenceMs": 1990.6043329974636
+    },
+    {
+      "fixture": "similar-colours.png",
+      "dimensions": [
+        512,
+        512
+      ],
+      "runs": [
+        {
+          "preprocessMs": 5.7242079928983,
+          "inferenceMs": 2193.566041998565,
+          "postprocessMs": 2.6050419837702066,
+          "exportMs": 23.63820798927918,
+          "rssBytes": 1682948096
+        },
+        {
+          "preprocessMs": 5.23020900436677,
+          "inferenceMs": 1724.8272920260206,
+          "postprocessMs": 2.132875000825152,
+          "exportMs": 31.437416997505352,
+          "rssBytes": 1909932032
+        },
+        {
+          "preprocessMs": 6.666083994787186,
+          "inferenceMs": 1704.432792001171,
+          "postprocessMs": 1.9316670077387244,
+          "exportMs": 28.328125015832484,
+          "rssBytes": 1894416384
+        }
+      ],
+      "medianInferenceMs": 1724.8272920260206,
+      "slowInferenceMs": 2193.566041998565
+    },
+    {
+      "fixture": "soft-transparent.png",
+      "dimensions": [
+        960,
+        720
+      ],
+      "runs": [
+        {
+          "preprocessMs": 8.043917012400925,
+          "inferenceMs": 1742.2070000029635,
+          "postprocessMs": 4.878582985838875,
+          "exportMs": 10.01158301369287,
+          "rssBytes": 1891155968
+        },
+        {
+          "preprocessMs": 7.225249981274828,
+          "inferenceMs": 1788.9931249956135,
+          "postprocessMs": 6.534791988087818,
+          "exportMs": 10.645542002748698,
+          "rssBytes": 1889271808
+        },
+        {
+          "preprocessMs": 10.49833299475722,
+          "inferenceMs": 1790.72437499417,
+          "postprocessMs": 5.5545840004924685,
+          "exportMs": 10.303290997399017,
+          "rssBytes": 1873821696
+        }
+      ],
+      "medianInferenceMs": 1788.9931249956135,
+      "slowInferenceMs": 1790.72437499417
+    }
+  ],
+  "comparisonReferenceBytesNotEnforced": 2147483648
+}

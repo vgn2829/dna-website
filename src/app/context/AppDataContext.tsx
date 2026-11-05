@@ -124,7 +124,7 @@ interface AppDataContextValue {
   addEvent:    (event: EventInput | FormData) => Promise<void>;
   updateEvent: (id: string, data: Partial<EventInput> | FormData) => Promise<void>;
   deleteEvent: (id: string) => void;
-  notifyEvent: (id: string, audience?: 'all' | 'registered') => Promise<NotifyResult>;
+  notifyEvent: (id: string, options?: Parameters<typeof api.notify.event>[1]) => Promise<NotifyResult>;
   // Domains / videos
   addDomain:          (domain: { title: string; fullName: string; icon: string; tagline: string; description: string; color: string }) => Promise<void>;
   updateDomain:       (id: string, data: Partial<{ title: string; fullName: string; icon: string; tagline: string; description: string; color: string }>) => Promise<void>;

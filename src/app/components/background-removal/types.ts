@@ -6,7 +6,7 @@
 export type RemovalStatus = 'idle' | 'processing' | 'done' | 'error';
 
 /** Which segmentation model to run. */
-export type ModelId = 'general' | 'portrait';
+export type ModelId = 'general' | 'portrait' | 'detail';
 
 /** Backdrop composited behind the cut-out subject (display + export). */
 export type Backdrop =
@@ -46,6 +46,7 @@ export interface SegmentProgress {
   phase: 'download' | 'init' | 'infer';
   /** 0–100 for downloads with a known length; omitted when indeterminate. */
   pct?: number;
+  backend?: "webgpu" | "wasm";
 }
 
 export interface SegmentResult {
@@ -53,6 +54,8 @@ export interface SegmentResult {
   id: number;
   /** One alpha byte per pixel (width * height), transferred back. */
   mask: ArrayBuffer;
+  timings?: Record<string, number>;
+  backend?: "webgpu" | "wasm";
 }
 
 export interface SegmentError {

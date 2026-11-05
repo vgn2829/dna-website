@@ -1,0 +1,37 @@
+[
+  {
+    "engine": "chromium",
+    "version": "145.0.7632.6",
+    "checks": [
+      "font loading, script filter, 96px specimen, recipe export",
+      "palette generation, tool-switch draft, refresh recovery",
+      "halftone source-resolution PNG/SVG, image tool-switch, opt-in refresh recovery, clear, corrupt file"
+    ],
+    "errors": [],
+    "failure": "page.evaluate: TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:4173/src/app/components/background-removal/processor.ts\n    at /Users/venugopal/Downloads/dna_website/scripts/studio-browser-checks.mjs:68:34"
+  },
+  {
+    "engine": "firefox",
+    "version": "146.0.1",
+    "checks": [
+      "font loading, script filter, 96px specimen, recipe export",
+      "palette generation, tool-switch draft, refresh recovery",
+      "halftone source-resolution PNG/SVG, image tool-switch, opt-in refresh recovery, clear, corrupt file"
+    ],
+    "errors": [
+      "error loading dynamically imported module: http://127.0.0.1:4173/src/app/components/background-removal/processor.ts"
+    ],
+    "failure": "page.evaluate: error loading dynamically imported module: http://127.0.0.1:4173/src/app/components/background-removal/processor.ts\n    at /Users/venugopal/Downloads/dna_website/scripts/studio-browser-checks.mjs:68:34"
+  },
+  {
+    "engine": "webkit",
+    "version": "26.0",
+    "checks": [
+      "font loading, script filter, 96px specimen, recipe export",
+      "palette generation, tool-switch draft, refresh recovery",
+      "halftone source-resolution PNG/SVG, image tool-switch, opt-in refresh recovery, clear, corrupt file"
+    ],
+    "errors": [],
+    "failure": "page.evaluate: TypeError: Importing a module script failed.\n    at /Users/venugopal/Downloads/dna_website/scripts/studio-browser-checks.mjs:68:34"
+  }
+]

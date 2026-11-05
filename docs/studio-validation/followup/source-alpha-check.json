@@ -1,0 +1,26 @@
+[
+  {
+    "engine": "chromium",
+    "sourceAlphaExactlyEqual": true,
+    "dimensions": [
+      960,
+      720
+    ]
+  },
+  {
+    "engine": "firefox",
+    "sourceAlphaExactlyEqual": true,
+    "dimensions": [
+      960,
+      720
+    ]
+  },
+  {
+    "engine": "webkit",
+    "sourceAlphaExactlyEqual": true,
+    "dimensions": [
+      960,
+      720
+    ]
+  }
+]

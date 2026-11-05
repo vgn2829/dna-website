@@ -1,25 +1,12 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import {
-  Upload,
-  Download,
-  RotateCcw,
-  Loader2,
-  ImageOff,
-  AlertTriangle,
-  Info,
-  Brush,
-  Eraser,
-  Undo2,
-  Redo2,
-} from "lucide-react";
-import { JobOwner } from "../../lib/studio/jobs";
-import type { SourceImage, ModelId } from "./types";
-import { MODELS } from "./models";
-import { useImageUpload } from "./useImageUpload";
-import {
-  useBackgroundRemoval,
-  type RemovalProgress,
-} from "./useBackgroundRemoval";
+import { checkHelper } from './helper-processor';
+import { useStudioDraft, isBoolean } from "../../lib/studio-draft";
+import { readImageDraft, saveImageDraft, clearImageDraft, type ImageDraft } from '../../lib/image-drafts';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { Upload, Download, RotateCcw, Loader2, ImageOff, AlertTriangle, Info, Brush, Eraser, Undo2, Redo2 } from 'lucide-react';
+import type { SourceImage, ModelId } from './types';
+import { MODELS } from './models';
+import { useImageUpload } from './useImageUpload';
+import { useBackgroundRemoval, type RemovalProgress } from './useBackgroundRemoval';
 import {
   loadSourceImage,
   bitmapToImageData,
@@ -27,144 +14,142 @@ import {
   buildExportCanvas,
   canvasToPngBlob,
   downloadBlob,
-} from "./compositing";
-import { stampBrush, recompositeRegion, type BrushMode } from "./refine";
+} from './compositing';
+import { stampBrush, recompositeRegion, type BrushMode } from './refine';
 
 // ── Local style objects — same inline-CSS-var convention as the other tools ──
 const card = {
-  borderRadius: "var(--radius-xl)",
-  background: "var(--color-surface-1)",
-  border: "1px solid var(--color-hairline)",
-  overflow: "hidden",
+  borderRadius: 'var(--radius-xl)',
+  background: 'var(--color-surface-1)',
+  border: '1px solid var(--color-hairline)',
+  overflow: 'hidden',
 } as const;
 const cardHead = {
-  padding: "10px 16px",
+  padding: '10px 16px',
   fontSize: 12,
   fontWeight: 600,
-  letterSpacing: "0.04em",
-  textTransform: "uppercase" as const,
-  color: "var(--color-ink-muted)",
-  borderBottom: "1px solid var(--color-hairline)",
-  fontFamily: "var(--font-body)",
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase' as const,
+  color: 'var(--color-ink-muted)',
+  borderBottom: '1px solid var(--color-hairline)',
+  fontFamily: 'var(--font-body)',
 } as const;
 const label = {
-  display: "block",
+  display: 'block',
   fontSize: 13,
   fontWeight: 500,
-  color: "var(--color-ink)",
+  color: 'var(--color-ink)',
   marginBottom: 8,
-  fontFamily: "var(--font-body)",
+  fontFamily: 'var(--font-body)',
 } as const;
 const primaryBtn = (disabled: boolean) => ({
   flex: 1,
-  padding: "11px 0",
-  borderRadius: "var(--radius-pill)",
-  border: "none",
-  background: "var(--color-brand)",
-  color: "#fff",
+  padding: '11px 0',
+  borderRadius: 'var(--radius-pill)',
+  border: 'none',
+  background: 'var(--color-brand)',
+  color: '#fff',
   fontSize: 14,
   fontWeight: 600,
-  cursor: disabled ? "not-allowed" : "pointer",
+  cursor: disabled ? 'not-allowed' : 'pointer',
   opacity: disabled ? 0.6 : 1,
-  fontFamily: "var(--font-body)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
+  fontFamily: 'var(--font-body)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   gap: 8,
 });
 const ghostBtn = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   gap: 6,
-  padding: "11px 16px",
-  borderRadius: "var(--radius-pill)",
-  border: "1px solid var(--color-hairline)",
-  background: "transparent",
-  color: "var(--color-ink)",
+  padding: '11px 16px',
+  borderRadius: 'var(--radius-pill)',
+  border: '1px solid var(--color-hairline)',
+  background: 'transparent',
+  color: 'var(--color-ink)',
   fontSize: 14,
-  cursor: "pointer",
-  fontFamily: "var(--font-body)",
+  cursor: 'pointer',
+  fontFamily: 'var(--font-body)',
 } as const;
 
 const pill = (active: boolean) => ({
   flex: 1,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   gap: 6,
-  padding: "8px 0",
-  borderRadius: "var(--radius-md)",
-  cursor: "pointer",
-  border: active
-    ? "2px solid var(--color-brand)"
-    : "1px solid var(--color-hairline)",
-  background: active ? "var(--color-surface-2)" : "transparent",
-  color: active ? "var(--color-ink)" : "var(--color-ink-muted)",
+  padding: '8px 0',
+  borderRadius: 'var(--radius-md)',
+  cursor: 'pointer',
+  border: active ? '2px solid var(--color-brand)' : '1px solid var(--color-hairline)',
+  background: active ? 'var(--color-surface-2)' : 'transparent',
+  color: active ? 'var(--color-ink)' : 'var(--color-ink-muted)',
   fontSize: 13,
   fontWeight: active ? 600 : 500,
-  fontFamily: "var(--font-body)",
+  fontFamily: 'var(--font-body)',
 });
 const edgeBtn = (active: boolean) => ({
-  padding: "5px 12px",
-  borderRadius: "var(--radius-pill)",
-  cursor: "pointer",
-  border: "1px solid var(--color-hairline)",
-  background: active ? "var(--color-brand)" : "transparent",
-  color: active ? "#fff" : "var(--color-ink-muted)",
+  padding: '5px 12px',
+  borderRadius: 'var(--radius-pill)',
+  cursor: 'pointer',
+  border: '1px solid var(--color-hairline)',
+  background: active ? 'var(--color-brand)' : 'transparent',
+  color: active ? '#fff' : 'var(--color-ink-muted)',
   fontSize: 12,
   fontWeight: 500,
-  fontFamily: "var(--font-body)",
+  fontFamily: 'var(--font-body)',
 });
 
-const CHECKER =
-  "repeating-conic-gradient(rgba(0,0,0,0.10) 0% 25%, rgba(255,255,255,0.10) 0% 50%) 50% / 16px 16px, var(--color-canvas)";
+const CHECKER = 'repeating-conic-gradient(rgba(0,0,0,0.10) 0% 25%, rgba(255,255,255,0.10) 0% 50%) 50% / 16px 16px, var(--color-canvas)';
 function backdropCss(id: string): string {
-  if (id === "white") return "#ffffff";
-  if (id === "black") return "#000000";
+  if (id === 'white') return '#ffffff';
+  if (id === 'black') return '#000000';
   return CHECKER;
 }
 
 /** Human-readable label for the current processing phase. */
 function progressLabel(p: RemovalProgress | null): string {
-  if (!p) return "Processing…";
-  if (p.phase === "download")
-    return `Downloading model${p.pct != null ? ` ${p.pct}%` : "…"}`;
-  if (p.phase === "init") return "Initializing…";
-  return "Analyzing…";
+  if (!p) return 'Processing…';
+  if (p.phase === 'download') return `Downloading model${p.pct != null ? ` ${p.pct}%` : '…'}`;
+  if (p.phase === 'init') return 'Initializing…';
+  return 'Analyzing…';
 }
 
 const BACKDROPS = [
-  { id: "transparent", label: "Transparent", swatch: "checker" },
-  { id: "white", label: "White", swatch: "#ffffff" },
-  { id: "black", label: "Black", swatch: "#000000" },
+  { id: 'transparent', label: 'Transparent', swatch: 'checker' },
+  { id: 'white', label: 'White', swatch: '#ffffff' },
+  { id: 'black', label: 'Black', swatch: '#000000' },
 ];
 
 // Undo/redo depth. Each step is a full-mask snapshot (~W×H bytes), so this caps
 // the memory the history can hold — see the memory note in the PR.
-const HISTORY_CAP = 15;
+const HISTORY_BYTES = 32 * 1024 * 1024;
+type EditHistory = { stack: Uint8ClampedArray[]; index: number };
+// Weak keys keep only the current image draft alive; history survives a tool switch, not a reload.
+const editHistories = new WeakMap<Blob, EditHistory>();
 
 export default function BackgroundRemover() {
-  const jobs = useRef(new JobOwner());
-  const bitmap = useRef<ImageBitmap | null>(null);
-  useEffect(
-    () => () => {
-      jobs.current.cancel();
-      bitmap.current?.close();
-    },
-    [],
-  );
+  const sourceGeneration = useRef(0);
+  const draftRef = useRef<ImageDraft | null>(null);
+  const [retain, setRetain] = useState(false);
+  const [provider, setProvider] = useState<'browser' | 'helper'>('browser');
+  const [helperReady, setHelperReady] = useState(false);
+  const [helperStatus, setHelperStatus] = useState('Python helper is optional and not connected.');
+  const [gpuAvailable, setGpuAvailable] = useState(false);
+  useEffect(() => { let active = true; const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu; void gpu?.requestAdapter().then(adapter => { if (active) setGpuAvailable(!!adapter); }).catch(() => {}); return () => { active = false; }; }, []);
   const [source, setSource] = useState<SourceImage | null>(null);
   const [imageData, setImageData] = useState<ImageData | null>(null);
   const [hasResult, setHasResult] = useState(false);
-  const [backdropId, setBackdropId] = useState("transparent");
+  const [backdropId, setBackdropId] = useStudioDraft('background-backdrop', 'transparent', (v): v is string => ['transparent', 'white', 'black'].includes(String(v)));
   const [reject, setReject] = useState<string | null>(null);
-  const [model, setModel] = useState<ModelId>("general");
+  const [model, setModel] = useState<ModelId>('general');
 
   // Refine (Phase A)
-  const [brushMode, setBrushMode] = useState<BrushMode | "off">("off");
-  const [brushSize, setBrushSize] = useState(48);
-  const [brushHard, setBrushHard] = useState(false);
+  const [brushMode, setBrushMode] = useState<BrushMode | 'off'>('off');
+  const [brushSize, setBrushSize] = useStudioDraft("background-brush-size", 48, (v): v is number => typeof v === "number" && v >= 8 && v <= 200);
+  const [brushHard, setBrushHard] = useStudioDraft("background-brush-hard", false, isBoolean);
 
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -177,20 +162,11 @@ export default function BackgroundRemover() {
   const strokeRef = useRef<{ x: number; y: number } | null>(null);
   const strokeChangedRef = useRef(false);
   // Undo/redo: full-mask snapshots. index points at the current state.
-  const historyRef = useRef<{ stack: Uint8ClampedArray[]; index: number }>({
-    stack: [],
-    index: -1,
-  });
+  const historyRef = useRef<{ stack: Uint8ClampedArray[]; index: number }>({ stack: [], index: -1 });
 
-  const {
-    status,
-    error,
-    progress,
-    removeBackground,
-    reset: resetEngine,
-  } = useBackgroundRemoval();
+  const { status, error, progress, backend, removeBackground, release, reset: resetEngine } = useBackgroundRemoval();
   imageDataRef.current = imageData;
-  const refining = brushMode !== "off";
+  const refining = brushMode !== 'off';
 
   const syncHistoryFlags = useCallback(() => {
     const h = historyRef.current;
@@ -214,10 +190,11 @@ export default function BackgroundRemover() {
       h.stack = h.stack.slice(0, h.index + 1);
       h.stack.push(new Uint8ClampedArray(mask));
       h.index = h.stack.length - 1;
-      if (h.stack.length > HISTORY_CAP) {
+      if (h.stack.length > Math.max(2, Math.floor(HISTORY_BYTES / mask.byteLength))) {
         h.stack.shift();
         h.index -= 1;
       }
+      if (draftRef.current) void saveImageDraft("background", { ...draftRef.current, mask: new Uint8ClampedArray(mask), saved: Date.now() });
       syncHistoryFlags();
     },
     [syncHistoryFlags],
@@ -231,9 +208,7 @@ export default function BackgroundRemover() {
     if (!img || !canvas || i < 0 || i >= h.stack.length) return;
     maskRef.current = new Uint8ClampedArray(h.stack[i]); // fresh copy — snapshots stay immutable
     h.index = i;
-    canvas
-      .getContext("2d")!
-      .putImageData(applyMask(img, maskRef.current), 0, 0);
+    canvas.getContext('2d')!.putImageData(applyMask(img, maskRef.current), 0, 0);
     setCanUndo(i > 0);
     setCanRedo(i < h.stack.length - 1);
   }, []);
@@ -251,7 +226,7 @@ export default function BackgroundRemover() {
   const clearResult = useCallback(() => {
     maskRef.current = null;
     setHasResult(false);
-    setBrushMode("off");
+    setBrushMode('off');
     historyRef.current = { stack: [], index: -1 };
     setCanUndo(false);
     setCanRedo(false);
@@ -259,7 +234,6 @@ export default function BackgroundRemover() {
 
   const changeModel = useCallback(
     (m: ModelId) => {
-      jobs.current.cancel();
       setModel(m);
       clearResult();
       resetEngine();
@@ -269,42 +243,60 @@ export default function BackgroundRemover() {
 
   const handleFile = useCallback(
     async (file: File) => {
-      const id = jobs.current.next();
-      resetEngine();
+      const token = ++sourceGeneration.current;
+      resetEngine(); clearResult();
       setReject(null);
       try {
-        const name = file.name.replace(/\.[^.]+$/, "") || "image";
-        const src = await loadSourceImage(file, name);
-        if (!jobs.current.current(id)) {
-          src.bitmap.close();
-          return;
-        }
-        let pixels: ImageData;
-        try {
-          pixels = bitmapToImageData(src);
-        } catch (err) {
-          src.bitmap.close();
-          throw err;
-        }
-        bitmap.current?.close();
-        bitmap.current = src.bitmap;
-        setSource(src);
-        setImageData(pixels);
-        clearResult();
-        resetEngine();
-      } catch (err) {
-        if (jobs.current.current(id))
-          setReject((err as Error).message || "Could not decode image.");
-      }
+      const name = file.name.replace(/\.[^.]+$/, '') || 'image';
+      const src = await loadSourceImage(file, name);
+      if (token !== sourceGeneration.current) { src.bitmap.close(); return; }
+      draftRef.current = { version: 1, file, name, saved: Date.now(), retain: draftRef.current?.retain || false };
+      void saveImageDraft("background", draftRef.current);
+      setSource(src);
+      setImageData(bitmapToImageData(src));
+      clearResult();
+      resetEngine();
+      } catch (error) { if (token === sourceGeneration.current) setReject(error instanceof Error ? error.message : "Image decoding failed"); }
     },
     [clearResult, resetEngine],
   );
 
-  const upload = useImageUpload({
-    onImage: handleFile,
-    onReject: setReject,
-    enabled: true,
-  });
+  useEffect(() => () => source?.bitmap.close(), [source]);
+  useEffect(() => {
+    let active = true;
+    void readImageDraft('background').then(async draft => {
+      if (!active || !draft || sourceGeneration.current) return;
+      const token = ++sourceGeneration.current;
+      try {
+        const restored = await loadSourceImage(draft.file, draft.name);
+        if (!active || token !== sourceGeneration.current) { restored.bitmap.close(); return; }
+        draftRef.current = draft; setRetain(draft.retain);
+        setSource(restored); setImageData(bitmapToImageData(restored)); setModel(draft.model || 'general');
+        if (draft.mask?.length === restored.width * restored.height) {
+          maskRef.current = new Uint8ClampedArray(draft.mask);
+          const edits = editHistories.get(draft.file);
+          if (edits && edits.stack.every(mask => mask.length === draft.mask!.length)) { historyRef.current = edits; syncHistoryFlags(); }
+          else resetHistory(draft.mask);
+          setHasResult(true);
+        }
+      } catch { setReject('Saved image could not be restored. Upload a new image.'); }
+    });
+    return () => {
+      active = false;
+      if (draftRef.current) editHistories.set(draftRef.current.file, historyRef.current);
+      if (draftRef.current) void saveImageDraft('background', { ...draftRef.current, mask: maskRef.current ? new Uint8ClampedArray(maskRef.current) : undefined, saved: Date.now() });
+    };
+  }, [resetHistory, syncHistoryFlags]);
+  useEffect(() => {
+    if (!draftRef.current) return;
+    const draft = { ...draftRef.current, model, retain, mask: hasResult && maskRef.current ? new Uint8ClampedArray(maskRef.current) : undefined, saved: Date.now() };
+    draftRef.current = draft;
+    void saveImageDraft('background', draft).then(ok => { if (!ok) setReject(retain ? 'Device storage unavailable. Image remains in this session; an older retained image may still exist.' : 'Device storage could not be cleared. A retained image may remain; use Reset or browser site-data settings.'); });
+  }, [retain, hasResult, model, source]);
+  useEffect(() => () => { ++sourceGeneration.current; }, []);
+
+  const hasSourceAlpha = useMemo(() => { if (!imageData) return false; for (let i = 3; i < imageData.data.length; i += 4) if (imageData.data[i] < 255) return true; return false; }, [imageData]);
+  const upload = useImageUpload({ onImage: handleFile, onReject: setReject, enabled: true });
 
   // Full repaint on source change or when a result appears/disappears. Brush
   // edits patch the canvas imperatively and don't retrigger this.
@@ -313,7 +305,7 @@ export default function BackgroundRemover() {
     if (!canvas || !source) return;
     canvas.width = source.width;
     canvas.height = source.height;
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext('2d')!;
     ctx.clearRect(0, 0, source.width, source.height);
     if (hasResult && maskRef.current && imageDataRef.current) {
       ctx.putImageData(applyMask(imageDataRef.current, maskRef.current), 0, 0);
@@ -329,72 +321,51 @@ export default function BackgroundRemover() {
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
       const el = e.target as HTMLElement | null;
-      if (
-        el &&
-        (el.tagName === "INPUT" ||
-          el.tagName === "TEXTAREA" ||
-          el.isContentEditable)
-      )
-        return;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
       const k = e.key.toLowerCase();
-      if (k === "z" && !e.shiftKey) {
+      if (k === 'z' && !e.shiftKey) {
         e.preventDefault();
         undo();
-      } else if (k === "y" || (k === "z" && e.shiftKey)) {
+      } else if (k === 'y' || (k === 'z' && e.shiftKey)) {
         e.preventDefault();
         redo();
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [hasResult, undo, redo]);
 
   const handleRemove = useCallback(async () => {
     if (!imageData) return;
-    const id = jobs.current.next();
     try {
-      const mask = await removeBackground(imageData, model);
-      if (!jobs.current.current(id)) return;
-      if (mask.length !== imageData.width * imageData.height)
-        throw new Error("Incorrect mask dimensions.");
+      const mask = await removeBackground(imageData, model, provider);
       maskRef.current = mask;
       resetHistory(mask);
       setHasResult(true);
-    } catch (err) {
-      if (jobs.current.current(id) && (err as Error).name !== "AbortError")
-        setReject((err as Error).message);
+    } catch {
+      /* status/error surfaced by the hook */
     }
-  }, [imageData, model, removeBackground, resetHistory]);
+  }, [imageData, model, provider, removeBackground, resetHistory]);
 
   const handleDownload = useCallback(async () => {
     const canvas = displayRef.current;
     if (!canvas || !source || !hasResult) return;
-    const id = jobs.current.capture();
-    const backdrop =
-      backdropId === "transparent"
-        ? ({ kind: "transparent" } as const)
-        : ({
-            kind: "color",
-            color: backdropId === "white" ? "#ffffff" : "#000000",
-          } as const);
+    const backdrop = backdropId === 'transparent'
+      ? ({ kind: 'transparent' } as const)
+      : ({ kind: 'color', color: backdropId === 'white' ? '#ffffff' : '#000000' } as const);
     try {
-      const blob = await canvasToPngBlob(buildExportCanvas(canvas, backdrop));
-      if (jobs.current.current(id))
-        downloadBlob(blob, `${source.name}-nobg.png`);
-    } catch (err) {
-      if (jobs.current.current(id)) setReject((err as Error).message);
-    }
+    const blob = await canvasToPngBlob(buildExportCanvas(canvas, backdrop));
+    downloadBlob(blob, `${source.name}-nobg.png`);
+    } catch { setReject("PNG export failed. Please retry."); }
   }, [source, hasResult, backdropId]);
 
-  const handleReset = useCallback(() => {
-    jobs.current.cancel();
-    bitmap.current?.close();
-    bitmap.current = null;
-    setSource(null);
-    setImageData(null);
-    setReject(null);
-    clearResult();
-    resetEngine();
+  const handleReset = useCallback(async () => {
+    const token = ++sourceGeneration.current;
+    resetEngine(); clearResult(); draftRef.current = null;
+    const ok = await clearImageDraft('background');
+    if (token !== sourceGeneration.current) return;
+    setSource(null); setImageData(null);
+    setReject(ok ? null : 'Device storage could not be cleared. Clear site data in browser settings.');
   }, [clearResult, resetEngine]);
 
   // ── Brush interaction ──────────────────────────────────────────────────────
@@ -412,12 +383,12 @@ export default function BackgroundRemover() {
     const c = displayRef.current;
     if (!ring || !c) return;
     if (!refining) {
-      ring.style.display = "none";
+      ring.style.display = 'none';
       return;
     }
     const rect = c.getBoundingClientRect();
     const diameter = brushSize * (rect.width / c.width);
-    ring.style.display = "block";
+    ring.style.display = 'block';
     ring.style.width = `${diameter}px`;
     ring.style.height = `${diameter}px`;
     ring.style.left = `${e.clientX - rect.left}px`;
@@ -428,19 +399,10 @@ export default function BackgroundRemover() {
     const mask = maskRef.current;
     const img = imageDataRef.current;
     const canvas = displayRef.current;
-    if (!mask || !img || !canvas || brushMode === "off") return null;
+    if (!mask || !img || !canvas || brushMode === 'off') return null;
     const hardness = brushHard ? 1 : 0.35;
     const r = brushSize / 2;
-    const dirty = stampBrush(
-      mask,
-      img.width,
-      img.height,
-      cx,
-      cy,
-      r,
-      hardness,
-      brushMode,
-    );
+    const dirty = stampBrush(mask, img.width, img.height, cx, cy, r, hardness, brushMode);
     recompositeRegion(canvas, img, mask, dirty);
     strokeChangedRef.current = true;
     return dirty;
@@ -491,185 +453,118 @@ export default function BackgroundRemover() {
 
   const onPointerLeave = () => {
     strokeRef.current = null;
-    if (ringRef.current) ringRef.current.style.display = "none";
+    if (ringRef.current) ringRef.current.style.display = 'none';
   };
 
   return (
-    <div
-      style={{
-        width: "100%",
-        maxWidth: 1100,
-        margin: "0 auto",
-        padding: "0 16px",
-      }}
-    >
-      {reject && (
-        <p role="alert" className="studio-status is-error">
-          {reject}
-        </p>
-      )}
-      <input
-        ref={upload.inputRef}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={upload.onInputChange}
-      />
+    <div style={{ width: '100%', maxWidth: 1100, margin: '0 auto', padding: '0 16px' }}>
+      <input ref={upload.inputRef} type="file" accept="image/*" hidden onChange={upload.onInputChange} />
 
       {/* Honest, persistent limitation note. */}
       <div
         style={{
-          display: "flex",
-          alignItems: "flex-start",
+          display: 'flex',
+          alignItems: 'flex-start',
           gap: 8,
-          padding: "10px 14px",
+          padding: '10px 14px',
           marginBottom: 16,
-          borderRadius: "var(--radius-md)",
-          background: "var(--color-surface-2)",
-          border: "1px solid var(--color-hairline)",
-          color: "var(--color-ink-muted)",
+          borderRadius: 'var(--radius-md)',
+          background: 'var(--color-surface-2)',
+          border: '1px solid var(--color-hairline)',
+          color: 'var(--color-ink-muted)',
           fontSize: 12.5,
           lineHeight: 1.5,
-          fontFamily: "var(--font-body)",
+          fontFamily: 'var(--font-body)',
         }}
       >
         <Info size={15} style={{ flexShrink: 0, marginTop: 1 }} />
         <span>
-          Runs on your device — the image never leaves it. Results won't match
-          paid tools on the hardest cases: neither model cuts out{" "}
-          <strong>true transparency</strong> (glass, smoke) or very fine hair
-          cleanly. Use <strong>Refine</strong> to fix what the model misses.
+          Runs on your device — the image never leaves it. Fine hair, translucent glass and smoke
+          remain difficult for these checkpoints. Inspect edges on multiple backgrounds and use
+          <strong> Refine</strong> for manual corrections.
         </span>
       </div>
 
+      <p role="status">{backend === "helper" ? "Python helper on this computer (CPU)" : backend === "webgpu" ? "WebGPU acceleration (float32)" : backend === "wasm" ? "CPU WASM fallback - larger images may take several seconds" : "Local processing: WebGPU when available, CPU WASM fallback"}. Model sessions release after two idle minutes. <button onClick={release} style={ghostBtn}>Release browser model memory</button></p>
+      <label style={{ display: "block", marginBottom: 12 }}><input type="checkbox" checked={retain} onChange={e => setRetain(e.target.checked)} /> Keep this image on this device for 24 hours (off by default)</label>
       {!source ? (
         <div
-          role="button"
-          tabIndex={0}
-          aria-label="Choose background removal image"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              upload.openPicker();
-            }
-          }}
           onClick={upload.openPicker}
           onDrop={upload.onDrop}
           onDragOver={upload.onDragOver}
           onDragLeave={upload.onDragLeave}
           style={{
             ...card,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
             minHeight: 320,
-            cursor: "pointer",
-            color: "var(--color-ink-muted)",
+            cursor: 'pointer',
+            color: 'var(--color-ink-muted)',
             padding: 40,
-            textAlign: "center",
-            borderStyle: "dashed",
-            borderColor: upload.isDragging
-              ? "var(--color-brand)"
-              : "var(--color-hairline)",
+            textAlign: 'center',
+            borderStyle: 'dashed',
+            borderColor: upload.isDragging ? 'var(--color-brand)' : 'var(--color-hairline)',
           }}
         >
           <Upload size={32} style={{ marginBottom: 12 }} />
-          <div
-            style={{
-              fontSize: 15,
-              fontWeight: 500,
-              color: "var(--color-ink)",
-              fontFamily: "var(--font-body)",
-            }}
-          >
+          <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
             Drop an image, click to browse, or paste from clipboard
           </div>
-          <div
-            style={{
-              fontSize: 13,
-              marginTop: 6,
-              fontFamily: "var(--font-body)",
-            }}
-          >
+          <div style={{ fontSize: 13, marginTop: 6, fontFamily: 'var(--font-body)' }}>
             PNG, JPEG, WebP, GIF or BMP · processed entirely on your device
           </div>
           {reject && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                marginTop: 16,
-                color: "var(--color-error)",
-                fontSize: 13,
-                fontFamily: "var(--font-body)",
-              }}
-            >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 16, color: 'var(--color-error)', fontSize: 13, fontFamily: 'var(--font-body)' }}>
               <AlertTriangle size={15} /> {reject}
             </div>
           )}
         </div>
       ) : (
-        <div
-          style={{
-            display: "grid",
-            gap: 16,
-            gridTemplateColumns: "minmax(0, 1fr) 300px",
-          }}
-          className="bg-remover-grid"
-        >
+        <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'minmax(0, 1fr) 300px' }} className="bg-remover-grid">
           {/* Canvas */}
           <div style={card}>
-            <div style={cardHead}>{hasResult ? "Result" : "Original"}</div>
+            <div style={cardHead}>{hasResult ? 'Result' : 'Original'}</div>
             <div
               style={{
                 padding: 16,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 minHeight: 320,
-                background: "var(--color-canvas)",
+                background: 'var(--color-canvas)',
               }}
             >
-              <div
-                style={{
-                  position: "relative",
-                  display: "inline-block",
-                  lineHeight: 0,
-                }}
-              >
+              <div style={{ position: 'relative', display: 'inline-block', lineHeight: 0 }}>
                 <canvas
                   ref={displayRef}
                   onPointerDown={onPointerDown}
                   onPointerMove={onPointerMove}
                   onPointerUp={onPointerUp}
-                  onPointerCancel={onPointerUp}
                   onPointerLeave={onPointerLeave}
                   style={{
-                    maxWidth: "100%",
-                    maxHeight: "68vh",
-                    display: "block",
-                    borderRadius: "var(--radius-md)",
-                    background: hasResult
-                      ? backdropCss(backdropId)
-                      : "transparent",
-                    cursor: refining ? "none" : "default",
-                    touchAction: refining ? "none" : "auto",
+                    maxWidth: '100%',
+                    maxHeight: '68vh',
+                    display: 'block',
+                    borderRadius: 'var(--radius-md)',
+                    background: hasResult ? backdropCss(backdropId) : 'transparent',
+                    cursor: refining ? 'none' : 'default',
+                    touchAction: refining ? 'none' : 'auto',
                   }}
                 />
                 <div
                   ref={ringRef}
                   style={{
-                    position: "absolute",
-                    display: "none",
-                    pointerEvents: "none",
+                    position: 'absolute',
+                    display: 'none',
+                    pointerEvents: 'none',
                     left: 0,
                     top: 0,
-                    transform: "translate(-50%, -50%)",
-                    borderRadius: "50%",
-                    border: "1.5px solid rgba(255,255,255,0.95)",
-                    boxShadow: "0 0 0 1.5px rgba(0,0,0,0.55)",
+                    transform: 'translate(-50%, -50%)',
+                    borderRadius: '50%',
+                    border: '1.5px solid rgba(255,255,255,0.95)',
+                    boxShadow: '0 0 0 1.5px rgba(0,0,0,0.55)',
                   }}
                 />
               </div>
@@ -677,89 +572,65 @@ export default function BackgroundRemover() {
           </div>
 
           {/* Controls */}
-          <div style={{ ...card, padding: 20, alignSelf: "start" }}>
+          <div style={{ ...card, padding: 20, alignSelf: 'start' }}>
+            <label style={label} htmlFor="background-provider">Processing location</label>
+            <select id="background-provider" aria-label="Background processing location" value={provider} onChange={e => { const next = e.target.value === 'helper' ? 'helper' : 'browser'; resetEngine(); clearResult(); setProvider(next); if (next === 'helper') setModel('detail'); }}>
+              <option value="browser">In this browser (no image upload)</option>
+              <option value="helper" disabled={!helperReady}>Python helper on this computer (sends image from browser)</option>
+            </select>
+            <p role="status">{helperStatus}</p>
+            <button style={ghostBtn} onClick={async () => { setHelperStatus('Checking local helper…'); try { await checkHelper(); setHelperReady(true); setHelperStatus('Verified local helper ready. Selecting it and clicking Remove Background sends the image to 127.0.0.1:8935.'); } catch { setHelperReady(false); setHelperStatus('Helper unavailable. Browser processing works independently. Start services/studio-helper/server.py, then check again.'); } }}>Check Python helper</button>
+            {provider === 'helper' && <p>The image will leave this browser for the local Python helper only after you click Remove Background. The helper uses the pinned Detail model, keeps a warm CPU session and does not save uploads. Stop the Python process to release its memory.</p>}
             <label style={label}>Model</label>
-            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-              {(["general", "portrait"] as ModelId[]).map((m) => (
-                <button
-                  key={m}
-                  aria-pressed={model === m}
-                  onClick={() => changeModel(m)}
-                  style={pill(model === m)}
-                >
-                  {MODELS[m].label}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              {(['general', 'portrait', 'detail'] as ModelId[]).map((m) => (
+                <button key={m} disabled={provider === 'helper' ? m !== 'detail' : m === 'detail' && !gpuAvailable} onClick={() => changeModel(m)} style={pill(model === m)}>
+                  {m === 'detail' && provider === 'helper' ? 'Detail (local CPU)' : MODELS[m].label}
                 </button>
               ))}
             </div>
-            <div
-              style={{
-                fontSize: 11.5,
-                lineHeight: 1.5,
-                color: "var(--color-ink-muted)",
-                marginBottom: 20,
-                fontFamily: "var(--font-body)",
-              }}
-            >
-              {MODELS[model].caption}
+            <div style={{ fontSize: 11.5, lineHeight: 1.5, color: 'var(--color-ink-muted)', marginBottom: 20, fontFamily: 'var(--font-body)' }}>
+              {provider === 'helper' ? 'BiRefNet Lite 512, fixed verified FP32 checkpoint. Uses local CPU; no browser model download.' : MODELS[model].caption}
+              {provider === 'browser' && !gpuAvailable && ' Detail needs WebGPU. General and Portrait keep their CPU fallback; the optional helper offers Detail on this computer.'}
             </div>
 
             <label style={label}>Background</label>
-            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
               {BACKDROPS.map((b) => (
                 <button
-                  aria-label={b.label}
-                  aria-pressed={backdropId === b.id}
                   key={b.id}
                   onClick={() => setBackdropId(b.id)}
                   title={b.label}
                   style={{
                     flex: 1,
                     height: 40,
-                    borderRadius: "var(--radius-md)",
-                    cursor: "pointer",
-                    border:
-                      backdropId === b.id
-                        ? "2px solid var(--color-brand)"
-                        : "1px solid var(--color-hairline)",
+                    borderRadius: 'var(--radius-md)',
+                    cursor: 'pointer',
+                    border: backdropId === b.id ? '2px solid var(--color-brand)' : '1px solid var(--color-hairline)',
                     background:
-                      b.swatch === "checker"
-                        ? "repeating-conic-gradient(rgba(0,0,0,0.12) 0% 25%, transparent 0% 50%) 50% / 12px 12px"
+                      b.swatch === 'checker'
+                        ? 'repeating-conic-gradient(rgba(0,0,0,0.12) 0% 25%, transparent 0% 50%) 50% / 12px 12px'
                         : b.swatch,
                   }}
                 />
               ))}
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <button
-                onClick={handleRemove}
-                disabled={status === "processing"}
-                style={primaryBtn(status === "processing")}
-              >
-                {status === "processing" ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button onClick={handleRemove} disabled={status === 'processing' || (provider === 'browser' && model === 'detail' && !gpuAvailable)} style={primaryBtn(status === 'processing')}>
+                {status === 'processing' ? (
                   <>
-                    <Loader2 size={16} className="animate-spin" />{" "}
-                    {progressLabel(progress)}
+                    <Loader2 size={16} className="animate-spin" /> {progressLabel(progress)}
                   </>
                 ) : (
                   <>
-                    <ImageOff size={16} />{" "}
-                    {hasResult ? "Re-run" : "Remove Background"}
+                    <ImageOff size={16} /> {hasResult ? 'Re-run' : 'Remove Background'}
                   </>
                 )}
               </button>
 
-              <div style={{ display: "flex", gap: 10 }}>
-                <button
-                  onClick={handleDownload}
-                  disabled={!hasResult}
-                  style={{
-                    ...ghostBtn,
-                    flex: 1,
-                    opacity: hasResult ? 1 : 0.5,
-                    cursor: hasResult ? "pointer" : "not-allowed",
-                  }}
-                >
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={handleDownload} disabled={!hasResult} style={{ ...ghostBtn, flex: 1, opacity: hasResult ? 1 : 0.5, cursor: hasResult ? 'pointer' : 'not-allowed' }}>
                   <Download size={16} /> PNG
                 </button>
                 <button onClick={handleReset} title="Reset" style={ghostBtn}>
@@ -768,50 +639,26 @@ export default function BackgroundRemover() {
               </div>
             </div>
 
+            {hasSourceAlpha && <button style={ghostBtn} onClick={() => { resetEngine(); const mask = new Uint8ClampedArray(imageData!.width * imageData!.height).fill(255); maskRef.current = mask; resetHistory(mask); setHasResult(true); }}>Keep source transparency (skip AI)</button>}
             {/* Refine — only once there's a result to fix. */}
             {hasResult && (
-              <div
-                style={{
-                  marginTop: 20,
-                  borderTop: "1px solid var(--color-hairline)",
-                  paddingTop: 18,
-                }}
-              >
+              <div style={{ marginTop: 20, borderTop: '1px solid var(--color-hairline)', paddingTop: 18 }}>
                 <label style={label}>Refine mask</label>
-                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                  <button
-                    aria-pressed={brushMode === "restore"}
-                    onClick={() =>
-                      setBrushMode((m) => (m === "restore" ? "off" : "restore"))
-                    }
-                    style={pill(brushMode === "restore")}
-                  >
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <button onClick={() => setBrushMode((m) => (m === 'restore' ? 'off' : 'restore'))} style={pill(brushMode === 'restore')}>
                     <Brush size={14} /> Restore
                   </button>
-                  <button
-                    aria-pressed={brushMode === "erase"}
-                    onClick={() =>
-                      setBrushMode((m) => (m === "erase" ? "off" : "erase"))
-                    }
-                    style={pill(brushMode === "erase")}
-                  >
+                  <button onClick={() => setBrushMode((m) => (m === 'erase' ? 'off' : 'erase'))} style={pill(brushMode === 'erase')}>
                     <Eraser size={14} /> Erase
                   </button>
                 </div>
 
-                <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
                   <button
                     onClick={undo}
                     disabled={!canUndo}
                     title="Undo (⌘/Ctrl+Z)"
-                    style={{
-                      ...ghostBtn,
-                      flex: 1,
-                      padding: "8px 0",
-                      fontSize: 13,
-                      opacity: canUndo ? 1 : 0.45,
-                      cursor: canUndo ? "pointer" : "not-allowed",
-                    }}
+                    style={{ ...ghostBtn, flex: 1, padding: '8px 0', fontSize: 13, opacity: canUndo ? 1 : 0.45, cursor: canUndo ? 'pointer' : 'not-allowed' }}
                   >
                     <Undo2 size={14} /> Undo
                   </button>
@@ -819,112 +666,48 @@ export default function BackgroundRemover() {
                     onClick={redo}
                     disabled={!canRedo}
                     title="Redo (⌘/Ctrl+Shift+Z)"
-                    style={{
-                      ...ghostBtn,
-                      flex: 1,
-                      padding: "8px 0",
-                      fontSize: 13,
-                      opacity: canRedo ? 1 : 0.45,
-                      cursor: canRedo ? "pointer" : "not-allowed",
-                    }}
+                    style={{ ...ghostBtn, flex: 1, padding: '8px 0', fontSize: 13, opacity: canRedo ? 1 : 0.45, cursor: canRedo ? 'pointer' : 'not-allowed' }}
                   >
                     <Redo2 size={14} /> Redo
                   </button>
                 </div>
 
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "var(--color-ink-muted)",
-                    marginBottom: 6,
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
+                <div style={{ fontSize: 12, color: 'var(--color-ink-muted)', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
                   Brush size — {brushSize}px
                 </div>
                 <input
-                  aria-label="Refinement brush size"
+                  aria-label="Mask brush size"
                   type="range"
                   min={8}
                   max={200}
                   value={brushSize}
                   onChange={(e) => setBrushSize(+e.target.value)}
-                  style={{
-                    width: "100%",
-                    accentColor: "var(--color-brand)",
-                    cursor: "pointer",
-                    marginBottom: 14,
-                  }}
+                  style={{ width: '100%', accentColor: 'var(--color-brand)', cursor: 'pointer', marginBottom: 14 }}
                 />
 
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: "var(--color-ink-muted)",
-                      fontFamily: "var(--font-body)",
-                    }}
-                  >
-                    Edge
-                  </span>
-                  <button
-                    onClick={() => setBrushHard(false)}
-                    style={edgeBtn(!brushHard)}
-                  >
-                    Soft
-                  </button>
-                  <button
-                    onClick={() => setBrushHard(true)}
-                    style={edgeBtn(brushHard)}
-                  >
-                    Hard
-                  </button>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>Edge</span>
+                  <button onClick={() => setBrushHard(false)} style={edgeBtn(!brushHard)}>Soft</button>
+                  <button onClick={() => setBrushHard(true)} style={edgeBtn(brushHard)}>Hard</button>
                 </div>
 
-                <div
-                  style={{
-                    fontSize: 11.5,
-                    lineHeight: 1.5,
-                    color: "var(--color-ink-muted)",
-                    marginTop: 12,
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
+                <div style={{ fontSize: 11.5, lineHeight: 1.5, color: 'var(--color-ink-muted)', marginTop: 12, fontFamily: 'var(--font-body)' }}>
                   {refining
                     ? `Brush over the image to ${brushMode} areas. Restore brings back removed pixels; erase removes kept ones.`
-                    : "Pick Restore or Erase, then brush over the image to fix the mask."}
+                    : 'Pick Restore or Erase, then brush over the image to fix the mask.'}
                 </div>
               </div>
             )}
 
             {error && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  marginTop: 16,
-                  color: "var(--color-error)",
-                  fontSize: 12.5,
-                  fontFamily: "var(--font-body)",
-                }}
-              >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 16, color: 'var(--color-error)', fontSize: 12.5, fontFamily: 'var(--font-body)' }}>
                 <AlertTriangle size={15} /> {error}
               </div>
             )}
 
-            <div
-              style={{
-                marginTop: 18,
-                fontSize: 11.5,
-                lineHeight: 1.5,
-                color: "var(--color-ink-muted)",
-                fontFamily: "var(--font-body)",
-              }}
-            >
-              {source.width} × {source.height}px · everything runs locally; the
-              image never leaves your device.
-              {source.downscaled && " Large image downscaled for processing."}
+            <div style={{ marginTop: 18, fontSize: 11.5, lineHeight: 1.5, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+              {source.width} × {source.height}px · everything runs locally; the image never leaves your device.
+              {source.downscaled && ' Large image downscaled for processing.'}
             </div>
           </div>
         </div>

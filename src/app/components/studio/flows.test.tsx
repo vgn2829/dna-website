@@ -3,7 +3,7 @@ import { studioDrafts } from "./drafts";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { FontPairing, makeFontUrl } from "./FontPairing";
+import { FontPairing, typographyCss } from "./FontPairing";
 import { GridCalculator } from "./GridCalculator";
 import PaletteStudio from "../PaletteStudio";
 import { SvgConverter } from "../SvgConverter";
@@ -15,6 +15,7 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let host: HTMLDivElement, root: Root;
 beforeEach(() => {
   studioDrafts.clear();
+  localStorage.clear();
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -107,7 +108,7 @@ it("mood changes remain separate and accessibility names the pair criteria", asy
   expect(host.textContent).toContain("Independent mood exploration");
   await click(button("Accessibility"));
   expect(host.textContent).toContain("Normal AA");
-  expect(host.textContent).toContain("signed");
+  expect(host.textContent).not.toContain("APCA");
   expect(host.textContent).not.toContain("AA+");
 });
 it("SVG input is rendered as an image, rejects active files, and recovers to valid input", async () => {
@@ -257,33 +258,36 @@ it("releases pending SVG raster image URLs when the tool is left before decode c
   expect(URL.revokeObjectURL).toHaveBeenCalledWith(url);
 });
 
-it("font stylesheet failure reports fallback and exposes selected filters", async () => {
-  await render(<FontPairing />);
-  const sheet = Array.from(document.head.querySelectorAll("link")).find((l) =>
-    l.href.startsWith("https://fonts.googleapis.com/css2?"),
-  )!;
-  expect(new URL(sheet.href).searchParams.getAll("family")).toEqual(
-    ["Playfair+Display:wght@700", "Source+Sans+3:wght@400"].map((v) =>
-      v.replace(/\+/g, " "),
-    ),
-  );
-  await act(() => {
-    sheet.dispatchEvent(new Event("error"));
-  });
-  expect(host.textContent).toContain("preview uses fallback fonts");
-  const all = Array.from(host.querySelectorAll("button")).find(
-    (b) => b.textContent === "All",
-  )!;
-  expect(all.getAttribute("aria-pressed")).toBe("true");
+it("self-hosted font failure reports fallback and exposes retry", async () => {
+  vi.stubGlobal("FontFace", class { load() { return Promise.reject(new Error("missing font")); } });
+  Object.defineProperty(document,"fonts",{configurable:true,value:new Set()});
+  try {
+    await render(<FontPairing />);
+    expect(host.textContent).toContain("Font download failed");
+    expect(button("Retry fonts")).toBeTruthy();
+    expect(document.head.querySelector('link[href^="https://fonts.googleapis.com"]')).toBeNull();
+  } finally { vi.unstubAllGlobals(); }
+});
+it("same-family CSS preserves the actual selected variable weights and self-hosted URL", () => {
+  const css=typographyCss({title:"Product clarity",heading:"inter",body:"inter",headingWeight:800,bodyWeight:400,use:"Product",script:"Latin",reason:""},54);
+  expect(css.match(/@font-face/g)).toHaveLength(1);
+  expect(css).toContain("font-weight: 400 800");
+  expect(css).toContain("/fonts/studio/inter.woff2");
+  expect(css).toContain("font-weight: 800");
 });
 
-it("font requests merge weights for the same family without dropping heavy display weights", () => {
-  const url = new URL(
-    makeFontUrl([
-      { name: "Inter", weight: 900 },
-      { name: "Inter", weight: 400 },
-      { name: "Inter", weight: 900 },
-    ]),
-  );
-  expect(url.searchParams.getAll("family")).toEqual(["Inter:wght@400;900"]);
+it("halftone replacement and unmount release pending decode URLs before image events arrive", async () => {
+  const {HalftoneStudio}=await import('../HalftoneStudio');
+  const revoke=vi.mocked(URL.revokeObjectURL);
+  vi.stubGlobal('Image',class {onload: (()=>void)|null=null;onerror: (()=>void)|null=null;src='';});
+  try {
+    await render(<HalftoneStudio/>);
+    await upload(host.querySelector('input[type=file]')!,new File(['one'],'one.png',{type:'image/png'}));
+    const first=vi.mocked(URL.createObjectURL).mock.results[0].value;
+    expect(revoke).not.toHaveBeenCalledWith(first);
+    await upload(host.querySelector('input[type=file]')!,new File(['two'],'two.png',{type:'image/png'}));
+    const second=vi.mocked(URL.createObjectURL).mock.results[1].value;
+    expect(revoke).toHaveBeenCalledWith(first);
+    await render(null);expect(revoke).toHaveBeenCalledWith(second);
+  } finally {vi.unstubAllGlobals();}
 });

@@ -1,0 +1,91 @@
+{
+  "firstUiJobMs": 27150,
+  "checks": [
+    "real pinned remote model download, integrity check, WebGPU inference and PNG export"
+  ],
+  "measurementContext": "Successful real UI processing and processor runs overlapped build/browser activity. Diagnostic slow cases, not isolated performance benchmark.",
+  "processorRuns": [
+    {
+      "elapsedMs": 32280.59999999404,
+      "maskPixels": 262144,
+      "phases": [
+        {
+          "type": "progress",
+          "id": 1,
+          "phase": "download",
+          "elapsedMs": 237
+        },
+        {
+          "type": "progress",
+          "id": 1,
+          "phase": "init",
+          "elapsedMs": 6442.0999999940395
+        },
+        {
+          "type": "progress",
+          "id": 1,
+          "phase": "infer",
+          "backend": "webgpu",
+          "elapsedMs": 11855.90000000596
+        }
+      ],
+      "temperature": "cold separate worker with populated model cache"
+    },
+    {
+      "elapsedMs": 74545.40000000596,
+      "maskPixels": 262144,
+      "phases": [
+        {
+          "type": "progress",
+          "id": 2,
+          "phase": "infer",
+          "backend": "webgpu",
+          "elapsedMs": 57.5
+        }
+      ],
+      "temperature": "warm"
+    },
+    {
+      "elapsedMs": 3513.0999999940395,
+      "maskPixels": 262144,
+      "phases": [
+        {
+          "type": "progress",
+          "id": 3,
+          "phase": "infer",
+          "backend": "webgpu",
+          "elapsedMs": 206.19999998807907
+        }
+      ],
+      "temperature": "warm"
+    },
+    {
+      "elapsedMs": 3791.9000000059605,
+      "maskPixels": 262144,
+      "phases": [
+        {
+          "type": "progress",
+          "id": 4,
+          "phase": "infer",
+          "backend": "webgpu",
+          "elapsedMs": 7.200000017881393
+        }
+      ],
+      "temperature": "warm"
+    },
+    {
+      "elapsedMs": 5133.4000000059605,
+      "maskPixels": 262144,
+      "phases": [
+        {
+          "type": "progress",
+          "id": 5,
+          "phase": "infer",
+          "backend": "webgpu",
+          "elapsedMs": 106.09999999403954
+        }
+      ],
+      "temperature": "warm"
+    }
+  ]
+}

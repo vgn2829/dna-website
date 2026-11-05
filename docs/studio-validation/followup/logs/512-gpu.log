@@ -1,0 +1,69 @@
+debug [vite] connecting...
+debug [vite] connected.
+info %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold
+error Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+error Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+error Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+error Failed to load app data: SyntaxError: Failed to execute 'json' on 'Response': Unexpected end of JSON input
+    at request (http://127.0.0.1:5173/src/app/lib/api.ts:47:26)
+    at async Promise.all (index 0)
+error Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+error Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+error Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+log Initializing BiRefNet Lite webgpu
+log %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+log %c[Vercel Web Analytics]%c [view] http://127.0.0.1:5173/design-studio?tab=bg color: rgb(120, 120, 120) color: inherit {o: http://127.0.0.1:5173/design-studio?tab=bg, sv: 0.1.3, sdkn: @vercel/analytics/react, sdkv: 2.0.1, r: } /_vercel/insights/view
+log %c[Vercel Speed Insights]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+error [0;93m2026-11-05 01:43:53.416900 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Div node '/bb/layers.0_1/Div_1'[m
+error [0;93m2026-11-05 01:43:53.418800 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Div node '/bb/layers.0_1/Div'[m
+error [0;93m2026-11-05 01:43:53.424000 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Ceil node '/bb/layers.0/Ceil_1'[m
+error [0;93m2026-11-05 01:43:53.429900 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Div node '/bb/layers.1_1/Div_1'[m
+error [0;93m2026-11-05 01:43:53.430200 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Div node '/bb/layers.1_1/Div'[m
+error [0;93m2026-11-05 01:43:53.434900 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Ceil node '/bb/layers.1/Ceil_1'[m
+error [0;93m2026-11-05 01:43:53.440800 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Div node '/bb/layers.2_1/Div_1'[m
+error [0;93m2026-11-05 01:43:53.441100 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Div node '/bb/layers.2_1/Div'[m
+error [0;93m2026-11-05 01:43:53.450100 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Ceil node '/bb/layers.2/Ceil_1'[m
+error [0;93m2026-11-05 01:43:53.459500 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Div node '/bb/layers.3_1/Div_1'[m
+error [0;93m2026-11-05 01:43:53.459700 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Div node '/bb/layers.3_1/Div'[m
+error [0;93m2026-11-05 01:43:53.464100 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Ceil node '/bb/layers.3/Ceil_1'[m
+error [0;93m2026-11-05 01:43:53.686700 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Div node '/bb/layers.0_1/Div_1'[m
+error [0;93m2026-11-05 01:43:53.687100 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Div node '/bb/layers.0_1/Div'[m
+error [0;93m2026-11-05 01:43:53.687200 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Ceil node '/bb/layers.0/Ceil_1'[m
+error [0;93m2026-11-05 01:43:53.687500 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Div node '/bb/layers.1_1/Div_1'[m
+error [0;93m2026-11-05 01:43:53.687600 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Div node '/bb/layers.1_1/Div'[m
+error [0;93m2026-11-05 01:43:53.687700 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Ceil node '/bb/layers.1/Ceil_1'[m
+error [0;93m2026-11-05 01:43:53.688000 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Div node '/bb/layers.2_1/Div_1'[m
+error [0;93m2026-11-05 01:43:53.688000 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Div node '/bb/layers.2_1/Div'[m
+error [0;93m2026-11-05 01:43:53.688200 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Ceil node '/bb/layers.2/Ceil_1'[m
+error [0;93m2026-11-05 01:43:53.688400 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Div node '/bb/layers.3_1/Div_1'[m
+error [0;93m2026-11-05 01:43:53.688499 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Div node '/bb/layers.3_1/Div'[m
+error [0;93m2026-11-05 01:43:53.688700 [W:onnxruntime:, constant_folding.cc:484 ApplyImpl] Could not find a CPU kernel and hence can't constant fold Ceil node '/bb/layers.3/Ceil_1'[m
+error [0;93m2026-11-05 01:43:54.564999 [W:onnxruntime:, session_state.cc:1367 VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.[m
+error [0;93m2026-11-05 01:43:54.565300 [W:onnxruntime:, session_state.cc:1369 VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.[m
+log Running BiRefNet Lite webgpu 0
+log Running BiRefNet Lite webgpu 1
+log Running BiRefNet Lite webgpu 2
+{
+  "capabilities": {
+    "gpu": true,
+    "float16": true,
+    "adapterMaxStorageBuffers": 10,
+    "defaultDeviceStorageBuffers": 8
+  },
+  "downloadMs": 183.40000000596046,
+  "results": [
+    {
+      "backend": "webgpu",
+      "initMs": 3495.199999988079,
+      "timings": [
+        3987,
+        2059.899999976158,
+        2028.7000000178814
+      ]
+    }
+  ],
+  "hardware": {
+    "cpu": "Apple M2",
+    "memoryGB": 64
+  }
+}

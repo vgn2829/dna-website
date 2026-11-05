@@ -378,9 +378,9 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
   // result to the DOM through each FlipCard's `style` (see below). Real
   // state transitions (phase, containerSize, artworks) still legitimately
   // re-render, since this callback re-closes over them.
-  const circleTargets = useTransform(
+  const circleTargets = useTransform<number, CardTarget[]>(
     [smoothMorph, smoothScrollRotate, smoothMouseX],
-    ([morphValue, rotateValue, parallaxValue]: [number, number, number]): CardTarget[] => {
+    ([morphValue, rotateValue, parallaxValue]): CardTarget[] => {
       const isMobile = containerSize.width < 768;
       const minDimension = Math.min(containerSize.width, containerSize.height);
 

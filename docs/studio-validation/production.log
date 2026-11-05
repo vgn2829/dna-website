@@ -1,0 +1,26 @@
+[
+  {
+    "mode": "wasm",
+    "checks": [
+      "production module worker, runtime chunks, ONNX model load, actual inference, PNG export",
+      "production halftone worker and full-resolution export",
+      "production local fonts and colour engine",
+      "image conversion and source recovery after tool switch"
+    ],
+    "backendStatus": [
+      "CPU WASM fallback - larger images may take several seconds. Model sessions release after two idle minutes. Release model memory"
+    ]
+  },
+  {
+    "mode": "gpu",
+    "checks": [
+      "production module worker, runtime chunks, ONNX model load, actual inference, PNG export",
+      "production halftone worker and full-resolution export",
+      "production local fonts and colour engine",
+      "image conversion and source recovery after tool switch"
+    ],
+    "backendStatus": [
+      "WebGPU acceleration (float32). Model sessions release after two idle minutes. Release model memory"
+    ]
+  }
+]

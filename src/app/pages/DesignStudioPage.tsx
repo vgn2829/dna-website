@@ -157,8 +157,7 @@ export default function DesignStudio() {
         >
           <div className="studio-active-tool">
             <p className="studio-help">
-              Palette, font and contrast drafts are retained in this tab.
-              Switching tools cancels image processing and clears file inputs.
+              Switching tools cancels active image processing. Completed background and halftone images remain in this session; device image recovery is opt-in.
             </p>
             <Tool />
           </div>

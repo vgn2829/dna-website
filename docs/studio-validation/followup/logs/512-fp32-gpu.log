@@ -1,0 +1,33 @@
+debug [vite] connecting...
+error Failed to load resource: the server responded with a status of 404 (Not Found)
+debug [vite] connected.
+log Initializing BiRefNet Lite webgpu
+error [0;93m2026-11-05 01:51:53.006699 [W:onnxruntime:, session_state.cc:1367 VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.[m
+error [0;93m2026-11-05 01:51:53.008499 [W:onnxruntime:, session_state.cc:1369 VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.[m
+log Running BiRefNet Lite webgpu 0
+log Running BiRefNet Lite webgpu 1
+log Running BiRefNet Lite webgpu 2
+{
+  "capabilities": {
+    "gpu": true,
+    "float16": true,
+    "adapterMaxStorageBuffers": 10,
+    "defaultDeviceStorageBuffers": 8
+  },
+  "downloadMs": 1339,
+  "results": [
+    {
+      "backend": "webgpu",
+      "initMs": 1716.5,
+      "timings": [
+        3198.4000000059605,
+        6463,
+        2305.5
+      ]
+    }
+  ],
+  "hardware": {
+    "cpu": "Apple M2",
+    "memoryGB": 64
+  }
+}

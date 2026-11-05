@@ -1,0 +1,18 @@
+
+> @figma/my-make-file@0.0.1 test
+> vitest run
+
+
+ RUN  v5.0.1 /Users/venugopal/Downloads/dna_website
+
+
+ Test Files  15 passed (15)
+      Tests  195 passed (195)
+   Start at  22:14:27
+   Duration  394ms (transform 60%, import 20%, tests 15%, worker 5%)
+
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
