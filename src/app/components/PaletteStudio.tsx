@@ -60,10 +60,10 @@ export {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const GRADE = (n: number) => {
-  if (n >= 7.0) return { label: "AAA", color: "var(--color-success)" };
-  if (n >= 4.5) return { label: "AA", color: "#84cc16" };
-  if (n >= 3.0) return { label: "Large AA only", color: "#eab308" };
-  return { label: "Fail", color: "var(--color-error)" };
+  if (n >= 7.0) return { label: "AAA", tone: "is-pass" };
+  if (n >= 4.5) return { label: "AA", tone: "is-pass" };
+  if (n >= 3.0) return { label: "Large AA only", tone: "is-warn" };
+  return { label: "Fail", tone: "is-fail" };
 };
 
 const SCORE_COLOR = (s: number) =>
@@ -281,9 +281,9 @@ export default function PaletteStudio() {
         >
           Download CSS
         </button>
+        <button className="btn-secondary" onClick={async()=>{try{normalizeHex(seed);if(dirty)throw new Error("Generate the changed settings before sharing");const url=new URL(window.location.href);url.searchParams.set("tab","palette");url.searchParams.set("palette",serializeEditor(editor));await copy(url.toString());}catch(error){setError(error instanceof Error?error.message:"Sharing failed");}}}>Copy palette link</button>
       </div>
-      <button className="btn-secondary" onClick={async()=>{try{normalizeHex(seed);if(dirty)throw new Error("Generate the changed settings before sharing");const url=new URL(window.location.href);url.searchParams.set("tab","palette");url.searchParams.set("palette",serializeEditor(editor));await copy(url.toString());}catch(error){setError(error instanceof Error?error.message:"Sharing failed");}}}>Copy palette link</button>
-      <div className="segmented" role="group" aria-label="Palette views">
+      <div className="segmented studio-choice" role="group" aria-label="Palette views">
         {["palette", "accessibility", "colorblind", "mood"].map((t) => (
           <button
             key={t}
@@ -834,28 +834,14 @@ function AccessibilityTab({
     SurfaceElevated: "surfaceElevated",
   };
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
-        gap: 10,
-      }}
-    >
+    <div className="studio-pairs">
       {Object.entries(fitness.pairs).map(([name, data]) => {
         const parts = name.split(" / ");
         const fgHex = palette[keyMap[parts[0]]] || palette.text;
         const bgHex = palette[keyMap[parts[1]]] || palette.bg;
         const g = GRADE(data.cr);
         return (
-          <div
-            key={name}
-            style={{
-              background: "var(--color-surface-1)",
-              border: "1px solid var(--color-hairline)",
-              borderRadius: "var(--radius-md)",
-              overflow: "hidden",
-            }}
-          >
+          <div key={name} className="studio-pair">
             {/* Live text preview on actual palette background */}
             <div
               style={{
@@ -878,58 +864,14 @@ function AccessibilityTab({
               </span>
             </div>
             {/* Metadata row */}
-            <div
-              style={{
-                padding: "10px 14px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 500,
-                    color: "var(--color-ink)",
-                    marginBottom: 3,
-                  }}
-                >
-                  {name}
-                </div>
-
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-end",
-                  gap: 4,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: g.color,
-                    background: "var(--color-surface-2)",
-                    padding: "2px 8px",
-                    borderRadius: "var(--radius-xs)",
-                  }}
-                >
+            <div className="studio-pair-meta">
+              <span style={{ fontWeight: 500 }}>{name}</span>
+              <span className="studio-inline" style={{ gap: 8 }}>
+                <span className="studio-value">{data.cr.toFixed(2)}:1</span>
+                <span className={`studio-badge studio-tone ${g.tone}`}>
                   {g.label}
                 </span>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontFamily: "var(--font-mono)",
-                    color: "var(--color-ink-muted)",
-                  }}
-                >
-                  {data.cr.toFixed(2)}:1
-                </span>
-              </div>
+              </span>
             </div>
           </div>
         );
@@ -951,28 +893,14 @@ function ColorBlindTab({
     tritanopia: "Tritanopia (Blue-blind)",
   };
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
-        gap: 12,
-      }}
-    >
+    <div className="studio-pairs">
       {Object.entries(cbData).map(([type, data]) => {
         const tCR = data.textBgCR,
           pCR = data.primaryBgCR;
         const tG = GRADE(tCR),
           pG = GRADE(pCR);
         return (
-          <div
-            key={type}
-            style={{
-              background: "var(--color-surface-1)",
-              border: "1px solid var(--color-hairline)",
-              borderRadius: "var(--radius-md)",
-              overflow: "hidden",
-            }}
-          >
+          <div key={type} className="studio-pair">
             {/* Card header */}
             <div
               style={{
@@ -980,27 +908,10 @@ function ColorBlindTab({
                 borderBottom: "1px solid var(--color-hairline)",
               }}
             >
-              <div
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  letterSpacing: ".1em",
-                  textTransform: "uppercase",
-                  color: "var(--color-ink-muted)",
-                  marginBottom: 3,
-                }}
-              >
+              <div className="studio-help" style={{ fontSize: 12 }}>
                 Simulation
               </div>
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: "var(--color-ink)",
-                }}
-              >
-                {names[type]}
-              </div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{names[type]}</div>
             </div>
             {/* Simulated color strip */}
             <div style={{ padding: "12px 14px" }}>
@@ -1040,43 +951,18 @@ function ColorBlindTab({
               ].map((row) => (
                 <div
                   key={row.label}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    paddingBottom: 6,
-                  }}
+                  className="studio-pair-meta"
+                  style={{ padding: "0 0 6px" }}
                 >
-                  <span
-                    style={{ fontSize: 11, color: "var(--color-ink-muted)" }}
-                  >
+                  <span className="studio-help" style={{ fontSize: 12 }}>
                     {row.label}
                   </span>
-                  <div
-                    style={{ display: "flex", gap: 8, alignItems: "center" }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontFamily: "var(--font-mono)",
-                        color: "var(--color-ink-muted)",
-                      }}
-                    >
-                      {row.cr.toFixed(2)}:1
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: row.g.color,
-                        background: "var(--color-surface-2)",
-                        padding: "2px 7px",
-                        borderRadius: "var(--radius-xs)",
-                      }}
-                    >
+                  <span className="studio-inline" style={{ gap: 8 }}>
+                    <span className="studio-value">{row.cr.toFixed(2)}:1</span>
+                    <span className={`studio-badge studio-tone ${row.g.tone}`}>
                       {row.g.label}
                     </span>
-                  </div>
+                  </span>
                 </div>
               ))}
             </div>
@@ -1121,30 +1007,28 @@ function MoodTab({
       {/* Mode selector row */}
       <div style={s.moodBar}>
         <div
-          style={s.harmonySegment}
+          className="segmented studio-choice"
           role="group"
           aria-label="Visual palette mood"
         >
           {VISUAL_MODES.map((m) => (
             <button
               key={m.id}
+              className="segmented-item"
               onClick={() => onChangeMode(m.id)}
               aria-pressed={visualMode === m.id}
-              style={{
-                ...s.harmonyBtn,
-                ...(visualMode === m.id ? s.harmonyBtnActive : {}),
-              }}
             >
               {m.label}
             </button>
           ))}
         </div>
-        <span style={s.harmonyDesc}>
+        <span className="studio-help">
           {VISUAL_MODE_DESCRIPTIONS[visualMode]}
         </span>
         <button
           onClick={onReroll}
-          style={s.rerollBtn}
+          className="btn-secondary"
+          style={{ marginLeft: "auto" }}
           aria-label="Generate visual palette"
         >
           <RefreshCw size={14} aria-hidden="true" />
@@ -1169,15 +1053,8 @@ function MoodTab({
                   setTimeout(() => setCopied(""), 1500);
                 }}
                 aria-label={`Copy ${swatch.name} ${swatch.hex}`}
-                style={{ ...s.moodSwatch, background: swatch.hex }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-3px)";
-                  e.currentTarget.style.boxShadow = "var(--shadow-level-2)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "none";
-                  e.currentTarget.style.boxShadow = "none";
-                }}
+                className="studio-mood-swatch"
+                style={{ background: swatch.hex }}
               >
                 <div style={{ ...s.moodSwatchInner, color: onColor }}>
                   <span style={s.moodSwatchName}>{swatch.name}</span>
@@ -1203,39 +1080,6 @@ function MoodTab({
 // ─────────────────────────────────────────────────────────────────────────────
 
 const styles: Record<string, CSSProperties> = {
-  harmonySegment: {
-    display: "flex",
-    overflowX: "auto",
-    scrollbarWidth: "none",
-    flexWrap: "nowrap",
-    background: "var(--color-surface-1)",
-    borderRadius: "var(--radius-pill)",
-    padding: 3,
-    gap: 2,
-  },
-  harmonyBtn: {
-    background: "none",
-    border: "none",
-    borderRadius: "var(--radius-pill)",
-    padding: "5px 13px",
-    fontSize: 12,
-    fontWeight: 500,
-    fontFamily: "var(--font-body)",
-    color: "var(--color-ink-muted)",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    lineHeight: 1,
-    transition: "background .12s, color .12s",
-  },
-  harmonyBtnActive: {
-    background: "var(--color-inverse-canvas)", // vivid active state, matching Grid/Font pills
-    color: "var(--color-canvas)",
-  },
-  harmonyDesc: {
-    fontSize: 11,
-    color: "var(--color-ink-muted)",
-    lineHeight: 1,
-  },
   empty: {
     display: "flex",
     flexDirection: "column",
@@ -1259,37 +1103,10 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 20,
     flexWrap: "wrap",
   },
-  rerollBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 5,
-    background: "var(--color-surface-1)",
-    color: "var(--color-ink)",
-    border: "none",
-    borderRadius: "var(--radius-pill)",
-    padding: "10px 18px",
-    fontSize: 13,
-    fontWeight: 500,
-    fontFamily: "var(--font-body)",
-    cursor: "pointer",
-    lineHeight: 1,
-    whiteSpace: "nowrap",
-    marginLeft: "auto",
-  },
   moodGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
     gap: 8,
-  },
-  moodSwatch: {
-    border: "1px solid var(--color-hairline)",
-    borderRadius: "var(--radius-md)",
-    cursor: "pointer",
-    padding: 0,
-    position: "relative",
-    minHeight: 200,
-    display: "block",
-    transition: "transform .12s, box-shadow .12s",
   },
   moodSwatchInner: {
     position: "absolute",
@@ -1306,7 +1123,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.2,
   },
   moodSwatchHex: {
-    fontSize: 9,
+    fontSize: 12,
     fontFamily: "var(--font-mono)",
     letterSpacing: ".06em",
     textTransform: "uppercase",

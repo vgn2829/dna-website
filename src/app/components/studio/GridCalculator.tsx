@@ -1,6 +1,7 @@
 import { gridGeometry } from "../../lib/studio/grid";
 import { useState, useEffect, useRef } from "react";
-import { T, ss } from "./style";
+import { RectangleHorizontal, RectangleVertical } from "lucide-react";
+import { StudioRange } from "./StudioRange";
 const FORMATS = [
   {
     id: "a4",
@@ -940,6 +941,7 @@ export function GridCalculator() {
 
   const cats = ["Editorial", "Harmonic", "Poster"];
 
+  const landscapeOut = fmtW > fmtH;
   return (
     <div className="studio-tool">
       {geometryError && (
@@ -947,230 +949,110 @@ export function GridCalculator() {
           {geometryError}
         </p>
       )}
-      <div>
-        <div
-          style={{
-            fontFamily: "var(--font-body)",
-            fontSize: 10,
-            fontWeight: 600,
-            color: "var(--color-ink-muted)",
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            marginBottom: 10,
-            marginTop: 32,
-          }}
-        >
-          Format
+      <div className="studio-toolbar">
+        <div className="studio-group" role="group" aria-labelledby="grid-format-label">
+          <span className="studio-label" id="grid-format-label">
+            Format
+          </span>
+          <div className="segmented studio-choice">
+            {FORMATS.map((f) => (
+              <button
+                key={f.id}
+                className="segmented-item"
+                aria-pressed={fmtId === f.id}
+                onClick={() => setFormat(f.id)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div
-          style={{
-            display: "flex",
-            gap: 6,
-            flexWrap: "nowrap",
-            overflowX: "auto",
-            scrollbarWidth: "none",
-          }}
-        >
-          {FORMATS.map((f) => (
-            <button
-              key={f.id}
-              aria-pressed={fmtId === f.id}
-              onClick={() => setFormat(f.id)}
-              style={{
-                padding: "6px 14px",
-                borderRadius: "var(--radius-pill)",
-                border: "none",
-                cursor: "pointer",
-                fontFamily: "var(--font-body)",
-                fontSize: 12,
-                fontWeight: fmtId === f.id ? 500 : 400,
-                background:
-                  fmtId === f.id
-                    ? "var(--color-inverse-canvas)"
-                    : "var(--color-surface-1)",
-                color:
-                  fmtId === f.id
-                    ? "var(--color-canvas)"
-                    : "var(--color-ink-muted)",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="studio-group">
+          <span className="studio-label" aria-hidden="true">
+            Orientation
+          </span>
           <button
-            aria-label={`Swap orientation (currently ${fmtW > fmtH ? "landscape" : "portrait"})`}
-            aria-pressed={fmtW > fmtH}
+            className="btn-secondary"
+            aria-label={`Swap orientation (currently ${landscapeOut ? "landscape" : "portrait"})`}
+            aria-pressed={landscapeOut}
             onClick={() => {
               changed.current = true;
               setLandscape((l) => !l);
             }}
-            style={{
-              background: "var(--color-surface-1)",
-              color: "var(--color-ink)",
-              borderRadius: "var(--radius-pill)",
-              padding: "10px 18px",
-              fontSize: 13,
-              fontWeight: 500,
-              border: "none",
-              cursor: "pointer",
-              fontFamily: "var(--font-body)",
-              whiteSpace: "nowrap",
-            }}
           >
-            {fmtW > fmtH ? "⬛" : "⬜"} {fmtW > fmtH ? "Land" : "Port"}
+            {landscapeOut ? (
+              <RectangleHorizontal size={16} aria-hidden="true" />
+            ) : (
+              <RectangleVertical size={16} aria-hidden="true" />
+            )}
+            {landscapeOut ? "Landscape" : "Portrait"}
           </button>
         </div>
-        {fmtId === "custom" && (
-          <div
-            style={{
-              background: "var(--color-surface-1)",
-              borderRadius: "var(--radius-xl)",
-              border: `1px solid ${T.hairlineSoft}`,
-              padding: "24px",
-              display: "flex",
-              gap: 12,
-              marginTop: 10,
-              flexWrap: "wrap",
-            }}
-          >
-            {[
-              ["customW", "Width (px)"],
-              ["customH", "Height (px)"],
-            ].map(([k, l]) => (
-              <div key={k} style={{ width: "min(130px,100%)" }}>
-                <label htmlFor={"grid-" + k} style={ss.label}>
-                  {l}
-                </label>
-                <input
-                  id={"grid-" + k}
-                  type="number"
-                  value={params[k]}
-                  min={100}
-                  max={5000}
-                  onChange={(e: any) => setP(k, +e.target.value)}
-                  style={{ ...ss.input, fontFamily: "var(--font-mono)" }}
-                />
-              </div>
+      </div>
+      {fmtId === "custom" && (
+        <div className="studio-toolbar">
+          {[
+            ["customW", "Width (px)"],
+            ["customH", "Height (px)"],
+          ].map(([k, l]) => (
+            <label key={k} className="studio-field" htmlFor={"grid-" + k}>
+              {l}
+              <input
+                id={"grid-" + k}
+                className="input-base studio-mono"
+                type="number"
+                value={params[k]}
+                min={100}
+                max={5000}
+                onChange={(e) => setP(k, +e.target.value)}
+              />
+            </label>
+          ))}
+        </div>
+      )}
+
+      {cats.map((cat) => (
+        <div
+          key={cat}
+          className="studio-group"
+          role="group"
+          aria-labelledby={`grid-cat-${cat}`}
+        >
+          <span className="studio-label" id={`grid-cat-${cat}`}>
+            {cat} grids
+          </span>
+          <div className="segmented studio-choice">
+            {GRID_SYSTEMS.filter((g) => g.cat === cat).map((g) => (
+              <button
+                key={g.id}
+                className="segmented-item"
+                aria-pressed={system === g.id}
+                onClick={() => {
+                  changed.current = true;
+                  setSystem(g.id);
+                }}
+              >
+                <span aria-hidden="true" style={{ marginRight: 6 }}>
+                  {g.icon}
+                </span>
+                {g.label}
+              </button>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      ))}
 
-      {cats.map((cat) => {
-        const sys2 = GRID_SYSTEMS.filter((g) => g.cat === cat);
-        return (
-          <div key={cat}>
-            <div
-              style={{
-                fontFamily: "var(--font-body)",
-                fontSize: 10,
-                fontWeight: 600,
-                color: "var(--color-ink-muted)",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                marginBottom: 10,
-                marginTop: 32,
-              }}
-            >
-              {cat} Grids
-            </div>
-            <div
-              style={{
-                display: "flex",
-                gap: 6,
-                flexWrap: "nowrap",
-                overflowX: "auto",
-                scrollbarWidth: "none",
-              }}
-            >
-              {sys2.map((g) => (
-                <button
-                  key={g.id}
-                  aria-pressed={system === g.id}
-                  onClick={() => {
-                    changed.current = true;
-                    setSystem(g.id);
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "6px 14px",
-                    borderRadius: "var(--radius-pill)",
-                    border: "none",
-                    cursor: "pointer",
-                    fontFamily: "var(--font-body)",
-                    fontSize: 12,
-                    fontWeight: system === g.id ? 500 : 400,
-                    background:
-                      system === g.id
-                        ? "var(--color-inverse-canvas)"
-                        : "var(--color-surface-1)",
-                    color:
-                      system === g.id
-                        ? "var(--color-canvas)"
-                        : "var(--color-ink-muted)",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  <span style={{ fontSize: 14 }}>{g.icon}</span>
-                  {g.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-
-      <div
-        style={{
-          background: "var(--color-surface-1)",
-          borderRadius: "var(--radius-xl)",
-          padding: 24,
-          border: `1px solid ${T.hairlineSoft}`,
-          display: "flex",
-          gap: 12,
-          alignItems: "flex-start",
-        }}
-      >
-        <span style={{ fontSize: 22, marginRight: 12, flexShrink: 0 }}>
+      <div className="studio-notice has-icon">
+        <span aria-hidden="true" style={{ fontSize: 22, lineHeight: 1 }}>
           {sys.icon}
         </span>
         <div>
-          <div
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 13,
-              fontWeight: 600,
-              color: T.ink,
-              marginBottom: 3,
-            }}
-          >
-            {sys.label}
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 12,
-              color: T.inkMuted,
-              lineHeight: 1.6,
-            }}
-          >
-            {sys.desc}
-          </div>
+          <strong>{sys.label}</strong>
+          <p style={{ marginTop: 4, lineHeight: 1.6 }}>{sys.desc}</p>
         </div>
       </div>
 
-      <div
-        style={{
-          background: "var(--color-canvas)",
-          borderRadius: "var(--radius-xl)",
-          overflow: "hidden",
-          border: `1px solid ${T.hairlineSoft}`,
-          padding: 12,
-        }}
-      >
+      <div className="studio-card is-canvas">
         <canvas
           ref={canvasRef}
           width={680}
@@ -1179,169 +1061,67 @@ export function GridCalculator() {
             width: "100%",
             height: "auto",
             display: "block",
-            borderRadius: 10,
+            borderRadius: "var(--radius-md)",
           }}
         />
       </div>
 
       {recents.length > 0 && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 10,
-              fontWeight: 600,
-              color: "var(--color-ink-muted)",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              marginRight: 2,
-            }}
-          >
+        <div className="studio-actions" role="group" aria-labelledby="grid-recent-label">
+          <span className="studio-label" id="grid-recent-label">
             Recent
           </span>
           {recents.map((r, i) => (
             <button
               key={`${r.ts}-${i}`}
+              className="btn-secondary btn-sm"
               onClick={() => restoreGrid(r)}
               title={`${gridSnapLabel(r)} · cols ${r.params.cols}, rows ${r.params.rows} · ${gridRelTime(r.ts)}`}
-              style={{
-                padding: "5px 12px",
-                borderRadius: "var(--radius-pill)",
-                border: "1px solid var(--color-hairline)",
-                background: "var(--color-surface-1)",
-                color: "var(--color-ink-muted)",
-                fontSize: 12,
-                fontFamily: "var(--font-body)",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
             >
               {gridSnapLabel(r)}
             </button>
           ))}
-          <button
-            onClick={clearRecents}
-            style={{ ...ss.btnSec, padding: "5px 12px", fontSize: 12 }}
-          >
+          <button className="btn-secondary btn-sm is-danger" onClick={clearRecents}>
             Clear
           </button>
         </div>
       )}
 
       {geometry && ["swiss", "column", "baseline"].includes(system) && (
-        <div
-          className="studio-grid-metrics"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4,minmax(0,1fr))",
-            gap: 8,
-          }}
-        >
+        <div className="studio-metrics">
           {[
             { l: "Column width", v: `${colW.toFixed(1)}px` },
             { l: "Row height", v: `${rowH.toFixed(1)}px` },
             { l: "Inner area", v: `${IW}×${IH}px` },
             { l: "Aspect ratio", v: `${(IW / IH).toFixed(3)}:1` },
-          ].map((s: any) => (
-            <div
-              key={s.l}
-              style={{
-                background: "var(--color-surface-1)",
-                borderRadius: "var(--radius-lg)",
-                padding: "11px 13px",
-                border: `1px solid ${T.hairlineSoft}`,
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: "var(--font-body)",
-                  fontSize: 9,
-                  color: "var(--color-ink-muted)",
-                  letterSpacing: "0.05em",
-                  textTransform: "uppercase",
-                  marginBottom: 3,
-                }}
-              >
-                {s.l}
-              </div>
-              <div
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: "var(--color-ink)",
-                }}
-              >
-                {s.v}
-              </div>
+          ].map((m) => (
+            <div key={m.l} className="studio-metric">
+              <span>{m.l}</span>
+              <strong>{m.v}</strong>
             </div>
           ))}
         </div>
       )}
 
       {(controlDefs[system] || []).length > 0 && (
-        <div
-          style={{
-            background: "var(--color-surface-1)",
-            borderRadius: "var(--radius-xl)",
-            padding: 24,
-            border: `1px solid ${T.hairlineSoft}`,
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 10,
-              fontWeight: 600,
-              color: "var(--color-ink-muted)",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              marginBottom: 10,
-            }}
-          >
+        <section className="studio-controls" aria-labelledby="grid-params-label">
+          <h2 className="studio-label" id="grid-params-label">
             Parameters
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))",
-              gap: 16,
-            }}
-          >
-            {(controlDefs[system] || []).map((c: any) => (
-              <div key={c.k}>
-                <label htmlFor={"grid-" + c.k} style={ss.label}>
-                  {c.l} —{" "}
-                  <span
-                    style={{
-                      color: T.accentBlue,
-                      fontFamily: "var(--font-mono)",
-                    }}
-                  >
-                    {params[c.k]}
-                  </span>
-                </label>
-                <input
-                  id={"grid-" + c.k}
-                  type="range"
-                  min={c.mn}
-                  max={c.mx}
-                  step={1}
-                  value={params[c.k]}
-                  onChange={(e: any) => setP(c.k, +e.target.value)}
-                  style={{ width: "100%", accentColor: T.accentBlue }}
-                />
-              </div>
+          </h2>
+          <div className="studio-ranges">
+            {(controlDefs[system] || []).map((c) => (
+              <StudioRange
+                key={c.k}
+                id={"grid-" + c.k}
+                label={c.l}
+                min={c.mn}
+                max={c.mx}
+                value={params[c.k]}
+                onChange={(v) => setP(c.k, v)}
+              />
             ))}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

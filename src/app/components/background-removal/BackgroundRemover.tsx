@@ -16,91 +16,7 @@ import {
   downloadBlob,
 } from './compositing';
 import { stampBrush, recompositeRegion, type BrushMode } from './refine';
-
-// ── Local style objects — same inline-CSS-var convention as the other tools ──
-const card = {
-  borderRadius: 'var(--radius-xl)',
-  background: 'var(--color-surface-1)',
-  border: '1px solid var(--color-hairline)',
-  overflow: 'hidden',
-} as const;
-const cardHead = {
-  padding: '10px 16px',
-  fontSize: 12,
-  fontWeight: 600,
-  letterSpacing: '0.04em',
-  textTransform: 'uppercase' as const,
-  color: 'var(--color-ink-muted)',
-  borderBottom: '1px solid var(--color-hairline)',
-  fontFamily: 'var(--font-body)',
-} as const;
-const label = {
-  display: 'block',
-  fontSize: 13,
-  fontWeight: 500,
-  color: 'var(--color-ink)',
-  marginBottom: 8,
-  fontFamily: 'var(--font-body)',
-} as const;
-const primaryBtn = (disabled: boolean) => ({
-  flex: 1,
-  padding: '11px 0',
-  borderRadius: 'var(--radius-pill)',
-  border: 'none',
-  background: 'var(--color-brand)',
-  color: '#fff',
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: disabled ? 'not-allowed' : 'pointer',
-  opacity: disabled ? 0.6 : 1,
-  fontFamily: 'var(--font-body)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 8,
-});
-const ghostBtn = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 6,
-  padding: '11px 16px',
-  borderRadius: 'var(--radius-pill)',
-  border: '1px solid var(--color-hairline)',
-  background: 'transparent',
-  color: 'var(--color-ink)',
-  fontSize: 14,
-  cursor: 'pointer',
-  fontFamily: 'var(--font-body)',
-} as const;
-
-const pill = (active: boolean) => ({
-  flex: 1,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 6,
-  padding: '8px 0',
-  borderRadius: 'var(--radius-md)',
-  cursor: 'pointer',
-  border: active ? '2px solid var(--color-brand)' : '1px solid var(--color-hairline)',
-  background: active ? 'var(--color-surface-2)' : 'transparent',
-  color: active ? 'var(--color-ink)' : 'var(--color-ink-muted)',
-  fontSize: 13,
-  fontWeight: active ? 600 : 500,
-  fontFamily: 'var(--font-body)',
-});
-const edgeBtn = (active: boolean) => ({
-  padding: '5px 12px',
-  borderRadius: 'var(--radius-pill)',
-  cursor: 'pointer',
-  border: '1px solid var(--color-hairline)',
-  background: active ? 'var(--color-brand)' : 'transparent',
-  color: active ? '#fff' : 'var(--color-ink-muted)',
-  fontSize: 12,
-  fontWeight: 500,
-  fontFamily: 'var(--font-body)',
-});
+import { StudioRange } from '../studio/StudioRange';
 
 const CHECKER = 'repeating-conic-gradient(rgba(0,0,0,0.10) 0% 25%, rgba(255,255,255,0.10) 0% 50%) 50% / 16px 16px, var(--color-canvas)';
 function backdropCss(id: string): string {
@@ -456,28 +372,14 @@ export default function BackgroundRemover() {
     if (ringRef.current) ringRef.current.style.display = 'none';
   };
 
+  const busy = status === 'processing';
   return (
-    <div style={{ width: '100%', maxWidth: 1100, margin: '0 auto', padding: '0 16px' }}>
+    <div className="studio-tool">
       <input ref={upload.inputRef} type="file" accept="image/*" hidden onChange={upload.onInputChange} />
 
       {/* Honest, persistent limitation note. */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 8,
-          padding: '10px 14px',
-          marginBottom: 16,
-          borderRadius: 'var(--radius-md)',
-          background: 'var(--color-surface-2)',
-          border: '1px solid var(--color-hairline)',
-          color: 'var(--color-ink-muted)',
-          fontSize: 12.5,
-          lineHeight: 1.5,
-          fontFamily: 'var(--font-body)',
-        }}
-      >
-        <Info size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+      <div className="studio-notice has-icon">
+        <Info size={15} aria-hidden="true" />
         <span>
           Runs on your device — the image never leaves it. Fine hair, translucent glass and smoke
           remain difficult for these checkpoints. Inspect edges on multiple backgrounds and use
@@ -485,60 +387,42 @@ export default function BackgroundRemover() {
         </span>
       </div>
 
-      <p role="status">{backend === "helper" ? "Python helper on this computer (CPU)" : backend === "webgpu" ? "WebGPU acceleration (float32)" : backend === "wasm" ? "CPU WASM fallback - larger images may take several seconds" : "Local processing: WebGPU when available, CPU WASM fallback"}. Model sessions release after two idle minutes. <button onClick={release} style={ghostBtn}>Release browser model memory</button></p>
-      <label style={{ display: "block", marginBottom: 12 }}><input type="checkbox" checked={retain} onChange={e => setRetain(e.target.checked)} /> Keep this image on this device for 24 hours (off by default)</label>
+      <div className="studio-actions">
+        <p role="status" className="studio-help" style={{ flex: '1 1 320px' }}>{backend === "helper" ? "Python helper on this computer (CPU)" : backend === "webgpu" ? "WebGPU acceleration (float32)" : backend === "wasm" ? "CPU WASM fallback - larger images may take several seconds" : "Local processing: WebGPU when available, CPU WASM fallback"}. Model sessions release after two idle minutes.</p>
+        <button className="btn-secondary btn-sm" onClick={release}>Release browser model memory</button>
+      </div>
+      <label className="studio-check"><input type="checkbox" checked={retain} onChange={e => setRetain(e.target.checked)} /> Keep this image on this device for 24 hours (off by default)</label>
       {!source ? (
         <div
+          className={`studio-upload is-clickable${upload.isDragging ? ' is-dragging' : ''}`}
+          style={{ minHeight: 320 }}
           onClick={upload.openPicker}
           onDrop={upload.onDrop}
           onDragOver={upload.onDragOver}
           onDragLeave={upload.onDragLeave}
-          style={{
-            ...card,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: 320,
-            cursor: 'pointer',
-            color: 'var(--color-ink-muted)',
-            padding: 40,
-            textAlign: 'center',
-            borderStyle: 'dashed',
-            borderColor: upload.isDragging ? 'var(--color-brand)' : 'var(--color-hairline)',
-          }}
         >
-          <Upload size={32} style={{ marginBottom: 12 }} />
-          <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
-            Drop an image, click to browse, or paste from clipboard
+          <Upload size={32} aria-hidden="true" />
+          <div>
+            <strong>Drop an image, click to browse, or paste from clipboard</strong>
+            <p style={{ marginTop: 6 }}>PNG, JPEG, WebP, GIF or BMP · processed entirely on your device</p>
           </div>
-          <div style={{ fontSize: 13, marginTop: 6, fontFamily: 'var(--font-body)' }}>
-            PNG, JPEG, WebP, GIF or BMP · processed entirely on your device
-          </div>
+          <button type="button" className="btn-secondary" onClick={e => { e.stopPropagation(); upload.openPicker(); }}>Choose image</button>
           {reject && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 16, color: 'var(--color-error)', fontSize: 13, fontFamily: 'var(--font-body)' }}>
-              <AlertTriangle size={15} /> {reject}
-            </div>
+            <p role="alert" className="studio-status is-error">
+              <AlertTriangle size={15} aria-hidden="true" style={{ verticalAlign: -3, marginRight: 6 }} />{reject}
+            </p>
           )}
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'minmax(0, 1fr) 300px' }} className="bg-remover-grid">
+        <div className="studio-workspace">
           {/* Canvas */}
-          <div style={card}>
-            <div style={cardHead}>{hasResult ? 'Result' : 'Original'}</div>
-            <div
-              style={{
-                padding: 16,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minHeight: 320,
-                background: 'var(--color-canvas)',
-              }}
-            >
+          <section className="studio-panel">
+            <h2>{hasResult ? 'Result' : 'Original'}</h2>
+            <div className="studio-panel-stage is-padded" style={{ minHeight: 320 }}>
               <div style={{ position: 'relative', display: 'inline-block', lineHeight: 0 }}>
                 <canvas
                   ref={displayRef}
+                  aria-label={hasResult ? 'Background removal result' : 'Original image'}
                   onPointerDown={onPointerDown}
                   onPointerMove={onPointerMove}
                   onPointerUp={onPointerUp}
@@ -555,6 +439,7 @@ export default function BackgroundRemover() {
                 />
                 <div
                   ref={ringRef}
+                  className="studio-brush-ring"
                   style={{
                     position: 'absolute',
                     display: 'none',
@@ -569,152 +454,132 @@ export default function BackgroundRemover() {
                 />
               </div>
             </div>
-          </div>
+          </section>
 
           {/* Controls */}
-          <div style={{ ...card, padding: 20, alignSelf: 'start' }}>
-            <label style={label} htmlFor="background-provider">Processing location</label>
-            <select id="background-provider" aria-label="Background processing location" value={provider} onChange={e => { const next = e.target.value === 'helper' ? 'helper' : 'browser'; resetEngine(); clearResult(); setProvider(next); if (next === 'helper') setModel('detail'); }}>
-              <option value="browser">In this browser (no image upload)</option>
-              <option value="helper" disabled={!helperReady}>Python helper on this computer (sends image from browser)</option>
-            </select>
-            <p role="status">{helperStatus}</p>
-            <button style={ghostBtn} onClick={async () => { setHelperStatus('Checking local helper…'); try { await checkHelper(); setHelperReady(true); setHelperStatus('Verified local helper ready. Selecting it and clicking Remove Background sends the image to 127.0.0.1:8935.'); } catch { setHelperReady(false); setHelperStatus('Helper unavailable. Browser processing works independently. Start services/studio-helper/server.py, then check again.'); } }}>Check Python helper</button>
-            {provider === 'helper' && <p>The image will leave this browser for the local Python helper only after you click Remove Background. The helper uses the pinned Detail model, keeps a warm CPU session and does not save uploads. Stop the Python process to release its memory.</p>}
-            <label style={label}>Model</label>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-              {(['general', 'portrait', 'detail'] as ModelId[]).map((m) => (
-                <button key={m} disabled={provider === 'helper' ? m !== 'detail' : m === 'detail' && !gpuAvailable} onClick={() => changeModel(m)} style={pill(model === m)}>
-                  {m === 'detail' && provider === 'helper' ? 'Detail (local CPU)' : MODELS[m].label}
-                </button>
-              ))}
-            </div>
-            <div style={{ fontSize: 11.5, lineHeight: 1.5, color: 'var(--color-ink-muted)', marginBottom: 20, fontFamily: 'var(--font-body)' }}>
-              {provider === 'helper' ? 'BiRefNet Lite 512, fixed verified FP32 checkpoint. Uses local CPU; no browser model download.' : MODELS[model].caption}
-              {provider === 'browser' && !gpuAvailable && ' Detail needs WebGPU. General and Portrait keep their CPU fallback; the optional helper offers Detail on this computer.'}
+          <div className="studio-controls">
+            <div className="studio-group">
+              <label className="studio-label" htmlFor="background-provider">Processing location</label>
+              <select id="background-provider" className="input-base" aria-label="Background processing location" value={provider} onChange={e => { const next = e.target.value === 'helper' ? 'helper' : 'browser'; resetEngine(); clearResult(); setProvider(next); if (next === 'helper') setModel('detail'); }}>
+                <option value="browser">In this browser (no image upload)</option>
+                <option value="helper" disabled={!helperReady}>Python helper on this computer (sends image from browser)</option>
+              </select>
+              <p role="status" className="studio-help">{helperStatus}</p>
+              <div><button className="btn-translucent btn-sm" onClick={async () => { setHelperStatus('Checking local helper…'); try { await checkHelper(); setHelperReady(true); setHelperStatus('Verified local helper ready. Selecting it and clicking Remove Background sends the image to 127.0.0.1:8935.'); } catch { setHelperReady(false); setHelperStatus('Helper unavailable. Browser processing works independently. Start services/studio-helper/server.py, then check again.'); } }}>Check Python helper</button></div>
+              {provider === 'helper' && <p className="studio-notice">The image will leave this browser for the local Python helper only after you click Remove Background. The helper uses the pinned Detail model, keeps a warm CPU session and does not save uploads. Stop the Python process to release its memory.</p>}
             </div>
 
-            <label style={label}>Background</label>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-              {BACKDROPS.map((b) => (
-                <button
-                  key={b.id}
-                  onClick={() => setBackdropId(b.id)}
-                  title={b.label}
-                  style={{
-                    flex: 1,
-                    height: 40,
-                    borderRadius: 'var(--radius-md)',
-                    cursor: 'pointer',
-                    border: backdropId === b.id ? '2px solid var(--color-brand)' : '1px solid var(--color-hairline)',
-                    background:
-                      b.swatch === 'checker'
-                        ? 'repeating-conic-gradient(rgba(0,0,0,0.12) 0% 25%, transparent 0% 50%) 50% / 12px 12px'
-                        : b.swatch,
-                  }}
-                />
-              ))}
+            <div className="studio-group" role="group" aria-labelledby="background-model">
+              <span className="studio-label" id="background-model">Model</span>
+              <div className="segmented studio-choice is-fill">
+                {(['general', 'portrait', 'detail'] as ModelId[]).map((m) => (
+                  <button key={m} className="segmented-item" aria-pressed={model === m} disabled={provider === 'helper' ? m !== 'detail' : m === 'detail' && !gpuAvailable} onClick={() => changeModel(m)}>
+                    {m === 'detail' && provider === 'helper' ? 'Detail (local CPU)' : MODELS[m].label}
+                  </button>
+                ))}
+              </div>
+              <p className="studio-help">
+                {provider === 'helper' ? 'BiRefNet Lite 512, fixed verified FP32 checkpoint. Uses local CPU; no browser model download.' : MODELS[model].caption}
+                {provider === 'browser' && !gpuAvailable && ' Detail needs WebGPU. General and Portrait keep their CPU fallback; the optional helper offers Detail on this computer.'}
+              </p>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button onClick={handleRemove} disabled={status === 'processing' || (provider === 'browser' && model === 'detail' && !gpuAvailable)} style={primaryBtn(status === 'processing')}>
-                {status === 'processing' ? (
+            <div className="studio-group" role="group" aria-labelledby="background-backdrop">
+              <span className="studio-label" id="background-backdrop">Background</span>
+              <div className="studio-inline">
+                {BACKDROPS.map((b) => (
+                  <button
+                    key={b.id}
+                    className="studio-swatch-choice"
+                    onClick={() => setBackdropId(b.id)}
+                    title={b.label}
+                    aria-label={`${b.label} background`}
+                    aria-pressed={backdropId === b.id}
+                    style={{
+                      background:
+                        b.swatch === 'checker'
+                          ? 'repeating-conic-gradient(rgba(0,0,0,0.12) 0% 25%, transparent 0% 50%) 50% / 12px 12px'
+                          : b.swatch,
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="studio-actions">
+              <button className="btn-primary" style={{ flex: '1 1 100%' }} onClick={handleRemove} disabled={busy || (provider === 'browser' && model === 'detail' && !gpuAvailable)}>
+                {busy ? (
                   <>
-                    <Loader2 size={16} className="animate-spin" /> {progressLabel(progress)}
+                    <Loader2 size={16} className="animate-spin" aria-hidden="true" /> {progressLabel(progress)}
                   </>
                 ) : (
                   <>
-                    <ImageOff size={16} /> {hasResult ? 'Re-run' : 'Remove Background'}
+                    <ImageOff size={16} aria-hidden="true" /> {hasResult ? 'Re-run' : 'Remove Background'}
                   </>
                 )}
               </button>
-
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={handleDownload} disabled={!hasResult} style={{ ...ghostBtn, flex: 1, opacity: hasResult ? 1 : 0.5, cursor: hasResult ? 'pointer' : 'not-allowed' }}>
-                  <Download size={16} /> PNG
-                </button>
-                <button onClick={handleReset} title="Reset" style={ghostBtn}>
-                  <RotateCcw size={16} />
-                </button>
-              </div>
+              <button className="btn-translucent is-grow" onClick={handleDownload} disabled={!hasResult}>
+                <Download size={16} aria-hidden="true" /> PNG
+              </button>
+              <button className="btn-translucent btn-icon" onClick={handleReset} title="Reset" aria-label="Reset">
+                <RotateCcw size={16} aria-hidden="true" />
+              </button>
             </div>
 
-            {hasSourceAlpha && <button style={ghostBtn} onClick={() => { resetEngine(); const mask = new Uint8ClampedArray(imageData!.width * imageData!.height).fill(255); maskRef.current = mask; resetHistory(mask); setHasResult(true); }}>Keep source transparency (skip AI)</button>}
+            {hasSourceAlpha && <div><button className="btn-translucent btn-sm" onClick={() => { resetEngine(); const mask = new Uint8ClampedArray(imageData!.width * imageData!.height).fill(255); maskRef.current = mask; resetHistory(mask); setHasResult(true); }}>Keep source transparency (skip AI)</button></div>}
             {/* Refine — only once there's a result to fix. */}
             {hasResult && (
-              <div style={{ marginTop: 20, borderTop: '1px solid var(--color-hairline)', paddingTop: 18 }}>
-                <label style={label}>Refine mask</label>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                  <button onClick={() => setBrushMode((m) => (m === 'restore' ? 'off' : 'restore'))} style={pill(brushMode === 'restore')}>
-                    <Brush size={14} /> Restore
+              <div className="studio-controls-section" role="group" aria-labelledby="background-refine">
+                <span className="studio-label" id="background-refine">Refine mask</span>
+                <div className="studio-actions">
+                  <button className="btn-translucent is-grow" aria-pressed={brushMode === 'restore'} onClick={() => setBrushMode((m) => (m === 'restore' ? 'off' : 'restore'))}>
+                    <Brush size={14} aria-hidden="true" /> Restore
                   </button>
-                  <button onClick={() => setBrushMode((m) => (m === 'erase' ? 'off' : 'erase'))} style={pill(brushMode === 'erase')}>
-                    <Eraser size={14} /> Erase
-                  </button>
-                </div>
-
-                <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-                  <button
-                    onClick={undo}
-                    disabled={!canUndo}
-                    title="Undo (⌘/Ctrl+Z)"
-                    style={{ ...ghostBtn, flex: 1, padding: '8px 0', fontSize: 13, opacity: canUndo ? 1 : 0.45, cursor: canUndo ? 'pointer' : 'not-allowed' }}
-                  >
-                    <Undo2 size={14} /> Undo
-                  </button>
-                  <button
-                    onClick={redo}
-                    disabled={!canRedo}
-                    title="Redo (⌘/Ctrl+Shift+Z)"
-                    style={{ ...ghostBtn, flex: 1, padding: '8px 0', fontSize: 13, opacity: canRedo ? 1 : 0.45, cursor: canRedo ? 'pointer' : 'not-allowed' }}
-                  >
-                    <Redo2 size={14} /> Redo
+                  <button className="btn-translucent is-grow" aria-pressed={brushMode === 'erase'} onClick={() => setBrushMode((m) => (m === 'erase' ? 'off' : 'erase'))}>
+                    <Eraser size={14} aria-hidden="true" /> Erase
                   </button>
                 </div>
 
-                <div style={{ fontSize: 12, color: 'var(--color-ink-muted)', marginBottom: 6, fontFamily: 'var(--font-body)' }}>
-                  Brush size — {brushSize}px
-                </div>
-                <input
-                  aria-label="Mask brush size"
-                  type="range"
-                  min={8}
-                  max={200}
-                  value={brushSize}
-                  onChange={(e) => setBrushSize(+e.target.value)}
-                  style={{ width: '100%', accentColor: 'var(--color-brand)', cursor: 'pointer', marginBottom: 14 }}
-                />
-
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span style={{ fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>Edge</span>
-                  <button onClick={() => setBrushHard(false)} style={edgeBtn(!brushHard)}>Soft</button>
-                  <button onClick={() => setBrushHard(true)} style={edgeBtn(brushHard)}>Hard</button>
+                <div className="studio-actions">
+                  <button className="btn-translucent btn-sm is-grow" onClick={undo} disabled={!canUndo} title="Undo (⌘/Ctrl+Z)">
+                    <Undo2 size={14} aria-hidden="true" /> Undo
+                  </button>
+                  <button className="btn-translucent btn-sm is-grow" onClick={redo} disabled={!canRedo} title="Redo (⌘/Ctrl+Shift+Z)">
+                    <Redo2 size={14} aria-hidden="true" /> Redo
+                  </button>
                 </div>
 
-                <div style={{ fontSize: 11.5, lineHeight: 1.5, color: 'var(--color-ink-muted)', marginTop: 12, fontFamily: 'var(--font-body)' }}>
+                <StudioRange label="Brush size" ariaLabel="Mask brush size" min={8} max={200} value={brushSize} suffix="px" onChange={setBrushSize} />
+
+                <div className="studio-group" role="group" aria-labelledby="background-edge">
+                  <span className="studio-label" id="background-edge">Edge</span>
+                  <div className="segmented studio-choice is-fill">
+                    <button className="segmented-item" aria-pressed={!brushHard} onClick={() => setBrushHard(false)}>Soft</button>
+                    <button className="segmented-item" aria-pressed={brushHard} onClick={() => setBrushHard(true)}>Hard</button>
+                  </div>
+                </div>
+
+                <p className="studio-help">
                   {refining
                     ? `Brush over the image to ${brushMode} areas. Restore brings back removed pixels; erase removes kept ones.`
                     : 'Pick Restore or Erase, then brush over the image to fix the mask.'}
-                </div>
+                </p>
               </div>
             )}
 
-            {error && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 16, color: 'var(--color-error)', fontSize: 12.5, fontFamily: 'var(--font-body)' }}>
-                <AlertTriangle size={15} /> {error}
-              </div>
+            {(error || reject) && (
+              <p role="alert" className="studio-status is-error">
+                <AlertTriangle size={15} aria-hidden="true" style={{ verticalAlign: -3, marginRight: 6 }} />{error || reject}
+              </p>
             )}
 
-            <div style={{ marginTop: 18, fontSize: 11.5, lineHeight: 1.5, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
+            <p className="studio-help">
               {source.width} × {source.height}px · everything runs locally; the image never leaves your device.
               {source.downscaled && ' Large image downscaled for processing.'}
-            </div>
+            </p>
           </div>
         </div>
       )}
-
-      {/* One-column layout on narrow screens. */}
-      <style>{`@media (max-width: 720px){ .bg-remover-grid{ grid-template-columns: 1fr !important; } }`}</style>
     </div>
   );
 }

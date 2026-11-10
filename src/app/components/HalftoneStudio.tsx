@@ -5,23 +5,10 @@ import { Upload, Download, RotateCcw, Loader2 } from 'lucide-react';
 import type { HalftoneOptions } from '../lib/halftone-logic';
 import { renderHalftone } from '../lib/halftone-job';
 import { downloadBlob, isAcceptableImage } from './background-removal/compositing';
+import { StudioRange } from './studio/StudioRange';
+import { Status } from './StudioUI';
 
 const MAX_WORK = 700;
-
-const Slider = ({ label, val, min, max, step, suffix, onChange }: {
-  label: string; val: number; min: number; max: number;
-  step: number; suffix: string; onChange: (v: number) => void;
-}) => (
-  <div style={{ marginBottom: 18 }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>{label}</span>
-      <span style={{ fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono)' }}>{val}{suffix}</span>
-    </div>
-    <input aria-label={label} type="range" min={min} max={max} step={step} value={val}
-      onChange={e => onChange(parseFloat(e.target.value))}
-      style={{ width: '100%', accentColor: 'var(--color-brand)', cursor: 'pointer' }} />
-  </div>
-);
 
 const DEFAULTS: HalftoneOptions = {
   type: 'lines', contrast: 100, brightness: 100, angle: 45,
@@ -135,103 +122,92 @@ export function HalftoneStudio() {
     if (f) loadFile(f);
   };
 
+  const pickRef = useRef<HTMLInputElement>(null);
+  const clearDraft = async () => { ++sourceToken.current; releasePendingSource(); exportJob.current?.abort(); setLoading(false); setExporting(''); draftRef.current = null; srcDataRef.current = null; const ok = await clearImageDraft('halftone'); setImg(null); if (!ok) setError('Device storage could not be cleared. Clear browser site data.'); };
+
   return (
-    <div style={{
-      gap: 16,
-      width: '100%', maxWidth: 1200, margin: '0 auto',
-    }} className="flex flex-col lg:flex-row">
-      {/* Canvas area */}
+    <div className="studio-workspace">
+      {/* Preview: fixed stage height so renders and status changes never move the controls. */}
       <div
+        className="studio-stage is-fixed"
         onDragOver={e => e.preventDefault()}
         onDrop={onDrop}
-        style={{
-          flex: 1, minHeight: 320, borderRadius: 'var(--radius-xl)',
-          background: 'var(--color-surface-1)', border: '1px solid var(--color-hairline)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          position: 'relative', overflow: 'hidden', padding: 24,
-        }}
       >
         {loading && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-surface-1)', zIndex: 2 }}>
-            <Loader2 size={28} style={{ color: 'var(--color-ink-muted)' }} className="animate-spin" />
+          <div className="studio-stage-overlay" role="status" aria-label="Loading image">
+            <Loader2 size={28} className="animate-spin" aria-hidden="true" />
           </div>
         )}
         {img ? (
-          <canvas ref={canvasRef} style={{ maxWidth: '100%', maxHeight: '70vh', display: 'block', borderRadius: 'var(--radius-md)' }} />
+          <canvas ref={canvasRef} aria-label="Halftone preview" />
         ) : (
-          <label style={{ textAlign: 'center', cursor: 'pointer', color: 'var(--color-ink-muted)' }}>
-            <input type="file" accept="image/*" hidden onChange={e => e.target.files?.[0] && loadFile(e.target.files[0])} />
-            <Upload size={32} style={{ marginBottom: 12 }} />
-            <div style={{ fontSize: 14, fontFamily: 'var(--font-body)' }}>Drag an image here or click to upload</div>
-          </label>
+          <div className="studio-upload is-bare">
+            <input ref={pickRef} type="file" accept="image/*" hidden onChange={e => e.target.files?.[0] && loadFile(e.target.files[0])} />
+            <Upload size={32} aria-hidden="true" />
+            <p>Drag an image here or choose one to start.</p>
+            <button type="button" className="btn-secondary" onClick={() => pickRef.current?.click()}>Choose image</button>
+          </div>
         )}
       </div>
 
       {/* Controls */}
-      <div style={{
-        flexShrink: 0,
-        borderRadius: 'var(--radius-xl)', background: 'var(--color-surface-1)',
-        border: '1px solid var(--color-hairline)', padding: 20,
-      }} className="w-full lg:w-80">
-        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--color-ink)', marginBottom: 4 }}>Halftone</h3>
-        <p style={{ fontSize: 12, color: 'var(--color-ink-muted)', marginBottom: 20, fontFamily: 'var(--font-body)' }}>Linear-light area sampling · ink on opaque paper. Pattern spacing uses a 700px reference edge.</p>
-        {img && <p>{img.naturalWidth} × {img.naturalHeight}px export · preview ≤700px</p>}
-        {draftStatus && <p role="status">{draftStatus}</p>}
-        {error && <p role="alert">{error}</p>}
-        {(previewBusy || exporting) && <p role="status">{exporting || 'Rendering preview…'}</p>}
-        {exporting && <button onClick={() => { exportJob.current?.abort(); setExporting(''); }}>Cancel export</button>}
+      <div className="studio-controls">
+        <div>
+          <h2>Halftone</h2>
+          <p className="studio-help">Linear-light area sampling · ink on opaque paper. Pattern spacing uses a 700px reference edge.</p>
+          {img && <p className="studio-help studio-mono">{img.naturalWidth} × {img.naturalHeight}px export · preview ≤700px</p>}
+        </div>
+        <Status error={error}>{exporting || (previewBusy ? 'Rendering preview…' : '')}</Status>
+        {exporting && <button className="btn-translucent btn-sm" onClick={() => { exportJob.current?.abort(); setExporting(''); }}>Cancel export</button>}
 
-        <div style={{ marginBottom: 18 }}>
-          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', display: 'block', marginBottom: 8, fontFamily: 'var(--font-body)' }}>Style</span>
-          <div style={{ display: 'flex', gap: 6 }}>
+        <div className="studio-group" role="group" aria-labelledby="halftone-style">
+          <span className="studio-label" id="halftone-style">Style</span>
+          <div className="segmented studio-choice is-fill">
             {(['lines', 'dots', 'squares'] as const).map(t => (
-              <button key={t} onClick={() => update({ type: t })}
-                style={{
-                  flex: 1, padding: '7px 0', borderRadius: 'var(--radius-sm)', fontSize: 12, textTransform: 'capitalize',
-                  cursor: 'pointer', fontFamily: 'var(--font-body)',
-                  border: '1px solid var(--color-hairline)',
-                  background: settings.type === t ? 'var(--color-brand)' : 'transparent',
-                  color: settings.type === t ? '#fff' : 'var(--color-ink-muted)',
-                }}>{t}</button>
+              <button key={t} className="segmented-item" aria-pressed={settings.type === t} onClick={() => update({ type: t })} style={{ textTransform: 'capitalize' }}>{t}</button>
             ))}
           </div>
         </div>
 
-        <Slider label="Angle" val={settings.angle} min={0} max={90} step={1} suffix="°" onChange={v => update({ angle: v })} />
-        <Slider label="Spacing" val={settings.frequency} min={4} max={50} step={1} suffix="px" onChange={v => update({ frequency: v })} />
-        <Slider label="Detail" val={settings.resolution} min={1} max={20} step={1} suffix="px" onChange={v => update({ resolution: v })} />
-        <Slider label="Contrast" val={settings.contrast} min={0} max={200} step={5} suffix="%" onChange={v => update({ contrast: v })} />
-        <Slider label="Brightness" val={settings.brightness} min={0} max={200} step={5} suffix="%" onChange={v => update({ brightness: v })} />
+        <StudioRange label="Angle" min={0} max={90} step={1} value={settings.angle} suffix="°" onChange={v => update({ angle: v })} />
+        <StudioRange label="Spacing" min={4} max={50} step={1} value={settings.frequency} suffix="px" onChange={v => update({ frequency: v })} />
+        <StudioRange label="Detail" min={1} max={20} step={1} value={settings.resolution} suffix="px" onChange={v => update({ resolution: v })} />
+        <StudioRange label="Contrast" min={0} max={200} step={5} value={settings.contrast} suffix="%" onChange={v => update({ contrast: v })} />
+        <StudioRange label="Brightness" min={0} max={200} step={5} value={settings.brightness} suffix="%" onChange={v => update({ brightness: v })} />
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '6px 0 18px' }}>
-          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>Invert</span>
-          <input aria-label="Invert tone" type="checkbox" checked={settings.inverted} onChange={e => update({ inverted: e.target.checked })} style={{ accentColor: 'var(--color-brand)', width: 16, height: 16, cursor: 'pointer' }} />
-        </div>
+        <label className="studio-check">
+          <input aria-label="Invert tone" type="checkbox" checked={settings.inverted} onChange={e => update({ inverted: e.target.checked })} />
+          Invert
+        </label>
 
-        <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+        <div className="studio-inline">
           {(['color', 'backgroundColor'] as const).map(key => (
-            <div key={key} style={{ flex: 1 }}>
-              <span style={{ fontSize: 11, color: 'var(--color-ink-muted)', display: 'block', marginBottom: 6, fontFamily: 'var(--font-body)' }}>{key === 'color' ? 'Foreground' : 'Background'}</span>
-              <input aria-label={key === 'color' ? 'Ink colour' : 'Paper colour'} type="color" value={settings[key]} onChange={e => update({ [key]: e.target.value })}
-                style={{ width: '100%', height: 34, border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-sm)', background: 'none', cursor: 'pointer' }} />
-            </div>
+            <label key={key} className="studio-group" style={{ flex: 1 }}>
+              <span className="studio-label">{key === 'color' ? 'Foreground' : 'Background'}</span>
+              <input aria-label={key === 'color' ? 'Ink colour' : 'Paper colour'} className="studio-color-input" style={{ width: '100%' }} type="color" value={settings[key]} onChange={e => update({ [key]: e.target.value })} />
+            </label>
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setSettings(DEFAULTS)}
-            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 0', borderRadius: 'var(--radius-pill)', border: '1px solid var(--color-hairline)', background: 'transparent', color: 'var(--color-ink)', fontSize: 13, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
-            <RotateCcw size={14} /> Reset
+        <div className="studio-actions">
+          <button className="btn-primary is-grow" onClick={() => download()} disabled={!img || !!exporting}>
+            <Download size={14} aria-hidden="true" /> PNG
           </button>
-          <button onClick={() => download()} disabled={!img || !!exporting}
-            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 0', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--color-brand)', color: '#fff', fontSize: 13, cursor: img ? 'pointer' : 'not-allowed', opacity: img ? 1 : 0.5, fontFamily: 'var(--font-body)' }}>
-            <Download size={14} /> PNG
+          <button className="btn-translucent is-grow" disabled={!img || !!exporting} onClick={() => download('svg')}>Export vector SVG</button>
+          <button className="btn-translucent" onClick={() => setSettings(DEFAULTS)}>
+            <RotateCcw size={14} aria-hidden="true" /> Reset
           </button>
         </div>
-        <label style={{ display: "block", marginTop: 12 }}><input type="checkbox" checked={retain} onChange={e => setRetain(e.target.checked)} /> Keep image on this device for 24 hours</label>
-        <button onClick={async () => { ++sourceToken.current; releasePendingSource(); exportJob.current?.abort(); setLoading(false); setExporting(''); draftRef.current = null; srcDataRef.current = null; const ok = await clearImageDraft('halftone'); setImg(null); if (!ok) setError('Device storage could not be cleared. Clear browser site data.'); }}>Clear image draft</button>
-        <button disabled={!img || !!exporting} onClick={() => download('svg')} style={{ marginTop: 12 }}>Export vector SVG</button>
-        <label style={{ display: 'block', marginTop: 12 }}>Replace image <input aria-label="Replace halftone image" type="file" accept="image/*" onChange={e => e.target.files?.[0] && loadFile(e.target.files[0])} /></label>
+
+        <div className="studio-controls-section">
+          <label className="studio-group">
+            <span className="studio-label">Replace image</span>
+            <input aria-label="Replace halftone image" className="studio-file-input" type="file" accept="image/*" onChange={e => e.target.files?.[0] && loadFile(e.target.files[0])} />
+          </label>
+          <label className="studio-check"><input type="checkbox" checked={retain} onChange={e => setRetain(e.target.checked)} /> Keep image on this device for 24 hours</label>
+          <p className="studio-help studio-status" role="status">{draftStatus}</p>
+          <div><button className="btn-translucent btn-sm" onClick={clearDraft}>Clear image draft</button></div>
+        </div>
       </div>
     </div>
   );

@@ -169,14 +169,17 @@
 }
 .studio-main button,
 .palette-editor button {
-  min-height: 36px;
+  min-height: 40px;
+}
+@media (pointer: coarse) {
+  .studio-main button,
+  .palette-editor button {
+    min-height: 44px;
+  }
 }
 .studio-main input:focus-visible,
 .palette-editor input:focus-visible {
   box-shadow: var(--shadow-focus);
-}
-.studio-tool-nav {
-  scroll-padding: 16px;
 }
 @media (max-width: 600px) {
   .studio-main {
@@ -195,47 +198,19 @@
   .palette-editor button {
     min-height: 44px;
   }
-  .studio-main > div:first-child {
-    margin-bottom: 24px !important;
-  }
-  .studio-grid-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
+  .studio-tool-nav *,
   .studio-main *,
   .palette-editor * {
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
   }
-  .studio-main [style*="transform"],
+  .studio-main [style*="transform"]:not(.studio-brush-ring),
   .palette-editor [style*="transform"] {
     transform: none !important;
   }
-}
-.studio-halftone {
-  flex-wrap: wrap;
-}
-.studio-halftone > .studio-toolbar,
-.studio-halftone > [role="alert"] {
-  flex-basis: 100%;
-}
-.studio-halftone-controls {
-  width: 320px;
-  max-width: 100%;
-}
-@media (max-width: 900px) {
-  .studio-halftone {
-    flex-direction: column;
-  }
-  .studio-halftone-controls {
-    width: 100%;
-  }
-}
-
-.studio-tool-nav {
-  top: 72px !important;
 }
 .studio-main h1 {
   scroll-margin-top: 140px;
@@ -248,5 +223,720 @@
   .studio-media-actions > button:first-child {
     flex: 1 1 160px !important;
     min-height: 44px;
+  }
+}
+
+/* ── Design Studio shared control contract ───────────────────────────────────
+   Owned here, consumed by the eight Studio tools and the standalone /palette
+   page. Every selector is studio-prefixed or nested under .studio-main /
+   .palette-editor, so the site's shared primitives (.btn-*, .segmented,
+   .input-base) keep their meaning everywhere else. Tools keep their own state;
+   these rules only describe presentation. */
+.studio-main,
+.palette-editor {
+  /* Text tokens that are not in theme.css yet; both read on canvas and
+     surfaces in their theme. */
+  --studio-warning: #fbbf24;
+  --studio-link: var(--color-accent-blue);
+  --studio-track: color-mix(in srgb, var(--color-ink) 18%, transparent);
+}
+[data-theme="light"] .studio-main,
+[data-theme="light"] .palette-editor {
+  --studio-warning: #8a5a00;
+  --studio-link: #0063a6;
+}
+
+/* Page chrome: tool navigation and heading */
+.studio-tool-nav {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scroll-padding: 16px;
+  padding: 8px clamp(16px, 3vw, 40px);
+  border-bottom: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  position: sticky;
+  top: 72px;
+  z-index: 90;
+}
+.studio-tool-nav-item {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 6px 16px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-ink-muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.studio-tool-nav-item:hover {
+  color: var(--color-ink);
+  background: var(--color-surface-1);
+}
+.studio-tool-nav-item[aria-current="page"] {
+  color: var(--color-ink);
+  background: var(--color-surface-2);
+  font-weight: 500;
+}
+@media (pointer: coarse) {
+  .studio-tool-nav-item {
+    min-height: 44px;
+  }
+}
+.studio-intro {
+  margin-bottom: 32px;
+  padding-top: 8px;
+}
+.studio-intro h1 {
+  margin: 0 0 10px;
+}
+.studio-intro p {
+  max-width: 72ch;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--color-ink-muted);
+}
+.studio-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  color: var(--color-ink-muted);
+}
+
+/* Labels, groups and action rows */
+.studio-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--color-ink);
+}
+.studio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.studio-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.studio-status-row {
+  /* Reserves room for a status line plus its recovery action. */
+  min-height: 44px;
+}
+.studio-actions > .is-grow {
+  /* Two growing actions fit side by side in the 320px control column. */
+  flex: 1 1 120px;
+}
+
+/* Wrapping choice groups: the DNA .segmented primitive with aria-pressed,
+   allowed onto several rows instead of clipping at narrow widths. */
+.segmented.studio-choice {
+  flex-wrap: wrap;
+  overflow: visible;
+  border-radius: var(--radius-lg);
+}
+.segmented.studio-choice.is-fill {
+  display: flex;
+  width: 100%;
+}
+.segmented.studio-choice.is-fill > .segmented-item {
+  flex: 1 1 auto;
+}
+.studio-main .segmented-item:disabled,
+.palette-editor .segmented-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.studio-main .segmented-item:disabled:hover,
+.palette-editor .segmented-item:disabled:hover {
+  color: var(--color-ink-muted);
+}
+.studio-main .segmented-item > svg,
+.palette-editor .segmented-item > svg {
+  vertical-align: -2px;
+  margin-right: 6px;
+}
+
+/* Fields */
+.studio-mono {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+.studio-color-input {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 2px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  cursor: pointer;
+}
+.studio-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-ink);
+  cursor: pointer;
+}
+.studio-check input {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-brand);
+  cursor: pointer;
+}
+.studio-file-input {
+  max-width: 100%;
+  font-size: 13px;
+  color: var(--color-ink-muted);
+}
+.studio-file-input::file-selector-button {
+  min-height: 40px;
+  margin-right: 10px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.studio-file-input:focus-visible {
+  outline: none;
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-focus);
+}
+.studio-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink);
+  cursor: pointer;
+}
+.studio-disclosure > summary:focus-visible {
+  outline: none;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-focus);
+}
+
+/* StudioRange: native range with a tokenized track and a stable readout */
+.studio-range {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.studio-range-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink);
+}
+.studio-value {
+  min-width: 6ch;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-muted);
+}
+.studio-range-input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.studio-range-input::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(
+    to right,
+    var(--color-brand) 0 var(--studio-range-progress, 0%),
+    var(--studio-track) var(--studio-range-progress, 0%) 100%
+  );
+}
+.studio-range-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border: 2px solid var(--color-canvas);
+  border-radius: var(--radius-full);
+  background: var(--color-brand);
+  box-shadow: 0 0 0 1px var(--color-brand);
+}
+.studio-range-input::-moz-range-track {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--studio-track);
+}
+.studio-range-input::-moz-range-progress {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--color-brand);
+}
+.studio-range-input::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--color-canvas);
+  border-radius: var(--radius-full);
+  background: var(--color-brand);
+  box-shadow: 0 0 0 1px var(--color-brand);
+}
+.studio-range-input:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.studio-range-input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+@media (pointer: coarse) {
+  .studio-range-input {
+    height: 44px;
+  }
+}
+.studio-ranges {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: 12px 24px;
+}
+
+/* Surfaces: control panel, two-column workspace and preview stages */
+.studio-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-1);
+}
+.studio-controls-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-hairline);
+}
+.studio-controls h2 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.studio-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  align-items: start;
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .studio-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.studio-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 320px;
+  padding: 24px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-1);
+}
+.studio-stage.is-fixed {
+  height: clamp(320px, 50vw, 600px);
+}
+.studio-stage canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius-md);
+}
+.studio-stage-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-1);
+  color: var(--color-ink-muted);
+}
+.studio-panel h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.studio-panel-meta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-ink-muted);
+}
+.studio-panel .studio-panel-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 280px;
+  padding: 0;
+  color: var(--color-ink-muted);
+  font-size: 13px;
+}
+.studio-panel .studio-panel-stage.is-padded {
+  padding: 16px;
+  background: var(--color-canvas);
+}
+.studio-notice.has-icon {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--color-ink-muted);
+  font-size: 13px;
+}
+.studio-notice.has-icon > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.studio-notice strong {
+  color: var(--color-ink);
+}
+.studio-upload svg {
+  color: var(--color-ink-muted);
+}
+.studio-upload.is-bare {
+  /* Upload prompt inside a stage that already draws the frame. */
+  border: 0;
+  background: transparent;
+}
+.studio-upload.is-clickable {
+  cursor: pointer;
+}
+.studio-upload.is-dragging {
+  border-color: var(--color-brand);
+}
+.studio-upload strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+/* Pass / warn / fail tones (meaning is always repeated in text) */
+.studio-tone.is-pass {
+  color: var(--color-success);
+}
+.studio-tone.is-warn {
+  color: var(--studio-warning);
+}
+.studio-tone.is-fail {
+  color: var(--color-error);
+}
+.studio-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-1);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.studio-badge.is-strong {
+  font-size: 18px;
+}
+.studio-meter {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--studio-track);
+  overflow: hidden;
+}
+.studio-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transition: width 0.3s;
+}
+.studio-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--color-ink-muted);
+}
+.studio-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
+  gap: 10px;
+}
+.studio-result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-1);
+  font-size: 13px;
+}
+.studio-result.is-pass {
+  border-color: color-mix(in srgb, var(--color-success) 45%, var(--color-hairline));
+}
+.studio-result.is-fail {
+  border-color: color-mix(in srgb, var(--color-error) 45%, var(--color-hairline));
+}
+.studio-result-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--color-ink-muted);
+}
+.studio-result strong {
+  font-weight: 600;
+}
+.studio-result small,
+.studio-option small {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-ink-muted);
+}
+
+/* Option cards: explanatory suggestions that apply a value when chosen */
+.studio-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: 10px;
+}
+.studio-option {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-2);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.studio-option:hover {
+  border-color: color-mix(in srgb, var(--color-ink) 40%, transparent);
+}
+.studio-option-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.studio-color-chip {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-sm);
+}
+
+/* Metric tiles (Grid Calculator) */
+.studio-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.studio-metric {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-1);
+}
+.studio-metric span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--color-ink-muted);
+}
+.studio-metric strong {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .studio-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Cards that hold content (specimens, font metadata, grid notes) */
+.studio-card {
+  min-width: 0;
+  padding: clamp(16px, 3vw, 24px);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-1);
+}
+.studio-card.is-canvas {
+  padding: 12px;
+  background: var(--color-canvas);
+}
+.studio-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 16px;
+}
+.studio-card p + p,
+.studio-card strong + p {
+  margin-top: 8px;
+}
+.studio-link {
+  color: var(--studio-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.studio-link:hover {
+  opacity: 1;
+  text-decoration-thickness: 2px;
+}
+
+/* Backdrop swatches (Background Remover): the colour is the content */
+.studio-swatch-choice {
+  flex: 1 1 0;
+  min-width: 44px;
+  height: 40px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.studio-swatch-choice[aria-pressed="true"] {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* Contrast Checker sample */
+.studio-contrast-sample {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 200px;
+  padding: clamp(20px, 4vw, 32px);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-xl);
+}
+.studio-contrast-sample .studio-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.studio-contrast-aa {
+  font-size: clamp(48px, 8vw, 72px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+.studio-contrast-pair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+}
+.studio-contrast-pair > .studio-group {
+  flex: 1 1 200px;
+}
+
+/* Palette Studio chrome around generated colours */
+.studio-pairs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 10px;
+}
+.studio-pair {
+  overflow: hidden;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+}
+.studio-pair-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+}
+.studio-pair-meta .studio-badge {
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 700;
+}
+/* Scoped like the generic .palette-editor button rule it must override. */
+.palette-editor .studio-mood-swatch {
+  position: relative;
+  display: block;
+  min-height: 200px;
+  padding: 0;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.palette-editor .studio-mood-swatch:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-level-2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .palette-editor .studio-mood-swatch:hover {
+    transform: none !important;
   }
 }
