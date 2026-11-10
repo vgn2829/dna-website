@@ -3,7 +3,6 @@ import { Loader2 } from "lucide-react";
 import { useLocation, useSearchParams } from "react-router";
 import { usePageMeta } from "../components/hooks/use-page-meta";
 import { TOOLS } from "../components/studio/tools";
-import { T } from "../components/studio/style";
 import "../../styles/studio.css";
 // ── Shell ─────────────────────────────────────────────────────────────────────
 export default function DesignStudio() {
@@ -49,113 +48,56 @@ export default function DesignStudio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const Tool = TOOLS.find((t) => t.id === active)!.comp;
+  // Keep the selected tool visible in the horizontally scrolling nav (deep
+  // links and narrow screens), without moving the page vertically.
+  const nav = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const bar = nav.current;
+    const item = bar?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!bar || !item) return;
+    const left = item.offsetLeft - bar.offsetLeft;
+    if (left < bar.scrollLeft || left + item.offsetWidth > bar.scrollLeft + bar.clientWidth)
+      bar.scrollLeft = left - 16;
+  }, [active]);
+
+  const tool = TOOLS.find((t) => t.id === active)!;
+  const Tool = tool.comp;
   return (
     <div
       style={{
         minHeight: "100vh",
-        background: T.canvas,
+        background: "var(--color-canvas)",
         fontFamily: "var(--font-body)",
-        color: T.ink,
-        paddingTop: 0,
+        color: "var(--color-ink)",
       }}
     >
-      <nav
-        aria-label="Design tools"
-        className="studio-tool-nav"
-        style={{
-          display: "flex",
-          gap: 4,
-          alignItems: "center",
-          overflowX: "auto",
-          scrollbarWidth: "none",
-          padding: "8px 24px",
-          borderBottom: `1px solid ${T.hairline}`,
-          background: "var(--color-canvas)",
-          position: "sticky",
-          top: 56,
-          zIndex: 90,
-        }}
-      >
+      <nav ref={nav} aria-label="Design tools" className="studio-tool-nav">
         {TOOLS.map((t) => (
           <button
             aria-current={active === t.id ? "page" : undefined}
-            className="touch-target"
+            className="studio-tool-nav-item"
             key={t.id}
             onClick={() => setActive(t.id)}
-            style={
-              active === t.id
-                ? {
-                    background: "var(--color-surface-2)",
-                    color: "var(--color-ink)",
-                    borderRadius: "var(--radius-pill)",
-                    padding: "6px 16px",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    border: "none",
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    fontFamily: "var(--font-body)",
-                    letterSpacing: "-0.1px",
-                  }
-                : {
-                    background: "transparent",
-                    color: "var(--color-ink-muted)",
-                    borderRadius: "var(--radius-pill)",
-                    padding: "6px 16px",
-                    fontSize: 13,
-                    fontWeight: 400,
-                    border: "none",
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    fontFamily: "var(--font-body)",
-                  }
-            }
           >
             {t.label}
           </button>
         ))}
       </nav>
       <main className="studio-main">
-        <div style={{ marginBottom: 40, paddingTop: 8 }}>
-          <h1
-            ref={heading}
-            tabIndex={-1}
-            className="type-display-lg"
-            style={{ margin: "0 0 10px 0" }}
-          >
-            {TOOLS.find((t) => t.id === active)!.label}
+        <div className="studio-intro">
+          <h1 ref={heading} tabIndex={-1} className="type-display-lg">
+            {tool.label}
           </h1>
-          <p
-            style={{
-              fontSize: 16,
-              fontWeight: 400,
-              color: "var(--color-ink-muted)",
-              lineHeight: 1.5,
-              letterSpacing: "-0.01em",
-              margin: 0,
-              fontFamily: "var(--font-body)",
-            }}
-          >
-            {TOOLS.find((t) => t.id === active)!.description}
-          </p>
+          <p>{tool.description}</p>
         </div>
         <Suspense
           fallback={
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                minHeight: 320,
-                color: "var(--color-ink-muted)",
-              }}
-            >
-              <Loader2 size={26} className="animate-spin" />
+            <div className="studio-loading" role="status" aria-label="Loading tool">
+              <Loader2 size={26} className="animate-spin" aria-hidden="true" />
             </div>
           }
         >
-          <div className="studio-active-tool">
+          <div className="studio-active-tool studio-tool">
             <p className="studio-help">
               Switching tools cancels active image processing. Completed background and halftone images remain in this session; device image recovery is opt-in.
             </p>

@@ -1,7 +1,6 @@
 import { useStudioDraft } from "./drafts";
 import { contrastRatio, hexToRgb } from "../../lib/palette/engine";
-import { useState } from "react";
-import { T, ss } from "./style";
+import { ArrowDownUp } from "lucide-react";
 function hexToRgbCC(hex: string): [number, number, number] {
   const h = hex.replace(/^#/, "");
   const full =
@@ -145,7 +144,7 @@ export function ContrastChecker() {
 
   const ratio = cRatio(isHex(fg) ? fg : "#fff", isHex(bg) ? bg : "#000");
   const rStr = ratio.toFixed(2);
-  const rc = ratio >= 4.5 ? "var(--color-success)" : "var(--color-error)";
+  const tone = ratio >= 4.5 ? "is-pass" : "is-fail";
   const failing = ratio < 4.5;
   const suggestions = failing ? generateSuggestions(fg, bg, 4.5) : [];
 
@@ -172,476 +171,172 @@ export function ContrastChecker() {
     { l: "AAA Large text", p: ratio >= 4.5, r: "4.5:1" },
   ];
 
+  const field = (
+    which: "fg" | "bg",
+    label: string,
+    value: string,
+    draft: string,
+    pick: (v: string) => void,
+    sync: (v: string) => void,
+  ) => (
+    <div className="studio-group">
+      <label htmlFor={`contrast-${which}`} className="studio-label">
+        {label}
+      </label>
+      <div className="studio-inline">
+        <input
+          aria-label={which === "fg" ? "Pick foreground" : "Pick background"}
+          className="studio-color-input"
+          type="color"
+          value={isHex(value) ? value : which === "fg" ? "#fff" : "#000"}
+          onChange={(e) => pick(e.target.value)}
+        />
+        <input
+          id={`contrast-${which}`}
+          className="input-base studio-mono"
+          style={{ flex: 1, minWidth: 0 }}
+          aria-invalid={!isHex(draft)}
+          value={draft}
+          onChange={(e) => sync(e.target.value)}
+          maxLength={7}
+          spellCheck={false}
+        />
+      </div>
+    </div>
+  );
+
   return (
     <div className="studio-tool">
       {(!isHex(fgI) || !isHex(bgI)) && (
-        <p role="alert">
+        <p role="alert" className="studio-status is-error">
           Enter complete six-digit hex values. Results below show the last valid
           pair.
         </p>
       )}
       <div
+        className="studio-contrast-sample"
         style={{
-          borderRadius: "var(--radius-xl)",
-          padding: 40,
-          background: isHex(bg) ? bg : T.canvas,
-          border: `1px solid ${T.hairlineSoft}`,
-          minHeight: 160,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          position: "relative",
+          background: isHex(bg) ? bg : "var(--color-canvas)",
+          color: isHex(fg) ? fg : "var(--color-ink)",
         }}
       >
-        <div
-          style={{
-            fontFamily: "var(--font-body)",
-            letterSpacing: "-3px",
-            fontSize: 64,
-            fontWeight: 700,
-            lineHeight: 1,
-            color: isHex(fg) ? fg : T.ink,
-          }}
-        >
+        <div className="studio-badges">
+          <span className={`studio-badge is-strong studio-tone ${tone}`}>
+            {rStr}:1
+          </span>
+          {failing && (
+            <span className="studio-badge studio-tone is-fail">
+              Fails WCAG AA
+            </span>
+          )}
+        </div>
+        <div className="studio-contrast-aa" aria-hidden="true">
           Aa
         </div>
-        <p
-          style={{
-            fontFamily: "var(--font-body)",
-            fontSize: 15,
-            lineHeight: 1.5,
-            letterSpacing: "-0.15px",
-            margin: "12px 0 0",
-            color: isHex(fg) ? fg : T.ink,
-          }}
-        >
+        <p style={{ fontSize: 15, lineHeight: 1.5 }}>
           Contrast ratio: <strong>{rStr}:1</strong>
         </p>
-        <div
-          style={{
-            position: "absolute",
-            top: 20,
-            right: 20,
-            padding: "8px 16px",
-            borderRadius: 100,
-            background: "rgba(0,0,0,0.55)",
-            backdropFilter: "blur(8px)",
-            fontFamily: "var(--font-body)",
-            fontSize: 20,
-            fontWeight: 700,
-            color: rc,
-            letterSpacing: "-0.5px",
-          }}
-        >
-          {rStr}:1
-        </div>
-        {failing && (
-          <div
-            style={{
-              position: "absolute",
-              bottom: 16,
-              right: 16,
-              padding: "5px 12px",
-              borderRadius: 8,
-              background: "rgba(239,68,68,0.18)",
-              border: "1px solid rgba(239,68,68,0.35)",
-              fontFamily: "var(--font-body)",
-              fontSize: 11,
-              color: "#f87171",
-            }}
-          >
-            Fails WCAG AA
-          </div>
-        )}
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          gap: 16,
-          alignItems: "flex-end",
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={{ flex: 1, minWidth: 160 }}>
-          <label htmlFor="contrast-fg" style={ss.label}>
-            Foreground (text)
-          </label>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              aria-label="Pick foreground"
-              type="color"
-              value={isHex(fg) ? fg : "#fff"}
-              onChange={(e: any) => {
-                setFg(e.target.value);
-                setFgI(e.target.value);
-              }}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 10,
-                border: `1px solid ${T.hairline}`,
-                background: "none",
-                cursor: "pointer",
-                padding: 2,
-              }}
-            />
-            <input
-              id="contrast-fg"
-              aria-invalid={!isHex(fgI)}
-              value={fgI}
-              onChange={(e: any) => syncFg(e.target.value)}
-              style={{
-                ...ss.input,
-                fontFamily: "var(--font-mono)",
-                letterSpacing: "0.05em",
-              }}
-              maxLength={7}
-            />
-          </div>
-        </div>
+      <div className="studio-contrast-pair">
+        {field("fg", "Foreground (text)", fg, fgI, (v) => {
+          setFg(v);
+          setFgI(v);
+        }, syncFg)}
         <button
+          className="btn-icon"
           aria-label="Swap foreground and background"
           disabled={!isHex(fgI) || !isHex(bgI)}
           onClick={swap}
-          style={{
-            background: "var(--color-surface-1)",
-            color: "var(--color-ink)",
-            borderRadius: "var(--radius-pill)",
-            border: "none",
-            cursor: "pointer",
-            fontFamily: "var(--font-body)",
-            width: 44,
-            height: 44,
-            fontSize: 18,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-          }}
+          style={{ flexShrink: 0, height: 44, width: 44 }}
         >
-          ⇅
+          <ArrowDownUp size={18} aria-hidden="true" />
         </button>
-        <div style={{ flex: 1, minWidth: 160 }}>
-          <label htmlFor="contrast-bg" style={ss.label}>
-            Background
-          </label>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              aria-label="Pick background"
-              type="color"
-              value={isHex(bg) ? bg : "#000"}
-              onChange={(e: any) => {
-                setBg(e.target.value);
-                setBgI(e.target.value);
-              }}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 10,
-                border: `1px solid ${T.hairline}`,
-                background: "none",
-                cursor: "pointer",
-                padding: 2,
-              }}
-            />
-            <input
-              id="contrast-bg"
-              aria-invalid={!isHex(bgI)}
-              value={bgI}
-              onChange={(e: any) => syncBg(e.target.value)}
-              style={{
-                ...ss.input,
-                fontFamily: "var(--font-mono)",
-                letterSpacing: "0.05em",
-              }}
-              maxLength={7}
-            />
-          </div>
-        </div>
+        {field("bg", "Background", bg, bgI, (v) => {
+          setBg(v);
+          setBgI(v);
+        }, syncBg)}
       </div>
 
-      <div
-        style={{
-          background: "var(--color-surface-1)",
-          borderRadius: "var(--radius-xl)",
-          padding: 24,
-          border: `1px solid ${T.hairlineSoft}`,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginBottom: 10,
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 13,
-              color: T.inkMuted,
-            }}
-          >
-            Contrast ratio
-          </span>
-          <span
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 13,
-              fontWeight: 600,
-              color: rc,
-            }}
-          >
-            {rStr}:1
-          </span>
+      <div className="studio-card">
+        <div className="studio-result-head" style={{ marginBottom: 10 }}>
+          <span>Contrast ratio</span>
+          <strong className={`studio-tone ${tone}`}>{rStr}:1</strong>
         </div>
-        <div
-          style={{
-            height: 6,
-            background: T.surface2,
-            borderRadius: 100,
-            overflow: "hidden",
-            position: "relative",
-          }}
-        >
-          <div
-            style={{
-              width: `${Math.min(((ratio - 1) / 20) * 100, 100)}%`,
-              height: "100%",
-              background: rc,
-              borderRadius: 100,
-              transition: "width .3s",
-            }}
+        <div className={`studio-meter studio-tone ${tone}`}>
+          <span
+            style={{ width: `${Math.min(((ratio - 1) / 20) * 100, 100)}%` }}
           />
         </div>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginTop: 6,
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 11,
-              color: T.inkMuted,
-            }}
-          >
-            1:1
-          </span>
-          <span
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 11,
-              color: T.inkMuted,
-            }}
-          >
-            3 · 4.5 · 7 · 21:1
-          </span>
+        <div className="studio-scale" aria-hidden="true">
+          <span>1:1</span>
+          <span>3 · 4.5 · 7 · 21:1</span>
         </div>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))",
-          gap: 10,
-        }}
-      >
-        {levels.map((l: any) => (
-          <div
-            key={l.l}
-            style={{
-              background: "var(--color-surface-1)",
-              borderRadius: "var(--radius-lg)",
-              padding: 14,
-              border: `1px solid ${l.p ? "#166534" : "#7f1d1d"}`,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: 6,
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: "var(--font-body)",
-                  fontSize: 11,
-                  color: T.inkMuted,
-                  lineHeight: 1.3,
-                }}
-              >
-                {l.l}
-              </span>
-              <span style={{ fontSize: 16 }}>{l.p ? "✓" : "✗"}</span>
+      <div className="studio-results">
+        {levels.map((l) => (
+          <div key={l.l} className={`studio-result ${l.p ? "is-pass" : "is-fail"}`}>
+            <div className="studio-result-head">
+              <span>{l.l}</span>
+              <span aria-hidden="true">{l.p ? "✓" : "✗"}</span>
             </div>
-            <div
-              style={{
-                fontFamily: "var(--font-body)",
-                fontSize: 13,
-                fontWeight: 600,
-                color: l.p ? "var(--color-success)" : "var(--color-error)",
-              }}
-            >
+            <strong className={`studio-tone ${l.p ? "is-pass" : "is-fail"}`}>
               {l.p ? "Pass" : "Fail"}
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--font-body)",
-                fontSize: 11,
-                color: T.inkMuted,
-              }}
-            >
-              Requires {l.r}
-            </div>
+            </strong>
+            <small>Requires {l.r}</small>
           </div>
         ))}
       </div>
 
       {failing && (
-        <div
-          style={{
-            background: "var(--color-surface-1)",
-            borderRadius: "var(--radius-xl)",
-            border: "1px solid rgba(239,68,68,0.3)",
-            padding: 24,
-          }}
-        >
-          <div style={{ marginBottom: 16 }}>
-            <div
-              style={{
-                fontFamily: "var(--font-body)",
-                fontSize: 13,
-                fontWeight: 600,
-                color: T.ink,
-                marginBottom: 2,
-              }}
-            >
-              Suggested foreground colors
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--font-body)",
-                fontSize: 11,
-                color: T.inkMuted,
-              }}
-            >
-              All achieve WCAG AA (4.5:1) against your background, maintaining
-              color harmony
-            </div>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))",
-              gap: 10,
-            }}
-          >
-            {suggestions.map((s: any, i: number) => (
+        <section className="studio-card">
+          <h2 className="studio-label">Suggested foreground colors</h2>
+          <p className="studio-help" style={{ marginBottom: 16 }}>
+            All achieve WCAG AA (4.5:1) against your background, maintaining
+            color harmony
+          </p>
+          <div className="studio-options">
+            {suggestions.map((s) => (
               <button
-                key={i}
+                key={s.hex}
+                className="studio-option"
                 onClick={() => {
                   setFg(s.hex);
                   setFgI(s.hex);
                 }}
-                style={{
-                  background: "var(--color-surface-2)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: 14,
-                  border: `1px solid ${T.hairline}`,
-                  cursor: "pointer",
-                  textAlign: "left",
-                  transition: "border-color .15s",
-                }}
-                onMouseEnter={(e: any) =>
-                  (e.currentTarget.style.borderColor = s.hex)
-                }
-                onMouseLeave={(e: any) =>
-                  (e.currentTarget.style.borderColor = T.hairline)
-                }
               >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    marginBottom: 8,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 8,
-                      background: s.hex,
-                      border: `1px solid ${T.hairline}`,
-                      flexShrink: 0,
-                    }}
+                <span className="studio-option-head">
+                  <span
+                    className="studio-color-chip"
+                    style={{ background: s.hex }}
+                    aria-hidden="true"
                   />
-                  <div>
-                    <div
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 12,
-                        color: T.ink,
-                      }}
-                    >
+                  <span>
+                    <span className="studio-mono" style={{ display: "block" }}>
                       {s.hex.toUpperCase()}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: "var(--font-body)",
-                        fontSize: 10,
-                        color: T.inkMuted,
-                      }}
-                    >
-                      {cRatio(s.hex, bg).toFixed(1)}:1
-                    </div>
-                  </div>
-                </div>
-                <div
+                    </span>
+                    <small>{cRatio(s.hex, bg).toFixed(1)}:1</small>
+                  </span>
+                </span>
+                <strong>{s.label}</strong>
+                <small>{s.theory}</small>
+                <span
+                  aria-hidden="true"
                   style={{
-                    fontFamily: "var(--font-body)",
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: T.ink,
-                    marginBottom: 2,
-                  }}
-                >
-                  {s.label}
-                </div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-body)",
-                    fontSize: 10,
-                    color: T.inkMuted,
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {s.theory}
-                </div>
-                <div
-                  style={{
-                    marginTop: 8,
                     padding: "6px 10px",
-                    borderRadius: 6,
+                    borderRadius: "var(--radius-sm)",
                     background: bg,
-                    fontFamily: "var(--font-body)",
-                    fontSize: 11,
                     color: s.hex,
                     fontWeight: 600,
                   }}
                 >
                   Aa — preview
-                </div>
+                </span>
               </button>
             ))}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

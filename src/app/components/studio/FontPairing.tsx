@@ -1,7 +1,8 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState } from 'react';
 import catalogue from '../../lib/studio-fonts.json';
 import { useStudioDraft, isString } from '../../lib/studio-draft';
 import { downloadBlob } from '../background-removal/compositing';
+import { StudioRange } from './StudioRange';
 type FontId = 'inter' | 'sourceserif4' | 'jetbrainsmono' | 'notosansdevanagari' | 'notoserifdevanagari';
 interface Pair { title: string; heading: FontId; body: FontId; headingWeight: number; bodyWeight: number; use: 'Editorial' | 'Product' | 'Technical'; script: 'Latin' | 'Devanagari'; reason: string }
 const PAIRS: Pair[] = [
@@ -12,8 +13,6 @@ const PAIRS: Pair[] = [
   { title: 'Devanagari editorial', heading: 'notoserifdevanagari', body: 'notosansdevanagari', headingWeight: 700, bodyWeight: 400, use: 'Editorial', script: 'Devanagari', reason: 'Both families cover Devanagari and Latin. Serif detail separates headlines from simpler body forms.' },
   { title: 'Devanagari product', heading: 'notosansdevanagari', body: 'notosansdevanagari', headingWeight: 700, bodyWeight: 400, use: 'Product', script: 'Devanagari', reason: 'A shared family maintains script consistency while weight and spacing establish hierarchy.' },
 ];
-const card: CSSProperties = { background: 'var(--color-surface-1)', border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-xl)', padding: 24 };
-const field: CSSProperties = { border: '1px solid var(--color-hairline)', borderRadius: 8, padding: 10, background: 'var(--color-surface-1)', color: 'var(--color-ink)' };
 const byId = (id: FontId) => catalogue.find(font => font.id === id)!;
 export function typographyCss(pair: Pair, size: number) {
   const fonts = [...new Set([pair.heading, pair.body])];
@@ -43,28 +42,35 @@ export function FontPairing() {
     })).then(() => { if (active) { clearTimeout(timer); setStatus('Selected fonts loaded'); } }).catch(() => { if (active) { clearTimeout(timer); setStatus('Font download failed. System fallback is visible. Retry to load the selected families.'); } });
     return () => { active = false; clearTimeout(timer); faces.forEach(face => document.fonts.delete(face)); };
   }, [pair, retry]);
-  return <div style={{ display: 'grid', gap: 20 }}>
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
-      <label>Use case <select aria-label="Font use case" style={field} value={use} onChange={e => { setUse(e.target.value); setIndex(0); }}>{['All', 'Editorial', 'Product', 'Technical'].map(value => <option key={value}>{value}</option>)}</select></label>
-      <label>Script <select aria-label="Font script" style={field} value={script} onChange={e => { setScript(e.target.value); setUse('All'); setIndex(0); }}><option>Latin</option><option>Devanagari</option></select></label>
-      <button style={field} disabled={pool.length < 2} onClick={() => setIndex(value => (value + 1) % pool.length)}>Next pairing</button>
-      <span>{pool.length} curated pairings in this selection</span>
+  const loaded = status === 'Selected fonts loaded';
+  const failed = /failed|timed out/i.test(status);
+  return <div className="studio-tool">
+    <div className="studio-toolbar">
+      <label className="studio-field">Use case <select aria-label="Font use case" className="input-base" value={use} onChange={e => { setUse(e.target.value); setIndex(0); }}>{['All', 'Editorial', 'Product', 'Technical'].map(value => <option key={value}>{value}</option>)}</select></label>
+      <label className="studio-field">Script <select aria-label="Font script" className="input-base" value={script} onChange={e => { setScript(e.target.value); setUse('All'); setIndex(0); }}><option>Latin</option><option>Devanagari</option></select></label>
+      <button className="btn-secondary" disabled={pool.length < 2} onClick={() => setIndex(value => (value + 1) % pool.length)}>Next pairing</button>
+      <span className="studio-help">{pool.length} curated pairings in this selection</span>
     </div>
-    {!pool.length && <p role="status">No pairing matches this combination. Showing a verified {script} family.</p>}
-    <p role="status">{status} {status !== 'Selected fonts loaded' && <button style={field} onClick={() => setRetry(v => v + 1)}>Retry fonts</button>}</p>
-    <article style={card}>
-      <p>{pair.title} · {pair.use}</p>
+    {!pool.length && <p role="status" className="studio-notice">No pairing matches this combination. Showing a verified {script} family.</p>}
+    <div className="studio-actions studio-status-row">
+      <p role="status" className={`studio-status${failed ? ' studio-tone is-warn' : ''}`}>{status}</p>
+      {!loaded && <button className="btn-secondary btn-sm" onClick={() => setRetry(v => v + 1)}>Retry fonts</button>}
+    </div>
+    <article className="studio-card">
+      <p className="studio-help">{pair.title} · {pair.use}</p>
       <h2 style={{ fontFamily: `'${byId(pair.heading).family}', serif`, fontWeight: pair.headingWeight, fontSize: size, lineHeight: 1.15, overflowWrap: 'anywhere', fontSynthesis: 'none', margin: '20px 0' }}>{headline || (script === 'Latin' ? 'Design gives ideas a voice.' : 'डिज़ाइन विचारों को आवाज़ देता है।')}</h2>
       <p style={{ fontFamily: `'${byId(pair.body).family}', sans-serif`, fontWeight: pair.bodyWeight, fontSize: 18, lineHeight: 1.65, fontSynthesis: 'none', maxWidth: '65ch' }}>{body || (script === 'Latin' ? 'A useful specimen shows the rhythm of real sentences, punctuation, numerals 0123456789 and the space between ideas. Read it at the size your audience will use.' : 'अच्छा डिज़ाइन स्पष्टता और पढ़ने की सहजता को महत्व देता है। अक्षरों, मात्राओं और शब्दों के बीच का अंतर भी देखें। ०१२३४५६७८९')}</p>
-      <p style={{ color: 'var(--color-ink-muted)', maxWidth: '75ch' }}>{pair.reason}</p>
+      <p className="studio-help" style={{ marginTop: 16, maxWidth: '75ch' }}>{pair.reason}</p>
     </article>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
-      {([['Heading', pair.heading, pair.headingWeight], ['Body', pair.body, pair.bodyWeight]] as const).map(([label, id, weight]) => { const font = byId(id); return <div key={label} style={card}><strong>{label}: {font.family}</strong><p>Weight {weight} · {font.scripts.join(', ')}</p><p>x-height {font.xHeightEm ?? 'unavailable'} em · cap-height {font.capHeightEm ?? 'unavailable'} em</p><small>OS/2 metadata, default variable instance. Metrics describe proportions; they do not score visual quality.</small><p><a href={font.licenseUrl} download>{font.license} licence</a> · <a href={font.url} download>Font file</a></p></div>; })}
+    <div className="studio-cards">
+      {([['Heading', pair.heading, pair.headingWeight], ['Body', pair.body, pair.bodyWeight]] as const).map(([label, id, weight]) => { const font = byId(id); return <div key={label} className="studio-card"><strong>{label}: {font.family}</strong><p>Weight {weight} · {font.scripts.join(', ')}</p><p>x-height {font.xHeightEm ?? 'unavailable'} em · cap-height {font.capHeightEm ?? 'unavailable'} em</p><p className="studio-help">OS/2 metadata, default variable instance. Metrics describe proportions; they do not score visual quality.</p><p><a className="studio-link" href={font.licenseUrl} download>{font.license} licence</a> · <a className="studio-link" href={font.url} download>Font file</a></p></div>; })}
     </div>
-    <label>Headline specimen <input aria-label="Headline specimen" style={{ ...field, width: '100%' }} value={headline} onChange={e => setHeadline(e.target.value)} /></label>
-    <label>Body specimen <textarea aria-label="Body specimen" style={{ ...field, width: '100%', minHeight: 90 }} value={body} onChange={e => setBody(e.target.value)} /></label>
-    <label>Headline size: {size}px <input aria-label="Headline size" type="range" min={24} max={96} value={size} onChange={e => setSize(Number(e.target.value))} /></label>
-    <button style={{ ...field, justifySelf: 'start' }} onClick={() => downloadBlob(new Blob([typographyCss(pair, size)], { type: 'text/css' }), 'typography.css')}>Download typography CSS</button>
-    <p>Fonts are self-hosted. This catalogue verifies Latin and Devanagari only; characters outside a selected font’s coverage may use system fallback.</p>
+    <div className="studio-controls">
+      <label className="studio-group"><span className="studio-label">Headline specimen</span><input aria-label="Headline specimen" className="input-base" value={headline} onChange={e => setHeadline(e.target.value)} /></label>
+      <label className="studio-group"><span className="studio-label">Body specimen</span><textarea aria-label="Body specimen" className="input-base" style={{ minHeight: 90, resize: 'vertical' }} value={body} onChange={e => setBody(e.target.value)} /></label>
+      <StudioRange label="Headline size" ariaLabel="Headline size" min={24} max={96} value={size} suffix="px" onChange={setSize} />
+      <div className="studio-actions"><button className="btn-primary" onClick={() => downloadBlob(new Blob([typographyCss(pair, size)], { type: 'text/css' }), 'typography.css')}>Download typography CSS</button></div>
+    </div>
+    <p className="studio-help">Fonts are self-hosted. This catalogue verifies Latin and Devanagari only; characters outside a selected font’s coverage may use system fallback.</p>
   </div>;
 }

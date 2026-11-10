@@ -15,6 +15,7 @@ import { PRESETS, type PresetId } from "./svg-converter/presets";
 import { JobOwner, dimensions } from "../lib/studio/jobs";
 import { prepareSvg, svgImageUrl } from "../lib/studio/svg";
 import type { TracerConfig } from "./svg-converter/types";
+import { StudioRange } from "./studio/StudioRange";
 
 const MAX_DIM = 1000;
 
@@ -495,100 +496,62 @@ export function SvgConverter() {
     if (svgFileRef.current) svgFileRef.current.value = "";
   };
 
-  const card = {
-    borderRadius: "var(--radius-xl)",
-    background: "var(--color-surface-1)",
-    border: "1px solid var(--color-hairline)",
-    overflow: "hidden",
-  } as const;
-  const cardHead = {
-    padding: "10px 16px",
-    fontSize: 12,
-    fontWeight: 600,
-    letterSpacing: "0.04em",
-    textTransform: "uppercase" as const,
-    color: "var(--color-ink-muted)",
-    borderBottom: "1px solid var(--color-hairline)",
-    fontFamily: "var(--font-body)",
-  } as const;
-  const effBtn = (active: boolean) => ({
-    flex: 1,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "10px 0",
-    borderRadius: "var(--radius-md)",
-    cursor: "pointer",
-    border: "1px solid var(--color-hairline)",
-    background: active ? "var(--color-brand)" : "transparent",
-    color: active ? "#fff" : "var(--color-ink-muted)",
-  });
-  const modeBtn = (active: boolean) => ({
-    padding: "8px 18px",
-    borderRadius: "var(--radius-pill)",
-    cursor: "pointer",
-    border: "1px solid var(--color-hairline)",
-    background: active ? "var(--color-brand)" : "transparent",
-    color: active ? "#fff" : "var(--color-ink-muted)",
-    fontSize: 13,
-    fontWeight: 600,
-    fontFamily: "var(--font-body)",
-  });
-  const pill = (active: boolean) => ({
-    padding: "6px 14px",
-    borderRadius: "var(--radius-pill)",
-    cursor: "pointer",
-    border: "1px solid var(--color-hairline)",
-    background: active ? "var(--color-brand)" : "transparent",
-    color: active ? "#fff" : "var(--color-ink-muted)",
-    fontSize: 12,
-    fontWeight: active ? 600 : 500,
-    fontFamily: "var(--font-body)",
-  });
+  const lineBusy = traceEngine === "line" ? isProcessing : vectorizeStatus === "processing";
+  // One labelled, wrapping choice group (DNA .segmented with aria-pressed).
+  const choice = <V extends string | boolean>(
+    id: string,
+    label: string,
+    value: V,
+    options: [V, string][],
+    onPick: (v: V) => void,
+  ) => (
+    <div className="studio-group" role="group" aria-labelledby={id}>
+      <span className="studio-label" id={id}>
+        {label}
+      </span>
+      <div className="segmented studio-choice">
+        {options.map(([v, l]) => (
+          <button
+            key={String(v)}
+            className="segmented-item"
+            aria-pressed={value === v}
+            onClick={() => onPick(v)}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+  const switchMode = (next: "toSvg" | "toRaster") => {
+    cancelJobs();
+    resetVectorize();
+    setIsProcessing(false);
+    setIsRasterizing(false);
+    setMode(next);
+  };
 
   return (
-    <div
-      style={{
-        width: "100%",
-        maxWidth: 1100,
-        margin: "0 auto",
-        padding: "0 16px",
-      }}
-    >
+    <div className="studio-tool">
       <canvas ref={canvasRef} style={{ display: "none" }} />
-      {fileError && <p role="alert">{fileError}</p>}
+      {fileError && (
+        <p role="alert" className="studio-status is-error">
+          {fileError}
+        </p>
+      )}
 
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          justifyContent: "center",
-          marginBottom: 20,
-        }}
-      >
+      <div className="segmented" role="group" aria-label="Conversion direction" style={{ alignSelf: "flex-start" }}>
         <button
-          onClick={() => {
-            cancelJobs();
-            resetVectorize();
-            setIsProcessing(false);
-            setIsRasterizing(false);
-            setMode("toSvg");
-          }}
+          className="segmented-item"
+          onClick={() => switchMode("toSvg")}
           aria-pressed={mode === "toSvg"}
-          style={modeBtn(mode === "toSvg")}
         >
           Image → SVG
         </button>
         <button
-          onClick={() => {
-            cancelJobs();
-            resetVectorize();
-            setIsProcessing(false);
-            setIsRasterizing(false);
-            setMode("toRaster");
-          }}
+          className="segmented-item"
+          onClick={() => switchMode("toRaster")}
           aria-pressed={mode === "toRaster"}
-          style={modeBtn(mode === "toRaster")}
         >
           SVG → Image
         </button>
@@ -596,19 +559,7 @@ export function SvgConverter() {
 
       {mode === "toSvg" ? (
         !imageUrl ? (
-          <label
-            style={{
-              ...card,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              minHeight: 300,
-              cursor: "pointer",
-              color: "var(--color-ink-muted)",
-              padding: 40,
-            }}
-          >
+          <label className="studio-upload is-clickable" style={{ minHeight: 300 }}>
             <input
               ref={fileInputRef}
               type="file"
@@ -616,75 +567,33 @@ export function SvgConverter() {
               hidden
               onChange={handleFileUpload}
             />
-            <Upload size={32} style={{ marginBottom: 12 }} />
+            <Upload size={32} aria-hidden="true" />
+            <p>Select an image (high-contrast works best)</p>
             <button
               className="btn-secondary"
               type="button"
               onClick={(e) => {
                 e.preventDefault();
-                (mode === "toSvg" ? fileInputRef : svgFileRef).current?.click();
+                fileInputRef.current?.click();
               }}
             >
               Browse files
             </button>
-            <div style={{ fontSize: 14, fontFamily: "var(--font-body)" }}>
-              Select an image (high-contrast works best)
-            </div>
           </label>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div
-              style={{
-                display: "grid",
-                gap: 16,
-                gridTemplateColumns:
-                  "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
-              }}
-            >
-              <div style={card}>
-                <div style={cardHead}>Original</div>
-                <div
-                  style={{
-                    padding: 16,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    minHeight: 260,
-                  }}
-                >
-                  <img
-                    src={imageUrl}
-                    alt="Original"
-                    style={{
-                      maxWidth: "100%",
-                      maxHeight: 440,
-                      objectFit: "contain",
-                      borderRadius: "var(--radius-md)",
-                    }}
-                  />
+          <>
+            <div className="studio-previews">
+              <section className="studio-panel">
+                <h2>Original</h2>
+                <div className="studio-panel-stage">
+                  <img src={imageUrl} alt="Original" />
                 </div>
-              </div>
-              <div style={card}>
-                <div style={cardHead}>SVG Output</div>
-                <div
-                  style={{
-                    padding: 16,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    minHeight: 260,
-                  }}
-                >
-                  {(
-                    traceEngine === "line"
-                      ? isProcessing
-                      : vectorizeStatus === "processing"
-                  ) ? (
-                    <Loader2
-                      size={26}
-                      className="animate-spin"
-                      style={{ color: "var(--color-ink-muted)" }}
-                    />
+              </section>
+              <section className="studio-panel">
+                <h2>SVG Output</h2>
+                <div className="studio-panel-stage" aria-busy={lineBusy}>
+                  {lineBusy ? (
+                    <Loader2 size={26} className="animate-spin" aria-label="Processing" />
                   ) : svgData ? (
                     <img
                       className="studio-svg-preview"
@@ -692,77 +601,33 @@ export function SvgConverter() {
                       alt="Generated SVG output"
                     />
                   ) : (
-                    <span
-                      style={{
-                        color: "var(--color-ink-muted)",
-                        fontSize: 13,
-                        fontFamily: "var(--font-body)",
-                      }}
-                    >
-                      No output yet
-                    </span>
+                    <span>No output yet</span>
                   )}
                 </div>
-              </div>
+              </section>
             </div>
 
             {traceEngine === "line" && rectCount > 40000 && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "10px 14px",
-                  borderRadius: "var(--radius-md)",
-                  background: "var(--color-surface-2)",
-                  border: "1px solid var(--color-hairline)",
-                  color: "var(--color-ink-muted)",
-                  fontSize: 12,
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                <AlertTriangle size={15} /> Large output (
-                {rectCount.toLocaleString()} shapes). The SVG may be slow to
-                open. Try a higher threshold or a simpler image.
+              <div className="studio-notice has-icon" role="status">
+                <AlertTriangle size={15} aria-hidden="true" />
+                <span>
+                  Large output ({rectCount.toLocaleString()} shapes). The SVG
+                  may be slow to open. Try a higher threshold or a simpler
+                  image.
+                </span>
               </div>
             )}
 
             {traceEngine === "vector" && vectorizeError && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "10px 14px",
-                  borderRadius: "var(--radius-md)",
-                  background: "var(--color-surface-2)",
-                  border: "1px solid var(--color-hairline)",
-                  color: "var(--color-ink-muted)",
-                  fontSize: 12,
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                <AlertTriangle size={15} /> Vectorize failed: {vectorizeError}
+              <div className="studio-notice has-icon studio-tone is-fail" role="alert">
+                <AlertTriangle size={15} aria-hidden="true" />
+                <span>Vectorize failed: {vectorizeError}</span>
               </div>
             )}
 
             {traceEngine === "vector" && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 8,
-                  padding: "10px 14px",
-                  borderRadius: "var(--radius-md)",
-                  background: "var(--color-surface-2)",
-                  border: "1px solid var(--color-hairline)",
-                  color: "var(--color-ink-muted)",
-                  fontSize: 12.5,
-                  lineHeight: 1.5,
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                <Info size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+              <div className="studio-notice has-icon">
+                <Info size={15} aria-hidden="true" />
                 <span>
                   Runs on your device — the image never leaves it. Vector Trace
                   works best on{" "}
@@ -774,395 +639,113 @@ export function SvgConverter() {
               </div>
             )}
 
-            <div style={{ ...card, padding: 20 }}>
-              <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-                <button
-                  onClick={() => switchEngine("line")}
-                  aria-pressed={traceEngine === "line"}
-                  style={pill(traceEngine === "line")}
-                >
-                  Line Trace
-                </button>
-                <button
-                  onClick={() => switchEngine("vector")}
-                  aria-pressed={traceEngine === "vector"}
-                  style={pill(traceEngine === "vector")}
-                >
-                  Vector Trace
-                </button>
-              </div>
+            <div className="studio-controls">
+              {choice("svg-engine", "Trace engine", traceEngine, [["line", "Line Trace"], ["vector", "Vector Trace"]], switchEngine)}
 
               {traceEngine === "line" ? (
-                <div
-                  style={{
-                    display: "grid",
-                    gap: 20,
-                    gridTemplateColumns:
-                      "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
-                    marginBottom: 18,
-                  }}
-                >
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: 13,
-                        fontWeight: 500,
-                        color: "var(--color-ink)",
-                        marginBottom: 8,
-                        fontFamily: "var(--font-body)",
-                      }}
-                    >
-                      Threshold: {threshold}
-                    </label>
-                    <input
-                      aria-label="Threshold"
-                      type="range"
-                      min={0}
-                      max={255}
-                      value={threshold}
-                      onChange={(e) => setThreshold(Number(e.target.value))}
-                      style={{
-                        width: "100%",
-                        accentColor: "var(--color-brand)",
-                        cursor: "pointer",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: 13,
-                        fontWeight: 500,
-                        color: "var(--color-ink)",
-                        marginBottom: 8,
-                        fontFamily: "var(--font-body)",
-                      }}
-                    >
+                <div className="studio-ranges">
+                  <StudioRange
+                    label="Threshold"
+                    ariaLabel="Threshold"
+                    min={0}
+                    max={255}
+                    value={threshold}
+                    onChange={setThreshold}
+                  />
+                  <div className="studio-group" role="group" aria-labelledby="svg-effects">
+                    <span className="studio-label" id="svg-effects">
                       Effects
-                    </label>
-                    <div style={{ display: "flex", gap: 8 }}>
+                    </span>
+                    <div className="studio-inline">
                       <button
+                        className="btn-translucent btn-icon"
                         aria-pressed={useFill}
                         aria-label="Fill dark areas"
                         onClick={() => setUseFill(!useFill)}
                         title="Fill"
-                        style={effBtn(useFill)}
                       >
-                        <CircleDot size={18} />
+                        <CircleDot size={18} aria-hidden="true" />
                       </button>
                       <button
+                        className="btn-translucent btn-icon"
                         aria-pressed={useInvert}
                         aria-label="Invert threshold"
                         onClick={() => setUseInvert(!useInvert)}
                         title="Invert"
-                        style={effBtn(useInvert)}
                       >
-                        <Repeat size={18} />
+                        <Repeat size={18} aria-hidden="true" />
                       </button>
                       <button
+                        className="btn-translucent btn-icon"
                         aria-pressed={useDilate}
                         aria-label="Thicken edges"
                         onClick={() => setUseDilate(!useDilate)}
                         title="Thicken"
-                        style={effBtn(useDilate)}
                       >
-                        <Maximize2 size={18} />
+                        <Maximize2 size={18} aria-hidden="true" />
                       </button>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 18,
-                    marginBottom: 18,
-                  }}
-                >
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: 13,
-                        fontWeight: 500,
-                        color: "var(--color-ink)",
-                        marginBottom: 8,
-                        fontFamily: "var(--font-body)",
-                      }}
-                    >
-                      Preset
-                    </label>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        onClick={() => applyPreset("photo")}
-                        aria-pressed={preset === "photo"}
-                        style={pill(preset === "photo")}
-                      >
-                        Photo
-                      </button>
-                      <button
-                        onClick={() => applyPreset("lineArt")}
-                        aria-pressed={preset === "lineArt"}
-                        style={pill(preset === "lineArt")}
-                      >
-                        Line Art
-                      </button>
-                      <button
-                        onClick={() => applyPreset("pixelArt")}
-                        aria-pressed={preset === "pixelArt"}
-                        style={pill(preset === "pixelArt")}
-                      >
-                        Pixel Art
-                      </button>
-                    </div>
+                <>
+                  {choice("svg-preset", "Preset", preset, [["photo", "Photo"], ["lineArt", "Line Art"], ["pixelArt", "Pixel Art"]], applyPreset)}
+                  <div className="studio-toolbar" style={{ alignItems: "flex-start" }}>
+                    {choice("svg-colour-mode", "Color mode", tracerBinary, [[false, "Color"], [true, "Binary"]], setTracerBinary)}
+                    {choice("svg-path-style", "Path style", tracerPathMode, [["spline", "Spline"], ["polygon", "Polygon"], ["pixel", "Pixel"]], setTracerPathMode)}
                   </div>
-                  <div
-                    style={{
-                      display: "grid",
-                      gap: 20,
-                      gridTemplateColumns:
-                        "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
-                    }}
-                  >
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          fontSize: 13,
-                          fontWeight: 500,
-                          color: "var(--color-ink)",
-                          marginBottom: 8,
-                          fontFamily: "var(--font-body)",
-                        }}
-                      >
-                        Color mode
-                      </label>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button
-                          onClick={() => setTracerBinary(false)}
-                          aria-pressed={!tracerBinary}
-                          style={pill(!tracerBinary)}
-                        >
-                          Color
-                        </button>
-                        <button
-                          onClick={() => setTracerBinary(true)}
-                          aria-pressed={tracerBinary}
-                          style={pill(tracerBinary)}
-                        >
-                          Binary
-                        </button>
-                      </div>
-                    </div>
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          fontSize: 13,
-                          fontWeight: 500,
-                          color: "var(--color-ink)",
-                          marginBottom: 8,
-                          fontFamily: "var(--font-body)",
-                        }}
-                      >
-                        Path style
-                      </label>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button
-                          onClick={() => setTracerPathMode("spline")}
-                          aria-pressed={tracerPathMode === "spline"}
-                          style={pill(tracerPathMode === "spline")}
-                        >
-                          Spline
-                        </button>
-                        <button
-                          onClick={() => setTracerPathMode("polygon")}
-                          aria-pressed={tracerPathMode === "polygon"}
-                          style={pill(tracerPathMode === "polygon")}
-                        >
-                          Polygon
-                        </button>
-                        <button
-                          onClick={() => setTracerPathMode("pixel")}
-                          aria-pressed={tracerPathMode === "pixel"}
-                          style={pill(tracerPathMode === "pixel")}
-                        >
-                          Pixel
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <details>
-                    <summary
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 500,
-                        color: "var(--color-ink)",
-                        cursor: "pointer",
-                        fontFamily: "var(--font-body)",
-                      }}
-                    >
-                      Advanced
-                    </summary>
-                    <div
-                      style={{
-                        display: "grid",
-                        gap: 20,
-                        gridTemplateColumns:
-                          "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
-                        marginTop: 14,
-                      }}
-                    >
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: "var(--color-ink)",
-                            marginBottom: 8,
-                            fontFamily: "var(--font-body)",
-                          }}
-                        >
-                          Speckle filter: {tracerFilterSpeckle}
-                        </label>
-                        <input
-                          aria-label="Speckle filter"
-                          type="range"
-                          min={0}
-                          max={32}
-                          value={tracerFilterSpeckle}
-                          onChange={(e) =>
-                            setTracerFilterSpeckle(Number(e.target.value))
-                          }
-                          style={{
-                            width: "100%",
-                            accentColor: "var(--color-brand)",
-                            cursor: "pointer",
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: "var(--color-ink)",
-                            marginBottom: 8,
-                            fontFamily: "var(--font-body)",
-                          }}
-                        >
-                          Corner threshold: {tracerCornerThreshold}°
-                        </label>
-                        <input
-                          aria-label="Corner threshold"
-                          type="range"
-                          min={0}
-                          max={180}
-                          value={tracerCornerThreshold}
-                          onChange={(e) =>
-                            setTracerCornerThreshold(Number(e.target.value))
-                          }
-                          style={{
-                            width: "100%",
-                            accentColor: "var(--color-brand)",
-                            cursor: "pointer",
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: "var(--color-ink)",
-                            marginBottom: 8,
-                            fontFamily: "var(--font-body)",
-                          }}
-                        >
-                          Color precision: {tracerColorPrecision}
-                        </label>
-                        <input
-                          aria-label="Colour precision"
-                          type="range"
-                          min={0}
-                          max={7}
-                          value={tracerColorPrecision}
-                          onChange={(e) =>
-                            setTracerColorPrecision(Number(e.target.value))
-                          }
-                          style={{
-                            width: "100%",
-                            accentColor: "var(--color-brand)",
-                            cursor: "pointer",
-                          }}
-                        />
-                      </div>
+                  <details className="studio-disclosure">
+                    <summary>Advanced</summary>
+                    <div className="studio-ranges" style={{ marginTop: 8 }}>
+                      <StudioRange
+                        label="Speckle filter"
+                        ariaLabel="Speckle filter"
+                        min={0}
+                        max={32}
+                        value={tracerFilterSpeckle}
+                        onChange={setTracerFilterSpeckle}
+                      />
+                      <StudioRange
+                        label="Corner threshold"
+                        ariaLabel="Corner threshold"
+                        min={0}
+                        max={180}
+                        value={tracerCornerThreshold}
+                        suffix="°"
+                        onChange={setTracerCornerThreshold}
+                      />
+                      <StudioRange
+                        label="Color precision"
+                        ariaLabel="Colour precision"
+                        min={0}
+                        max={7}
+                        value={tracerColorPrecision}
+                        onChange={setTracerColorPrecision}
+                      />
                     </div>
                   </details>
                   {svgData && shapeCount > 0 && (
-                    <span
-                      style={{
-                        fontSize: 12,
-                        color: "var(--color-ink-muted)",
-                        fontFamily: "var(--font-mono)",
-                      }}
-                    >
+                    <span className="studio-value" style={{ textAlign: "left" }}>
                       {shapeCount.toLocaleString()} shapes
                     </span>
                   )}
-                </div>
+                </>
               )}
 
-              <div
-                className="studio-media-actions"
-                style={{ display: "flex", gap: 10 }}
-              >
+              <div className="studio-actions studio-media-actions">
                 {traceEngine === "line" ? (
                   <button
+                    className="btn-primary is-grow"
                     onClick={processImage}
                     disabled={isProcessing}
-                    style={{
-                      flex: 1,
-                      padding: "11px 0",
-                      borderRadius: "var(--radius-pill)",
-                      border: "none",
-                      background: "var(--color-brand)",
-                      color: "#fff",
-                      fontSize: 14,
-                      fontWeight: 600,
-                      cursor: isProcessing ? "not-allowed" : "pointer",
-                      opacity: isProcessing ? 0.6 : 1,
-                      fontFamily: "var(--font-body)",
-                    }}
                   >
                     {isProcessing ? "Processing…" : "Convert to SVG"}
                   </button>
                 ) : (
                   <button
+                    className="btn-primary is-grow"
                     onClick={vectorizeImage}
                     disabled={isProcessing || vectorizeStatus === "processing"}
-                    style={{
-                      flex: 1,
-                      padding: "11px 0",
-                      borderRadius: "var(--radius-pill)",
-                      border: "none",
-                      background: "var(--color-brand)",
-                      color: "#fff",
-                      fontSize: 14,
-                      fontWeight: 600,
-                      cursor:
-                        vectorizeStatus === "processing"
-                          ? "not-allowed"
-                          : "pointer",
-                      opacity: vectorizeStatus === "processing" ? 0.6 : 1,
-                      fontFamily: "var(--font-body)",
-                    }}
                   >
                     {vectorizeStatus === "processing"
                       ? "Vectorizing…"
@@ -1170,60 +753,24 @@ export function SvgConverter() {
                   </button>
                 )}
                 {svgData && (
-                  <button
-                    onClick={downloadSvg}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      padding: "11px 18px",
-                      borderRadius: "var(--radius-pill)",
-                      border: "1px solid var(--color-hairline)",
-                      background: "transparent",
-                      color: "var(--color-ink)",
-                      fontSize: 14,
-                      cursor: "pointer",
-                      fontFamily: "var(--font-body)",
-                    }}
-                  >
-                    <Download size={16} /> Download
+                  <button className="btn-translucent" onClick={downloadSvg}>
+                    <Download size={16} aria-hidden="true" /> Download
                   </button>
                 )}
                 <button
+                  className="btn-translucent btn-icon"
                   onClick={reset}
                   title="Reset"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "11px 14px",
-                    borderRadius: "var(--radius-pill)",
-                    border: "1px solid var(--color-hairline)",
-                    background: "transparent",
-                    color: "var(--color-ink)",
-                    cursor: "pointer",
-                  }}
+                  aria-label="Reset"
                 >
-                  <X size={16} />
+                  <X size={16} aria-hidden="true" />
                 </button>
               </div>
             </div>
-          </div>
+          </>
         )
       ) : !svgText ? (
-        <label
-          style={{
-            ...card,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: 300,
-            cursor: "pointer",
-            color: "var(--color-ink-muted)",
-            padding: 40,
-          }}
-        >
+        <label className="studio-upload is-clickable" style={{ minHeight: 300 }}>
           <input
             ref={svgFileRef}
             type="file"
@@ -1231,7 +778,8 @@ export function SvgConverter() {
             hidden
             onChange={handleSvgUpload}
           />
-          <Upload size={32} style={{ marginBottom: 12 }} />
+          <Upload size={32} aria-hidden="true" />
+          <p>Select an SVG file to rasterize</p>
           <button
             className="btn-secondary"
             type="button"
@@ -1242,279 +790,98 @@ export function SvgConverter() {
           >
             Browse files
           </button>
-          <div style={{ fontSize: 14, fontFamily: "var(--font-body)" }}>
-            Select an SVG file to rasterize
-          </div>
         </label>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div
-            style={{
-              display: "grid",
-              gap: 16,
-              gridTemplateColumns:
-                "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
-            }}
-          >
-            <div style={card}>
-              <div
-                style={{
-                  ...cardHead,
-                  display: "flex",
-                  justifyContent: "space-between",
-                }}
-              >
-                <span>SVG Input</span>
+        <>
+          <div className="studio-previews">
+            <section className="studio-panel">
+              <h2>
+                SVG Input
                 {svgDims && (
-                  <span
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      textTransform: "none",
-                      letterSpacing: 0,
-                    }}
-                  >
+                  <span className="studio-panel-meta">
                     {svgDims.w}×{svgDims.h}
                   </span>
                 )}
-              </div>
-              <div
-                style={{
-                  padding: 16,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minHeight: 260,
-                }}
-              >
+              </h2>
+              <div className="studio-panel-stage">
                 <img
                   className="studio-svg-preview"
                   src={svgImageUrl(svgText)}
                   alt="SVG input"
                 />
               </div>
-            </div>
-            <div style={card}>
-              <div
-                style={{
-                  ...cardHead,
-                  display: "flex",
-                  justifyContent: "space-between",
-                }}
-              >
-                <span>Raster Output</span>
+            </section>
+            <section className="studio-panel">
+              <h2>
+                Raster Output
                 {rasterInfo && (
-                  <span
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      textTransform: "none",
-                      letterSpacing: 0,
-                    }}
-                  >
+                  <span className="studio-panel-meta">
                     {rasterInfo.w}×{rasterInfo.h} · {rasterInfo.size}KB
                   </span>
                 )}
-              </div>
-              <div
-                style={{
-                  padding: 16,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minHeight: 260,
-                }}
-              >
+              </h2>
+              <div className="studio-panel-stage" aria-busy={isRasterizing}>
                 {isRasterizing ? (
-                  <Loader2
-                    size={26}
-                    className="animate-spin"
-                    style={{ color: "var(--color-ink-muted)" }}
-                  />
+                  <Loader2 size={26} className="animate-spin" aria-label="Rendering" />
                 ) : rasterUrl ? (
-                  <img
-                    src={rasterUrl}
-                    alt="Raster output"
-                    style={{
-                      maxWidth: "100%",
-                      maxHeight: 440,
-                      objectFit: "contain",
-                      borderRadius: "var(--radius-md)",
-                    }}
-                  />
+                  <img src={rasterUrl} alt="Raster output" />
                 ) : (
-                  <span
-                    style={{
-                      color: "var(--color-ink-muted)",
-                      fontSize: 13,
-                      fontFamily: "var(--font-body)",
-                    }}
-                  >
-                    No output yet
-                  </span>
+                  <span>No output yet</span>
                 )}
               </div>
-            </div>
+            </section>
           </div>
 
-          <div style={{ ...card, padding: 20 }}>
-            <div
-              style={{
-                display: "flex",
-                gap: 20,
-                flexWrap: "wrap",
-                alignItems: "flex-end",
-                marginBottom: 18,
-              }}
-            >
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    color: "var(--color-ink)",
-                    marginBottom: 8,
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
-                  Format
-                </label>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    onClick={() => setRasterFormat("image/png")}
-                    aria-pressed={rasterFormat === "image/png"}
-                    style={pill(rasterFormat === "image/png")}
-                  >
-                    PNG
-                  </button>
-                  <button
-                    onClick={() => setRasterFormat("image/jpeg")}
-                    aria-pressed={rasterFormat === "image/jpeg"}
-                    style={pill(rasterFormat === "image/jpeg")}
-                  >
-                    JPG
-                  </button>
-                </div>
-              </div>
-              {rasterFormat === "image/jpeg" && (
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: 13,
-                      fontWeight: 500,
-                      color: "var(--color-ink)",
-                      marginBottom: 8,
-                      fontFamily: "var(--font-body)",
-                    }}
-                  >
-                    Quality — {rasterQuality}%
-                  </label>
-                  <input
-                    aria-label="Raster quality"
-                    type="range"
-                    min={10}
-                    max={100}
-                    value={rasterQuality}
-                    onChange={(e) => setRasterQuality(Number(e.target.value))}
-                    style={{
-                      width: 140,
-                      accentColor: "var(--color-brand)",
-                      cursor: "pointer",
-                    }}
-                  />
-                </div>
-              )}
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    color: "var(--color-ink)",
-                    marginBottom: 8,
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
-                  Scale — {rasterScale}%
-                </label>
-                <input
-                  aria-label="Raster scale"
-                  type="range"
-                  min={10}
-                  max={400}
-                  value={rasterScale}
-                  onChange={(e) => setRasterScale(Number(e.target.value))}
-                  style={{
-                    width: 140,
-                    accentColor: "var(--color-brand)",
-                    cursor: "pointer",
-                  }}
-                />
-              </div>
+          <div className="studio-controls">
+            <div className="studio-toolbar" style={{ alignItems: "flex-start" }}>
+              {choice("svg-raster-format", "Format", rasterFormat, [["image/png", "PNG"], ["image/jpeg", "JPG"]], setRasterFormat)}
             </div>
-            <div
-              className="studio-media-actions"
-              style={{ display: "flex", gap: 10 }}
-            >
+            <div className="studio-ranges">
+              {rasterFormat === "image/jpeg" && (
+                <StudioRange
+                  label="Quality"
+                  ariaLabel="Raster quality"
+                  min={10}
+                  max={100}
+                  value={rasterQuality}
+                  suffix="%"
+                  onChange={setRasterQuality}
+                />
+              )}
+              <StudioRange
+                label="Scale"
+                ariaLabel="Raster scale"
+                min={10}
+                max={400}
+                value={rasterScale}
+                suffix="%"
+                onChange={setRasterScale}
+              />
+            </div>
+            <div className="studio-actions studio-media-actions">
               <button
+                className="btn-primary is-grow"
                 onClick={rasterize}
                 disabled={isRasterizing}
-                style={{
-                  flex: 1,
-                  padding: "11px 0",
-                  borderRadius: "var(--radius-pill)",
-                  border: "none",
-                  background: "var(--color-brand)",
-                  color: "#fff",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: isRasterizing ? "not-allowed" : "pointer",
-                  opacity: isRasterizing ? 0.6 : 1,
-                  fontFamily: "var(--font-body)",
-                }}
               >
                 {isRasterizing ? "Rendering…" : "Convert to Image"}
               </button>
               {rasterUrl && (
-                <button
-                  onClick={downloadRaster}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "11px 18px",
-                    borderRadius: "var(--radius-pill)",
-                    border: "1px solid var(--color-hairline)",
-                    background: "transparent",
-                    color: "var(--color-ink)",
-                    fontSize: 14,
-                    cursor: "pointer",
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
-                  <Download size={16} /> Download
+                <button className="btn-translucent" onClick={downloadRaster}>
+                  <Download size={16} aria-hidden="true" /> Download
                 </button>
               )}
               <button
+                className="btn-translucent btn-icon"
                 onClick={resetRaster}
                 title="Reset"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "11px 14px",
-                  borderRadius: "var(--radius-pill)",
-                  border: "1px solid var(--color-hairline)",
-                  background: "transparent",
-                  color: "var(--color-ink)",
-                  cursor: "pointer",
-                }}
+                aria-label="Reset"
               >
-                <X size={16} />
+                <X size={16} aria-hidden="true" />
               </button>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

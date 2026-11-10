@@ -11,7 +11,9 @@ import {
   loadImage,
   canvasBlob,
 } from "../../lib/studio/jobs";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { UploadZone, Status } from "../StudioUI";
+import { StudioRange } from "./StudioRange";
 interface Source {
   url: string;
   w: number;
@@ -273,97 +275,102 @@ export function ImageConverter() {
                     </p>
                   </>
                 ) : (
-                  <p>Configure output and choose Convert.</p>
+                  <div className="studio-panel-stage">
+                    Configure output and choose Convert.
+                  </div>
                 )}
               </section>
             ))}
           </div>
-          <div className="studio-toolbar">
-            <label className="studio-field">
-              Format
-              <select
-                className="input-base"
-                value={format}
-                disabled={busy}
-                onChange={(e) => setFormat(e.target.value)}
-              >
+          <div className="studio-controls">
+            <div className="studio-group" role="group" aria-labelledby="converter-format">
+              <span className="studio-label" id="converter-format">
+                Format
+              </span>
+              <div className="segmented studio-choice">
                 {[
                   ["image/png", "PNG"],
                   ["image/jpeg", "JPEG"],
                   ["image/webp", "WebP"],
                   ["application/pdf", "PDF"],
                 ].map(([v, l]) => (
-                  <option key={v} value={v}>
+                  <button
+                    key={v}
+                    className="segmented-item"
+                    aria-pressed={format === v}
+                    disabled={busy}
+                    onClick={() => setFormat(v)}
+                  >
                     {l}
-                  </option>
+                  </button>
                 ))}
-              </select>
-            </label>
-            {["image/jpeg", "image/webp"].includes(format) && (
-              <label className="studio-field">
-                Quality {quality}%
-                <input
-                  type="range"
+              </div>
+            </div>
+            <div className="studio-ranges">
+              {["image/jpeg", "image/webp"].includes(format) && (
+                <StudioRange
+                  label="Quality"
                   min={10}
                   max={100}
                   value={quality}
+                  suffix="%"
                   disabled={busy}
-                  onChange={(e) => setQuality(+e.target.value)}
+                  onChange={setQuality}
                 />
-              </label>
-            )}
-            <label className="studio-field">
-              Scale {scale}%
-              <input
-                type="range"
+              )}
+              <StudioRange
+                label="Scale"
                 min={10}
                 max={200}
                 value={scale}
+                suffix="%"
                 disabled={busy}
-                onChange={(e) => setScale(+e.target.value)}
+                onChange={setScale}
               />
-            </label>
+            </div>
             {pages > 1 && (
-              <div className="studio-inline">
+              <div className="studio-inline" role="group" aria-label="PDF page">
                 <button
-                  className="btn-secondary"
+                  className="btn-translucent btn-icon"
                   aria-label="Previous PDF page"
                   disabled={busy || page <= 1}
                   onClick={() => gotoPage(page - 1)}
                 >
-                  ‹
+                  <ChevronLeft size={18} aria-hidden="true" />
                 </button>
-                <span>
+                <span className="studio-value" aria-live="polite">
                   Page {page}/{pages}
                 </span>
                 <button
-                  className="btn-secondary"
+                  className="btn-translucent btn-icon"
                   aria-label="Next PDF page"
                   disabled={busy || page >= pages}
                   onClick={() => gotoPage(page + 1)}
                 >
-                  ›
+                  <ChevronRight size={18} aria-hidden="true" />
                 </button>
               </div>
             )}
-            <button className="btn-primary" onClick={convert} disabled={busy}>
-              Convert
-            </button>
-            <button className="btn-secondary" onClick={reset}>
-              {busy ? "Cancel and clear" : "Clear input"}
-            </button>
-            {output && output.config === config && (
-              <a
-                className="btn-primary"
-                href={output.url}
-                download={`converted.${output.ext}`}
-              >
-                Download {output.ext.toUpperCase()}
-              </a>
-            )}
+            <div className="studio-actions">
+              <button className="btn-primary" onClick={convert} disabled={busy}>
+                Convert
+              </button>
+              {output && output.config === config && (
+                <a
+                  className="btn-primary"
+                  href={output.url}
+                  download={`converted.${output.ext}`}
+                >
+                  Download {output.ext.toUpperCase()}
+                </a>
+              )}
+              <button className="btn-translucent" onClick={reset}>
+                {busy ? "Cancel and clear" : "Clear input"}
+              </button>
+            </div>
           </div>
           {output && output.config !== config && (
-            <p role="status">
+            <p role="status" className="studio-help">
               Settings changed. Convert again to download the updated output.
             </p>
           )}
