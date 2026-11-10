@@ -66,7 +66,7 @@ export const TOOLS = [
     id: "bg",
     label: "Background Remover",
     description:
-      "Remove backgrounds in your browser, refine the mask and export PNG. An optional local Python helper requires explicit selection.",
+      "Remove backgrounds in your browser, refine the mask and export PNG.",
     comp: lazy(() => import("../background-removal/BackgroundRemover")),
   },
 ];
