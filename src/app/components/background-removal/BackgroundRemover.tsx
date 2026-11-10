@@ -1,8 +1,7 @@
-import { checkHelper } from './helper-processor';
 import { useStudioDraft, isBoolean } from "../../lib/studio-draft";
 import { readImageDraft, saveImageDraft, clearImageDraft, type ImageDraft } from '../../lib/image-drafts';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { Upload, Download, RotateCcw, Loader2, ImageOff, AlertTriangle, Info, Brush, Eraser, Undo2, Redo2 } from 'lucide-react';
+import { Upload, Download, RotateCcw, Loader2, ImageOff, AlertTriangle, Brush, Eraser, Undo2, Redo2 } from 'lucide-react';
 import type { SourceImage, ModelId } from './types';
 import { MODELS } from './models';
 import { useImageUpload } from './useImageUpload';
@@ -50,9 +49,6 @@ export default function BackgroundRemover() {
   const sourceGeneration = useRef(0);
   const draftRef = useRef<ImageDraft | null>(null);
   const [retain, setRetain] = useState(false);
-  const [provider, setProvider] = useState<'browser' | 'helper'>('browser');
-  const [helperReady, setHelperReady] = useState(false);
-  const [helperStatus, setHelperStatus] = useState('Python helper is optional and not connected.');
   const [gpuAvailable, setGpuAvailable] = useState(false);
   useEffect(() => { let active = true; const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu; void gpu?.requestAdapter().then(adapter => { if (active) setGpuAvailable(!!adapter); }).catch(() => {}); return () => { active = false; }; }, []);
   const [source, setSource] = useState<SourceImage | null>(null);
@@ -254,14 +250,14 @@ export default function BackgroundRemover() {
   const handleRemove = useCallback(async () => {
     if (!imageData) return;
     try {
-      const mask = await removeBackground(imageData, model, provider);
+      const mask = await removeBackground(imageData, model, 'browser');
       maskRef.current = mask;
       resetHistory(mask);
       setHasResult(true);
     } catch {
       /* status/error surfaced by the hook */
     }
-  }, [imageData, model, provider, removeBackground, resetHistory]);
+  }, [imageData, model, removeBackground, resetHistory]);
 
   const handleDownload = useCallback(async () => {
     const canvas = displayRef.current;
@@ -377,16 +373,6 @@ export default function BackgroundRemover() {
     <div className="studio-tool">
       <input ref={upload.inputRef} type="file" accept="image/*" hidden onChange={upload.onInputChange} />
 
-      {/* Honest, persistent limitation note. */}
-      <div className="studio-notice has-icon">
-        <Info size={15} aria-hidden="true" />
-        <span>
-          Runs on your device — the image never leaves it. Fine hair, translucent glass and smoke
-          remain difficult for these checkpoints. Inspect edges on multiple backgrounds and use
-          <strong> Refine</strong> for manual corrections.
-        </span>
-      </div>
-
       <div className="studio-actions">
         <p role="status" className="studio-help" style={{ flex: '1 1 320px' }}>{backend === "helper" ? "Python helper on this computer (CPU)" : backend === "webgpu" ? "WebGPU acceleration (float32)" : backend === "wasm" ? "CPU WASM fallback - larger images may take several seconds" : "Local processing: WebGPU when available, CPU WASM fallback"}. Model sessions release after two idle minutes.</p>
         <button className="btn-secondary btn-sm" onClick={release}>Release browser model memory</button>
@@ -458,30 +444,21 @@ export default function BackgroundRemover() {
 
           {/* Controls */}
           <div className="studio-controls">
-            <div className="studio-group">
-              <label className="studio-label" htmlFor="background-provider">Processing location</label>
-              <select id="background-provider" className="input-base" aria-label="Background processing location" value={provider} onChange={e => { const next = e.target.value === 'helper' ? 'helper' : 'browser'; resetEngine(); clearResult(); setProvider(next); if (next === 'helper') setModel('detail'); }}>
-                <option value="browser">In this browser (no image upload)</option>
-                <option value="helper" disabled={!helperReady}>Python helper on this computer (sends image from browser)</option>
-              </select>
-              <p role="status" className="studio-help">{helperStatus}</p>
-              <div><button className="btn-translucent btn-sm" onClick={async () => { setHelperStatus('Checking local helper…'); try { await checkHelper(); setHelperReady(true); setHelperStatus('Verified local helper ready. Selecting it and clicking Remove Background sends the image to 127.0.0.1:8935.'); } catch { setHelperReady(false); setHelperStatus('Helper unavailable. Browser processing works independently. Start services/studio-helper/server.py, then check again.'); } }}>Check Python helper</button></div>
-              {provider === 'helper' && <p className="studio-notice">The image will leave this browser for the local Python helper only after you click Remove Background. The helper uses the pinned Detail model, keeps a warm CPU session and does not save uploads. Stop the Python process to release its memory.</p>}
-            </div>
-
             <div className="studio-group" role="group" aria-labelledby="background-model">
               <span className="studio-label" id="background-model">Model</span>
               <div className="segmented studio-choice is-fill">
                 {(['general', 'portrait', 'detail'] as ModelId[]).map((m) => (
-                  <button key={m} className="segmented-item" aria-pressed={model === m} disabled={provider === 'helper' ? m !== 'detail' : m === 'detail' && !gpuAvailable} onClick={() => changeModel(m)}>
-                    {m === 'detail' && provider === 'helper' ? 'Detail (local CPU)' : MODELS[m].label}
+                  <button key={m} className="segmented-item" aria-pressed={model === m} disabled={m === 'detail' && !gpuAvailable} onClick={() => changeModel(m)}>
+                    {MODELS[m].label}
                   </button>
                 ))}
               </div>
-              <p className="studio-help">
-                {provider === 'helper' ? 'BiRefNet Lite 512, fixed verified FP32 checkpoint. Uses local CPU; no browser model download.' : MODELS[model].caption}
-                {provider === 'browser' && !gpuAvailable && ' Detail needs WebGPU. General and Portrait keep their CPU fallback; the optional helper offers Detail on this computer.'}
-              </p>
+              {(MODELS[model].caption || !gpuAvailable) && (
+                <p className="studio-help">
+                  {MODELS[model].caption}
+                  {!gpuAvailable && ' Detail needs WebGPU. General and Portrait keep their CPU fallback.'}
+                </p>
+              )}
             </div>
 
             <div className="studio-group" role="group" aria-labelledby="background-backdrop">
@@ -507,7 +484,7 @@ export default function BackgroundRemover() {
             </div>
 
             <div className="studio-actions">
-              <button className="btn-primary" style={{ flex: '1 1 100%' }} onClick={handleRemove} disabled={busy || (provider === 'browser' && model === 'detail' && !gpuAvailable)}>
+              <button className="btn-primary" style={{ flex: '1 1 100%' }} onClick={handleRemove} disabled={busy || (model === 'detail' && !gpuAvailable)}>
                 {busy ? (
                   <>
                     <Loader2 size={16} className="animate-spin" aria-hidden="true" /> {progressLabel(progress)}
@@ -574,7 +551,7 @@ export default function BackgroundRemover() {
             )}
 
             <p className="studio-help">
-              {source.width} × {source.height}px · everything runs locally; the image never leaves your device.
+              {source.width} × {source.height}px.
               {source.downscaled && ' Large image downscaled for processing.'}
             </p>
           </div>

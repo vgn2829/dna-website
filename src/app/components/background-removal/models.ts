@@ -7,7 +7,7 @@ export interface ModelConfig {
   id: ModelId;
   label: string;
   /** Honest one-line limitation, surfaced in the UI. */
-  caption: string;
+  caption?: string;
   /** Served path (versioned filename so cache invalidation is a rename). */
   url: string;
   /** Reference input resolution (static square for general; dynamic multiples of 32 for portrait). */
@@ -51,7 +51,6 @@ export const MODELS: Record<ModelId, ModelConfig> = {
   },
   detail: {
     id: 'detail', label: 'Detail (WebGPU)',
-    caption: 'BiRefNet Lite 512. First use downloads 192 MB from Hugging Face. Better tested photo edges; inspect fur and translucent/abstract subjects. Images stay in your browser.',
     url: 'https://huggingface.co/studioludens/birefnet-lite-512/resolve/962e67969ec6acec9c19fab76acee4f5e22e990c/onnx/model.onnx',
     inputSize: 512, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225], scaleDiv: 255,
     output: 'logits', approxMB: 192, requiresWebGPU: true,
