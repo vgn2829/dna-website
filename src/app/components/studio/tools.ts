@@ -5,7 +5,7 @@ export const TOOLS = [
     id: "palette",
     label: "Palette Studio",
     description:
-      "Build and refine semantic colour palettes. Inspect contrast for each foreground/background pair.",
+      "From one seed colour to a harmonious palette, tonal scales, WCAG checks and exportable design tokens.",
     comp: lazy(() => import("../PaletteStudio")),
   },
   {

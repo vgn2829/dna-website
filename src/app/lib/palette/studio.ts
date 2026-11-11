@@ -6,7 +6,7 @@ import type { Mood } from "./engine";
 // shortcut policy. The editor and its storage key are unchanged; mood settings
 // use their own versioned key so existing saved palettes keep loading.
 
-export const MOODS: Mood[] = ["visual", "poster", "luxury", "minimal", "cyberpunk"];
+export const MOODS: Mood[] = ["visual", "minimal", "poster", "luxury", "cyberpunk", "exploratory"];
 export type MoodState = { mode: Mood; variation: string; locks: Record<string, string> };
 export const createMood = (): MoodState => ({ mode: "visual", variation: "mood-1", locks: {} });
 
@@ -38,8 +38,13 @@ export function newVariation() {
 }
 
 export type StudioState = { editor: Editor; mood: MoodState };
-export type StudioAction = { type: "editor"; action: EditorAction } | { type: "mood"; patch: Partial<MoodState> };
+export type StudioAction =
+  | { type: "editor"; action: EditorAction }
+  | { type: "mood"; patch: Partial<MoodState> }
+  /** Several changes recorded as one undo step (e.g. Generate rerolls roles and mood together). */
+  | { type: "batch"; actions: StudioAction[] };
 export function studioReducer(state: StudioState, action: StudioAction): StudioState {
+  if (action.type === "batch") return action.actions.reduce(studioReducer, state);
   if (action.type === "editor") {
     const editor = paletteReducer(state.editor, action.action);
     return editor === state.editor ? state : { ...state, editor };

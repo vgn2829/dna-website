@@ -72,3 +72,14 @@ Not verified: Safari/Firefox, real devices, screen readers, signed-in production
 - Colour names are descriptive, not a curated dictionary; `getSeedSymbolism` keeps its own editorial hue bands.
 - Tailwind output uses the v3 config shape (usable via `@config` in v4); DTCG uses the 2025.10 object colour value.
 - Role colour pickers keep main's 40×28 px size.
+
+## UI restoration (follow-up to PR #88)
+
+PR #88 kept main's earlier Palette Studio layout and added the new features inside it. This follow-up restores the original Palette Studio interface that was designed and reviewed locally — seed pill, harmony and creative-mode selectors, five large swatch columns with in-swatch controls, tonal-scale ramps, colour details and contrast pairs, and the UI-system section with Light/Dark, Roles / Accessibility / Colour blind and the preview — while every #88 capability keeps running on the same modules:
+
+- State: main's role editor (both themes, exact locks, `dna.studio.palette.editor.v1`) and mood state (`dna.studio.palette.mood.v1`) under the one 25-step undoable reducer. A `batch` studio action keeps the original one-click Generate (roles and mood together) as a single undo step; Exploratory is exposed as a mode again (already supported by the engine; additive to the mood recipe validation).
+- Colour logic, naming, scales, contrast checks, Brettel simulation and all exports are the #88 modules unchanged. Export moved back into the original dialog (`LibraryDialog`) and keeps CSS, Tailwind, DTCG, SVG card and mood JSON plus the share link. The light/dark compare stays as a toggle in the Preview header.
+- Styling: the original `.palette-*` rules, scoped in `studio.css`, replacing the #88 mood-workspace rules; main's `.studio-choice` modifier and `.btn-secondary.btn-sm` stand in for the local-only `.is-wrap` and `.btn-ghost`. A few two-class rules stop main's `.studio-main button` minimum height from flattening the original control heights.
+- The Design Studio shell, navigation and other tools are unchanged; only the Palette Studio subtitle in the tool registry was restored.
+
+Comparison with the original local build (same seed and variation, headless Chromium): identical swatch colours, section order, type sizes/weights and control sizes at 375, 768 and 1440 px in both themes. The remaining difference is width: main's Design Studio shell is wider (max 1440 px) than the original local shell (1280 px), so columns are 272 px instead of 244 px at 1440. Values that come from the engine (e.g. the colour-separation heuristic, some semantic role hexes) follow main's #88 engine. Evidence: `evidence/restore-side-by-side-*.png` (original left, restored right) and `evidence/restore-browser.json`.
