@@ -152,20 +152,31 @@ export default function PaletteStudio() {
     setMessage(direction === "undo" ? "Undone." : "Redone.");
   }, [studio.history]);
 
-  // Space / Ctrl+Z / Ctrl+Shift+Z — only when focus is not on a control (see paletteShortcut).
+  // Space / Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y — policy in paletteShortcut (lib/palette/studio.ts).
   const keyHandlers = useRef({ generate, travel, exportOpen });
   keyHandlers.current = { generate, travel, exportOpen };
+  // Input modality: a control focused by a pointer click yields Space to Generate
+  // (so Space after clicking a lock does not toggle it again); keyboard focus
+  // keeps native activation.
+  const pointerFocused = useRef(false);
   useEffect(() => {
+    const onPointer = () => { pointerFocused.current = true; };
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Tab" || e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End") pointerFocused.current = false;
       if (keyHandlers.current.exportOpen) return;
-      const action = paletteShortcut(e);
+      const action = paletteShortcut({
+        key: e.key, code: e.code, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, altKey: e.altKey,
+        repeat: e.repeat, defaultPrevented: e.defaultPrevented, isComposing: e.isComposing, target: e.target,
+        pointerFocused: pointerFocused.current,
+      });
       if (!action) return;
       e.preventDefault();
       if (action === "generate") keyHandlers.current.generate();
       else if (action !== "suppress") keyHandlers.current.travel(action);
     };
+    window.addEventListener("pointerdown", onPointer, true);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => { window.removeEventListener("pointerdown", onPointer, true); window.removeEventListener("keydown", onKey); };
   }, []);
 
   const shareRecipe = async () => {
@@ -217,7 +228,7 @@ export default function PaletteStudio() {
   };
 
   return (
-    <div className="palette-tool palette-studio">
+    <div className="palette-tool palette-studio" data-palette-shortcuts="">
       {/* ── Generation controls ─────────────────────────────────────────── */}
       <div className="palette-toolbar">
         <div className="palette-toolbar-group">

@@ -139,3 +139,82 @@ describe('mood palettes', () => {
     expect(randomSeedColour('abc')).not.toBe(randomSeedColour('abd'));
   });
 });
+
+// ── Verification finding F: success/error distinguishability ────────────────
+import { okDistance, semanticCollisions } from './palette/contrast';
+import { rgbToHex } from './palette-engine';
+const F_SEEDS = ['#16A34A', '#00C853', '#DC2626', '#FF0000', '#2563EB', '#0000FF', '#EAB308', '#FFFF00', '#06B6D4', '#00FFFF', '#9333EA', '#6366F1', '#808080', '#000000', '#FFFFFF', '#FF6B00', '#E5D3B3'];
+const simHex = (hex: string, type: string) => rgbToHex(simulateCB(hexToRgb(hex), type));
+describe('success and error stay distinguishable (34-palette evidence set)', () => {
+  test('separated after Brettel simulation, by lightness as well as hue, with ≥4.5:1 contrast', () => {
+    for (const seed of F_SEEDS) for (const dark of [false, true]) {
+      const p = derivePalette(seed, dark, 'triadic');
+      for (const type of ['protanopia', 'deuteranopia', 'tritanopia']) expect(okDistance(simHex(p.success, type), simHex(p.error, type))).toBeGreaterThan(.12);
+      expect(okDistance(p.success, p.error)).toBeGreaterThan(.2);
+      // Lightness alone separates them (hue is lost to dichromacy).
+      expect(Math.abs(lch(p.success).L - lch(p.error).L)).toBeGreaterThan(.12);
+      for (const role of ['success', 'error']) for (const bg of [`${role}Bg`, 'surface', 'bg']) expect(contrast(p[role], p[bg])).toBeGreaterThanOrEqual(4.5);
+      expect(semanticCollisions(p).some(c => [c.a, c.b].sort().join() === 'error,success')).toBe(false);
+    }
+  });
+  test('the new status lightness does not make brand colours collide with success or error', () => {
+    for (const seed of F_SEEDS) for (const harmony of Object.keys(HARMONY_MODES)) for (const dark of [false, true]) {
+      const collisions = semanticCollisions(derivePalette(seed, dark, harmony)).filter(c => c.condition === 'typical vision');
+      expect(collisions.filter(c => c.b === 'success' || c.b === 'error')).toEqual([]);
+    }
+  });
+  test('locked success/error colours always win; the unlocked partner still meets contrast', () => {
+    for (const dark of [false, true]) {
+      const lockedSuccess = derivePalette('#6366F1', dark, 'triadic', { success: '#C0392B' });
+      expect(lockedSuccess.success).toBe('#C0392B');
+      expect(contrast(lockedSuccess.error, lockedSuccess.errorBg)).toBeGreaterThanOrEqual(4.5);
+      const lockedError = derivePalette('#6366F1', dark, 'triadic', { error: '#123456' });
+      expect(lockedError.error).toBe('#123456');
+      expect(contrast(lockedError.success, lockedError.successBg)).toBeGreaterThanOrEqual(4.5);
+      const both = derivePalette('#6366F1', dark, 'triadic', { success: '#2E8B57', error: '#C0392B' });
+      expect([both.success, both.error]).toEqual(['#2E8B57', '#C0392B']);
+      // A locked pair that converges under deuteranopia is reported, never silently changed.
+      expect(semanticCollisions(both).some(c => c.condition === 'deuteranopia' && [c.a, c.b].sort().join() === 'error,success')).toBe(true);
+    }
+  });
+});
+
+// ── Verification finding D: achromatic seeds in creative modes ──────────────
+describe('grey, black and white seeds across all six creative modes', () => {
+  const GREYS = ['#808080', '#000000', '#FFFFFF'];
+  test('swatches that represent the seed stay neutral; harmony and vivid slots stay chromatic', () => {
+    for (const seed of GREYS) for (const mode of Object.keys(CREATIVE_MODES)) for (const variation of ['a', 'b', 'verify']) {
+      const profile = CREATIVE_MODES[mode], swatches = deriveVisualPalette(seed, 'triadic', mode, variation);
+      swatches.forEach((s, i) => {
+        const C = lch(s.hex).C;
+        if (i === 0 && profile.anchorIsSeed) expect(s.hex).toBe(seed);
+        else if (profile.hueSlots[i] === 'seed' && profile.chroma[i] < .5) expect(C).toBeLessThan(1e-4);
+        else if (profile.chroma[i] >= .3) expect(C).toBeGreaterThan(.03);
+        else expect(C).toBeGreaterThan(.003); // muted harmony slot (Luxury Patina): tinted, not forced grey
+      });
+    }
+  });
+  test('named regressions: Visual/Exploratory Shade and Luxury Depth are neutral; Minimal stays neutral', () => {
+    for (const seed of GREYS) {
+      for (const mode of ['visual', 'exploratory']) {
+        const shade = deriveVisualPalette(seed, 'triadic', mode, 'verify').find(s => s.name === 'Shade')!;
+        expect(lch(shade.hex).C).toBeLessThan(1e-4);
+      }
+      expect(lch(deriveVisualPalette(seed, 'triadic', 'luxury', 'verify').find(s => s.name === 'Depth')!.hex).C).toBeLessThan(1e-4);
+      const minimal = deriveVisualPalette(seed, 'triadic', 'minimal', 'verify');
+      expect(minimal.slice(0, 4).every(s => lch(s.hex).C < 1e-4)).toBe(true);
+      expect(lch(minimal[4].hex).C).toBeGreaterThan(.05);
+    }
+  });
+  test('Poster Lead and Cyberpunk Neon are never neutralised', () => {
+    for (const seed of GREYS) for (const variation of ['a', 'b', 'c', 'verify']) {
+      expect(lch(deriveVisualPalette(seed, 'triadic', 'poster', variation).find(s => s.name === 'Lead')!.hex).C).toBeGreaterThan(.08);
+      expect(lch(deriveVisualPalette(seed, 'triadic', 'cyberpunk', variation).find(s => s.name === 'Neon')!.hex).C).toBeGreaterThan(.1);
+    }
+  });
+  test('chromatic seeds are unaffected', () => {
+    const before = { visual: deriveVisualPalette('#6366F1', 'triadic', 'visual', 'x'), luxury: deriveVisualPalette('#6366F1', 'triadic', 'luxury', 'x') };
+    expect(lch(before.visual.find(s => s.name === 'Shade')!.hex).C).toBeGreaterThan(.03);
+    expect(lch(before.luxury.find(s => s.name === 'Depth')!.hex).C).toBeGreaterThan(.03);
+  });
+});
