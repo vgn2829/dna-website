@@ -37,48 +37,43 @@ const change = async (input: HTMLInputElement, value: string) => {
 const press = async (init: KeyboardEventInit, target: EventTarget = document.body) => {
   await act(() => { target.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init })); });
 };
-const moodHexes = () => Array.from(host.querySelectorAll(".studio-mood-hex")).map((b) => b.textContent!.trim());
-const roleHex = (label: string) => host.querySelector<HTMLInputElement>(`[aria-label="${label} hex value"]`)!.value;
+const moodHexes = () => Array.from(host.querySelectorAll(".palette-column-hex")).map((b) => b.textContent!.trim());
+const roleHex = (key: string) => host.querySelector<HTMLButtonElement>(`button[data-role="${key}"]`)!.textContent!.trim();
+const seedField = () => host.querySelector<HTMLInputElement>('[aria-label="Seed hex"]')!;
+const docButton = (text: string) => Array.from(document.querySelectorAll("button")).find((b) => b.textContent === text)!;
 
-it("mood swatches lock exactly across new variations, and undo/redo restore them", async () => {
+it("swatches lock exactly across Generate, and undo/redo restore them", async () => {
   await render(<PaletteStudio />);
-  await click(button("Mood"));
   const before = moodHexes();
   expect(before).toHaveLength(5);
-  await click(host.querySelector('[aria-label="Lock Shade"]')!);
-  await click(host.querySelector('[aria-label="Generate a new mood variation"]')!);
+  await click(host.querySelector('[aria-label="Lock Shade swatch"]')!);
+  await click(button("Generate"));
   const after = moodHexes();
   expect(after[2]).toBe(before[2]);
   expect(after.join()).not.toBe(before.join());
-  expect(host.querySelector('[aria-label="Unlock Shade"]')!.getAttribute("aria-pressed")).toBe("true");
+  expect(host.querySelector('[aria-label="Unlock Shade swatch"]')!.getAttribute("aria-pressed")).toBe("true");
   await click(host.querySelector('[aria-label="Undo"]')!);
   expect(moodHexes()).toEqual(before);
   await click(host.querySelector('[aria-label="Undo"]')!);
-  expect(host.querySelector('[aria-label="Lock Shade"]')).not.toBeNull();
+  expect(host.querySelector('[aria-label="Lock Shade swatch"]')).not.toBeNull();
   await click(host.querySelector('[aria-label="Redo"]')!);
   await click(host.querySelector('[aria-label="Redo"]')!);
   expect(moodHexes()).toEqual(after);
 });
 
-it("editing a mood swatch locks that exact value", async () => {
+it("editing a swatch locks that exact value", async () => {
   await render(<PaletteStudio />);
-  await click(button("Mood"));
-  await change(host.querySelector<HTMLInputElement>('[aria-label="Edit Accent"]')!, "#123456");
+  await change(host.querySelector<HTMLInputElement>('[aria-label="Edit Accent swatch"]')!, "#123456");
   expect(moodHexes()[3]).toBe("#123456");
-  expect(host.querySelector('[aria-label="Unlock Accent"]')).not.toBeNull();
-  await click(host.querySelector('[aria-label="Generate a new mood variation"]')!);
+  expect(host.querySelector('[aria-label="Unlock Accent swatch"]')).not.toBeNull();
+  await click(button("Generate"));
   expect(moodHexes()[3]).toBe("#123456");
 });
 
-it("Space generates only in the Mood view and never from a focused control; Ctrl+Z undoes", async () => {
+it("Space generates, never from a focused control or a held key; Ctrl+Z / Ctrl+Shift+Z travel", async () => {
   await render(<PaletteStudio />);
-  const original = roleHex("Primary");
-  await press({ key: " ", code: "Space" });
-  expect(roleHex("Primary")).toBe(original);
-  await click(button("Mood"));
   const before = moodHexes();
-  const input = host.querySelector<HTMLInputElement>('[aria-label="Seed hex"]')!;
-  await press({ key: " ", code: "Space" }, input);
+  await press({ key: " ", code: "Space" }, seedField());
   expect(moodHexes()).toEqual(before);
   await press({ key: " ", code: "Space" });
   const after = moodHexes();
@@ -94,66 +89,67 @@ it("Space generates only in the Mood view and never from a focused control; Ctrl
 it("role locks can be undone, and undo restores the committed seed into the seed field", async () => {
   await render(<PaletteStudio />);
   await click(host.querySelector('[aria-label="Lock Accent"]')!);
-  await change(host.querySelector<HTMLInputElement>('[aria-label="Seed hex"]')!, "#FF006E");
-  await click(button("Generate"));
-  expect(host.textContent).toContain("Generated from #FF006E");
+  const locked = roleHex("accent");
+  await change(seedField(), "#FF006E");
+  expect(roleHex("accent")).toBe(locked);
+  expect(roleHex("primary")).not.toBe("");
   await click(host.querySelector('[aria-label="Undo"]')!);
-  expect(host.querySelector<HTMLInputElement>('[aria-label="Seed hex"]')!.value).toBe("#6366F1");
-  expect(host.textContent).toContain("Generated from #6366F1");
+  expect(seedField().value).toBe("#6366F1");
   await click(host.querySelector('[aria-label="Undo"]')!);
   expect(host.querySelector('[aria-label="Lock Accent"]')!.getAttribute("aria-pressed")).toBe("false");
 });
 
-it("using a mood swatch as the seed regenerates both themes from it", async () => {
+it("using a swatch as the seed regenerates both themes from it", async () => {
   await render(<PaletteStudio />);
-  await click(button("Mood"));
   const target = moodHexes()[1];
-  await click(host.querySelector('[aria-label="Use Companion as seed"]')!);
-  expect(host.textContent).toContain(`Generated from ${target}`);
-  expect(host.querySelector<HTMLInputElement>('[aria-label="Seed hex"]')!.value).toBe(target);
+  const primary = roleHex("primary");
+  await click(host.querySelector('[aria-label="Use Companion swatch as seed"]')!);
+  expect(seedField().value).toBe(target);
+  expect(moodHexes()[0]).toBe(target); // Visual mode keeps the exact seed as Anchor
+  expect(roleHex("primary")).not.toBe(primary);
 });
 
 it("grey seeds give exactly neutral surfaces and chromatic brand roles", async () => {
   await render(<PaletteStudio />);
-  await change(host.querySelector<HTMLInputElement>('[aria-label="Seed hex"]')!, "#808080");
-  await click(button("Generate"));
-  for (const role of ["Background", "Surface", "Border"]) expect(rgbToOKLCH(hexToRgb(roleHex(role))).C).toBeLessThan(0.002);
-  expect(rgbToOKLCH(hexToRgb(roleHex("Secondary"))).C).toBeGreaterThan(0.05);
+  await change(seedField(), "#808080");
+  for (const role of ["bg", "surface", "border"]) expect(rgbToOKLCH(hexToRgb(roleHex(role))).C).toBeLessThan(0.002);
+  expect(rgbToOKLCH(hexToRgb(roleHex("secondary"))).C).toBeGreaterThan(0.05);
 });
 
-it("mood settings persist across a reload", async () => {
+it("mood and roles persist across a reload with the existing editor key", async () => {
   await render(<PaletteStudio />);
-  await click(button("Mood"));
   await click(button("Poster"));
-  await click(host.querySelector('[aria-label="Lock Lead"]')!);
-  const saved = moodHexes();
+  await click(host.querySelector('[aria-label="Lock Lead swatch"]')!);
+  await click(host.querySelector('[aria-label="Lock Accent"]')!);
+  const saved = moodHexes(), accent = roleHex("accent");
+  expect(JSON.parse(localStorage.getItem("dna.studio.palette.editor.v1")!).locks.accent).toBe(accent);
   await act(() => root.unmount());
   studioDrafts.clear();
   root = createRoot(host);
   await render(<PaletteStudio />);
-  await click(button("Mood"));
   expect(button("Poster").getAttribute("aria-pressed")).toBe("true");
   expect(moodHexes()).toEqual(saved);
+  expect(roleHex("accent")).toBe(accent);
 });
 
-it("Export offers CSS, Tailwind, DTCG tokens and an SVG card from the committed palette", async () => {
+it("Export offers CSS, Tailwind, DTCG tokens, an SVG card and mood JSON from the committed palette", async () => {
   await render(<PaletteStudio />);
   await click(button("Export"));
-  const code = () => host.querySelector(".studio-export-code")!.textContent!;
-  const tokens = JSON.parse(code());
-  expect(tokens.ui.light.bg.$value.hex).toBe(roleHexFromState("bg"));
-  expect(Object.keys(tokens.palette)).toHaveLength(5);
-  await click(button("Tailwind"));
-  expect(code()).toContain("export default");
-  await click(button("CSS"));
+  const code = () => document.querySelector('[role="dialog"] .palette-export-code')!.textContent!;
   expect(code()).toContain('[data-palette-theme="dark"]');
   expect(code()).toContain("--palette-anchor:");
-  await click(button("SVG card"));
-  const img = host.querySelector<HTMLImageElement>('img[alt="SVG palette card preview"]')!;
-  expect(decodeURIComponent(img.src)).toContain("<svg");
-  await click(Array.from(host.querySelectorAll("button")).find((b) => b.textContent?.startsWith("Download dna-palette.svg"))!);
+  await click(docButton("Design tokens"));
+  const tokens = JSON.parse(code());
+  expect(tokens.ui.light.bg.$value.hex).toBe(JSON.parse(localStorage.getItem("dna.studio.palette.editor.v1")!).variants.light.bg.toLowerCase());
+  expect(Object.keys(tokens.palette)).toHaveLength(5);
+  await click(docButton("Tailwind"));
+  expect(code()).toContain("export default");
+  await click(docButton("Mood JSON"));
+  expect(JSON.parse(code())).toHaveLength(5);
+  await click(docButton("SVG card"));
+  expect(decodeURIComponent(document.querySelector<HTMLImageElement>('img[alt="SVG swatch card preview"]')!.src)).toContain("<svg");
+  await click(docButton("Download SVG"));
   expect(URL.createObjectURL).toHaveBeenCalled();
-  function roleHexFromState(role: string) { return JSON.parse(localStorage.getItem("dna.studio.palette.editor.v1")!).variants.light[role].toLowerCase(); }
 });
 
 it("Accessibility reports border non-text contrast and semantic distinctness", async () => {

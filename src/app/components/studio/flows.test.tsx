@@ -56,6 +56,11 @@ const upload = async (input: HTMLInputElement, file: File) => {
     await new Promise((r) => setTimeout(r, 20));
   });
 };
+// Palette Studio: roles render as copy buttons carrying their role key.
+const roleHex = (key: string) =>
+  host.querySelector<HTMLButtonElement>(`button[data-role="${key}"]`)!.textContent!.trim();
+const docButton = (text: string) =>
+  Array.from(document.querySelectorAll("button")).find((b) => b.textContent === text)!;
 it("palette edits and locks survive regeneration and theme switching", async () => {
   await render(<PaletteStudio />);
   const edit = host.querySelector<HTMLInputElement>(
@@ -65,30 +70,24 @@ it("palette edits and locks survive regeneration and theme switching", async () 
   await click(host.querySelector('[aria-label="Lock Accent"]')!);
   await click(button("Generate"));
   await click(button("Dark"));
-  expect(
-    host.querySelector<HTMLInputElement>('[aria-label="Accent hex value"]')!
-      .value,
-  ).toBe("#123456");
+  expect(roleHex("accent")).toBe("#123456");
   expect(
     host
       .querySelector('[aria-label="Unlock Accent"]')!
       .getAttribute("aria-pressed"),
   ).toBe("true");
 });
-it("invalid draft generation leaves committed colours intact and reports the error", async () => {
+it("incomplete or invalid seed input never changes the committed colours", async () => {
   await render(<PaletteStudio />);
-  const original = host.querySelector<HTMLInputElement>(
-    '[aria-label="Primary hex value"]',
-  )!.value;
-  await change(host.querySelector('[aria-label="Seed hex"]')!, "#12");
-  await click(button("Generate"));
-  expect(host.querySelector('[role="alert"]')!.textContent).toContain(
-    "complete hex",
-  );
-  expect(
-    host.querySelector<HTMLInputElement>('[aria-label="Primary hex value"]')!
-      .value,
-  ).toBe(original);
+  const original = roleHex("primary");
+  const seed = host.querySelector<HTMLInputElement>('[aria-label="Seed hex"]')!;
+  await change(seed, "#12");
+  expect(seed.value).toBe("#12");
+  await change(seed, "#12zz");
+  expect(seed.value).toBe("#12");
+  expect(roleHex("primary")).toBe(original);
+  await act(() => { seed.dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+  expect(seed.value).toBe("#6366F1");
 });
 it("clipboard rejection never reports success and CSS remains downloadable", async () => {
   Object.defineProperty(navigator, "clipboard", {
@@ -96,16 +95,20 @@ it("clipboard rejection never reports success and CSS remains downloadable", asy
     configurable: true,
   });
   await render(<PaletteStudio />);
-  await click(button("Copy CSS"));
-  expect(host.querySelector('[role="alert"]')!.textContent).toContain(
-    "Copy failed",
-  );
-  expect(button("Download CSS")).toBeTruthy();
+  await click(button("Export"));
+  await click(docButton("Copy"));
+  const status = document.querySelector('[role="dialog"] .palette-status')!.textContent!;
+  expect(status).toContain("Copy failed");
+  expect(status).not.toContain("copied");
+  expect(docButton("Download CSS")).toBeTruthy();
 });
 it("mood changes remain separate and accessibility names the pair criteria", async () => {
   await render(<PaletteStudio />);
-  await click(button("Mood"));
-  expect(host.textContent).toContain("Independent mood exploration");
+  const roles = roleHex("primary") + roleHex("accent");
+  const swatches = Array.from(host.querySelectorAll(".palette-column-hex")).map((b) => b.textContent).join();
+  await click(button("Poster"));
+  expect(roleHex("primary") + roleHex("accent")).toBe(roles);
+  expect(Array.from(host.querySelectorAll(".palette-column-hex")).map((b) => b.textContent).join()).not.toBe(swatches);
   await click(button("Accessibility"));
   expect(host.textContent).toContain("Normal AA");
   expect(host.textContent).not.toContain("APCA");

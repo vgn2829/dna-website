@@ -54,7 +54,7 @@ export type Harmony =
   | "triadic"
   | "splitComplementary"
   | "tetradic";
-export type Mood = "visual" | "poster" | "luxury" | "minimal" | "cyberpunk";
+export type Mood = "visual" | "poster" | "luxury" | "minimal" | "cyberpunk" | "exploratory";
 export function deltaOK(
   a: { L: number; a: number; b: number },
   b: { L: number; a: number; b: number },
