@@ -1,0 +1,283 @@
+{
+  "layouts": [
+    {
+      "theme": "dark",
+      "w": 375,
+      "palette": {
+        "doc": false,
+        "bad": []
+      },
+      "mood": {
+        "doc": false,
+        "bad": []
+      },
+      "col": "341x137",
+      "bg": "rgb(17, 17, 16)",
+      "a11y": {
+        "doc": false,
+        "bad": []
+      },
+      "export": {
+        "doc": false,
+        "bad": []
+      }
+    },
+    {
+      "theme": "dark",
+      "w": 768,
+      "palette": {
+        "doc": false,
+        "bad": []
+      },
+      "mood": {
+        "doc": false,
+        "bad": []
+      },
+      "col": "144x394",
+      "bg": "rgb(17, 17, 16)",
+      "a11y": {
+        "doc": false,
+        "bad": []
+      },
+      "export": {
+        "doc": false,
+        "bad": []
+      }
+    },
+    {
+      "theme": "dark",
+      "w": 1024,
+      "palette": {
+        "doc": false,
+        "bad": []
+      },
+      "mood": {
+        "doc": false,
+        "bad": []
+      },
+      "col": "192x394",
+      "bg": "rgb(17, 17, 16)",
+      "a11y": {
+        "doc": false,
+        "bad": []
+      },
+      "export": {
+        "doc": false,
+        "bad": []
+      }
+    },
+    {
+      "theme": "dark",
+      "w": 1440,
+      "palette": {
+        "doc": false,
+        "bad": []
+      },
+      "mood": {
+        "doc": false,
+        "bad": []
+      },
+      "col": "272x394",
+      "bg": "rgb(17, 17, 16)",
+      "a11y": {
+        "doc": false,
+        "bad": []
+      },
+      "export": {
+        "doc": false,
+        "bad": []
+      }
+    },
+    {
+      "theme": "light",
+      "w": 375,
+      "palette": {
+        "doc": false,
+        "bad": []
+      },
+      "mood": {
+        "doc": false,
+        "bad": []
+      },
+      "col": "341x137",
+      "bg": "rgb(255, 255, 255)",
+      "a11y": {
+        "doc": false,
+        "bad": []
+      },
+      "export": {
+        "doc": false,
+        "bad": []
+      }
+    },
+    {
+      "theme": "light",
+      "w": 768,
+      "palette": {
+        "doc": false,
+        "bad": []
+      },
+      "mood": {
+        "doc": false,
+        "bad": []
+      },
+      "col": "144x394",
+      "bg": "rgb(255, 255, 255)",
+      "a11y": {
+        "doc": false,
+        "bad": []
+      },
+      "export": {
+        "doc": false,
+        "bad": []
+      }
+    },
+    {
+      "theme": "light",
+      "w": 1024,
+      "palette": {
+        "doc": false,
+        "bad": []
+      },
+      "mood": {
+        "doc": false,
+        "bad": []
+      },
+      "col": "192x394",
+      "bg": "rgb(255, 255, 255)",
+      "a11y": {
+        "doc": false,
+        "bad": []
+      },
+      "export": {
+        "doc": false,
+        "bad": []
+      }
+    },
+    {
+      "theme": "light",
+      "w": 1440,
+      "palette": {
+        "doc": false,
+        "bad": []
+      },
+      "mood": {
+        "doc": false,
+        "bad": []
+      },
+      "col": "272x394",
+      "bg": "rgb(255, 255, 255)",
+      "a11y": {
+        "doc": false,
+        "bad": []
+      },
+      "export": {
+        "doc": false,
+        "bad": []
+      }
+    }
+  ],
+  "i": {
+    "space": {
+      "changed": true,
+      "anchorIsSeed": true,
+      "noScroll": true
+    },
+    "spaceInInput": {
+      "unchanged": true,
+      "seedField": "#6366F1 "
+    },
+    "lock": {
+      "exact": true,
+      "pressed": "true"
+    },
+    "undoRedo": {
+      "undoChanged": true,
+      "redoRestores": true
+    },
+    "edit": {
+      "value": "#123456",
+      "locked": true
+    },
+    "copy": {
+      "clipboard": "#E0CB6C",
+      "status": "Copied #E0CB6C."
+    },
+    "scaleSteps": 45,
+    "useAsSeed": {
+      "target": "#E0CB6C",
+      "field": "#E0CB6C",
+      "help": true
+    },
+    "pairs": 10,
+    "grey": [
+      "#F8F8F8",
+      "#EEEEEE",
+      "#B1B1B1",
+      "#995962",
+      "#A15B89"
+    ],
+    "compare": [
+      "40,1684",
+      "730,1684"
+    ],
+    "undoSeed": "#E0CB6C",
+    "a11y": {
+      "nonText": [
+        "Decorative separators only2.04:1Below 3:1",
+        "Decorative separators only1.87:1Below 3:1"
+      ],
+      "semantic": true
+    },
+    "export": {
+      "CSS": {
+        "file": "dna-palette.css",
+        "bytes": 2932,
+        "matchesPreview": true,
+        "head": "/* DNA palette v1; seed #E0CB6C; harmony complementary. Set "
+      },
+      "Tailwind": {
+        "file": "tailwind.palette.js",
+        "bytes": 2893,
+        "matchesPreview": true,
+        "head": "// DNA Palette Studio — Seed #E0CB6C · Complementary · Visua"
+      },
+      "Design tokens": {
+        "file": "dna-palette.tokens.json",
+        "bytes": 19088,
+        "matchesPreview": true,
+        "head": "{   \"$type\": \"color\",   \"$description\": \"DNA Palette Studio "
+      },
+      "tokensUiThemes": [
+        "light",
+        "dark"
+      ],
+      "SVG card": {
+        "file": "dna-palette.svg",
+        "bytes": 2964,
+        "matchesPreview": null,
+        "head": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"936\" height=\""
+      },
+      "svgImg": "936x376",
+      "copyStatus": "SVG card copied."
+    },
+    "reload": {
+      "same": true,
+      "luxury": "true",
+      "seed": "#E0CB6C"
+    },
+    "contrast": [
+      "#7676764.54:1 · AASame hue, darkerConstant OKLCH hue and chr",
+      "#00000021.00:1 · AAABlackMinimum lightness.Aa — preview"
+    ],
+    "standalone": {
+      "mood": true
+    },
+    "mobile": {
+      "tapGenerates": true,
+      "lockVisible": true,
+      "undoVisible": true
+    }
+  },
+  "consoleErrors": []
+}

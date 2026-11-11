@@ -1,7 +1,10 @@
-import { ColorSpace, parse, to, toGamut, contrastWCAG21, deltaE2000, getLuminance, sRGB, OKLCH, OKLab, Lab } from 'colorjs.io/fn';
-// Register only the spaces needed by the functional API. APCA is not imported into the product bundle.
-for (const space of [sRGB, OKLCH, OKLab, Lab]) ColorSpace.register(space);
-const rgbColor = (rgb: RGB) => ({ space: sRGB, coords: [rgb.r, rgb.g, rgb.b] as [number, number, number], alpha: 1 });
+import { ColorSpace, deltaE2000, sRGB, OKLCH as OKLCHSpace, OKLab, Lab } from 'colorjs.io/fn';
+import * as color from './palette/color';
+import { simulateCB as brettel, type Deficiency } from './palette/simulation';
+// Colour.js is used only for CIEDE2000 in scorePalette. Conversion, gamut
+// mapping and WCAG contrast come from the shared ./palette/color module, so the
+// generation path and the editor facade apply one fixture-validated policy.
+for (const space of [sRGB, OKLCHSpace, OKLab, Lab]) ColorSpace.register(space);
 export type RGB = { r: number; g: number; b: number };
 export type OKLCH = { L: number; C: number; H: number };
 export type RolePalette = Record<string, string>;
@@ -10,22 +13,25 @@ export function clamp(v: number, min = 0, max = 1) { return Math.max(min, Math.m
 export function validHex(value: unknown): value is string { return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value); }
 export function hexToRgb(hex: string): RGB {
   if (!validHex(hex)) throw new Error('Enter a six-digit hex colour, for example #6366F1');
-  const [r, g, b] = to(parse(hex), sRGB).coords; return { r: Number(r), g: Number(g), b: Number(b) };
+  return color.hexToRgb(hex);
 }
-export function rgbToHex(rgb: RGB): string {
-  return '#' + [rgb.r, rgb.g, rgb.b].map(v => Math.round(clamp(v) * 255).toString(16).padStart(2, '0')).join('').toUpperCase();
+export const rgbToHex = color.rgbToHex;
+export const rgbToOKLCH = color.rgbToOKLCH;
+/** Achromatic threshold: below this OKLCH chroma a colour has no usable hue. */
+export const ACHROMATIC_CHROMA = 0.02;
+/** Normalises out-of-range requests (L outside 0–1, negative C, any hue angle) before the shared fixed-L/H chroma reduction. */
+export function gamutMapOKLCH(c: OKLCH): OKLCH {
+  return color.gamutMap({ L: clamp(c.L), C: Math.max(0, c.C), H: ((c.H % 360) + 360) % 360 });
 }
-export function rgbToOKLCH(rgb: RGB): OKLCH {
-  const [L, C, hue] = to(rgbColor(rgb), OKLCH).coords;
-  return { L: Number(L), C: Number(C), H: typeof hue === "number" && Number.isFinite(hue) ? hue : 0 };
+export function oklchToHex(c: OKLCH): string { return color.oklchToHex(gamutMapOKLCH(c)); }
+const hexToOKLCH = (hex: string) => rgbToOKLCH(hexToRgb(hex));
+/** CSS-ready OKLCH string, e.g. `oklch(62.4% 0.181 276.2)`. */
+export function formatOKLCH(hex: string) {
+  const { L, C, H } = hexToOKLCH(hex);
+  return `oklch(${(L * 100).toFixed(1)}% ${C.toFixed(3)} ${C < 1e-4 ? 0 : H.toFixed(1)})`;
 }
-export function oklchToHex(c: OKLCH): string {
-  const color = to({ space: OKLCH, coords: [clamp(c.L), Math.max(0, c.C), c.H], alpha: 1 }, sRGB);
-  toGamut(color, { space: sRGB, method: 'oklch.c' });
-  const [r, g, b] = color.coords; return rgbToHex({ r: Number(r), g: Number(g), b: Number(b) });
-}
-export function wcagLuminance(c: RGB) { return getLuminance(rgbColor(c)); }
-export function contrastRatio(a: RGB, b: RGB) { return contrastWCAG21(rgbColor(a), rgbColor(b)); }
+export function wcagLuminance(c: RGB) { return color.wcagLuminance(c); }
+export function contrastRatio(a: RGB, b: RGB) { return color.contrastRatio(a, b); }
 export function contrast(a: string, b: string) { return contrastRatio(hexToRgb(a), hexToRgb(b)); }
 export function foreground(background: string) { return contrast('#000000', background) >= contrast('#FFFFFF', background) ? '#000000' : '#FFFFFF'; }
 export const HARMONY_MODES: Record<string, { label: string; description: string; getHues: (h: number) => { secondary: number; accent: number } }> = Object.fromEntries([
@@ -85,14 +91,20 @@ export function derivePalette(seedHex: string, darkMode: boolean, harmonyKey: st
   const seed = rgbToOKLCH(hexToRgb(seedHex));
   const harmony = Object.prototype.hasOwnProperty.call(HARMONY_MODES, harmonyKey) ? HARMONY_MODES[harmonyKey] : null; if (!harmony) throw new Error('Unknown harmony');
   for (const value of Object.values(lockedColors)) hexToRgb(value);
-  const random = seededRandom(randomSeed), hues = harmony.getHues(seed.H), C = Math.min(.22, seed.C);
-  const make = (L: number, chroma = .008, H = seed.H) => oklchToHex({ L, C: chroma, H });
+  const random = seededRandom(randomSeed), C = Math.min(.22, seed.C);
+  // A grey seed has no hue to build a harmony from. Primary stays neutral (it is
+  // the user's choice); secondary/accent keep the selected harmony angles around
+  // a hue chosen by the reproducible variation, so Generate still explores.
+  const achromatic = seed.C < ACHROMATIC_CHROMA, anchorHue = achromatic ? random() * 360 : seed.H;
+  const hues = harmony.getHues(anchorHue), brandC = achromatic ? .12 : C;
+  // Neutrals carry a faint seed tint; a grey seed has no hue, so its neutrals stay exactly grey.
+  const make = (L: number, chroma = achromatic ? 0 : .008, H = seed.H) => oklchToHex({ L, C: chroma, H });
   const bg = make(darkMode ? .12 : .98), palette: RolePalette = {
     bg, surface: make(darkMode ? .17 : .95), surfaceElevated: make(darkMode ? .22 : .92),
     text: make(darkMode ? .95 : .13), textMuted: make(darkMode ? .72 : .4), border: make(darkMode ? .4 : .76),
     primary: findContrast(seed.H, C, bg, seed.L).hex, primaryFg: '#FFFFFF',
-    secondary: findContrast(hues.secondary, C * .7, bg, .50 + random() * .12).hex,
-    accent: findContrast(hues.accent, C * .9, bg, .55 + random() * .1).hex,
+    secondary: findContrast(hues.secondary, brandC * .7, bg, .50 + random() * .12).hex,
+    accent: findContrast(hues.accent, brandC * .9, bg, .55 + random() * .1).hex,
   };
   for (const [key, H] of [['success', 145], ['warning', 75], ['error', 25], ['info', 240]] as const) {
     palette[key + 'Bg'] = make(darkMode ? .20 : .94, .035, H);
@@ -111,51 +123,71 @@ export function scorePalette(palette: RolePalette) {
   return { score: Math.round(Object.values(pairs).filter(p => p.score).length / ROLE_PAIRS.length * 100), pairs, dScore: Math.round(total / count * 100) };
 }
 export function paletteWarnings(palette: RolePalette) { return ROLE_PAIRS.filter(([, fg, bg]) => contrast(palette[fg], palette[bg]) < 4.5).map(([name]) => `${name} is below 4.5:1. Unlock or edit these roles to resolve the constraint.`); }
-export function deriveVisualPalette(seedHex: string, harmonyKey = 'complementary', paletteMode = 'visual', randomSeed = seedHex): CreativeSwatch[] {
-  const seed = rgbToOKLCH(hexToRgb(seedHex)), harmony = HARMONY_MODES[harmonyKey]; if (!harmony) throw new Error('Unknown harmony');
-  const random = seededRandom(randomSeed), hues = harmony.getHues(seed.H);
-  const offsets = paletteMode === 'exploratory' ? [(random() - .5) * 60, (random() - .5) * 60] : [0, 0];
-  const tones: Record<string, number[]> = { visual: [.62, .78, .24, .54, .94], poster: [.52, .64, .36, .16, .95], luxury: [.14, .30, .49, .73, .91], minimal: [.98, .87, .66, .30, .58], cyberpunk: [.1, .19, .74, .68, .63] };
-  const chromaProfiles: Record<string, number[]> = {
-    visual: [1, .6, .35, .8, .08], poster: [1, .95, .85, .04, .02],
-    luxury: [.02, .3, .4, .08, .03], minimal: [.015, .025, .04, .04, .8], cyberpunk: [.025, .035, 1, .9, .8],
-  };
-  const hueProfiles: Record<string, number[]> = {
-    poster: [seed.H, hues.secondary, hues.accent, seed.H, seed.H],
-    luxury: [seed.H, seed.H, hues.accent, hues.secondary, seed.H],
-    minimal: [seed.H, seed.H, seed.H, seed.H, hues.accent],
-    cyberpunk: [seed.H, seed.H, seed.H, hues.secondary, hues.accent],
-  };
-  const lights = tones[paletteMode] || tones.visual;
-  const chromas = chromaProfiles[paletteMode] || chromaProfiles.visual;
-  return lights.map((L, index) => {
-    const H = (hueProfiles[paletteMode] || [seed.H, hues.secondary + offsets[0], seed.H, hues.accent + offsets[1], seed.H])[index];
-    const C = Math.min(.24, seed.C) * chromas[index];
-    const hex = oklchToHex({ L: clamp(L + (random() - .5) * .025), C, H });
-    return { index, hex, name: ['Anchor', 'Companion', 'Shade', 'Accent', 'Paper'][index] };
+/** Creative palette personalities. Tones/chroma are per swatch; hue slots name harmony roles. */
+type CreativeProfile = { label: string; description: string; roles: string[]; tones: number[]; chroma: number[]; hueSlots: ('seed' | 'secondary' | 'accent')[]; jitter: number; floor: number; anchorIsSeed?: boolean; relaxed?: boolean };
+export const CREATIVE_MODES: Record<string, CreativeProfile> = {
+  visual: { label: 'Visual', description: 'Your exact seed with a tonal range built around it', roles: ['Anchor', 'Companion', 'Shade', 'Accent', 'Paper'], tones: [.62, .78, .24, .54, .94], chroma: [1, .6, .35, .8, .08], hueSlots: ['seed', 'secondary', 'seed', 'accent', 'seed'], jitter: .06, floor: .06, anchorIsSeed: true },
+  minimal: { label: 'Minimal', description: 'Tinted neutrals with one deliberate colour accent', roles: ['Paper', 'Mist', 'Stone', 'Ink', 'Accent'], tones: [.98, .87, .66, .30, .58], chroma: [.015, .025, .04, .04, .8], hueSlots: ['seed', 'seed', 'seed', 'seed', 'accent'], jitter: .03, floor: .12 },
+  poster: { label: 'Poster', description: 'Saturated mid-tones carried by ink and paper', roles: ['Lead', 'Support', 'Punch', 'Ink', 'Paper'], tones: [.52, .64, .36, .16, .95], chroma: [1, .95, .85, .04, .02], hueSlots: ['seed', 'secondary', 'accent', 'seed', 'seed'], jitter: .05, floor: .14 },
+  luxury: { label: 'Luxury', description: 'Deep tinted darks, one jewel tone and warm ivory', roles: ['Base', 'Depth', 'Jewel', 'Patina', 'Ivory'], tones: [.14, .30, .49, .73, .91], chroma: [.02, .3, .4, .08, .03], hueSlots: ['seed', 'seed', 'accent', 'secondary', 'seed'], jitter: .04, floor: .06 },
+  cyberpunk: { label: 'Cyberpunk', description: 'Near-black panels lit by three neon highlights', roles: ['Void', 'Panel', 'Neon', 'Glow', 'Spark'], tones: [.1, .19, .74, .68, .63], chroma: [.025, .035, 1, .9, .8], hueSlots: ['seed', 'seed', 'seed', 'secondary', 'accent'], jitter: .035, floor: .16 },
+  exploratory: { label: 'Exploratory', description: 'Visual, with harmony angles relaxed by up to ±30°', roles: ['Anchor', 'Companion', 'Shade', 'Accent', 'Paper'], tones: [.62, .78, .24, .54, .94], chroma: [1, .6, .35, .8, .08], hueSlots: ['seed', 'secondary', 'seed', 'accent', 'seed'], jitter: .06, floor: .06, anchorIsSeed: true, relaxed: true },
+};
+/** Highest in-gamut chroma at a lightness/hue. */
+const maxChroma = (L: number, H: number) => gamutMapOKLCH({ L, C: .5, H }).C;
+/**
+ * sRGB cannot hold saturated yellows/greens when dark or blues when light. For a
+ * vivid slot, step lightness outward (never hue) up to ±window until 75% of the
+ * requested chroma fits; otherwise use the most chromatic lightness found.
+ */
+function fitVividTone(L: number, C: number, H: number, window = .15) {
+  let best = L, bestC = maxChroma(L, H);
+  if (bestC >= C * .75) return L;
+  for (let d = .01; d <= window + 1e-9; d += .01) for (const candidate of [L - d, L + d]) {
+    const t = clamp(candidate, .04, .985), available = maxChroma(t, H);
+    if (available >= C * .75) return t;
+    if (available > bestC) { best = t; bestC = available; }
+  }
+  return best;
+}
+/**
+ * Five-swatch creative palette. Each variation moves tones and chroma inside the
+ * mode's personality while named harmonies keep their exact hue angles.
+ * `locked` (keyed by swatch index) is returned byte-identical. Random draws are
+ * made for every slot, locked or not, so locking one swatch never shifts others.
+ */
+export function deriveVisualPalette(seedHex: string, harmonyKey = 'complementary', paletteMode = 'visual', randomSeed = seedHex, locked: Record<string, string> = {}): CreativeSwatch[] {
+  const seed = rgbToOKLCH(hexToRgb(seedHex)), harmony = Object.prototype.hasOwnProperty.call(HARMONY_MODES, harmonyKey) ? HARMONY_MODES[harmonyKey] : null; if (!harmony) throw new Error('Unknown harmony');
+  for (const value of Object.values(locked)) hexToRgb(value);
+  const profile = Object.prototype.hasOwnProperty.call(CREATIVE_MODES, paletteMode) ? CREATIVE_MODES[paletteMode] : CREATIVE_MODES.visual;
+  const random = seededRandom(randomSeed), achromatic = seed.C < ACHROMATIC_CHROMA;
+  // Grey seeds: neutrals stay neutral, chromatic slots use a variation-chosen hue.
+  const baseH = achromatic ? random() * 360 : seed.H, hues = harmony.getHues(baseH);
+  const offsets = profile.relaxed ? [(random() - .5) * 60, (random() - .5) * 60] : [0, 0];
+  const baseC = Math.min(.24, Math.max(achromatic ? .12 : seed.C, profile.floor));
+  const slotHue = { seed: baseH, secondary: hues.secondary + offsets[0], accent: hues.accent + offsets[1] };
+  return profile.tones.map((tone, index) => {
+    const L = clamp(tone + (random() - .5) * 2 * profile.jitter, .04, .985), chromaScale = .85 + random() * .3;
+    const name = profile.roles[index];
+    if (validHex(locked[index])) return { index, hex: locked[index].toUpperCase(), name };
+    if (index === 0 && profile.anchorIsSeed) return { index, hex: seedHex.toUpperCase(), name };
+    const C = baseC * profile.chroma[index] * chromaScale, H = slotHue[profile.hueSlots[index]];
+    return { index, hex: oklchToHex({ L: profile.chroma[index] >= .5 ? fitVividTone(L, C, H) : L, C, H }), name };
   });
 }
-
-const CB_MATRICES: Record<string, number[][]> = {
-  protanopia:   [[0.567, 0.433, 0], [0.558, 0.442, 0], [0, 0.242, 0.758]],
-  deuteranopia: [[0.625, 0.375, 0], [0.70,  0.30,  0], [0, 0.30,  0.70 ]],
-  tritanopia:   [[0.95,  0.05,  0], [0,     0.433, 0.567], [0, 0.475, 0.525]],
-};
-
-function simulateCB(rgb: RGB, type: string) {
-  const m = CB_MATRICES[type];
-  return {
-    r: clamp(rgb.r * m[0][0] + rgb.g * m[0][1] + rgb.b * m[0][2]),
-    g: clamp(rgb.r * m[1][0] + rgb.g * m[1][1] + rgb.b * m[1][2]),
-    b: clamp(rgb.r * m[2][0] + rgb.g * m[2][1] + rgb.b * m[2][2]),
-  };
+/** A pleasant, reproducible random seed (mid lightness, moderate chroma). */
+export function randomSeedColour(variation: string) {
+  const random = seededRandom(`seed:${variation}`);
+  return oklchToHex({ H: random() * 360, L: .5 + random() * .25, C: .1 + random() * .1 });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PALETTE DERIVATION ENGINE
-// ─────────────────────────────────────────────────────────────────────────────
-
-
+// ── Colour-vision deficiency simulation ─────────────────────────────────────
+// Delegates to the Brettel 1997 / libDaltonLens model in ./palette/simulation
+// (linear light, full dichromacy) so every Palette Studio path uses one model.
+function simulateCB(rgb: RGB, type: string): RGB {
+  if (type !== 'protanopia' && type !== 'deuteranopia' && type !== 'tritanopia') throw new Error('Unknown colour-vision deficiency');
+  return brettel(rgb, type as Deficiency);
+}
 export { simulateCB };
 export function analyzeCB(palette: RolePalette) {
  const out: Record<string, { textBgCR: string; primaryBgCR: string }> = {};

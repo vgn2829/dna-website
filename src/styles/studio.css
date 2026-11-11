@@ -920,23 +920,302 @@
   font-size: 12px;
   font-weight: 700;
 }
-/* Scoped like the generic .palette-editor button rule it must override. */
-.palette-editor .studio-mood-swatch {
+/* Mood workspace: five large swatch columns with per-swatch actions, tonal
+   scales and pairwise contrast. Controls are the shared .btn-icon /
+   .btn-secondary / .segmented primitives; these rules only lay them out.
+   Swatch text uses whichever of black/white contrasts more (always ≥4.5:1). */
+.studio-mood {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.studio-push {
+  margin-left: auto;
+}
+.studio-mood-columns {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  min-height: clamp(280px, 44vh, 460px);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+.studio-mood-column {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+}
+.studio-mood-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.palette-editor .studio-mood-edit {
   position: relative;
-  display: block;
-  min-height: 200px;
+}
+.studio-mood-edit-chip {
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-radius: var(--radius-full);
+}
+.palette-editor .studio-mood-edit input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.studio-mood-edit:focus-within {
+  box-shadow: var(--shadow-focus);
+}
+.studio-mood-info {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-width: 0;
+}
+.studio-mood-role {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.palette-editor .studio-mood-hex {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin-left: -8px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: clamp(16px, 1.6vw, 22px);
+  font-weight: 600;
+  cursor: pointer;
+}
+.palette-editor .studio-mood-hex:hover {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.palette-editor .studio-mood-hex:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.studio-mood-name {
+  font-size: 14px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.studio-mood-oklch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.studio-kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  margin: 0 2px;
+  padding: 0 6px;
+  border: 1px solid var(--color-hairline);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-1);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: center;
+}
+.studio-scales {
+  display: grid;
+  gap: 12px;
+}
+.studio-scale-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 160px) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+.studio-scale-label {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+}
+.studio-scale-label span {
+  color: var(--color-ink-muted);
+  font-size: 12px;
+}
+.studio-scale-steps {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 2px;
+}
+.palette-editor .studio-scale-step {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.palette-editor .studio-scale-step:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.studio-scale-step .studio-mono {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.studio-mood-pair-sample {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 12px 16px;
+  font-size: 22px;
+  font-weight: 600;
+}
+.studio-mood-pair-sample span {
+  font-size: 12px;
+  font-weight: 500;
+}
+.studio-border-sample {
+  width: 56px;
+  height: 28px;
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+}
+.studio-checklist {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.studio-checklist li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px;
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: transform 0.12s, box-shadow 0.12s;
+  background: var(--color-surface-1);
+  font-size: 13px;
 }
-.palette-editor .studio-mood-swatch:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-level-2);
+.studio-checklist .studio-value {
+  margin-left: auto;
 }
-@media (prefers-reduced-motion: reduce) {
-  .palette-editor .studio-mood-swatch:hover {
-    transform: none !important;
+.studio-checklist-swatches {
+  display: inline-flex;
+}
+.studio-checklist-swatches span {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-full);
+}
+.studio-checklist-swatches span + span {
+  margin-left: -6px;
+}
+.studio-theme-compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr));
+  gap: 20px;
+  min-width: 0;
+}
+.studio-export {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.studio-export-options {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+.studio-export-options input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-brand);
+}
+.studio-export-code {
+  max-height: min(52vh, 440px);
+  margin: 0;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre;
+}
+.studio-export-code:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.studio-export-preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+}
+@media (max-width: 900px) {
+  .studio-scale-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .studio-scale-label {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+@media (max-width: 600px) {
+  .studio-mood-columns {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+  .studio-mood-column {
+    flex-direction: row;
+    align-items: center;
+    min-height: 112px;
+  }
+  .studio-mood-actions {
+    order: 2;
+    flex-wrap: nowrap;
+  }
+  .studio-scale-steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .studio-push {
+    margin-left: 0;
   }
 }
