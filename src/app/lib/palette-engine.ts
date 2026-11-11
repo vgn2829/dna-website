@@ -106,9 +106,16 @@ export function derivePalette(seedHex: string, darkMode: boolean, harmonyKey: st
     secondary: findContrast(hues.secondary, brandC * .7, bg, .50 + random() * .12).hex,
     accent: findContrast(hues.accent, brandC * .9, bg, .55 + random() * .1).hex,
   };
-  for (const [key, H] of [['success', 145], ['warning', 75], ['error', 25], ['info', 240]] as const) {
+  // Status colours: [role, hue, target L light, target L dark]. Success and error
+  // differ in lightness as well as hue — at equal lightness the pair was nearly
+  // indistinguishable under simulated deuteranopia. Success is the lighter of the
+  // two in light mode (protanopia darkens reds, so a lighter red would converge)
+  // and the brighter in dark mode. Targets were chosen to clear all three Brettel
+  // simulations without adding brand↔status collisions; findContrast still
+  // guarantees ≥4.5:1 against each status background.
+  for (const [key, H, lightL, darkL] of [['success', 150, .44, .92], ['warning', 75, .4, .75], ['error', 25, .28, .76], ['info', 240, .4, .75]] as const) {
     palette[key + 'Bg'] = make(darkMode ? .20 : .94, .035, H);
-    palette[key] = findContrast(H, .16, palette[key + 'Bg'], darkMode ? .75 : .4).hex;
+    palette[key] = findContrast(H, .16, palette[key + 'Bg'], darkMode ? darkL : lightL).hex;
   }
   const validLocks = Object.fromEntries(Object.entries(lockedColors).filter(([key]) => Object.prototype.hasOwnProperty.call(palette, key)));
   return repairRoles(palette, validLocks);
@@ -161,7 +168,7 @@ export function deriveVisualPalette(seedHex: string, harmonyKey = 'complementary
   for (const value of Object.values(locked)) hexToRgb(value);
   const profile = Object.prototype.hasOwnProperty.call(CREATIVE_MODES, paletteMode) ? CREATIVE_MODES[paletteMode] : CREATIVE_MODES.visual;
   const random = seededRandom(randomSeed), achromatic = seed.C < ACHROMATIC_CHROMA;
-  // Grey seeds: neutrals stay neutral, chromatic slots use a variation-chosen hue.
+  // Grey seeds: seed-representing swatches stay neutral; chromatic slots use a variation-chosen hue.
   const baseH = achromatic ? random() * 360 : seed.H, hues = harmony.getHues(baseH);
   const offsets = profile.relaxed ? [(random() - .5) * 60, (random() - .5) * 60] : [0, 0];
   const baseC = Math.min(.24, Math.max(achromatic ? .12 : seed.C, profile.floor));
@@ -171,7 +178,11 @@ export function deriveVisualPalette(seedHex: string, harmonyKey = 'complementary
     const name = profile.roles[index];
     if (validHex(locked[index])) return { index, hex: locked[index].toUpperCase(), name };
     if (index === 0 && profile.anchorIsSeed) return { index, hex: seedHex.toUpperCase(), name };
-    const C = baseC * profile.chroma[index] * chromaScale, H = slotHue[profile.hueSlots[index]];
+    // A grey seed has no hue: muted swatches that represent the seed (seed hue slot,
+    // profile chroma < .5 — e.g. Visual Shade/Paper, Luxury Depth) stay neutral.
+    // Vivid seed slots (Poster Lead, Cyberpunk Neon) keep a variation-chosen hue.
+    const neutralSeedSlot = achromatic && profile.hueSlots[index] === 'seed' && profile.chroma[index] < .5;
+    const C = neutralSeedSlot ? 0 : baseC * profile.chroma[index] * chromaScale, H = slotHue[profile.hueSlots[index]];
     return { index, hex: oklchToHex({ L: profile.chroma[index] >= .5 ? fitVividTone(L, C, H) : L, C, H }), name };
   });
 }

@@ -93,26 +93,59 @@ type ShortcutTarget = { closest?: (selector: string) => unknown } | null;
 export type ShortcutEvent = {
   key: string; code?: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean;
   repeat?: boolean; defaultPrevented?: boolean; isComposing?: boolean; target: ShortcutTarget | EventTarget | null;
+  /**
+   * True when the focused control was last focused by a pointer (mouse/touch)
+   * inside the shortcut scope rather than by keyboard navigation. Supplied by
+   * the component, which tracks input modality.
+   */
+  pointerFocused?: boolean;
 };
-/** Anything that already gives Space or Ctrl/Cmd+Z a meaning of its own. */
+/** Fields with their own text editing — and their own native undo. */
+export const TEXT_EDITING_SELECTOR = [
+  "input:not([type])", 'input[type="text"]', 'input[type="search"]', 'input[type="number"]', 'input[type="url"]',
+  'input[type="email"]', 'input[type="tel"]', 'input[type="password"]', "textarea",
+  '[contenteditable]:not([contenteditable="false"])', '[role="textbox"]', '[role="combobox"]',
+].join(",");
+/** Dialogs own their keys (Escape, focus trap, native activation). */
+export const DIALOG_SELECTOR = '[role="dialog"],[role="alertdialog"],[aria-modal="true"]';
+/** Controls that Space activates natively. */
 export const INTERACTIVE_SELECTOR = [
   "input", "textarea", "select", "button", "a[href]", "summary", "label", "audio", "video", "iframe",
   '[contenteditable]:not([contenteditable="false"])',
   '[role="button"]', '[role="checkbox"]', '[role="menuitem"]', '[role="option"]', '[role="radio"]', '[role="slider"]',
   '[role="switch"]', '[role="tab"]', '[role="textbox"]', '[role="combobox"]', '[role="dialog"]', '[aria-modal="true"]',
 ].join(",");
+/** Root element (data attribute) inside which a pointer-focused control yields Space to Generate. */
+export const SHORTCUT_SCOPE = "[data-palette-shortcuts]";
+
+const within = (target: ShortcutTarget, selector: string) =>
+  !!target && typeof target.closest === "function" && !!target.closest(selector);
+
 /**
  * Space → generate, Ctrl/Cmd+Z → undo, Ctrl/Cmd+Shift+Z or Ctrl+Y → redo.
- * A held Space returns "suppress" (no scroll, no repeat). Null whenever the key
- * belongs to a focused control, dialog, IME composition or another handler.
+ *
+ * - Undo/redo are left to the browser only in text-editing fields (native text
+ *   undo) and dialogs. A focused button, swatch, tab or colour picker does not
+ *   block them, so undo works straight after clicking Generate or a lock.
+ * - Space keeps its native activation on any keyboard-focused control. Only a
+ *   control that was just clicked with a pointer inside the studio yields Space
+ *   to Generate, so pressing Space after clicking a lock does not toggle it again.
+ *   Text fields and dialogs always keep Space.
+ * - A held Space returns "suppress" (no scroll, no repeat). Null means "leave the
+ *   key to the browser".
  */
 export function paletteShortcut(e: ShortcutEvent): "generate" | "undo" | "redo" | "suppress" | null {
   if (e.defaultPrevented || e.isComposing) return null;
   const target = e.target as ShortcutTarget;
-  if (target && typeof target.closest === "function" && target.closest(INTERACTIVE_SELECTOR)) return null;
+  if (within(target, DIALOG_SELECTOR)) return null;
+  const editing = within(target, TEXT_EDITING_SELECTOR) || within(target, "select");
   const key = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
-  if ((e.key === " " || e.code === "Space") && !mod && !e.altKey && !e.shiftKey) return e.repeat ? "suppress" : "generate";
-  if (!mod || e.altKey) return null;
+  if ((e.key === " " || e.code === "Space") && !mod && !e.altKey && !e.shiftKey) {
+    if (editing) return null;
+    if (within(target, INTERACTIVE_SELECTOR) && !(e.pointerFocused && within(target, SHORTCUT_SCOPE))) return null;
+    return e.repeat ? "suppress" : "generate";
+  }
+  if (!mod || e.altKey || within(target, TEXT_EDITING_SELECTOR)) return null;
   if (key === "z") return e.shiftKey ? "redo" : "undo";
   if (key === "y" && e.ctrlKey && !e.shiftKey) return "redo";
   return null;

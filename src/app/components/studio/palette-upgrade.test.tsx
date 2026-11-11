@@ -35,7 +35,13 @@ const change = async (input: HTMLInputElement, value: string) => {
   });
 };
 const press = async (init: KeyboardEventInit, target: EventTarget = document.body) => {
-  await act(() => { target.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init })); });
+  const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+  await act(() => { target.dispatchEvent(event); });
+  return event;
+};
+/** A pointer click: pointerdown (input modality) + focus + click, as a browser does for a mouse user. */
+const pointerClick = async (b: HTMLElement) => {
+  await act(() => { b.dispatchEvent(new Event("pointerdown", { bubbles: true })); b.focus(); b.click(); });
 };
 const moodHexes = () => Array.from(host.querySelectorAll(".palette-column-hex")).map((b) => b.textContent!.trim());
 const roleHex = (key: string) => host.querySelector<HTMLButtonElement>(`button[data-role="${key}"]`)!.textContent!.trim();
@@ -171,4 +177,72 @@ it("Contrast Checker suggestions come from the shared engine and all pass AA", a
     expect(contrastRatio(hexToRgb(hex), hexToRgb("#FFFFFF"))).toBeGreaterThanOrEqual(4.5);
     expect(option.textContent).toMatch(/AA/);
   }
+});
+
+// ── Verification finding E: keyboard shortcuts with focused controls ────────
+it("Ctrl/Cmd+Z, Ctrl+Shift+Z and Ctrl+Y work while the clicked Generate button keeps focus", async () => {
+  await render(<PaletteStudio />);
+  const before = moodHexes();
+  const generateButton = button("Generate");
+  await pointerClick(generateButton);
+  const after = moodHexes();
+  expect(after.join()).not.toBe(before.join());
+  expect(document.activeElement).toBe(generateButton);
+  const undo = await press({ key: "z", ctrlKey: true }, generateButton);
+  expect(undo.defaultPrevented).toBe(true);
+  expect(moodHexes()).toEqual(before);
+  await press({ key: "z", ctrlKey: true, shiftKey: true }, generateButton);
+  expect(moodHexes()).toEqual(after);
+  await press({ key: "z", metaKey: true }, generateButton);
+  expect(moodHexes()).toEqual(before);
+  await press({ key: "y", ctrlKey: true }, generateButton);
+  expect(moodHexes()).toEqual(after);
+});
+
+it("Space after clicking a lock generates and leaves the lock on", async () => {
+  await render(<PaletteStudio />);
+  const lock = host.querySelector<HTMLButtonElement>('[aria-label="Lock Shade swatch"]')!;
+  await pointerClick(lock);
+  const locked = host.querySelector<HTMLButtonElement>('[aria-label="Unlock Shade swatch"]')!;
+  expect(locked.getAttribute("aria-pressed")).toBe("true");
+  const before = moodHexes();
+  const space = await press({ key: " ", code: "Space" }, locked);
+  // Claimed by the studio, so the browser does not re-activate (unlock) the button.
+  expect(space.defaultPrevented).toBe(true);
+  expect(moodHexes()[2]).toBe(before[2]);
+  expect(moodHexes().join()).not.toBe(before.join());
+  expect(host.querySelector('[aria-label="Unlock Shade swatch"]')!.getAttribute("aria-pressed")).toBe("true");
+});
+
+it("Space on a keyboard-focused control keeps its native activation", async () => {
+  await render(<PaletteStudio />);
+  await pointerClick(button("Generate")); // earlier mouse use…
+  const lock = host.querySelector<HTMLButtonElement>('[aria-label="Lock Shade swatch"]')!;
+  await press({ key: "Tab" }, document.activeElement!); // …then keyboard navigation
+  lock.focus();
+  const before = moodHexes();
+  const space = await press({ key: " ", code: "Space" }, lock);
+  expect(space.defaultPrevented).toBe(false); // left to the browser: activates the focused control
+  expect(moodHexes()).toEqual(before);
+  const undo = await press({ key: "z", ctrlKey: true }, lock);
+  expect(undo.defaultPrevented).toBe(true); // undo still available from a focused control
+});
+
+it("text fields keep Space and native text undo; the export dialog keeps its keys", async () => {
+  await render(<PaletteStudio />);
+  const before = moodHexes();
+  for (const init of [{ key: " ", code: "Space" }, { key: "z", ctrlKey: true }, { key: "y", ctrlKey: true }]) {
+    const e = await press(init, seedField());
+    expect(e.defaultPrevented).toBe(false);
+  }
+  await press({ key: "z", ctrlKey: true }, host.querySelector<HTMLInputElement>('[aria-label="Palette variation"]')!);
+  expect(moodHexes()).toEqual(before);
+  await click(button("Export"));
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+  for (const init of [{ key: " ", code: "Space" }, { key: "z", ctrlKey: true }]) {
+    const e = await press(init, dialog.querySelector("button")!);
+    expect(e.defaultPrevented).toBe(false);
+  }
+  expect(moodHexes()).toEqual(before);
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
 });
