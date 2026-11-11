@@ -1037,6 +1037,7 @@
 /* Export dialog body (portalled, so not scoped to .palette-tool) */
 .palette-export { display: grid; gap: var(--space-md); min-width: 0; }
 .palette-export .segmented { justify-self: start; }
+.palette-export .segmented.studio-choice { border-radius: var(--radius-xl); }
 .palette-export-options { display: grid; gap: var(--space-xs); color: var(--color-ink); font: 13px/1.4 var(--font-body); }
 .palette-export-options label:has(input:disabled) { color: var(--color-ink-muted); }
 .palette-export-code { max-height: min(46vh, 380px); margin: 0; overflow: auto; padding: var(--space-md); border: 1px solid var(--color-hairline); border-radius: var(--radius-md); background: var(--color-canvas); color: var(--color-ink); font: 12px/1.55 var(--font-mono); white-space: pre; tab-size: 2; }
