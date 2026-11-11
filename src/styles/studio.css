@@ -1,7 +1,13 @@
+.studio-main,
+.studio-tool-nav {
+  /* One content measure shared by the tool tabs, heading and tool body. */
+  --studio-page-max: 1280px;
+  --studio-gutter: clamp(16px, 3vw, 30px);
+}
 .studio-main {
-  max-width: 1440px;
+  max-width: var(--studio-page-max);
   margin: 0 auto;
-  padding: 32px clamp(16px, 3vw, 40px) 64px;
+  padding: 32px var(--studio-gutter) 64px;
 }
 .studio-tool,
 .palette-editor {
@@ -254,7 +260,7 @@
   overflow-x: auto;
   scrollbar-width: thin;
   scroll-padding: 16px;
-  padding: 8px clamp(16px, 3vw, 40px);
+  padding: 8px max(var(--studio-gutter), calc((100% - var(--studio-page-max)) / 2 + var(--studio-gutter)));
   border-bottom: 1px solid var(--color-hairline);
   background: var(--color-canvas);
   position: sticky;
@@ -263,8 +269,8 @@
 }
 .studio-tool-nav-item {
   flex-shrink: 0;
-  min-height: 36px;
-  padding: 6px 16px;
+  min-height: 40px;
+  padding: 7px 14px;
   border: none;
   border-radius: var(--radius-pill);
   background: transparent;
@@ -272,6 +278,7 @@
   font-family: var(--font-body);
   font-size: 13px;
   font-weight: 400;
+  letter-spacing: -0.01em;
   white-space: nowrap;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -291,17 +298,21 @@
   }
 }
 .studio-intro {
-  margin-bottom: 32px;
+  margin-bottom: 30px;
   padding-top: 8px;
 }
 .studio-intro h1 {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
+  font-size: clamp(28px, 3vw, 40px);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.035em;
 }
 .studio-intro p {
-  max-width: 72ch;
+  max-width: 80ch;
   margin: 0;
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.6;
   color: var(--color-ink-muted);
 }
 .studio-loading {
@@ -1055,7 +1066,8 @@
    does not flatten the original control heights. */
 .palette-tool :is(.btn-primary, .btn-secondary) { min-height: 44px; }
 .palette-tool .palette-scale-step { min-height: 56px; }
-.palette-tool .palette-column-hex { min-height: 40px; }
+.palette-tool .palette-column-hex { min-height: 40px; font-family: var(--font-mono); }
+.palette-tool .segmented.studio-choice { border-radius: var(--radius-xl); }
 .palette-control-label { display: block; color: var(--color-ink); font: 13px/1.4 var(--font-body); }
 .palette-tool .btn-sm { min-height: 32px; }
 .palette-tool .btn-icon { min-width: 40px; min-height: 40px; border-radius: var(--radius-full); }
