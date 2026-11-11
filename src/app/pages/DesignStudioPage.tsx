@@ -4,6 +4,8 @@ import { useLocation, useSearchParams } from "react-router";
 import { usePageMeta } from "../components/hooks/use-page-meta";
 import { TOOLS } from "../components/studio/tools";
 import "../../styles/studio.css";
+// Tools that decode or process user images; the session notice only applies there.
+const MEDIA_TOOLS = new Set(["image", "halftone", "svg", "bg"]);
 // ── Shell ─────────────────────────────────────────────────────────────────────
 export default function DesignStudio() {
   usePageMeta({
@@ -98,9 +100,11 @@ export default function DesignStudio() {
           }
         >
           <div className="studio-active-tool studio-tool">
-            <p className="studio-help">
-              Switching tools cancels active image processing. Completed background and halftone images remain in this session; device image recovery is opt-in.
-            </p>
+            {MEDIA_TOOLS.has(active) && (
+              <p className="studio-help">
+                Switching tools cancels active image processing. Completed background and halftone images remain in this session; device image recovery is opt-in.
+              </p>
+            )}
             <Tool />
           </div>
         </Suspense>
