@@ -1,40 +1,7 @@
 import { useStudioDraft } from "./drafts";
 import { contrastRatio, hexToRgb } from "../../lib/palette/engine";
+import { contrastGrade, suggestContrastColours } from "../../lib/palette/contrast";
 import { ArrowDownUp } from "lucide-react";
-function hexToRgbCC(hex: string): [number, number, number] {
-  const h = hex.replace(/^#/, "");
-  const full =
-    h.length === 3
-      ? h
-          .split("")
-          .map((c: string) => c + c)
-          .join("")
-      : h;
-  return [
-    parseInt(full.slice(0, 2), 16),
-    parseInt(full.slice(2, 4), 16),
-    parseInt(full.slice(4, 6), 16),
-  ];
-}
-function rgbToHexCC([r, g, b]: [number, number, number]) {
-  return (
-    "#" +
-    [r, g, b]
-      .map((v) =>
-        Math.round(Math.max(0, Math.min(255, v)))
-          .toString(16)
-          .padStart(2, "0"),
-      )
-      .join("")
-  );
-}
-function relLum([r, g, b]: [number, number, number]) {
-  const c = [r, g, b].map((v) => {
-    const s = v / 255;
-    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-  });
-  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-}
 export function cRatio(a: string, b: string) {
   return contrastRatio(hexToRgb(a), hexToRgb(b));
 }
@@ -42,98 +9,16 @@ function isHex(h: string) {
   return /^#[0-9a-fA-F]{6}$/.test(h);
 }
 
-function rgbToHsl([r, g, b]: [number, number, number]): [
-  number,
-  number,
-  number,
-] {
-  r /= 255;
-  g /= 255;
-  b /= 255;
-  const max = Math.max(r, g, b),
-    min = Math.min(r, g, b);
-  let h = 0,
-    s = 0,
-    l = (max + min) / 2;
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch (max) {
-      case r:
-        h = (g - b) / d + (g < b ? 6 : 0);
-        break;
-      case g:
-        h = (b - r) / d + 2;
-        break;
-      default:
-        h = (r - g) / d + 4;
-    }
-    h /= 6;
-  }
-  return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
-}
-function hslToRgb(h: number, s: number, l: number): [number, number, number] {
-  h /= 360;
-  s /= 100;
-  l /= 100;
-  const hue2rgb = (p: number, q: number, t: number) => {
-    if (t < 0) t += 1;
-    if (t > 1) t -= 1;
-    if (t < 1 / 6) return p + (q - p) * 6 * t;
-    if (t < 1 / 2) return q;
-    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-    return p;
-  };
-  if (s === 0) {
-    const v = Math.round(l * 255);
-    return [v, v, v];
-  }
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s,
-    p = 2 * l - q;
-  return [
-    Math.round(hue2rgb(p, q, h + 1 / 3) * 255),
-    Math.round(hue2rgb(p, q, h) * 255),
-    Math.round(hue2rgb(p, q, h - 1 / 3) * 255),
-  ];
-}
-
+/**
+ * Accessible foreground suggestions from the shared Palette Studio colour
+ * engine (OKLCH lightness search and harmony angles), so both tools agree.
+ */
 export function generateSuggestions(
   fgHex: string,
   bgHex: string,
   targetRatio = 4.5,
 ) {
-  if (!isHex(fgHex) || !isHex(bgHex)) return [];
-  const [h, s, l] = rgbToHsl(hexToRgbCC(fgHex));
-  const options = [
-    { offset: 0, label: "Nearest lightness adjustment" },
-    { offset: 180, label: "Complementary hue" },
-    { offset: 30, label: "Analogous +30°" },
-    { offset: -30, label: "Analogous −30°" },
-    { offset: 120, label: "Triadic +120°" },
-    { offset: 240, label: "Triadic +240°" },
-  ];
-  return options
-    .flatMap(({ offset, label }) => {
-      const values = Array.from({ length: 1001 }, (_, i) => i / 10).sort(
-        (a, b) => Math.abs(a - l) - Math.abs(b - l),
-      );
-      for (const lightness of values) {
-        const hex = rgbToHexCC(
-          hslToRgb((h + offset + 360) % 360, s, lightness),
-        );
-        if (cRatio(hex, bgHex) >= targetRatio)
-          return [
-            {
-              hex,
-              label,
-              theory:
-                "Adjusted to meet normal-text AA against this background.",
-            },
-          ];
-      }
-      return [];
-    })
-    .filter((v, i, arr) => arr.findIndex((x) => x.hex === v.hex) === i);
+  return suggestContrastColours(fgHex, bgHex, targetRatio);
 }
 
 export function ContrastChecker() {
@@ -293,8 +178,8 @@ export function ContrastChecker() {
         <section className="studio-card">
           <h2 className="studio-label">Suggested foreground colors</h2>
           <p className="studio-help" style={{ marginBottom: 16 }}>
-            All achieve WCAG AA (4.5:1) against your background, maintaining
-            color harmony
+            Every suggestion reaches WCAG AA (4.5:1) on this background; those
+            marked AAA also reach 7:1. Built with the Palette Studio OKLCH engine.
           </p>
           <div className="studio-options">
             {suggestions.map((s) => (
@@ -316,7 +201,7 @@ export function ContrastChecker() {
                     <span className="studio-mono" style={{ display: "block" }}>
                       {s.hex.toUpperCase()}
                     </span>
-                    <small>{cRatio(s.hex, bg).toFixed(1)}:1</small>
+                    <small>{s.ratio.toFixed(2)}:1 · {contrastGrade(s.ratio).level}</small>
                   </span>
                 </span>
                 <strong>{s.label}</strong>

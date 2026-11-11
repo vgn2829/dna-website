@@ -1,5 +1,10 @@
 import {loadEditor,persistEditor,serializeEditor} from "../lib/palette/persistence";
 import { studioDrafts } from "./studio/drafts";
+import { createUndoable, loadMood, newVariation, paletteShortcut, persistMood, serializeMood, undoableReducer, undoHistory, redoHistory, HISTORY_LIMIT, type MoodState, type StudioAction } from "../lib/palette/studio";
+import { colourName } from "../lib/palette/naming";
+import { tonalScale } from "../lib/palette/scales";
+import { contrastGrade, nonTextChecks, semanticCollisions, COLLISION_DISTANCE } from "../lib/palette/contrast";
+import { EXPORT_FORMATS, exportPalette, moodCss, type ExportFormat } from "../lib/palette/export";
 /**
  * PaletteStudio
  * Self-contained palette generator.
@@ -14,13 +19,14 @@ import {
   useMemo,
   useReducer,
   useEffect,
-  type CSSProperties,
+  useRef,
+  useCallback,
 } from "react";
-import { Lock, LockOpen, RefreshCw } from "lucide-react";
+import { Copy, Crosshair, Download, Lock, LockOpen, Redo2, RefreshCw, Undo2 } from "lucide-react";
 import {
   createEditor,
-  paletteReducer,
   paletteCSS,
+  type EditorAction,
   type Theme,
 } from "../lib/palette/editor";
 import {
@@ -44,7 +50,8 @@ import {
   HARMONY_MODES,
   hexToRgb,
   rgbToHex,
-  wcagLuminance,
+  rgbToOKLCH,
+  contrastRatio,
   simulateCB,
   getSeedSymbolism,
 } from "../lib/palette/engine";
@@ -112,28 +119,38 @@ const GROUP_LABELS = {
 
 export default function PaletteStudio() {
   const [initial] = useState(()=>loadEditor(studioDrafts.get("palette.editor") as ReturnType<typeof createEditor> | undefined));
-  const [editor,dispatch]=useReducer(paletteReducer,initial.editor);
+  const [initialMood] = useState(()=>loadMood(studioDrafts.get("palette.mood") as MoodState | undefined));
+  // One undo/redo history over the editor (both themes, locks) and the mood settings.
+  const [studio, dispatchStudio] = useReducer(undoableReducer, undefined, () => createUndoable({ editor: initial.editor, mood: initialMood.mood }));
+  const { editor, mood } = studio.history.present;
+  const apply = useCallback((action: StudioAction, coalesce = "") => dispatchStudio({ type: "apply", action, coalesce, at: Date.now() }), []);
+  const dispatch = useCallback((action: EditorAction, coalesce = "") => apply({ type: "editor", action }, coalesce), [apply]);
   const [variation,setVariation]=useState(editor.variation);
   useEffect(() => {
     studioDrafts.set("palette.editor", editor);
     persistEditor(editor);
   }, [editor]);
   useEffect(() => {
-    if (!initial.shared) return;
+    studioDrafts.set("palette.mood", mood);
+    persistMood(mood);
+  }, [mood]);
+  useEffect(() => {
+    if (!initial.shared && !initialMood.shared) return;
     const url = new URL(window.location.href);
     url.searchParams.delete("palette");
+    url.searchParams.delete("mood");
     window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
-  }, [initial.shared]);
+  }, [initial.shared, initialMood.shared]);
   const [seed, setSeed] = useState(editor.seed),
     [harmony, setHarmony] = useState<Harmony>(editor.harmony);
   const [theme, setTheme] = useState<Theme>("light"),
     [tab, setTab] = useState("palette");
-  const [error, setError] = useState<string | null>(initial.error || null),
+  const [error, setError] = useState<string | null>(initial.error || initialMood.error || null),
     [message, setMessage] = useState(initial.shared ? "Shared palette recipe loaded." : "");
-  const [compare, setCompare] = useState(false),
-    [visualMode, setVisualMode] = useState<Mood>("visual");
-  const [visualPalette, setVisualPalette] = useState(() =>
-    deriveVisualPalette(editor.seed, editor.harmony),
+  const [compare, setCompare] = useState(false);
+  const visualPalette = useMemo(
+    () => deriveVisualPalette(editor.seed, editor.harmony, mood.mode, mood.variation, mood.locks),
+    [editor.seed, editor.harmony, mood],
   );
   const palette = editor.variants[theme];
   const fitness = useMemo(() => scorePalette(palette), [palette]),
@@ -148,7 +165,6 @@ export default function PaletteStudio() {
       if(variation.length>128)throw new Error("Variation seed exceeds 128 characters");
       dispatch({ type: "generate", seed: valid, harmony, variation });
       setSeed(valid);
-      setVisualPalette(deriveVisualPalette(valid, harmony, visualMode));
       setError(null);
       setMessage(
         "Generated both theme variants. Locked values were preserved.",
@@ -157,19 +173,52 @@ export default function PaletteStudio() {
       setError((e as Error).message);
     }
   };
-  const copy = async (value: string) => {
+  const copy = async (value: string, note = "Copied to clipboard.") => {
     try {
       await copyText(value);
-      setMessage("Copied to clipboard.");
+      setMessage(note);
       setError(null);
     } catch {
       setError("Copy failed. Select the displayed value or download the CSS.");
     }
   };
-  const reroll = () =>
-    setVisualPalette(
-      deriveVisualPalette(editor.seed, editor.harmony, visualMode),
-    );
+  const reroll = useCallback(() => {
+    apply({ type: "mood", patch: { variation: newVariation() } });
+    setMessage("New mood variation. Locked swatches were kept.");
+  }, [apply]);
+  // Undo/redo restore the whole studio state; the seed/harmony/variation drafts
+  // follow the restored committed editor so nothing reads as "changed".
+  const travel = useCallback((direction: "undo" | "redo") => {
+    const history = direction === "undo" ? undoHistory(studio.history) : redoHistory(studio.history);
+    if (history === studio.history) return;
+    const restored = history.present.editor;
+    setSeed(restored.seed); setHarmony(restored.harmony); setVariation(restored.variation);
+    dispatchStudio({ type: direction });
+    setError(null);
+    setMessage(direction === "undo" ? "Undone." : "Redone.");
+  }, [studio.history]);
+  const keyHandlers = useRef({ reroll, travel, tab });
+  keyHandlers.current = { reroll, travel, tab };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const action = paletteShortcut(e);
+      if (!action) return;
+      // Space belongs to the Mood view; undo/redo work across the studio.
+      if ((action === "generate" || action === "suppress") && keyHandlers.current.tab !== "mood") return;
+      e.preventDefault();
+      if (action === "generate") keyHandlers.current.reroll();
+      else if (action !== "suppress") keyHandlers.current.travel(action);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  const useAsSeed = (hex: string) => {
+    dispatch({ type: "generate", seed: hex, harmony: editor.harmony, variation: editor.variation });
+    setSeed(hex); setHarmony(editor.harmony); setVariation(editor.variation);
+    setError(null);
+    setMessage(`${hex} is now the seed. Both theme variants were regenerated; locked values were preserved.`);
+  };
   return (
     <div className="palette-editor">
       <div className="studio-toolbar">
@@ -245,6 +294,10 @@ export default function PaletteStudio() {
       )}
       <Status error={error}>{message}</Status>
       <div className="studio-toolbar">
+        <div className="studio-inline" role="group" aria-label="History">
+          <button className="btn-icon" onClick={() => travel("undo")} disabled={!studio.history.past.length} aria-label="Undo" title={`Undo (${isMac ? "⌘Z" : "Ctrl+Z"})`}><Undo2 size={16} aria-hidden="true" /></button>
+          <button className="btn-icon" onClick={() => travel("redo")} disabled={!studio.history.future.length} aria-label="Redo" title={`Redo (${isMac ? "⇧⌘Z" : "Ctrl+Shift+Z"})`}><Redo2 size={16} aria-hidden="true" /></button>
+        </div>
         <div className="segmented" role="group" aria-label="Palette theme">
           {(["light", "dark"] as const).map((t) => (
             <button
@@ -281,10 +334,10 @@ export default function PaletteStudio() {
         >
           Download CSS
         </button>
-        <button className="btn-secondary" onClick={async()=>{try{normalizeHex(seed);if(dirty)throw new Error("Generate the changed settings before sharing");const url=new URL(window.location.href);url.searchParams.set("tab","palette");url.searchParams.set("palette",serializeEditor(editor));await copy(url.toString());}catch(error){setError(error instanceof Error?error.message:"Sharing failed");}}}>Copy palette link</button>
+        <button className="btn-secondary" onClick={async()=>{try{normalizeHex(seed);if(dirty)throw new Error("Generate the changed settings before sharing");const url=new URL(window.location.href);url.searchParams.set("tab","palette");url.searchParams.set("palette",serializeEditor(editor));url.searchParams.set("mood",serializeMood(mood));await copy(url.toString());}catch(error){setError(error instanceof Error?error.message:"Sharing failed");}}}>Copy palette link</button>
       </div>
       <div className="segmented studio-choice" role="group" aria-label="Palette views">
-        {["palette", "accessibility", "colorblind", "mood"].map((t) => (
+        {["palette", "accessibility", "colorblind", "mood", "export"].map((t) => (
           <button
             key={t}
             className="segmented-item"
@@ -297,6 +350,7 @@ export default function PaletteStudio() {
                 accessibility: "Accessibility",
                 colorblind: "Colour vision",
                 mood: "Mood",
+                export: "Export",
               }[t]
             }
           </button>
@@ -346,7 +400,7 @@ export default function PaletteStudio() {
                               theme,
                               role: role.key,
                               value: e.target.value,
-                            })
+                            }, `edit-${theme}-${role.key}`)
                           }
                         />
                       </label>
@@ -384,16 +438,19 @@ export default function PaletteStudio() {
               Clear all {Object.keys(editor.locks).length} locks
             </button>
           )}
-          <h2 className="studio-section-title">UI preview · {theme}</h2>
-          <Preview palette={palette} />
-          {compare && (
+          {compare ? (
+            <div className="studio-theme-compare">
+              {(["light", "dark"] as const).map((t) => (
+                <section key={t}>
+                  <h2 className="studio-section-title">UI preview · {t}</h2>
+                  <Preview palette={editor.variants[t]} />
+                </section>
+              ))}
+            </div>
+          ) : (
             <>
-              <h2 className="studio-section-title">
-                UI preview · {theme === "light" ? "dark" : "light"}
-              </h2>
-              <Preview
-                palette={editor.variants[theme === "light" ? "dark" : "light"]}
-              />
+              <h2 className="studio-section-title">UI preview · {theme}</h2>
+              <Preview palette={palette} />
             </>
           )}
         </>
@@ -405,6 +462,7 @@ export default function PaletteStudio() {
             Results use unrounded WCAG ratios. Inspect the criteria for each intended foreground/background usage.
           </p>
           <AccessibilityTab palette={palette} fitness={fitness} />
+          <RoleChecks palette={palette} theme={theme} />
         </>
       )}
       {tab === "colorblind" && (
@@ -421,19 +479,26 @@ export default function PaletteStudio() {
         <>
           <p className="studio-help">
             Independent mood exploration from committed seed {editor.seed}. Mood
-            changes do not change semantic roles, their analysis, or CSS
-            exports.
+            changes do not change semantic roles, their analysis, or role CSS.
+            <kbd className="studio-kbd">Space</kbd> generates a new variation;
+            locked swatches stay exact; <kbd className="studio-kbd">{isMac ? "⌘" : "Ctrl"}</kbd>+<kbd className="studio-kbd">Z</kbd> undoes
+            (history keeps {HISTORY_LIMIT} states this session).
           </p>
           <MoodTab
             palette={visualPalette}
-            visualMode={visualMode}
-            onChangeMode={(mode) => {
-              setVisualMode(mode);
-              setVisualPalette(
-                deriveVisualPalette(editor.seed, editor.harmony, mode),
-              );
-            }}
+            mood={mood}
+            seed={editor.seed}
+            onChangeMode={(mode) => apply({ type: "mood", patch: { mode } })}
             onReroll={reroll}
+            onToggleLock={(index, hex) => {
+              const locks = { ...mood.locks };
+              if (locks[index]) delete locks[index]; else locks[index] = hex;
+              apply({ type: "mood", patch: { locks } });
+            }}
+            onEdit={(index, hex) => apply({ type: "mood", patch: { locks: { ...mood.locks, [index]: normalizeHex(hex) } } }, `mood-${index}`)}
+            onUnlockAll={() => apply({ type: "mood", patch: { locks: {} } })}
+            onUseAsSeed={useAsSeed}
+            onCopy={(hex) => copy(hex, `Copied ${hex}.`)}
           />
           <button
             className="btn-secondary"
@@ -449,6 +514,9 @@ export default function PaletteStudio() {
             Download mood JSON
           </button>
         </>
+      )}
+      {tab === "export" && (
+        <ExportPanel editor={editor} swatches={visualPalette} moodLabel={VISUAL_MODES.find((m) => m.id === mood.mode)?.label || mood.mode} onCopy={copy} />
       )}
     </div>
   );
@@ -981,31 +1049,44 @@ const VISUAL_MODES: { id: Mood; label: string }[] = [
   { id: "cyberpunk", label: "Cyberpunk" },
 ];
 
-const VISUAL_MODE_DESCRIPTIONS = {
-  visual: "Tonal range built around the seed",
-  poster: "High-chroma mid-tones with neutrals",
-  luxury: "Restrained depth with tinted neutrals",
-  minimal: "Near-achromatic — one colour accent",
-  cyberpunk: "Near-black darks with neon highlights",
+const VISUAL_MODE_DESCRIPTIONS: Record<Mood, string> = {
+  visual: "Your exact seed with a tonal range built around it",
+  poster: "Saturated mid-tones carried by ink and paper",
+  luxury: "Deep tinted darks, one jewel tone and warm ivory",
+  minimal: "Tinted neutrals with one deliberate colour accent",
+  cyberpunk: "Near-black panels lit by three neon highlights",
 };
+
+type Swatch = ReturnType<typeof deriveVisualPalette>[number];
 
 function MoodTab({
   palette,
-  visualMode,
+  mood,
+  seed,
   onChangeMode,
   onReroll,
+  onToggleLock,
+  onEdit,
+  onUnlockAll,
+  onUseAsSeed,
+  onCopy,
 }: {
-  palette: ReturnType<typeof deriveVisualPalette>;
-  visualMode: Mood;
+  palette: Swatch[];
+  mood: MoodState;
+  seed: string;
   onChangeMode: (mode: Mood) => void;
   onReroll: () => void;
+  onToggleLock: (index: number, hex: string) => void;
+  onEdit: (index: number, hex: string) => void;
+  onUnlockAll: () => void;
+  onUseAsSeed: (hex: string) => void;
+  onCopy: (hex: string) => void;
 }) {
-  const s = styles;
-  const [copied, setCopied] = useState("");
+  const lockCount = Object.keys(mood.locks).length;
   return (
-    <div>
+    <div className="studio-mood">
       {/* Mode selector row */}
-      <div style={s.moodBar}>
+      <div className="studio-inline">
         <div
           className="segmented studio-choice"
           role="group"
@@ -1016,118 +1097,219 @@ function MoodTab({
               key={m.id}
               className="segmented-item"
               onClick={() => onChangeMode(m.id)}
-              aria-pressed={visualMode === m.id}
+              aria-pressed={mood.mode === m.id}
             >
               {m.label}
             </button>
           ))}
         </div>
         <span className="studio-help">
-          {VISUAL_MODE_DESCRIPTIONS[visualMode]}
+          {VISUAL_MODE_DESCRIPTIONS[mood.mode]}
         </span>
         <button
           onClick={onReroll}
-          className="btn-secondary"
-          style={{ marginLeft: "auto" }}
-          aria-label="Generate visual palette"
+          className="btn-secondary studio-push"
+          aria-label="Generate a new mood variation"
         >
           <RefreshCw size={14} aria-hidden="true" />
-          Generate
+          New variation
         </button>
       </div>
 
-      {/* Swatch strip */}
-      {palette ? (
-        <div style={s.moodGrid}>
-          {palette.map((swatch) => {
-            const lum = wcagLuminance(hexToRgb(swatch.hex));
-            const onColor =
-              lum > 0.28 ? "rgba(0,0,0,0.72)" : "rgba(255,255,255,0.85)";
-            return (
-              <button
-                key={swatch.index}
-                onClick={() => {
-                  copyText(swatch.hex)
-                    .then(() => setCopied(swatch.hex))
-                    .catch(() => setCopied("Copy failed; select value"));
-                  setTimeout(() => setCopied(""), 1500);
-                }}
-                aria-label={`Copy ${swatch.name} ${swatch.hex}`}
-                className="studio-mood-swatch"
-                style={{ background: swatch.hex }}
-              >
-                <div style={{ ...s.moodSwatchInner, color: onColor }}>
-                  <span style={s.moodSwatchName}>{swatch.name}</span>
-                  <span style={s.moodSwatchHex}>
-                    {copied === swatch.hex ? "✓ Copied" : swatch.hex}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <div style={s.empty}>
-          <p style={s.emptySub}>Hit Generate to build a mood palette.</p>
-        </div>
+      {/* Swatch columns: role, name, value, OKLCH and per-swatch actions */}
+      <div className="studio-mood-columns">
+        {palette.map((swatch) => {
+          const locked = !!mood.locks[swatch.index];
+          const name = colourName(swatch.hex);
+          const { L, C, H } = rgbToOKLCH(hexToRgb(swatch.hex));
+          const ink = contrastRatio(hexToRgb("#000000"), hexToRgb(swatch.hex)) >= contrastRatio(hexToRgb("#FFFFFF"), hexToRgb(swatch.hex)) ? "#000000" : "#FFFFFF";
+          return (
+            <div key={swatch.index} className="studio-mood-column" role="group" aria-label={`${swatch.name}: ${name}, ${swatch.hex}${locked ? ", locked" : ""}`} style={{ background: swatch.hex, color: ink }}>
+              <div className="studio-mood-actions">
+                <button className="btn-icon" aria-pressed={locked} onClick={() => onToggleLock(swatch.index, swatch.hex)} aria-label={`${locked ? "Unlock" : "Lock"} ${swatch.name}`} title={locked ? "Unlock" : "Lock"}>
+                  {locked ? <Lock size={16} aria-hidden="true" /> : <LockOpen size={16} aria-hidden="true" />}
+                </button>
+                <label className="btn-icon studio-mood-edit" title="Edit colour">
+                  <span className="studio-mood-edit-chip" style={{ background: swatch.hex }} aria-hidden="true" />
+                  <input type="color" value={swatch.hex.toLowerCase()} onChange={(e) => onEdit(swatch.index, e.target.value)} aria-label={`Edit ${swatch.name}`} />
+                </label>
+                <button className="btn-icon" onClick={() => onUseAsSeed(swatch.hex)} disabled={swatch.hex === seed} aria-label={`Use ${swatch.name} as seed`} title="Use as seed">
+                  <Crosshair size={16} aria-hidden="true" />
+                </button>
+              </div>
+              <div className="studio-mood-info">
+                <span className="studio-mood-role">{swatch.name}{locked && <span className="sr-only"> (locked)</span>}</span>
+                <button className="studio-mood-hex" onClick={() => onCopy(swatch.hex)} aria-label={`Copy ${swatch.name} ${swatch.hex}`}>
+                  {swatch.hex}<Copy size={14} aria-hidden="true" />
+                </button>
+                <span className="studio-mood-name">{name}</span>
+                <span className="studio-mood-oklch" title={`oklch(${(L * 100).toFixed(1)}% ${C.toFixed(3)} ${H.toFixed(1)})`}>
+                  <span>L {(L * 100).toFixed(1)}</span><span>C {C.toFixed(3)}</span><span>H {C < 1e-4 ? "—" : H.toFixed(0)}</span>
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {lockCount > 0 && (
+        <p className="studio-help">
+          {lockCount} swatch{lockCount > 1 ? "es" : ""} locked.{" "}
+          <button className="btn-secondary" onClick={onUnlockAll}>Unlock all</button>
+        </p>
       )}
+
+      <h2 className="studio-section-title">Tonal scales</h2>
+      <p className="studio-help">100–900 at constant OKLCH hue. The marked step is the swatch itself; select a step to copy it.</p>
+      <div className="studio-scales">
+        {palette.map((swatch) => (
+          <div key={swatch.index} className="studio-scale-row" role="group" aria-label={`${swatch.name} tonal scale`}>
+            <div className="studio-scale-label"><strong>{swatch.name}</strong><span>{colourName(swatch.hex)}</span></div>
+            <div className="studio-scale-steps">
+              {tonalScale(swatch.hex).map((step) => (
+                <button key={step.step} className="studio-scale-step" style={{ background: step.hex, color: contrastRatio(hexToRgb("#000000"), hexToRgb(step.hex)) >= contrastRatio(hexToRgb("#FFFFFF"), hexToRgb(step.hex)) ? "#000000" : "#FFFFFF" }} onClick={() => onCopy(step.hex)} aria-label={`Copy ${swatch.name} ${step.step} ${step.hex}${step.source ? " (source colour)" : ""}`}>
+                  <span>{step.step}{step.source && <span aria-hidden="true"> ●</span>}</span>
+                  <span className="studio-mono">{step.hex}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <details>
+        <summary>Contrast between mood swatches</summary>
+        <p className="studio-help">Harmonious colours are not automatically readable together. Normal AA needs 4.5:1, large AA 3:1 and normal AAA 7:1.</p>
+        <MoodContrast swatches={palette} />
+      </details>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STYLES
-// ─────────────────────────────────────────────────────────────────────────────
+/** Pairwise WCAG contrast of the five mood swatches, lighter colour as background. */
+function MoodContrast({ swatches }: { swatches: Swatch[] }) {
+  const pairs: { fg: Swatch; bg: Swatch; ratio: number }[] = [];
+  for (let i = 0; i < swatches.length; i++) for (let j = i + 1; j < swatches.length; j++) {
+    const [a, b] = [swatches[i], swatches[j]];
+    const aLighter = rgbToOKLCH(hexToRgb(a.hex)).L >= rgbToOKLCH(hexToRgb(b.hex)).L;
+    pairs.push({ fg: aLighter ? b : a, bg: aLighter ? a : b, ratio: contrastRatio(hexToRgb(a.hex), hexToRgb(b.hex)) });
+  }
+  pairs.sort((x, y) => y.ratio - x.ratio);
+  return (
+    <div className="studio-pairs">
+      {pairs.map(({ fg, bg, ratio }) => {
+        const g = GRADE(ratio), grade = contrastGrade(ratio);
+        return (
+          <div key={`${fg.index}-${bg.index}`} className="studio-pair">
+            {/* Only the sample uses the pair's own colours; the label stays readable on the card. */}
+            <div className="studio-mood-pair-sample" style={{ background: bg.hex, color: fg.hex }} aria-hidden="true">Aa</div>
+            <div className="studio-pair-meta">
+              <span><strong>{fg.name} on {bg.name}</strong> · {grade.normalAAA ? "any text" : grade.normalAA ? "body text" : grade.largeAA ? "large text / UI parts only" : "decorative only"}</span>
+              <span className="studio-inline" style={{ gap: 8 }}>
+                <span className="studio-value">{ratio.toFixed(2)}:1</span>
+                <span className={`studio-badge studio-tone ${g.tone}`}>{g.label}</span>
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
-const styles: Record<string, CSSProperties> = {
-  empty: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "96px 24px",
-    textAlign: "center",
-    gap: 10,
-  },
-  emptySub: {
-    fontSize: 13,
-    color: "var(--color-ink-muted)",
-    lineHeight: 1.65,
-    maxWidth: 380,
-    margin: 0,
-  },
-  moodBar: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 20,
-    flexWrap: "wrap",
-  },
-  moodGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-    gap: 8,
-  },
-  moodSwatchInner: {
-    position: "absolute",
-    bottom: 12,
-    left: 12,
-    right: 12,
-    display: "flex",
-    flexDirection: "column",
-    gap: 3,
-  },
-  moodSwatchName: {
-    fontSize: 12,
-    fontWeight: 600,
-    lineHeight: 1.2,
-  },
-  moodSwatchHex: {
-    fontSize: 12,
-    fontFamily: "var(--font-mono)",
-    letterSpacing: ".06em",
-    textTransform: "uppercase",
-    lineHeight: 1,
-    opacity: 0.85,
-  },
-};
+const ROLE_LABEL: Record<string, string> = Object.fromEntries(ROLES.map((r) => [r.key, r.label]));
+/** Checks that pair-wise text contrast does not cover: non-text borders and semantic-role confusion. */
+function RoleChecks({ palette, theme }: { palette: Palette; theme: Theme }) {
+  const borders = nonTextChecks(palette);
+  const collisions = semanticCollisions(palette);
+  return (
+    <>
+      <h2 className="studio-section-title">Non-text contrast · {theme}</h2>
+      <p className="studio-help">
+        WCAG 1.4.11 asks for 3:1 when a border is what identifies a control, such as an input outline. Decorative separators between surfaces are exempt.
+      </p>
+      <div className="studio-pairs">
+        {borders.map((check) => (
+          <div key={check.name} className="studio-pair">
+            <div className="studio-mood-pair-sample" style={{ background: palette[check.bg as Role] }}>
+              <span className="studio-border-sample" style={{ borderColor: palette[check.fg as Role] }} aria-hidden="true" />
+              <span style={{ color: palette.text }}>{check.name}</span>
+            </div>
+            <div className="studio-pair-meta">
+              <span>{check.pass ? "Usable for control outlines" : "Decorative separators only"}</span>
+              <span className="studio-inline" style={{ gap: 8 }}>
+                <span className="studio-value">{check.ratio.toFixed(2)}:1</span>
+                <span className={`studio-badge studio-tone ${check.pass ? "is-pass" : "is-warn"}`}>{check.pass ? "3:1 pass" : "Below 3:1"}</span>
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <h2 className="studio-section-title">Semantic colour distinctness · {theme}</h2>
+      <p className="studio-help">
+        Brand colours that resemble a status colour, and status colours that converge under simulated colour-vision deficiency (Brettel 1997), measured as OKLab distance below {COLLISION_DISTANCE}. This is a heuristic: pair status colours with icons or text either way.
+      </p>
+      {collisions.length === 0 ? (
+        <div className="studio-notice"><strong>No close pairs found.</strong> Brand and status colours stay apart, including under the three simulations.</div>
+      ) : (
+        <ul className="studio-checklist">
+          {collisions.map((c) => (
+            <li key={`${c.a}-${c.b}-${c.condition}`}>
+              <span className="studio-checklist-swatches" aria-hidden="true">
+                <span style={{ background: palette[c.a as Role] }} />
+                <span style={{ background: palette[c.b as Role] }} />
+              </span>
+              <span><strong>{ROLE_LABEL[c.a]}</strong> and <strong>{ROLE_LABEL[c.b]}</strong> are close {c.condition === "typical vision" ? "for typical colour vision" : `under ${c.condition}`}</span>
+              <span className="studio-value">ΔOK {c.distance.toFixed(3)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+function ExportPanel({ editor, swatches, moodLabel, onCopy }: { editor: ReturnType<typeof createEditor>; swatches: Swatch[]; moodLabel: string; onCopy: (value: string, note?: string) => Promise<void> }) {
+  const [format, setFormat] = useState<"css" | ExportFormat>("tokens");
+  const [withMood, setWithMood] = useState(true);
+  const [withScales, setWithScales] = useState(true);
+  const [withRoles, setWithRoles] = useState(true);
+  const title = `Seed ${editor.seed} · ${HARMONY_MODES[editor.harmony].label} · ${moodLabel}`;
+  const input = {
+    swatches: withMood ? swatches.map((s) => ({ role: s.name, hex: s.hex })) : [],
+    themes: withRoles ? editor.variants : undefined,
+    includeScales: withScales,
+    title,
+  };
+  const meta = format === "css" ? { label: "CSS", filename: "dna-palette.css", mime: "text/css" } : EXPORT_FORMATS.find((f) => f.id === format)!;
+  let output = "", problem = "";
+  try {
+    output = format === "css" ? paletteCSS(editor) + (withMood ? moodCss(input) : "") : exportPalette(format, input);
+  } catch (e) { problem = e instanceof Error ? e.message : "Export failed"; }
+  const svg = format === "svg";
+  return (
+    <section className="studio-export" aria-label="Export">
+      <p className="studio-help">Every format is generated from the committed palette shown in Palette and Mood. Role CSS keeps the existing <code>--color-*</code> names for both themes.</p>
+      <div className="segmented studio-choice" role="group" aria-label="Export format">
+        {([{ id: "css", label: "CSS" }, ...EXPORT_FORMATS] as { id: "css" | ExportFormat; label: string }[]).map((f) => (
+          <button key={f.id} className="segmented-item" aria-pressed={format === f.id} onClick={() => setFormat(f.id)}>{f.label}</button>
+        ))}
+      </div>
+      <div className="studio-export-options">
+        <label className="studio-inline"><input type="checkbox" checked={withMood} disabled={svg} onChange={(e) => setWithMood(e.target.checked)} />Include the mood palette</label>
+        <label className="studio-inline"><input type="checkbox" checked={withScales} disabled={svg || !withMood} onChange={(e) => setWithScales(e.target.checked)} />Include 100–900 tonal scales</label>
+        <label className="studio-inline"><input type="checkbox" checked={format === "css" || withRoles} disabled={svg || format === "css"} onChange={(e) => setWithRoles(e.target.checked)} />Include UI roles (light and dark)</label>
+      </div>
+      {problem ? (
+        <p className="studio-status is-error" role="alert">{problem}</p>
+      ) : svg ? (
+        <img className="studio-export-preview" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(output)}`} alt="SVG palette card preview" />
+      ) : (
+        <pre className="studio-export-code" tabIndex={0} aria-label={`${meta.label} output`}><code>{output}</code></pre>
+      )}
+      <div className="studio-inline">
+        <button className="btn-secondary" disabled={!!problem} onClick={() => onCopy(output, `${meta.label} copied.`)}><Copy size={14} aria-hidden="true" />Copy {meta.label}</button>
+        <button className="btn-primary" disabled={!!problem} onClick={() => saveBlob(new Blob([output], { type: meta.mime }), meta.filename)}><Download size={14} aria-hidden="true" />Download {meta.filename}</button>
+      </div>
+    </section>
+  );
+}
