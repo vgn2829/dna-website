@@ -8,6 +8,7 @@ import { EmailCentreError, LIMITS, type MessagePayload } from './service';
 import { isValidEmail, type GroupFilter } from './recipients';
 import { SEED_DESIGN, SEED_TEMPLATES } from './templateSeeds';
 import type { DocNode, SubjectConfig } from './engine';
+import type { ShellOptions } from './emailShell';
 
 const id = (prefix: string) => `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 20)}`;
 
@@ -30,7 +31,7 @@ function splitDraft(p: DraftPayload) {
     doc: (p.doc ?? EMPTY_DOC) as DocNode,
     settings: {
       cc: p.cc ?? [], bcc: p.bcc ?? [], sharedData: p.sharedData ?? {}, fallbacks: p.fallbacks ?? {},
-      eventId: p.eventId ?? null, shell: p.shell ?? 'dna',
+      eventId: p.eventId ?? null, shell: p.shell ?? 'dna', shellOptions: p.shellOptions ?? null,
     },
     recipientInput: { recipients: p.recipients ?? [], groups: p.groups ?? [] },
     templateId: p.templateId ?? null,
@@ -91,7 +92,7 @@ export async function getDraft(draftId: string) {
       mode: m.mode, title: m.title, subject: m.subject_config, doc: m.doc,
       recipients: m.recipient_input.recipients ?? [], groups: m.recipient_input.groups ?? [],
       cc: m.settings.cc ?? [], bcc: m.settings.bcc ?? [], sharedData: m.settings.sharedData ?? {}, fallbacks: m.settings.fallbacks ?? {},
-      eventId: m.settings.eventId ?? null, shell: m.settings.shell ?? 'dna',
+      eventId: m.settings.eventId ?? null, shell: m.settings.shell ?? 'dna', shellOptions: m.settings.shellOptions ?? null,
       templateId: m.template_id, templateVersion: m.template_version,
     },
     attachments: atts,
@@ -245,7 +246,7 @@ export interface TemplateBody {
   mode: 'normal' | 'individual';
   subject: SubjectConfig;
   doc: DocNode;
-  settings: { sharedData?: Record<string, string>; fallbacks?: Record<string, string>; shell?: 'dna' | 'plain' };
+  settings: { sharedData?: Record<string, string>; fallbacks?: Record<string, string>; shell?: 'dna' | 'plain'; shellOptions?: ShellOptions | null };
 }
 
 export async function seedSystemTemplates(): Promise<void> {

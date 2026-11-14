@@ -43,9 +43,9 @@ afterAll(async () => { for (const sd of SEED_TEMPLATES) await resetBuiltIn(sd.id
 
 const CUP_ID = 'tpl_selection_digital_arts_cup';
 const getTpl = async (id: string) => (await request(app).get(`/api/email/templates/${id}`).set(auth())).body;
-const payloadFrom = (t: { body: { subject: unknown; doc: unknown; mode: string; settings: { shell?: string; sharedData?: Record<string, string> } } }, recipients: unknown[]) => ({
+const payloadFrom = (t: { body: { subject: unknown; doc: unknown; mode: string; settings: { shell?: string; sharedData?: Record<string, string>; shellOptions?: unknown } } }, recipients: unknown[]) => ({
   mode: t.body.mode, subject: t.body.subject, doc: t.body.doc, recipients, groups: [], cc: [], bcc: [],
-  sharedData: {}, fallbacks: {}, shell: t.body.settings.shell ?? 'dna', attachmentIds: [],
+  sharedData: {}, fallbacks: {}, shell: t.body.settings.shell ?? 'dna', shellOptions: t.body.settings.shellOptions ?? null, attachmentIds: [],
 });
 
 describe('DNA email shell', () => {
@@ -87,8 +87,10 @@ describe('every built-in template uses the unified design', () => {
       const r = await request(app).get(`/api/email/templates/${s.id}/preview`).set(auth());
       expect(r.status, s.id).toBe(200);
       expect(r.body.ok, `${s.id}: ${JSON.stringify(r.body.issues)}`).toBe(true);
-      expect(r.body.html, s.id).toContain('iit_kanpur');
-      expect(r.body.html, s.id).toContain('Get creative.');
+      // every template wears the DNA header + footer; the Cup customises their wording (tested below)
+      expect(r.body.html, s.id).toContain(s.id === 'tpl_selection_digital_arts_cup' ? 'digital arts cup' : 'iit_kanpur');
+      expect(r.body.html, s.id).toContain(s.id === 'tpl_selection_digital_arts_cup' ? 'All the best!' : 'Get creative.');
+      expect(r.body.html, s.id).toContain('designed by venugopal');
       expect(r.body.html, s.id).toMatch(/#e64298|#e0f55b|#dced3e/); // DNA accent palette (CTA / highlight panels)
       expect(r.body.html, s.id).not.toMatch(/\{\{|missing⟩|display:\s*(flex|grid)/);
     }
@@ -132,7 +134,7 @@ describe('Digital Arts Cup selection template', () => {
   it('renders the official selection information intact, in an editorial layout, with nothing invented', async () => {
     const r = await request(app).get(`/api/email/templates/${CUP_ID}/preview`).set(auth());
     const body = (r.body.html as string).replace(/&#39;/g, "'");
-    for (const s of ["YOU'RE IN.", 'Digital Arts Cup · Inter IIT 9.0', 'Dear Aarav,', 'Congratulations!',
+    for (const s of ['Dear Aarav,', 'Congratulations!',
       'selected to represent IIT Kanpur in the Digital Arts Cup contingent for the Inter IIT Cultural Meet 9.0',
       'mandatory schedule', 'December 3 – 21', 'On-campus preparation, IIT Kanpur', 'December 3rd to December 21st',
       'December 25 – 29', 'Offline events, IIT Mandi',
@@ -142,6 +144,10 @@ describe('Digital Arts Cup selection template', () => {
       'See you on campus,', 'The Coordinators', 'Design and Animation Club', 'Media and Cultural Council']) {
       expect(body, s).toContain(s);
     }
+    // the headline is gone; the personalised greeting is the primary (h1) heading
+    expect(body).not.toMatch(/YOU'RE IN|Digital Arts Cup · Inter IIT 9\.0/);
+    expect(body).toMatch(/<h1 class="dna-h1"[^>]*>Dear Aarav,<\/h1>/);
+    expect(body.indexOf('Dear Aarav,')).toBeLessThan(body.indexOf('Congratulations!'));
     // restrained: exactly one lime marker, quiet dividers, no stacked coloured cards or repeated labels
     expect((body.match(/background-color:#e0f55b/g) ?? []).length).toBe(1);
     expect((body.match(/height="1"/g) ?? []).length).toBe(2);
@@ -189,7 +195,7 @@ describe('Digital Arts Cup selection template', () => {
     const r = await request(app).post('/api/email/test').set(auth()).send({ payload: payloadFrom(t, []), testEmail: 'me@example.com', useSample: true });
     expect(r.status).toBe(200);
     expect(fake.calls[0].html).toContain('TEST EMAIL');
-    expect(fake.calls[0].html).toContain('iit_kanpur');
+    expect(fake.calls[0].html).toContain('digital arts cup');
     expect(fake.calls[0].to).toEqual(['me@example.com']);
   });
 
@@ -199,6 +205,67 @@ describe('Digital Arts Cup selection template', () => {
     await processQueue();
     expect(fake.calls[0].text).toContain('On-campus preparation, IIT Kanpur');
     expect(fake.calls[0].text).toContain('December 25th to December 29th');
+  });
+});
+
+describe('Digital Arts Cup header row and footer', () => {
+  const otpLabel = /font-family:monospace; font-size:16px; border-bottom:1\.5px solid #222; display:inline-block; margin-bottom:35px; color:#222; text-transform:lowercase;/;
+  const labelOf = (html: string, text: string) => new RegExp(`<div class="dna-label" style="([^"]*)">${text}</div>`).exec(html)?.[1] ?? '';
+
+  it('puts "digital arts cup" (left) and "inter iit 9.0" (right) on ONE row, directly above the greeting', async () => {
+    const html = (await request(app).get(`/api/email/templates/${CUP_ID}/preview`).set(auth())).body.html as string;
+    const row = /<table[^>]*>\s*<tr>\s*<td align="left"[^>]*>(.*?)<\/td>\s*<td align="right"[^>]*>(.*?)<\/td>\s*<\/tr><\/table>/s.exec(html);
+    expect(row, 'header row').toBeTruthy();
+    expect(row![1]).toContain('digital arts cup');
+    expect(row![2]).toContain('inter iit 9.0');
+    expect(html).not.toContain('iit_kanpur');
+    expect(html.indexOf('inter iit 9.0')).toBeLessThan(html.indexOf('Dear Aarav,'));
+  });
+
+  it('both labels use exactly the OTP template\'s label styling (and match each other)', async () => {
+    expect(renderOtpHtml('123456')).toMatch(otpLabel); // the reference itself
+    const html = (await request(app).get(`/api/email/templates/${CUP_ID}/preview`).set(auth())).body.html as string;
+    const l = labelOf(html, 'digital arts cup'); const r = labelOf(html, 'inter iit 9.0');
+    expect(l).toBe(r);
+    for (const part of ['font-family:monospace;', 'font-size:16px;', 'border-bottom:1.5px solid #222222;', 'display:inline-block;', 'color:#222222;', 'text-transform:lowercase;']) expect(l).toContain(part);
+    expect(l).not.toMatch(/font-weight/); // same (normal) weight as the OTP label
+    // the standard header on every other template uses the same label style
+    const std = (await request(app).get('/api/email/templates/tpl_welcome/preview').set(auth())).body.html as string;
+    expect(labelOf(std, 'iit_kanpur').replace(/margin:[^;]*;/, '')).toBe(l); // single-label header only adds its bottom margin
+  });
+
+  it('keeps both labels on one row on phones: nowrap + an equal, slightly smaller size on narrow screens', async () => {
+    const html = (await request(app).get(`/api/email/templates/${CUP_ID}/preview`).set(auth())).body.html as string;
+    expect(labelOf(html, 'digital arts cup')).toContain('white-space:nowrap');
+    expect(html).toMatch(/@media only screen and \(max-width: 520px\)[\s\S]*\.dna-label \{ font-size: 13px !important; \}/);
+  });
+
+  it('footer says "All the best!" for this template only; "designed by venugopal" stays everywhere', async () => {
+    const cup = (await request(app).get(`/api/email/templates/${CUP_ID}/preview`).set(auth())).body.html as string;
+    expect(cup).toContain('All the best!');
+    expect(cup).not.toContain('Get creative.');
+    expect(cup).toContain('designed by venugopal');
+    for (const sd of SEED_TEMPLATES.filter(x => x.id !== CUP_ID)) {
+      const h = (await request(app).get(`/api/email/templates/${sd.id}/preview`).set(auth())).body.html as string;
+      expect(h, sd.id).toContain('Get creative.');
+      expect(h, sd.id).toContain('iit_kanpur');
+      expect(h, sd.id).not.toContain('All the best!');
+      expect(h, sd.id).toContain('designed by venugopal');
+    }
+  });
+
+  it('the header/footer carry through to the real send and the test-send (same pipeline), and are escaped', async () => {
+    const t = await getTpl(CUP_ID);
+    const payload = payloadFrom(t, [{ email: 'x@example.com', name: 'Xena Y', source: 'manual' }]) as Record<string, unknown>;
+    payload.shellOptions = t.body.settings.shellOptions;
+    const pv = await request(app).post('/api/email/preview').set(auth()).send({ payload, index: 0 });
+    await request(app).post('/api/email/send').set(auth()).send({ idempotencyKey: `k-${crypto.randomUUID()}`, payload });
+    await processQueue();
+    expect(fake.calls[0].html).toBe(pv.body.html);
+    expect(fake.calls[0].html).toContain('inter iit 9.0');
+    expect(fake.calls[0].html).toContain('All the best!');
+    const evil = dnaShell('x', { labelLeft: '<script>a</script>', labelRight: '"><b>', tagline: '<i>' });
+    expect(evil).not.toMatch(/<script>a|<b>|<i>/);
   });
 });
 

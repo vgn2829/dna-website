@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   EMPTY_DOC, availableVariables, buildDraftPayload, buildPayload, composerProblems, docIsEmpty, fieldType, groupByCategory,
   knownVariables, mergeRecipients, newComposer, normalizeKeyClient, operatorsFor, overrideRecipient, setExcluded,
-  stateFromDraft, describeCondition,
+  stateFromDraft, describeCondition, applyTemplate,
   type ComposerState, type Meta, type Operator, type RecipientRow,
 } from './emailCentre';
 
@@ -50,6 +50,24 @@ describe('payloads', () => {
     expect(s.recipients[0]).toMatchObject({ email: 'a@x.com', name: 'A', source: 'csv', data: { team: 'D' } });
     expect(s.recipients[0].key).toBeTruthy();
     expect(s.groups).toEqual([{ id: 'sys:all_members', name: 'sys:all_members' }]);
+  });
+});
+
+describe('header/footer options (shellOptions)', () => {
+  const opts = { labelLeft: 'digital arts cup', labelRight: 'inter iit 9.0', tagline: 'All the best!' };
+  const tpl = (shellOptions?: typeof opts | null) => ({ id: 't', name: 'T', version: 1, body: { mode: 'individual', subject: { default: 's' }, doc: EMPTY_DOC, settings: { shellOptions } } }) as never;
+
+  it('a template carries them into the composer and the send payload; other templates reset them', () => {
+    const withOpts = applyTemplate(newComposer(), tpl(opts));
+    expect(withOpts.shellOptions).toEqual(opts);
+    expect(buildPayload(withOpts).shellOptions).toEqual(opts);
+    expect(buildDraftPayload(withOpts).shellOptions).toEqual(opts);
+    expect(applyTemplate(withOpts, tpl(undefined)).shellOptions).toBeNull();
+  });
+
+  it('survive a draft round-trip', () => {
+    const s = stateFromDraft({ id: 'm', status: 'draft', revision: 0, updatedAt: '', attachments: [], payload: { ...buildDraftPayload(applyTemplate(newComposer(), tpl(opts))) } } as never);
+    expect(s.shellOptions).toEqual(opts);
   });
 });
 

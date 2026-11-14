@@ -132,7 +132,7 @@ function TemplateEditor({ meta, initial, onBack, onSaved, notify }: { meta: Meta
   const cond = useMemo(() => conditionContext(meta, state), [meta, state]);
   const set = (fn: (s: ComposerState) => ComposerState) => setState(fn);
 
-  const body: TemplateBody = { mode: state.mode, subject: state.subject, doc: state.doc, settings: { sharedData: state.sharedData, fallbacks: state.fallbacks, shell: state.shell } };
+  const body: TemplateBody = { mode: state.mode, subject: state.subject, doc: state.doc, settings: { sharedData: state.sharedData, fallbacks: state.fallbacks, shell: state.shell, shellOptions: state.shellOptions } };
   const save = async () => {
     if (!name.trim()) { notify('Give the template a name', 'warn'); return; }
     setSaving(true);

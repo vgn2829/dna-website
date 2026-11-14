@@ -13,6 +13,7 @@
 // (email_templates table) are separate and unchanged.
 
 import type { DocNode, SubjectConfig } from './engine';
+import type { ShellOptions } from './emailShell';
 
 /** Bump when the built-in designs change; stored in each seeded version's settings. */
 export const SEED_DESIGN = 2;
@@ -29,8 +30,8 @@ const hr = (): DocNode => ({ type: 'horizontalRule' });
 const greeting = (): DocNode => ({
   type: 'conditionalBlock',
   content: [
-    { type: 'conditionalBranch', attrs: { when: { match: 'all', rules: [{ field: 'first_name', op: 'is_not_empty' }] } }, content: [p('Dear {{first_name}},')] },
-    { type: 'conditionalBranch', attrs: { when: null }, content: [p('Hello,')] },
+    { type: 'conditionalBranch', attrs: { when: { match: 'all', rules: [{ field: 'first_name', op: 'is_not_empty' }] } }, content: [h(1, 'Dear {{first_name}},')] },
+    { type: 'conditionalBranch', attrs: { when: null }, content: [h(1, 'Hello,')] },
   ],
 });
 const doc = (...content: DocNode[]): DocNode => ({ type: 'doc', content });
@@ -43,7 +44,7 @@ export interface SeedTemplate {
   mode: 'normal' | 'individual';
   subject: SubjectConfig;
   doc: DocNode;
-  settings: { sharedData?: Record<string, string>; fallbacks?: Record<string, string>; shell?: 'dna' | 'plain' };
+  settings: { sharedData?: Record<string, string>; fallbacks?: Record<string, string>; shell?: 'dna' | 'plain'; shellOptions?: ShellOptions };
 }
 
 export const SEED_TEMPLATES: SeedTemplate[] = [
@@ -146,8 +147,6 @@ export const SEED_TEMPLATES: SeedTemplate[] = [
     description: 'Official selection announcement for the IIT Kanpur Digital Arts Cup contingent, with the mandatory schedule.',
     subject: { default: 'Selection for Digital Arts Cup Contingent | Inter IIT Cultural Meet 9.0' },
     doc: doc(
-      h(1, "YOU'RE IN."),
-      h(3, 'Digital Arts Cup · Inter IIT 9.0'),
       greeting(),
       p(hl('Congratulations!'), ' We are pleased to inform you that you have been selected to represent IIT Kanpur in the Digital Arts Cup contingent for the Inter IIT Cultural Meet 9.0.'),
       p('To make sure we are well prepared for the competition, here is the mandatory schedule.'),
@@ -161,6 +160,6 @@ export const SEED_TEMPLATES: SeedTemplate[] = [
       p('See you on campus,'),
       p(bold('The Coordinators'), br(), 'Design and Animation Club', br(), 'Media and Cultural Council', br(), 'IIT Kanpur'),
     ),
-    settings: {},
+    settings: { shellOptions: { labelLeft: 'digital arts cup', labelRight: 'inter iit 9.0', tagline: 'All the best!' } },
   },
 ];

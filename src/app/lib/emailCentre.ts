@@ -10,6 +10,9 @@ export type Shell = 'dna' | 'plain';
 export type RecipientSource = 'manual' | 'student' | 'group' | 'csv';
 export type Operator = 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'is_empty' | 'is_not_empty' | 'gt' | 'lt' | 'one_of';
 
+/** Header/footer wording for the DNA layout (two-label header, custom footer tagline). */
+export interface ShellOptions { labelLeft?: string | null; labelRight?: string | null; tagline?: string | null }
+
 export interface Rule { field: string; op: Operator; value?: string | string[] }
 export interface Condition { match: 'all' | 'any'; rules: Rule[] }
 export interface SubjectConfig { default: string; variants?: { when: Condition; subject: string }[] }
@@ -55,6 +58,7 @@ export interface ComposerState {
   fallbacks: Record<string, string>;
   eventId: string | null;
   shell: Shell;
+  shellOptions: ShellOptions | null;
   templateId: string | null;
   templateVersion: number | null;
   attachments: AttachmentRow[];
@@ -66,7 +70,7 @@ export function newComposer(): ComposerState {
   return {
     draftId: null, revision: 0, mode: 'individual', subject: { default: '' }, doc: EMPTY_DOC,
     recipients: [], groups: [], cc: [], bcc: [], sharedData: {}, fallbacks: {}, eventId: null,
-    shell: 'dna', templateId: null, templateVersion: null, attachments: [],
+    shell: 'dna', shellOptions: null, templateId: null, templateVersion: null, attachments: [],
   };
 }
 
@@ -75,7 +79,7 @@ export interface ApiPayload {
   mode: Mode; subject: SubjectConfig; doc: DocNode;
   recipients: { email: string; name: string | null; source: RecipientSource; data: Record<string, string>; excluded?: boolean; groupRef?: GroupRef | null }[];
   groups: string[]; cc: string[]; bcc: string[]; sharedData: Record<string, string>; fallbacks: Record<string, string>;
-  eventId: string | null; shell: Shell; attachmentIds: string[]; templateId: string | null; templateVersion: number | null;
+  eventId: string | null; shell: Shell; shellOptions: ShellOptions | null; attachmentIds: string[]; templateId: string | null; templateVersion: number | null;
 }
 
 /** What the server receives: UI-only fields (keys, flags) are stripped. */
@@ -93,7 +97,7 @@ export function buildPayload(s: ComposerState): ApiPayload {
     groups: s.groups.map(g => g.id),
     cc: s.cc, bcc: s.bcc,
     sharedData: cleanMap(s.sharedData), fallbacks: cleanMap(s.fallbacks),
-    eventId: s.eventId, shell: s.shell,
+    eventId: s.eventId, shell: s.shell, shellOptions: s.shellOptions,
     attachmentIds: s.attachments.map(a => a.id),
     templateId: s.templateId, templateVersion: s.templateVersion,
   };
@@ -284,7 +288,7 @@ export interface ActivityDetail {
 }
 
 export interface TemplateSummary { id: string; name: string; description: string | null; category: string; isSystem: boolean; archived: boolean; version: number; updatedAt: string; subject: string; mode: Mode }
-export interface TemplateBody { mode: Mode; subject: SubjectConfig; doc: DocNode; settings: { sharedData?: Record<string, string>; fallbacks?: Record<string, string>; shell?: Shell } }
+export interface TemplateBody { mode: Mode; subject: SubjectConfig; doc: DocNode; settings: { sharedData?: Record<string, string>; fallbacks?: Record<string, string>; shell?: Shell; shellOptions?: ShellOptions | null } }
 export interface TemplateDetail { id: string; name: string; description: string | null; category: string; isSystem: boolean; archived: boolean; currentVersion: number; version: number; body: TemplateBody; versions: { version: number; createdAt: string }[] }
 
 export interface DraftSummary { id: string; mode: Mode; title: string | null; subject: string; updatedAt: string; recipientCount: number }
@@ -413,7 +417,7 @@ export function stateFromDraft(d: Awaited<ReturnType<typeof emailApi.getDraft>>)
     draftId: d.id, revision: d.revision, mode: p.mode, subject: p.subject ?? { default: '' }, doc: p.doc ?? EMPTY_DOC,
     recipients: (p.recipients ?? []).map(r => ({ key: newKey(), email: r.email, name: r.name ?? '', source: r.source, data: (r.data ?? {}) as Record<string, string>, excluded: r.excluded, groupRef: r.groupRef ?? null })),
     groups: ((p as { groups?: string[] }).groups ?? []).map(id => ({ id, name: id })), cc: p.cc ?? [], bcc: p.bcc ?? [], sharedData: p.sharedData ?? {}, fallbacks: p.fallbacks ?? {},
-    eventId: p.eventId ?? null, shell: p.shell ?? 'dna', templateId: p.templateId ?? null, templateVersion: p.templateVersion ?? null,
+    eventId: p.eventId ?? null, shell: p.shell ?? 'dna', shellOptions: p.shellOptions ?? null, templateId: p.templateId ?? null, templateVersion: p.templateVersion ?? null,
     attachments: d.attachments,
   };
 }
@@ -423,7 +427,7 @@ export function applyTemplate(s: ComposerState, t: TemplateDetail): ComposerStat
     ...s, mode: t.body.mode, subject: t.body.subject, doc: t.body.doc,
     sharedData: { ...s.sharedData, ...(t.body.settings.sharedData ?? {}) },
     fallbacks: { ...s.fallbacks, ...(t.body.settings.fallbacks ?? {}) },
-    shell: t.body.settings.shell ?? s.shell, templateId: t.id, templateVersion: t.version,
+    shell: t.body.settings.shell ?? s.shell, shellOptions: t.body.settings.shellOptions ?? null, templateId: t.id, templateVersion: t.version,
   };
 }
 

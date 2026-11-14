@@ -6,7 +6,7 @@
 import crypto from 'crypto';
 import { pool } from '../../db/client';
 import { lockQuotaBudget, addQuotaUsage, broadcastBudgetRemaining } from '../mailer';
-import { dnaShell } from './emailShell';
+import { dnaShell, type ShellOptions } from './emailShell';
 import {
   CATALOG_NAMES, KEY_RE, SHARED_ONLY_NAMES, renderMessage, sampleData, validateTemplate,
   type DocNode, type Issue, type RecipientData, type RenderResult, type SubjectConfig,
@@ -49,6 +49,8 @@ export interface MessagePayload {
   fallbacks: Record<string, string>;
   eventId?: string | null;
   shell: Shell;
+  /** Header/footer wording for the DNA layout (e.g. a two-label header). */
+  shellOptions?: ShellOptions | null;
   attachmentIds: string[];
   templateId?: string | null;
   templateVersion?: number | null;
@@ -59,13 +61,13 @@ export class EmailCentreError extends Error {
 }
 
 // ── Shell ───────────────────────────────────────────────────────────────────
-export function wrapShell(bodyHtml: string, shell: Shell, banner?: string): string {
+export function wrapShell(bodyHtml: string, shell: Shell, banner?: string, options?: ShellOptions | null): string {
   if (shell === 'plain') {
     const inner = banner ? `${banner}${bodyHtml}` : bodyHtml;
     return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#111;font-size:15px">${inner}</div>`;
   }
   // 'dna': the unified DNA layout (see emailShell.ts), used by every built-in template.
-  return dnaShell(bodyHtml, { banner });
+  return dnaShell(bodyHtml, { banner, ...(options ?? {}) });
 }
 
 export const TEST_BANNER = (who: string) =>
@@ -346,7 +348,7 @@ export async function sendMessage(payload: MessagePayload, opts: SendOptions): P
     await client.query('BEGIN');
 
     const contentHash = crypto.createHash('sha256').update(stableJson([payload.subject, payload.doc, payload.mode])).digest('hex');
-    const settings = { cc, bcc, sharedData: cleanShared(payload.sharedData), fallbacks: payload.fallbacks ?? {}, eventId: payload.eventId ?? null, shell: payload.shell, attachmentIds: payload.attachmentIds ?? [] };
+    const settings = { cc, bcc, sharedData: cleanShared(payload.sharedData), fallbacks: payload.fallbacks ?? {}, eventId: payload.eventId ?? null, shell: payload.shell, shellOptions: payload.shellOptions ?? null, attachmentIds: payload.attachmentIds ?? [] };
     const recipientInput = { recipients: payload.recipients, groups: payload.groups };
 
     if (opts.draftId) {
@@ -379,7 +381,7 @@ export async function sendMessage(payload: MessagePayload, opts: SendOptions): P
 
     if (payload.mode === 'individual') {
       const costEach = 1 + cc.length + bcc.length;
-      const rows = sendable.map(i => ({ subject: i.render!.subject, html: wrapShell(i.render!.bodyHtml, payload.shell), text: i.render!.text, hash: i.render!.hash, email: i.email }));
+      const rows = sendable.map(i => ({ subject: i.render!.subject, html: wrapShell(i.render!.bodyHtml, payload.shell, undefined, payload.shellOptions), text: i.render!.text, hash: i.render!.hash, email: i.email }));
       const ins = await client.query<{ id: string }>(
         `INSERT INTO ec_send_jobs (message_id, rendered_subject, rendered_html, rendered_text, render_hash, to_emails, cc_emails, bcc_emails, quota_cost)
          SELECT $1, t.subject, t.html, t.text, t.hash, ARRAY[t.email], $2::text[], $3::text[], $4
@@ -392,7 +394,7 @@ export async function sendMessage(payload: MessagePayload, opts: SendOptions): P
       jobIds = prepared.items.map(i => (i.state === 'valid' ? ids[n++] : null));
     } else {
       const r = prepared.shared!;
-      const html = wrapShell(r.bodyHtml, payload.shell);
+      const html = wrapShell(r.bodyHtml, payload.shell, undefined, payload.shellOptions);
       const toEmails = sendable.map(i => i.email);
       const ins = await client.query<{ id: string }>(
         `INSERT INTO ec_send_jobs (message_id, rendered_subject, rendered_html, rendered_text, render_hash, to_emails, cc_emails, bcc_emails, quota_cost)
@@ -691,7 +693,7 @@ export async function sendTest(
       'SELECT id, filename, mime_type, inline, content FROM ec_attachments WHERE id = ANY($1::text[])', [payload.attachmentIds]);
     for (const a of r.rows) atts.push({ filename: a.filename, content: a.content, contentType: a.mime_type, ...(a.inline ? { contentId: a.id } : {}) });
   }
-  const html = wrapShell(rendered.bodyHtml, payload.shell, TEST_BANNER(rendered.forLabel));
+  const html = wrapShell(rendered.bodyHtml, payload.shell, TEST_BANNER(rendered.forLabel), payload.shellOptions);
   const subject = `[TEST] ${rendered.subject}`;
   const res = await getEmailProvider().send({ to: [to], subject, html, text: rendered.text, attachments: atts.length ? atts : undefined },
     { idempotencyKey: `ec-test-${crypto.randomUUID()}` });

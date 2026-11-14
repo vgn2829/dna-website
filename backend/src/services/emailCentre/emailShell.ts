@@ -20,7 +20,6 @@ export const DNA_COLORS = {
 } as const;
 
 const FONT = "'Helvetica Neue',Helvetica,Arial,sans-serif";
-const MONO = "'Courier New',Courier,monospace";
 
 const MOBILE_CSS = `
   body { margin:0; padding:0; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }
@@ -31,11 +30,42 @@ const MOBILE_CSS = `
     .dna-h1 { font-size: 34px !important; }
     .dna-h2 { font-size: 24px !important; }
     .dna-tagline { font-size: 28px !important; }
+    .dna-label { font-size: 13px !important; }
   }
 `;
 
+/** Per-template header/footer wording. Defaults are the standard DNA header and footer. */
+export interface ShellOptions {
+  /** Left header label (default `iit_kanpur`). */
+  labelLeft?: string | null;
+  /** Optional right header label, on the same row. */
+  labelRight?: string | null;
+  /** Footer tagline (default `Get creative.`). */
+  tagline?: string | null;
+}
+
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const clean = (s: string | null | undefined, fallback: string, max: number) => {
+  const v = (s ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+  return esc(v || fallback);
+};
+
+// The label style is EXACTLY the OTP/welcome `iit_kanpur` label: monospace, 16px, #222 underline,
+// lowercase. Only the narrow-screen media query (class dna-label) shrinks it — equally for both.
+const LABEL_STYLE = `font-family:monospace;font-size:16px;border-bottom:1.5px solid ${DNA_COLORS.backdrop};display:inline-block;color:${DNA_COLORS.backdrop};text-transform:lowercase;white-space:nowrap;`;
+
+function headerRow(left: string, right: string | null): string {
+  if (!right) {
+    return `<div class="dna-label" style="${LABEL_STYLE}margin:0 0 35px 0;">${left}</div>`;
+  }
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 35px 0;"><tr>
+                    <td align="left" valign="top" style="text-align:left;"><div class="dna-label" style="${LABEL_STYLE}">${left}</div></td>
+                    <td align="right" valign="top" style="text-align:right;"><div class="dna-label" style="${LABEL_STYLE}">${right}</div></td>
+                  </tr></table>`;
+}
+
 /** Wraps rendered body HTML (from the engine) in the DNA layout and returns a complete document. */
-export function dnaShell(bodyHtml: string, opts: { banner?: string; title?: string } = {}): string {
+export function dnaShell(bodyHtml: string, opts: { banner?: string; title?: string } & ShellOptions = {}): string {
   const title = (opts.title ?? 'DnA Club').replace(/[<>&"]/g, '');
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
@@ -58,13 +88,13 @@ export function dnaShell(bodyHtml: string, opts: { banner?: string; title?: stri
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
               <tr>
                 <td class="dna-paper" bgcolor="${DNA_COLORS.paper}" style="background-color:${DNA_COLORS.paper};background-image:radial-gradient(#aaaaaa 1px, transparent 1px);background-size:20px 20px;padding:45px 35px;font-family:${FONT};color:${DNA_COLORS.inkSoft};text-align:left;">
-                  <div style="font-family:${MONO};font-size:16px;border-bottom:1.5px solid ${DNA_COLORS.backdrop};display:inline-block;margin:0 0 35px 0;color:${DNA_COLORS.backdrop};text-transform:lowercase;">iit_kanpur</div>
+                  ${headerRow(clean(opts.labelLeft, 'iit_kanpur', 40), opts.labelRight ? clean(opts.labelRight, '', 40) : null)}
                   ${opts.banner ?? ''}
                   ${bodyHtml}
                 </td>
               </tr>
             </table>
-            <div class="dna-tagline" style="margin-top:25px;font-size:35px;font-weight:800;color:${DNA_COLORS.ink};text-align:center;letter-spacing:-1px;font-family:${FONT};">Get creative.</div>
+            <div class="dna-tagline" style="margin-top:25px;font-size:35px;font-weight:800;color:${DNA_COLORS.ink};text-align:center;letter-spacing:-1px;font-family:${FONT};">${clean(opts.tagline, 'Get creative.', 40)}</div>
             <div style="text-align:center;color:#000000;font-size:12px;margin-top:20px;font-weight:500;letter-spacing:0.5px;font-family:${FONT};">designed by venugopal</div>
           </td>
         </tr>
