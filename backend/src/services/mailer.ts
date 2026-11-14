@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import type { PoolClient } from 'pg';
 import { pool } from '../db/client';
 
 // From-address for all outgoing mail (imported by routes/notify.ts too).
@@ -128,6 +129,36 @@ export async function broadcastBudgetRemaining(): Promise<number> {
   const monthlyRoom = Math.max(0, (MONTHLY_QUOTA - MONTHLY_SAFETY_BUFFER) - sentMonth);
   return Math.min(dailyRoom, monthlyRoom);
 }
+
+// ── Atomic reservation primitives (used by the Email Centre) ────────────────
+// broadcastBudgetRemaining() above is a read, so two concurrent senders can
+// both see the same headroom. The Email Centre instead reserves capacity
+// inside a transaction: lockQuotaBudget() takes a row lock on today's
+// mail_usage row (serialising every concurrent reserver), returns the budget
+// under the SAME formula/limits as the legacy broadcast gate, and the caller
+// then records what it reserved with addQuotaUsage() before committing.
+// Legacy broadcast paths are intentionally unchanged.
+export async function lockQuotaBudget(client: PoolClient): Promise<number> {
+  const day = todayUtc();
+  await client.query(
+    'INSERT INTO mail_usage (day, sent_count) VALUES ($1, 0) ON CONFLICT (day) DO NOTHING', [day]
+  );
+  await client.query('SELECT sent_count FROM mail_usage WHERE day = $1 FOR UPDATE', [day]);
+  return broadcastBudgetRemaining();
+}
+
+// Adds (or, with a negative n, refunds) usage on today's row. Never below 0.
+export async function addQuotaUsage(client: Pick<PoolClient, 'query'>, n: number): Promise<void> {
+  if (n === 0) return;
+  await client.query(
+    `INSERT INTO mail_usage (day, sent_count) VALUES ($1, GREATEST($2, 0))
+     ON CONFLICT (day) DO UPDATE SET sent_count = GREATEST(mail_usage.sent_count + $2, 0)`,
+    [todayUtc(), n]
+  );
+}
+
+// The shared Resend client (one instance for the whole app).
+export function getResendClient(): Resend { return resendClient(); }
 
 async function getTemplate(id: string): Promise<{ subject: string; body: string } | null> {
   try {
