@@ -5,7 +5,8 @@
 
 import crypto from 'crypto';
 import { pool } from '../../db/client';
-import { renderTemplateHtml, lockQuotaBudget, addQuotaUsage, broadcastBudgetRemaining } from '../mailer';
+import { lockQuotaBudget, addQuotaUsage, broadcastBudgetRemaining } from '../mailer';
+import { dnaShell } from './emailShell';
 import {
   CATALOG_NAMES, KEY_RE, SHARED_ONLY_NAMES, renderMessage, sampleData, validateTemplate,
   type DocNode, type Issue, type RecipientData, type RenderResult, type SubjectConfig,
@@ -59,11 +60,12 @@ export class EmailCentreError extends Error {
 
 // ── Shell ───────────────────────────────────────────────────────────────────
 export function wrapShell(bodyHtml: string, shell: Shell, banner?: string): string {
-  const inner = banner ? `${banner}${bodyHtml}` : bodyHtml;
   if (shell === 'plain') {
+    const inner = banner ? `${banner}${bodyHtml}` : bodyHtml;
     return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#111;font-size:15px">${inner}</div>`;
   }
-  return renderTemplateHtml('custom', inner);
+  // 'dna': the unified DNA layout (see emailShell.ts), used by every built-in template.
+  return dnaShell(bodyHtml, { banner });
 }
 
 export const TEST_BANNER = (who: string) =>

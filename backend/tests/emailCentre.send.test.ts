@@ -741,10 +741,10 @@ describe('drafts', () => {
 });
 
 describe('templates', () => {
-  it('ships the eight initial templates', async () => {
+  it('ships the built-in templates', async () => {
     const r = await request(app).get('/api/email/templates').set(auth());
     expect(r.body.templates.map((t: { name: string }) => t.name).sort()).toEqual([
-      'Artwork announcement', 'Custom email', 'Event reminder', 'Event selection', 'Event waitlist',
+      'Artwork announcement', 'Custom email', 'Digital Arts Cup — Inter IIT Cultural Meet 9.0 Selection', 'Event reminder', 'Event selection', 'Event waitlist',
       'New event announcement', 'New post announcement', 'Welcome email',
     ]);
   });

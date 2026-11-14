@@ -345,6 +345,7 @@ export const emailApi = {
   template: (id: string, version?: number) => ec<TemplateDetail>('GET', `/templates/${id}${version ? `?version=${version}` : ''}`),
   createTemplate: (name: string, description: string | null, body: TemplateBody) => ec<{ id: string }>('POST', '/templates', { name, description, body }),
   saveTemplate: (id: string, name: string, description: string | null, body: TemplateBody) => ec<{ version: number }>('PUT', `/templates/${id}`, { name, description, body }),
+  templatePreview: (id: string) => ec<{ ok: boolean; subject: string; html: string }>('GET', `/templates/${id}/preview`),
   duplicateTemplate: (id: string) => ec<{ id: string }>('POST', `/templates/${id}/duplicate`),
   archiveTemplate: (id: string, archived: boolean) => ec<{ success: boolean }>('POST', `/templates/${id}/${archived ? 'archive' : 'unarchive'}`),
 };

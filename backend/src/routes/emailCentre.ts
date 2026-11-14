@@ -330,6 +330,20 @@ router.get('/templates', handle(async (req, res) => {
   res.json({ templates: await store.listTemplates(req.query.archived === '1') });
 }));
 
+// Gallery thumbnail: the template rendered with sample data through the SAME pipeline as
+// preview/test/send (renderPreview + wrapShell). Message variables a template expects get a
+// visible sample so the thumbnail isn't full of "missing" markers.
+router.get('/templates/:id/preview', handle(async (req, res) => {
+  const t = await store.getTemplate(param(req.params.id), req.query.version ? Number(req.query.version) : undefined);
+  const shared = Object.fromEntries(Object.entries(t.body.settings.sharedData ?? {}).map(([k, v]) => [k, v || `Sample ${k.replace(/_/g, ' ')}`]));
+  const shell = t.body.settings.shell ?? 'dna';
+  const r = await renderPreview({
+    mode: t.body.mode, subject: t.body.subject, doc: t.body.doc, recipients: [], groups: [], cc: [], bcc: [],
+    sharedData: shared, fallbacks: t.body.settings.fallbacks ?? {}, eventId: null, shell, attachmentIds: [],
+  }, { useSample: true });
+  res.json({ ok: r.ok, subject: r.subject, html: wrapShell(r.bodyHtml, shell), issues: r.issues });
+}));
+
 router.get('/templates/:id', handle(async (req, res) => {
   res.json(await store.getTemplate(param(req.params.id), req.query.version ? Number(req.query.version) : undefined));
 }));

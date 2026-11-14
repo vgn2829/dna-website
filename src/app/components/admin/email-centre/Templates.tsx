@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, ArchiveRestore, ArrowLeft, Copy, Eye, FilePlus2, Pencil, Save, Send } from 'lucide-react';
 import {
   applyTemplate, availableVariables, emailApi, knownVariables, newComposer,
@@ -8,6 +8,37 @@ import { conditionContext } from './Compose';
 import { PreviewDialog } from './Dialogs';
 import { RichEditor } from './RichEditor';
 import { Badge, Field, Spinner, errMsg, timeAgo } from './shared';
+
+const CATEGORY_LABEL: Record<string, string> = {
+  welcome: 'Welcome', announcement: 'Announcement', event: 'Event', results: 'Results', selection: 'Selection · Official', custom: 'Custom',
+};
+
+/** Live thumbnail: the template rendered by the server's real pipeline with sample data, scaled to fit. */
+function TemplateThumb({ id, version, name }: { id: string; version: number; name: string }) {
+  const [html, setHtml] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.4);
+  useEffect(() => {
+    let live = true; setHtml(null); setFailed(false);
+    emailApi.templatePreview(id).then(r => { if (live) setHtml(r.html); }).catch(() => live && setFailed(true));
+    return () => { live = false; };
+  }, [id, version]);
+  useEffect(() => {
+    const el = box.current; if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setScale(el.clientWidth / 620));
+    ro.observe(el); setScale(el.clientWidth / 620);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div ref={box} aria-label={`Preview of ${name}`} style={{ height: 230, overflow: 'hidden', borderRadius: 10, border: '1px solid var(--color-hairline)', background: '#222', position: 'relative' }}>
+      {html ? (
+        <iframe title={`${name} preview`} sandbox="" srcDoc={html} tabIndex={-1} aria-hidden
+          style={{ width: 620, height: 1100, border: 0, transform: `scale(${scale})`, transformOrigin: 'top left', pointerEvents: 'none' }} />
+      ) : <div style={{ display: 'grid', placeItems: 'center', height: '100%' }}>{failed ? <span className="ec-hint">Preview unavailable</span> : <Spinner />}</div>}
+    </div>
+  );
+}
 
 export function Templates({ meta, onUse, notify }: { meta: Meta | null; onUse: (t: TemplateDetail) => void; notify: (m: string, t?: 'ok' | 'warn') => void }) {
   const [list, setList] = useState<TemplateSummary[] | null>(null);
@@ -44,7 +75,12 @@ export function Templates({ meta, onUse, notify }: { meta: Meta | null; onUse: (
                 <h3 style={{ margin: 0, fontSize: 15, fontFamily: 'var(--font-display)' }}>{t.name}</h3>
                 <span style={{ display: 'flex', gap: 4 }}>{t.isSystem && <Badge>Built-in</Badge>}{t.archived && <Badge tone="warn">Archived</Badge>}<Badge tone="info">v{t.version}</Badge></span>
               </div>
-              <p className="ec-hint" style={{ margin: 0, minHeight: 36 }}>{t.description ?? t.subject}</p>
+              <TemplateThumb id={t.id} version={t.version} name={t.name} />
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <Badge tone="neutral">{CATEGORY_LABEL[t.category] ?? t.category}</Badge>
+                <Badge tone={t.mode === 'individual' ? 'good' : 'neutral'} title={t.mode === 'individual' ? 'Each recipient gets their own email with their name and data' : 'One shared email for everyone'}>{t.mode === 'individual' ? 'Personalized' : 'Shared'}</Badge>
+              </div>
+              <p className="ec-hint" style={{ margin: 0 }}>{t.description ?? ''}</p>
               <p className="ec-hint" style={{ margin: 0 }}>Subject: <em>{t.subject || '—'}</em> · updated {timeAgo(t.updatedAt)}</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {!t.archived && <button type="button" className="ec-btn ec-btn-primary" style={{ minHeight: 34 }} disabled={busy === t.id} onClick={() => void withDetail(t.id, onUse)}>Use in composer</button>}

@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   useEditor, EditorContent, NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer,
-  Node, Extension, mergeAttributes, type Editor, type NodeViewProps,
+  Node, Mark, Extension, mergeAttributes, type Editor, type NodeViewProps,
 } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
@@ -14,7 +14,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import {
   AlignCenter, AlignLeft, AlignRight, Bold, Braces, GitBranch, ImagePlus, Italic, Link2, List, ListOrdered,
-  MousePointerClick, Plus, Redo2, Trash2, Underline as UnderlineIcon, Undo2, Unlink,
+  MousePointerClick, Minus, Plus, Redo2, Square, Highlighter, Trash2, Underline as UnderlineIcon, Undo2, Unlink,
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
 import {
@@ -42,12 +42,57 @@ function ButtonView({ node, updateAttributes, selected, deleteNode }: NodeViewPr
   );
 }
 
+// The DNA lime marker (as in the welcome email).
+const HighlightMark = Mark.create({
+  name: 'highlight',
+  parseHTML() { return [{ tag: 'mark' }]; },
+  renderHTML({ HTMLAttributes }) { return ['mark', mergeAttributes({ style: 'background:#e0f55b;color:#111;padding:0 3px;border-radius:2px' }, HTMLAttributes), 0]; },
+  addCommands() {
+    return { toggleHighlight: () => ({ commands }: { commands: { toggleMark: (n: string) => boolean } }) => commands.toggleMark('highlight') } as never;
+  },
+});
+
 const ButtonNode = Node.create({
   name: 'button', group: 'block', atom: true, draggable: true,
   addAttributes() { return { label: { default: 'Click here' }, href: { default: 'https://' } }; },
   parseHTML() { return [{ tag: 'a[data-ec-button]' }]; },
   renderHTML({ HTMLAttributes }) { return ['a', mergeAttributes({ 'data-ec-button': '' }, HTMLAttributes)]; },
   addNodeView() { return ReactNodeViewRenderer(ButtonView); },
+});
+
+const TONES: { id: string; label: string; bg: string; fg: string; border: string }[] = [
+  { id: 'highlight', label: 'Highlight', bg: '#e0f55b', fg: '#111', border: 'transparent' },
+  { id: 'lime', label: 'Lime', bg: '#dced3e', fg: '#111', border: 'transparent' },
+  { id: 'outline', label: 'Outline', bg: '#fff', fg: '#333', border: '#111' },
+  { id: 'dark', label: 'Dark', bg: '#222', fg: '#fff', border: 'transparent' },
+];
+
+// A coloured panel with an optional small monospace label — schedule blocks, notices, announcements.
+function CalloutView({ node, updateAttributes, deleteNode }: NodeViewProps) {
+  const tone = TONES.find(t => t.id === node.attrs.tone) ?? TONES[0];
+  return (
+    <NodeViewWrapper style={{ margin: '0 0 14px' }}>
+      <div contentEditable={false} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 4 }}>
+        <select aria-label="Panel colour" className="ec-mini" value={tone.id} onChange={e => updateAttributes({ tone: e.target.value })}>
+          {TONES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
+        <input aria-label="Panel label" className="ec-mini" style={{ width: 220 }} placeholder="Optional label, e.g. Travel arrangements" value={String(node.attrs.label ?? '')} onChange={e => updateAttributes({ label: e.target.value })} />
+        <button type="button" className="ec-tb" aria-label="Remove panel" onClick={deleteNode}><Trash2 size={13} /></button>
+      </div>
+      <div style={{ background: tone.bg, color: tone.fg, border: `2px solid ${tone.border}`, borderRadius: 6, padding: '10px 14px' }}>
+        {String(node.attrs.label ?? '') && <div contentEditable={false} style={{ fontFamily: "'Courier New',monospace", fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>{String(node.attrs.label)}</div>}
+        <NodeViewContent />
+      </div>
+    </NodeViewWrapper>
+  );
+}
+
+const CalloutNode = Node.create({
+  name: 'callout', group: 'block', content: 'block+', defining: true,
+  addAttributes() { return { tone: { default: 'highlight' }, label: { default: '' } }; },
+  parseHTML() { return [{ tag: 'div[data-ec-callout]' }]; },
+  renderHTML({ HTMLAttributes }) { return ['div', mergeAttributes({ 'data-ec-callout': '' }, HTMLAttributes), 0]; },
+  addNodeView() { return ReactNodeViewRenderer(CalloutView); },
 });
 
 function BlockView({ editor, node, getPos, deleteNode }: NodeViewProps) {
@@ -251,13 +296,13 @@ export function RichEditor({ value, onChange, variables, env, onUploadImage, ari
   const knownRef = useRef(env.known);
   knownRef.current = env.known;
   const extensions = useMemo(() => [
-    StarterKit.configure({ heading: { levels: [1, 2, 3] }, code: false, codeBlock: false, blockquote: false, horizontalRule: false, strike: false }),
+    StarterKit.configure({ heading: { levels: [1, 2, 3] }, code: false, codeBlock: false, blockquote: false, strike: false }),
     Underline,
     Link.configure({ openOnClick: false, autolink: false, HTMLAttributes: { rel: 'noopener noreferrer nofollow' } }),
     Image,
     TextAlign.configure({ types: ['heading', 'paragraph'] }),
     TextStyle, Color,
-    ButtonNode, ConditionalBlockNode, ConditionalBranchNode,
+    HighlightMark, ButtonNode, CalloutNode, ConditionalBlockNode, ConditionalBranchNode,
     variableHighlight(knownRef),
   ], []);
 
@@ -310,6 +355,7 @@ export function RichEditor({ value, onChange, variables, env, onUploadImage, ari
           <Tb label="Bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}><Bold size={15} /></Tb>
           <Tb label="Italic" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}><Italic size={15} /></Tb>
           <Tb label="Underline" active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}><UnderlineIcon size={15} /></Tb>
+          <Tb label="Lime highlight" active={editor.isActive('highlight')} onClick={() => (editor.chain().focus() as unknown as { toggleHighlight: () => { run: () => void } }).toggleHighlight().run()}><Highlighter size={15} /></Tb>
           <label className="ec-tb" title="Text colour" style={{ cursor: 'pointer', position: 'relative' }}>
             <span aria-hidden style={{ width: 16, height: 16, borderRadius: 4, border: '1px solid var(--color-hairline)', background: (editor.getAttributes('textStyle').color as string) || 'var(--color-ink)' }} />
             <input type="color" aria-label="Text colour" style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }}
@@ -325,6 +371,8 @@ export function RichEditor({ value, onChange, variables, env, onUploadImage, ari
           <Tb label="Numbered list" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}><ListOrdered size={15} /></Tb>
           <LinkMenu editor={editor} />
           <ImageMenu editor={editor} onUpload={onUploadImage} />
+          <Tb label="Divider" onClick={() => editor.chain().focus().setHorizontalRule().run()}><Minus size={15} /></Tb>
+          <Tb label="Insert highlighted panel" onClick={() => editor.chain().focus().insertContent({ type: 'callout', attrs: { tone: 'highlight', label: '' }, content: [{ type: 'paragraph' }] }).run()}><Square size={15} /></Tb>
           <Tb label="Insert button" onClick={() => editor.chain().focus().insertContent({ type: 'button', attrs: { label: 'Click here', href: 'https://' } }).run()}><MousePointerClick size={15} /></Tb>
           <span className="ec-sep" />
           <VariableMenu options={variables} onPick={insertToken} />

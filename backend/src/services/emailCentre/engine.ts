@@ -204,7 +204,7 @@ const SAFE_IMG_RE = /^(https:\/\/|cid:)/i;
 const COLOR_RE = /^(#[0-9a-fA-F]{3,8}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\))$/;
 const ALIGNS = new Set(['left', 'center', 'right', 'justify']);
 
-const BLOCK_TYPES = new Set(['paragraph', 'heading', 'bulletList', 'orderedList', 'listItem', 'image', 'button', 'conditionalBlock', 'conditionalBranch', 'doc']);
+const BLOCK_TYPES = new Set(['paragraph', 'heading', 'bulletList', 'orderedList', 'listItem', 'image', 'button', 'callout', 'horizontalRule', 'conditionalBlock', 'conditionalBranch', 'doc']);
 const INLINE_TYPES = new Set(['text', 'hardBreak']);
 
 function walk(node: DocNode, fn: (n: DocNode, depth: number) => void, depth = 0): void {
@@ -298,7 +298,12 @@ export interface RenderResult {
   hash: string;
 }
 
+// Text colours for the surface being rendered (the page paper, or inside a callout).
+interface Ink { body: string; head: string; link: string }
+const PAPER_INK: Ink = { body: '#333333', head: '#111111', link: '#b8105f' };
+
 interface Ctx {
+  ink: Ink;
   data: RecipientData;
   fallbacks: Record<string, string>;
   known: Set<string>;
@@ -369,7 +374,20 @@ function safeUrl(raw: unknown, ctx: Ctx, kind: 'link' | 'image'): string | null 
   return url;
 }
 
-const BTN_STYLE = 'display:inline-block;padding:12px 24px;background:#E91E8C;color:#ffffff;text-decoration:none;border-radius:100px;font-weight:600;font-size:14px;';
+// DNA call-to-action pink. A table cell carries the background so Outlook (which ignores
+// padding/background on <a>) still draws a solid button; rounded corners are progressive.
+const BTN_BG = '#e64298';
+const BTN_LINK_STYLE = 'display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-weight:bold;font-size:15px;font-family:\'Helvetica Neue\',Helvetica,Arial,sans-serif;';
+
+export const CALLOUT_TONES = ['highlight', 'lime', 'outline', 'dark'] as const;
+type Tone = (typeof CALLOUT_TONES)[number];
+const TONE_STYLE: Record<Tone, { bg: string; border: string; ink: Ink; label: string }> = {
+  highlight: { bg: '#e0f55b', border: 'none', ink: { body: '#111111', head: '#111111', link: '#111111' }, label: '#111111' },
+  lime:      { bg: '#dced3e', border: 'none', ink: { body: '#111111', head: '#111111', link: '#111111' }, label: '#111111' },
+  outline:   { bg: '#ffffff', border: '2px solid #111111', ink: { body: '#333333', head: '#111111', link: '#b8105f' }, label: '#111111' },
+  dark:      { bg: '#222222', border: 'none', ink: { body: '#ffffff', head: '#ffffff', link: '#e0f55b' }, label: '#e0f55b' },
+};
+const MONO = "'Courier New',Courier,monospace";
 
 function renderInline(nodes: DocNode[] | undefined, ctx: Ctx): { html: string; text: string } {
   let html = ''; let text = '';
@@ -382,11 +400,16 @@ function renderInline(nodes: DocNode[] | undefined, ctx: Ctx): { html: string; t
       if (m.type === 'bold') h = `<strong>${h}</strong>`;
       else if (m.type === 'italic') h = `<em>${h}</em>`;
       else if (m.type === 'underline') h = `<u>${h}</u>`;
+      else if (m.type === 'highlight') {
+        // The DNA marker: a lime highlight behind the words (as in the welcome email). Falls back
+        // to plain bold text where background colour on inline elements is unsupported.
+        h = `<span style="background-color:#e0f55b;padding:2px 5px;font-weight:700;color:#111111;border-radius:2px;-webkit-box-decoration-break:clone;box-decoration-break:clone">${h}</span>`;
+      }
       else if (m.type === 'textStyle' && typeof m.attrs?.color === 'string' && COLOR_RE.test(m.attrs.color)) {
         h = `<span style="color:${m.attrs.color}">${h}</span>`;
       } else if (m.type === 'link') {
         const url = safeUrl(m.attrs?.href, ctx, 'link');
-        if (url) { h = `<a href="${escapeHtml(url)}" style="color:#E91E8C;text-decoration:underline">${h}</a>`; t = `${t} (${url})`; }
+        if (url) { h = `<a href="${escapeHtml(url)}" style="color:${ctx.ink.link};text-decoration:underline">${h}</a>`; t = `${t} (${url})`; }
       }
     }
     html += h; text += t;
@@ -406,15 +429,19 @@ function renderBlocks(nodes: DocNode[] | undefined, ctx: Ctx, path: string, dept
     switch (n.type) {
       case 'paragraph': {
         const r = renderInline(n.content, ctx);
-        html += `<p style="margin:0 0 16px;line-height:1.6;${alignStyle(n)}">${r.html || '&nbsp;'}</p>`;
+        html += `<p style="margin:0 0 16px;font-size:16px;line-height:1.6;font-weight:500;color:${ctx.ink.body};${alignStyle(n)}">${r.html || '&nbsp;'}</p>`;
         text += `${r.text}\n\n`;
         break;
       }
       case 'heading': {
         const lvl = Math.min(3, Math.max(1, Number(n.attrs?.level) || 2));
-        const size = lvl === 1 ? 26 : lvl === 2 ? 21 : 17;
+        // Bold, tightly tracked headings (the DNA look). `class` lets the shell's mobile
+        // stylesheet shrink them; the inline size is the fallback everywhere else.
+        const look = lvl === 1 ? 'font-size:44px;line-height:1.05;letter-spacing:-1.5px;margin:0 0 14px;'
+          : lvl === 2 ? 'font-size:28px;line-height:1.1;letter-spacing:-1px;margin:20px 0 8px;'
+          : 'font-size:18px;line-height:1.3;letter-spacing:-0.3px;margin:0 0 20px;';
         const r = renderInline(n.content, ctx);
-        html += `<h${lvl} style="margin:0 0 14px;font-size:${size}px;line-height:1.3;${alignStyle(n)}">${r.html}</h${lvl}>`;
+        html += `<h${lvl} class="dna-h${lvl}" style="${look}font-weight:800;color:${ctx.ink.head};${alignStyle(n)}">${r.html}</h${lvl}>`;
         text += `${r.text}\n\n`;
         break;
       }
@@ -446,9 +473,30 @@ function renderBlocks(nodes: DocNode[] | undefined, ctx: Ctx, path: string, dept
         const url = safeUrl(n.attrs?.href, ctx, 'link');
         const label = typeof n.attrs?.label === 'string' ? n.attrs.label : '';
         if (url && label) {
-          html += `<p style="margin:0 0 16px"><a href="${escapeHtml(url)}" style="${BTN_STYLE}">${resolveHtmlText(label, ctx)}</a></p>`;
+          html += `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px"><tr><td bgcolor="${BTN_BG}" style="background-color:${BTN_BG};border-radius:25px"><a href="${escapeHtml(url)}" style="${BTN_LINK_STYLE}">${resolveHtmlText(label, ctx)}</a></td></tr></table>`;
           text += `${resolvePlain(label, ctx)}: ${url}\n\n`;
         }
+        break;
+      }
+      case 'horizontalRule': {
+        // A quiet separator between sections.
+        html += `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 24px"><tr><td height="1" style="border-top:1px solid #c8c8bd;font-size:1px;line-height:1px;height:1px">&nbsp;</td></tr></table>`;
+        text += '---\n\n';
+        break;
+      }
+      case 'callout': {
+        // A highlighted panel with an optional small monospace label (schedule blocks, notices…).
+        const tone: Tone = (CALLOUT_TONES as readonly string[]).includes(String(n.attrs?.tone)) ? (n.attrs!.tone as Tone) : 'highlight';
+        const t = TONE_STYLE[tone];
+        const label = typeof n.attrs?.label === 'string' ? n.attrs.label.trim() : '';
+        const prev = ctx.ink;
+        ctx.ink = t.ink;
+        const inner = renderBlocks(n.content, ctx, `${p}.c`, depth);
+        ctx.ink = prev;
+        const labelHtml = label
+          ? `<div style="font-family:${MONO};font-size:12px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:${t.label};margin:0 0 10px">${resolveHtmlText(label, ctx)}</div>` : '';
+        html += `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px"><tr><td bgcolor="${t.bg}" style="background-color:${t.bg};border:${t.border};border-radius:6px;padding:16px 18px;color:${t.ink.body}">${labelHtml}${inner.html.replace(/margin:0 0 16px;/g, 'margin:0 0 10px;')}</td></tr></table>`;
+        text += `${label ? `${resolvePlain(label, ctx).toUpperCase()}\n` : ''}${inner.text}`;
         break;
       }
       case 'conditionalBlock': {
@@ -511,7 +559,7 @@ export function pickSubject(subject: SubjectConfig, data: RecipientData, issues:
 
 export function renderMessage(input: RenderInput): RenderResult {
   const ctx: Ctx = {
-    data: input.data, fallbacks: input.fallbacks ?? {}, known: input.known,
+    ink: PAPER_INK, data: input.data, fallbacks: input.fallbacks ?? {}, known: input.known,
     issues: [], resolved: {}, branches: [],
   };
 
