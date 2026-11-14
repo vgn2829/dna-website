@@ -11,6 +11,7 @@ import { checkGoogleFormUrl, eventSavingLabel } from '../lib/eventForm';
 import { EventAttachmentField } from '../components/events/EventAttachmentField';
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from '../lib/uploadLimits';
 import { LibraryModerationTab } from '../components/admin/LibraryModerationTab';
+import { EmailCentre } from '../components/admin/email-centre/EmailCentre';
 
 async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith('image/')) return file;
@@ -684,7 +685,7 @@ function RegistrantsModal({ event, onClose }: { event: ClubEvent; onClose: () =>
   );
 }
 
-type Tab = 'overview' | 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings' | 'announcements' | 'sessions' | 'moodboards' | 'assets' | 'templates';
+type Tab = 'overview' | 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings' | 'announcements' | 'email' | 'sessions' | 'moodboards' | 'assets' | 'templates';
 
 // ── Overview tab ─────────────────────────────────────────────────────────────
 function StatCard({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
@@ -4434,6 +4435,7 @@ export function AdminPage() {
     { id: 'comments',      label: 'Comments',      icon: MessageSquare },
     { id: 'settings',      label: 'Settings',      icon: Settings },
     { id: 'announcements', label: 'Announcements', icon: Mail },
+    { id: 'email',         label: 'Email Centre',  icon: Send },
     { id: 'sessions',      label: 'Sessions',      icon: Radio },
     { id: 'moodboards',   label: 'Moodboards',   icon: Layout },
     { id: 'assets',       label: 'Assets',       icon: FolderOpen },
@@ -4480,6 +4482,7 @@ export function AdminPage() {
           {tab === 'comments' && <motion.div key="comments"  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><CommentsTab /></motion.div>}
           {tab === 'settings'      && <motion.div key="settings"      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><SettingsTab /></motion.div>}
           {tab === 'announcements' && <motion.div key="announcements" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><AnnouncementsTab /></motion.div>}
+          {tab === 'email'         && <motion.div key="email"         initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><EmailCentre /></motion.div>}
           {tab === 'sessions'      && <motion.div key="sessions"      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><SessionsTab /></motion.div>}
           {tab === 'moodboards'   && <motion.div key="moodboards"   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><MoodboardsAdminTab /></motion.div>}
           {tab === 'assets'       && <motion.div key="assets"       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><LibraryModerationTab kind="assets" /></motion.div>}

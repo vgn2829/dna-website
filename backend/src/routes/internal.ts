@@ -2,6 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { pool } from '../db/client';
 import { drainMailQueue, sendEventReminders, type DueReminder } from '../services/mailer';
+import { processQueue as processEmailCentreQueue } from '../services/emailCentre/service';
 
 const router = Router();
 
@@ -47,6 +48,13 @@ router.post('/tick', requireTickSecret, async (_req, res) => {
   } catch (err) {
     console.error('Tick: mail queue drain failed:', err);
     report.queueDrained = false;
+  }
+
+  // Email Centre jobs the daily quota deferred (or that were interrupted): resume them.
+  try {
+    await processEmailCentreQueue({ deadlineMs: 20_000 });
+  } catch (err) {
+    console.error('Tick: Email Centre queue failed:', err);
   }
 
   try {
