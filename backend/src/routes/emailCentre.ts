@@ -39,6 +39,12 @@ const recipientSchema = z.object({
   groupRef: z.object({ id: z.string().max(100), name: z.string().max(200) }).nullish(),
 });
 
+// Header/footer wording + per-email footer controls (sign-off = `tagline`, design credit = `credit`).
+const shellOptionsSchema = z.object({
+  labelLeft: z.string().max(40).nullish(), labelRight: z.string().max(40).nullish(), tagline: z.string().max(40).nullish(),
+  showSignoff: z.boolean().nullish(), showCredit: z.boolean().nullish(), credit: z.string().max(60).nullish(),
+}).nullish();
+
 const shared = {
   mode: z.enum(['normal', 'individual']),
   recipients: z.array(recipientSchema).max(LIMITS.maxRecipients).default([]),
@@ -49,7 +55,7 @@ const shared = {
   fallbacks: z.record(z.string(), z.string().max(500)).default({}),
   eventId: z.string().max(100).nullish(),
   shell: z.enum(['dna', 'plain']).default('dna'),
-  shellOptions: z.object({ labelLeft: z.string().max(40).nullish(), labelRight: z.string().max(40).nullish(), tagline: z.string().max(40).nullish() }).nullish(),
+  shellOptions: shellOptionsSchema,
   templateId: z.string().max(100).nullish(),
   templateVersion: z.number().int().nullish(),
 };
@@ -76,7 +82,7 @@ const templateBodySchema = z.object({
     sharedData: z.record(z.string(), z.string().max(500)).optional(),
     fallbacks: z.record(z.string(), z.string().max(500)).optional(),
     shell: z.enum(['dna', 'plain']).optional(),
-    shellOptions: z.object({ labelLeft: z.string().max(40).nullish(), labelRight: z.string().max(40).nullish(), tagline: z.string().max(40).nullish() }).nullish(),
+    shellOptions: shellOptionsSchema,
   }).default({}),
 });
 
