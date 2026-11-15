@@ -49,6 +49,7 @@ const shared = {
   fallbacks: z.record(z.string(), z.string().max(500)).default({}),
   eventId: z.string().max(100).nullish(),
   shell: z.enum(['dna', 'plain']).default('dna'),
+  shellOptions: z.object({ labelLeft: z.string().max(40).nullish(), labelRight: z.string().max(40).nullish(), tagline: z.string().max(40).nullish() }).nullish(),
   templateId: z.string().max(100).nullish(),
   templateVersion: z.number().int().nullish(),
 };
@@ -75,6 +76,7 @@ const templateBodySchema = z.object({
     sharedData: z.record(z.string(), z.string().max(500)).optional(),
     fallbacks: z.record(z.string(), z.string().max(500)).optional(),
     shell: z.enum(['dna', 'plain']).optional(),
+    shellOptions: z.object({ labelLeft: z.string().max(40).nullish(), labelRight: z.string().max(40).nullish(), tagline: z.string().max(40).nullish() }).nullish(),
   }).default({}),
 });
 
@@ -262,7 +264,7 @@ router.delete('/attachments/:id', handle(async (req, res) => {
 router.post('/preview', heavyLimiter, handle(async (req, res) => {
   const b = z.object({ payload: payloadSchema, index: z.number().int().min(0).optional(), useSample: z.boolean().optional() }).parse(req.body);
   const r = await renderPreview(b.payload as MessagePayload, { index: b.index, useSample: b.useSample });
-  res.json({ ...r, html: wrapShell(r.bodyHtml, b.payload.shell) });
+  res.json({ ...r, html: wrapShell(r.bodyHtml, b.payload.shell, undefined, b.payload.shellOptions) });
 }));
 
 router.post('/send/preview', heavyLimiter, handle(async (req, res) => {
@@ -328,6 +330,20 @@ router.post('/activity/:id/cancel', handle(async (req, res) => { res.json(await 
 // ── Templates ──────────────────────────────────────────────────────────────
 router.get('/templates', handle(async (req, res) => {
   res.json({ templates: await store.listTemplates(req.query.archived === '1') });
+}));
+
+// Gallery thumbnail: the template rendered with sample data through the SAME pipeline as
+// preview/test/send (renderPreview + wrapShell). Message variables a template expects get a
+// visible sample so the thumbnail isn't full of "missing" markers.
+router.get('/templates/:id/preview', handle(async (req, res) => {
+  const t = await store.getTemplate(param(req.params.id), req.query.version ? Number(req.query.version) : undefined);
+  const shared = Object.fromEntries(Object.entries(t.body.settings.sharedData ?? {}).map(([k, v]) => [k, v || `Sample ${k.replace(/_/g, ' ')}`]));
+  const shell = t.body.settings.shell ?? 'dna';
+  const r = await renderPreview({
+    mode: t.body.mode, subject: t.body.subject, doc: t.body.doc, recipients: [], groups: [], cc: [], bcc: [],
+    sharedData: shared, fallbacks: t.body.settings.fallbacks ?? {}, eventId: null, shell, shellOptions: t.body.settings.shellOptions ?? null, attachmentIds: [],
+  }, { useSample: true });
+  res.json({ ok: r.ok, subject: r.subject, html: wrapShell(r.bodyHtml, shell, undefined, t.body.settings.shellOptions), issues: r.issues });
 }));
 
 router.get('/templates/:id', handle(async (req, res) => {

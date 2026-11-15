@@ -48,6 +48,7 @@ export const EC_CSS = `
 .ec-prose { padding: 16px 18px; min-height: 280px; max-height: 560px; overflow:auto; font-size: 15px; line-height: 1.65; outline: none; }
 .ec-prose p { margin: 0 0 12px; } .ec-prose h1 { font-size: 26px; margin: 0 0 12px; } .ec-prose h2 { font-size: 21px; margin: 0 0 12px; } .ec-prose h3 { font-size: 17px; margin: 0 0 10px; }
 .ec-prose ul { list-style: disc; padding-left: 22px; margin: 0 0 12px; } .ec-prose ol { list-style: decimal; padding-left: 22px; margin: 0 0 12px; }
+.ec-prose hr { border: 0; border-top: 1px solid var(--color-hairline); margin: 14px 0 18px; } .ec-prose mark { background: #e0f55b; color: #111; padding: 0 3px; border-radius: 2px; }
 .ec-prose a { color: var(--color-brand-text); text-decoration: underline; } .ec-prose img { max-width: 100%; height:auto; border-radius: 8px; }
 .ec-prose .ProseMirror-focused { outline: none; }
 .ec-var { background: color-mix(in srgb, var(--color-brand) 22%, transparent); border-radius: 4px; padding: 0 2px; color: var(--color-brand-text); }

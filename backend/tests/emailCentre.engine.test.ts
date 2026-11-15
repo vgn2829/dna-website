@@ -211,6 +211,27 @@ describe('conditional messaging', () => {
   });
 });
 
+describe('editorial building blocks', () => {
+  it('renders the lime marker and a quiet divider, and escapes marked text', () => {
+    const r = render('s', doc(p(t('x', [{ type: 'highlight' }]), t(' <b>y</b>', [{ type: 'highlight' }])), { type: 'horizontalRule' }), {});
+    expect(r.bodyHtml).toContain('background-color:#e0f55b');
+    expect(r.bodyHtml).toContain('&lt;b&gt;y&lt;/b&gt;');
+    expect(r.bodyHtml).toContain('height="1"');
+    expect(r.text).toContain('---');
+  });
+  it('greeting pattern: "Dear <name>," with a name, plain "Hello," without — never a guess', () => {
+    const greet: DocNode = { type: 'conditionalBlock', content: [
+      branch({ match: 'all', rules: [{ field: 'first_name', op: 'is_not_empty' }] }, p('Dear {{first_name}},')),
+      branch(null, p('Hello,')),
+    ] };
+    expect(render('s', doc(greet), { first_name: 'Asha' }).bodyHtml).toContain('Dear Asha,');
+    const none = render('s', doc(greet), {});
+    expect(none.ok).toBe(true);
+    expect(none.bodyHtml).toContain('Hello,');
+    expect(none.bodyHtml).not.toContain('Dear');
+  });
+});
+
 describe('safe HTML generation', () => {
   it('drops unsupported nodes and never emits script, handlers or javascript: URLs', () => {
     const nasty = doc(
@@ -243,7 +264,7 @@ describe('safe HTML generation', () => {
       p(t('c', [{ type: 'textStyle', attrs: { color: '#ff0000' } }, { type: 'underline' }, { type: 'italic' }])),
     );
     const r = render('s', d, {});
-    expect(r.bodyHtml).toContain('<h2 style="margin:0 0 14px;font-size:21px;line-height:1.3;text-align:center;">');
+    expect(r.bodyHtml).toContain('<h2 class="dna-h2" style="font-size:28px;line-height:1.1;letter-spacing:-1px;margin:20px 0 8px;font-weight:800;color:#111111;text-align:center;">');
     expect(r.bodyHtml).toContain('<ul');
     expect(r.bodyHtml).toContain('<strong>one</strong>');
     expect(r.bodyHtml).toContain('<ol');

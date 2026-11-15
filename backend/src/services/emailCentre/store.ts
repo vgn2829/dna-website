@@ -6,8 +6,9 @@ import { pool } from '../../db/client';
 import { MAIL_FROM } from '../mailer';
 import { EmailCentreError, LIMITS, type MessagePayload } from './service';
 import { isValidEmail, type GroupFilter } from './recipients';
-import { SEED_TEMPLATES } from './templateSeeds';
+import { SEED_DESIGN, SEED_TEMPLATES } from './templateSeeds';
 import type { DocNode, SubjectConfig } from './engine';
+import type { ShellOptions } from './emailShell';
 
 const id = (prefix: string) => `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 20)}`;
 
@@ -30,7 +31,7 @@ function splitDraft(p: DraftPayload) {
     doc: (p.doc ?? EMPTY_DOC) as DocNode,
     settings: {
       cc: p.cc ?? [], bcc: p.bcc ?? [], sharedData: p.sharedData ?? {}, fallbacks: p.fallbacks ?? {},
-      eventId: p.eventId ?? null, shell: p.shell ?? 'dna',
+      eventId: p.eventId ?? null, shell: p.shell ?? 'dna', shellOptions: p.shellOptions ?? null,
     },
     recipientInput: { recipients: p.recipients ?? [], groups: p.groups ?? [] },
     templateId: p.templateId ?? null,
@@ -91,7 +92,7 @@ export async function getDraft(draftId: string) {
       mode: m.mode, title: m.title, subject: m.subject_config, doc: m.doc,
       recipients: m.recipient_input.recipients ?? [], groups: m.recipient_input.groups ?? [],
       cc: m.settings.cc ?? [], bcc: m.settings.bcc ?? [], sharedData: m.settings.sharedData ?? {}, fallbacks: m.settings.fallbacks ?? {},
-      eventId: m.settings.eventId ?? null, shell: m.settings.shell ?? 'dna',
+      eventId: m.settings.eventId ?? null, shell: m.settings.shell ?? 'dna', shellOptions: m.settings.shellOptions ?? null,
       templateId: m.template_id, templateVersion: m.template_version,
     },
     attachments: atts,
@@ -245,19 +246,44 @@ export interface TemplateBody {
   mode: 'normal' | 'individual';
   subject: SubjectConfig;
   doc: DocNode;
-  settings: { sharedData?: Record<string, string>; fallbacks?: Record<string, string>; shell?: 'dna' | 'plain' };
+  settings: { sharedData?: Record<string, string>; fallbacks?: Record<string, string>; shell?: 'dna' | 'plain'; shellOptions?: ShellOptions | null };
 }
 
 export async function seedSystemTemplates(): Promise<void> {
   for (const s of SEED_TEMPLATES) {
+    const settings = JSON.stringify({ ...s.settings, design: SEED_DESIGN });
     const ins = await pool.query(
       `INSERT INTO ec_templates (id, name, description, category, is_system) VALUES ($1,$2,$3,$4,true) ON CONFLICT (id) DO NOTHING RETURNING id`,
       [s.id, s.name, s.description, s.category]);
     if (ins.rowCount) {
       await pool.query(
         `INSERT INTO ec_template_versions (template_id, version, mode, subject_config, doc, settings) VALUES ($1,1,$2,$3::jsonb,$4::jsonb,$5::jsonb)`,
-        [s.id, s.mode, JSON.stringify(s.subject), JSON.stringify(s.doc), JSON.stringify(s.settings)]);
+        [s.id, s.mode, JSON.stringify(s.subject), JSON.stringify(s.doc), settings]);
+      continue;
     }
+    // Existing built-in: move it to the current design ONLY if an admin never edited it
+    // (still on version 1) and that version predates this design. Appends version 2 —
+    // version 1, and every message already sent from it, are left exactly as they were.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const cur = await client.query<{ current_version: number; is_system: boolean }>(
+        'SELECT current_version, is_system FROM ec_templates WHERE id=$1 FOR UPDATE', [s.id]);
+      if (cur.rows[0]?.is_system && cur.rows[0].current_version === 1) {
+        const v1 = await client.query<{ settings: { design?: number } }>(
+          'SELECT settings FROM ec_template_versions WHERE template_id=$1 AND version=1', [s.id]);
+        if ((v1.rows[0]?.settings?.design ?? 1) < SEED_DESIGN) {
+          await client.query(
+            `INSERT INTO ec_template_versions (template_id, version, mode, subject_config, doc, settings) VALUES ($1,2,$2,$3::jsonb,$4::jsonb,$5::jsonb)`,
+            [s.id, s.mode, JSON.stringify(s.subject), JSON.stringify(s.doc), settings]);
+          await client.query('UPDATE ec_templates SET current_version=2, updated_at=NOW() WHERE id=$1', [s.id]);
+        }
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw e;
+    } finally { client.release(); }
   }
 }
 

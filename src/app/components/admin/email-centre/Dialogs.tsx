@@ -10,7 +10,8 @@ type SetState = (fn: (s: ComposerState) => ComposerState) => void;
 
 /** Sandboxed, script-free rendering of the exact HTML that would be sent. */
 export function MailFrame({ html, height = 460 }: { html: string; height?: number }) {
-  const doc = `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>body{margin:0;padding:16px;font-family:Arial,Helvetica,sans-serif;background:#f3f3f3}</style></head><body>${html}</body></html>`;
+  // The DNA layout is already a complete HTML document; the plain layout is a fragment.
+  const doc = /^\s*<!doctype html/i.test(html) ? html : `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>body{margin:0;padding:16px;font-family:Arial,Helvetica,sans-serif;background:#f3f3f3}</style></head><body>${html}</body></html>`;
   return <iframe title="Email preview" sandbox="" srcDoc={doc} style={{ width: '100%', height, border: '1px solid var(--color-hairline)', borderRadius: 10, background: '#f3f3f3' }} />;
 }
 
