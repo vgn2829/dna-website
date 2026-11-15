@@ -10,6 +10,7 @@ import { ConditionBuilder } from './ConditionBuilder';
 import { RichEditor, VariableMenu } from './RichEditor';
 import { addFromText } from './RecipientsPanel';
 import { Badge, Field, Spinner, errMsg } from './shared';
+import { FooterControls } from './FooterControls';
 import type { SaveStatus } from './useComposer';
 
 type SetState = (fn: (s: ComposerState) => ComposerState) => void;
@@ -238,6 +239,9 @@ export function Compose({ state, setState, setSilently, meta, contentKey, ensure
           </button>
           {optionsOpen && <Options state={state} setState={setState} events={events} meta={meta} />}
         </div>
+
+        {/* Footer & sign-off (per email; only the DnA layout has a footer) */}
+        {state.shell === 'dna' && <FooterControls state={state} setState={setState} />}
 
         {/* 7. Attachments */}
         <div>

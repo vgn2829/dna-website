@@ -11,7 +11,51 @@ export type RecipientSource = 'manual' | 'student' | 'group' | 'csv';
 export type Operator = 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'is_empty' | 'is_not_empty' | 'gt' | 'lt' | 'one_of';
 
 /** Header/footer wording for the DNA layout (two-label header, custom footer tagline). */
-export interface ShellOptions { labelLeft?: string | null; labelRight?: string | null; tagline?: string | null }
+export interface ShellOptions {
+  labelLeft?: string | null; labelRight?: string | null;
+  /** Sign-off line (the big footer text). */
+  tagline?: string | null;
+  /** Per-email footer controls; absent = legacy behaviour (both lines shown, template wording). */
+  showSignoff?: boolean | null; showCredit?: boolean | null; credit?: string | null;
+}
+
+export const DEFAULT_SIGNOFF = 'All the best!';
+export const DEFAULT_CREDIT = 'designed by venugopal';
+/** What a template without footer wording has always shown. */
+const LEGACY_SIGNOFF = 'Get creative.';
+export const SIGNOFF_MAX = 40;
+export const CREDIT_MAX = 60;
+
+export interface FooterSettings { showSignoff: boolean; signoff: string; showCredit: boolean; credit: string }
+
+/** The footer a composer's shellOptions resolves to (mirrors the server's dnaShell rules). */
+export function footerOf(o: ShellOptions | null | undefined): FooterSettings {
+  return {
+    showSignoff: o?.showSignoff !== false,
+    signoff: o?.tagline ?? LEGACY_SIGNOFF,
+    showCredit: o?.showCredit !== false,
+    credit: o?.credit ?? DEFAULT_CREDIT,
+  };
+}
+
+/** Writes a footer change into shellOptions without touching the header labels. */
+export function withFooter(o: ShellOptions | null | undefined, patch: Partial<FooterSettings>): ShellOptions {
+  const f = { ...footerOf(o), ...patch };
+  return { ...(o ?? {}), showSignoff: f.showSignoff, tagline: f.signoff, showCredit: f.showCredit, credit: f.credit };
+}
+
+/** Footer lines as they will render (null = not rendered), for the live footer preview. */
+export function footerPreview(o: ShellOptions | null | undefined): { signoff: string | null; credit: string | null } {
+  const f = footerOf(o);
+  const clean = (v: string, max: number) => v.replace(/\s+/g, ' ').trim().slice(0, max);
+  return {
+    signoff: f.showSignoff && clean(f.signoff, SIGNOFF_MAX) ? clean(f.signoff, SIGNOFF_MAX) : null,
+    credit: f.showCredit && clean(f.credit, CREDIT_MAX) ? clean(f.credit, CREDIT_MAX) : null,
+  };
+}
+
+/** New manual emails start with both footer lines on (see Email Centre footer controls). */
+export const defaultShellOptions = (): ShellOptions => ({ showSignoff: true, tagline: DEFAULT_SIGNOFF, showCredit: true, credit: DEFAULT_CREDIT });
 
 export interface Rule { field: string; op: Operator; value?: string | string[] }
 export interface Condition { match: 'all' | 'any'; rules: Rule[] }
@@ -70,7 +114,7 @@ export function newComposer(): ComposerState {
   return {
     draftId: null, revision: 0, mode: 'individual', subject: { default: '' }, doc: EMPTY_DOC,
     recipients: [], groups: [], cc: [], bcc: [], sharedData: {}, fallbacks: {}, eventId: null,
-    shell: 'dna', shellOptions: null, templateId: null, templateVersion: null, attachments: [],
+    shell: 'dna', shellOptions: defaultShellOptions(), templateId: null, templateVersion: null, attachments: [],
   };
 }
 

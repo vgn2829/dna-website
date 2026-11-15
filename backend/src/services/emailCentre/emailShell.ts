@@ -40,9 +40,21 @@ export interface ShellOptions {
   labelLeft?: string | null;
   /** Optional right header label, on the same row. */
   labelRight?: string | null;
-  /** Footer tagline (default `Get creative.`). */
+  /** Footer tagline / sign-off (default `Get creative.`). */
   tagline?: string | null;
+  /**
+   * Per-email footer controls (Email Centre composer). Every field is optional and an absent
+   * field means the legacy behaviour, so existing drafts, templates and sends render unchanged.
+   * `showSignoff` / `showCredit` === false remove that line entirely.
+   */
+  showSignoff?: boolean | null;
+  showCredit?: boolean | null;
+  /** Design-credit text (default `designed by venugopal`). */
+  credit?: string | null;
 }
+
+export const DEFAULT_CREDIT = 'designed by venugopal';
+export const DEFAULT_TAGLINE = 'Get creative.';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const clean = (s: string | null | undefined, fallback: string, max: number) => {
@@ -53,6 +65,23 @@ const clean = (s: string | null | undefined, fallback: string, max: number) => {
 // The label style is EXACTLY the OTP/welcome `iit_kanpur` label: monospace, 16px, #222 underline,
 // lowercase. Only the narrow-screen media query (class dna-label) shrinks it — equally for both.
 const LABEL_STYLE = `font-family:monospace;font-size:16px;border-bottom:1.5px solid ${DNA_COLORS.backdrop};display:inline-block;color:${DNA_COLORS.backdrop};text-transform:lowercase;white-space:nowrap;`;
+
+/** The big sign-off line, or '' when it must not render. */
+function signoffHtml(opts: ShellOptions): string {
+  if (opts.showSignoff === false) return '';
+  const explicit = typeof opts.showSignoff === 'boolean'; // new footer controls in play
+  const text = clean(opts.tagline, explicit && opts.tagline != null ? '' : DEFAULT_TAGLINE, 40);
+  if (!text) return '';
+  return `<div class="dna-tagline" style="margin-top:25px;font-size:35px;font-weight:800;color:${DNA_COLORS.ink};text-align:center;letter-spacing:-1px;font-family:${FONT};">${text}</div>`;
+}
+
+/** The small design-credit line, or '' when it must not render. */
+function creditHtml(opts: ShellOptions, hasSignoff: boolean): string {
+  if (opts.showCredit === false) return '';
+  const text = clean(opts.credit, opts.credit != null ? '' : DEFAULT_CREDIT, 60);
+  if (!text) return '';
+  return `<div style="text-align:center;color:#000000;font-size:12px;margin-top:${hasSignoff ? 20 : 25}px;font-weight:500;letter-spacing:0.5px;font-family:${FONT};">${text}</div>`;
+}
 
 function headerRow(left: string, right: string | null): string {
   if (!right) {
@@ -66,6 +95,8 @@ function headerRow(left: string, right: string | null): string {
 
 /** Wraps rendered body HTML (from the engine) in the DNA layout and returns a complete document. */
 export function dnaShell(bodyHtml: string, opts: { banner?: string; title?: string } & ShellOptions = {}): string {
+  const signoff = signoffHtml(opts);
+  const credit = creditHtml(opts, signoff !== '');
   const title = (opts.title ?? 'DnA Club').replace(/[<>&"]/g, '');
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
@@ -94,8 +125,7 @@ export function dnaShell(bodyHtml: string, opts: { banner?: string; title?: stri
                 </td>
               </tr>
             </table>
-            <div class="dna-tagline" style="margin-top:25px;font-size:35px;font-weight:800;color:${DNA_COLORS.ink};text-align:center;letter-spacing:-1px;font-family:${FONT};">${clean(opts.tagline, 'Get creative.', 40)}</div>
-            <div style="text-align:center;color:#000000;font-size:12px;margin-top:20px;font-weight:500;letter-spacing:0.5px;font-family:${FONT};">designed by venugopal</div>
+            ${[signoff, credit].filter(Boolean).join('\n            ')}
           </td>
         </tr>
       </table>
