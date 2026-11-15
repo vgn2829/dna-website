@@ -54,6 +54,7 @@
     "@tiptap/react": "^2.27.3",
     "@tiptap/starter-kit": "^2.27.3",
     "@tldraw/sync": "2.4.4",
+    "@vercel/analytics": "^2.0.1",
     "browser-image-compression": "^2.0.2",
     "canvas-confetti": "1.9.4",
     "class-variance-authority": "0.7.1",
