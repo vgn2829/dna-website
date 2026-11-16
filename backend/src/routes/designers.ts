@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
+import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../db/client';
@@ -9,6 +10,7 @@ import { requireAdmin } from '../middleware/adminAuth';
 import { param } from '../routeParams';
 import { getStorage } from '../storage';
 import { deriveBatch } from '../services/activityService';
+import { AVATAR_MAX_BYTES, processAvatar } from '../lib/avatarImage';
 import { canViewProfile, writeAudit, type ProfileVisibility } from '../lib/credits';
 import {
   bioSchema, checkHandle, departmentSchema, displayNameSchema, headlineSchema, linksSchema,
@@ -301,6 +303,53 @@ designersRouter.patch('/me/visibility', requireVerifiedStudent, writeLimiter, as
   await pool.query('UPDATE designer_profiles SET visibility = $2, updated_at = NOW() WHERE owner_roll = $1',
     [req.studentRoll, parsed.data.visibility]);
   return res.json({ visibility: parsed.data.visibility });
+});
+
+// ── Profile image ────────────────────────────────────────────────────────────
+// Verified sessions only (it changes how the member is identified publicly).
+// The file is validated by content and re-encoded (lib/avatarImage.ts); every
+// upload gets a fresh key so a cached old image can never be mistaken for the
+// new one, and the previous object is deleted once the row points at the new.
+
+const avatarUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: AVATAR_MAX_BYTES + 1, files: 1, fields: 0 } }).single('avatar');
+const avatarLimiter = limiter(10 * 60 * 1000, 10);
+
+designersRouter.post('/me/avatar', requireVerifiedStudent, avatarLimiter, (req, res, next) => {
+  avatarUpload(req, res, err => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'Profile images must be 2 MB or smaller' });
+    return res.status(400).json({ error: 'Upload a single image file' });
+  });
+}, async (req, res) => {
+  const file = (req as Request & { file?: Express.Multer.File }).file;
+  if (!file || file.size > AVATAR_MAX_BYTES) return res.status(file ? 413 : 400).json({ error: file ? 'Profile images must be 2 MB or smaller' : 'Choose an image to upload' });
+  const current = await ownProfile(req.studentRoll!);
+  if (!current) return res.status(404).json({ error: 'Create your profile first' });
+  const processed = await processAvatar(file.buffer);
+  if (!processed.ok) {
+    const msg = processed.problem === 'unsupported' ? 'Use a JPG, PNG or WebP image'
+      : processed.problem === 'too-large-dimensions' ? 'That image has too many pixels — resize it and try again'
+      : 'That image could not be read';
+    return res.status(400).json({ error: msg });
+  }
+  const key = `profiles/${current.id}/avatar-${uuidv4()}.webp`;
+  await getStorage().upload(key, processed.buffer, 'image/webp', { cacheControl: '31536000' });
+  try {
+    await pool.query('UPDATE designer_profiles SET avatar_key = $2, updated_at = NOW() WHERE id = $1', [current.id, key]);
+  } catch (err) {
+    await getStorage().delete(key).catch(() => {});
+    throw err;
+  }
+  if (current.avatar_key) await getStorage().delete(current.avatar_key).catch(e => console.error('Old avatar cleanup failed:', e));
+  return res.json({ avatarUrl: mediaUrl(key) });
+});
+
+designersRouter.delete('/me/avatar', requireVerifiedStudent, writeLimiter, async (req, res) => {
+  const current = await ownProfile(req.studentRoll!);
+  if (!current) return res.status(404).json({ error: 'Designer profile not found' });
+  await pool.query('UPDATE designer_profiles SET avatar_key = NULL, updated_at = NOW() WHERE id = $1', [current.id]);
+  if (current.avatar_key) await getStorage().delete(current.avatar_key).catch(e => console.error('Avatar cleanup failed:', e));
+  return res.json({ avatarUrl: null });
 });
 
 // Exactly what a stranger sees right now (ignores the caller's own identity).
