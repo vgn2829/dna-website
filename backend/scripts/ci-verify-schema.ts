@@ -12,7 +12,12 @@ const REQUIRED_TABLES = [
   'boards', 'board_members', 'board_comments', 'board_comment_reads',
   'projects', 'templates', 'notifications', 'workspaces',
   'assets', 'asset_collections',
+  // DNA 2.0 Phase 1: creator identity, attribution and the optional roster.
+  'designer_profiles', 'designer_profile_links', 'designer_profile_disciplines',
+  'artwork_credits', 'creator_audit_log', 'student_roster',
 ];
+// Gallery lifecycle columns that keep non-published artwork out of public reads.
+const REQUIRED_ARTWORK_COLUMNS = ['status', 'source_kind', 'source_asset_id', 'created_by_roll', 'published_at'];
 const REQUIRED_COMMENT_COLUMNS = ['anchor_page_id', 'mentions'];
 // Workspace Asset Library: kinds, collections, external links.
 const REQUIRED_ASSET_COLUMNS = ['kind', 'collection_id', 'link_url'];
@@ -49,6 +54,22 @@ async function main(): Promise<void> {
   const missingAssetColumns = REQUIRED_ASSET_COLUMNS.filter(c => !assetColumns.includes(c));
   if (missingAssetColumns.length > 0) {
     console.error('MISSING assets COLUMNS:', missingAssetColumns.join(', '));
+    process.exitCode = 1;
+    return;
+  }
+
+  const artworkColumns = (await query<{ column_name: string }>(
+    `SELECT column_name FROM information_schema.columns WHERE table_name = 'artworks'`
+  )).map(r => r.column_name);
+  const missingArtworkColumns = REQUIRED_ARTWORK_COLUMNS.filter(c => !artworkColumns.includes(c));
+  if (missingArtworkColumns.length > 0) {
+    console.error('MISSING artworks COLUMNS:', missingArtworkColumns.join(', '));
+    process.exitCode = 1;
+    return;
+  }
+  // The retired single-column attribution model must not come back.
+  if (artworkColumns.includes('creator_designer_id')) {
+    console.error('artworks.creator_designer_id must not exist (attribution lives in artwork_credits)');
     process.exitCode = 1;
     return;
   }

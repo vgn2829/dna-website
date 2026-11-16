@@ -46,6 +46,7 @@ const TABLES_TO_CLEAN = [
   'student_watched_videos',
   'student_completed_quizzes',
   'student_sessions',
+  'student_roster',
   'event_rsvps',
   'events',
   'mail_usage',

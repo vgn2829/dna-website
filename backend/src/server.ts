@@ -9,6 +9,16 @@ for (const v of required) {
   }
 }
 
+// A weak or placeholder signing secret lets anyone forge student/admin tokens.
+// Logged loudly rather than fatal so an existing deployment keeps running while
+// the secret is rotated; see docs/dna-2.0/SECURITY_REMEDIATION_CHECKLIST.md.
+{
+  const secret = process.env.JWT_SECRET ?? '';
+  if (secret.length < 32 || /dev-only|change-in-production|replace-with|changeme|secret/i.test(secret)) {
+    console.error('SECURITY WARNING: JWT_SECRET is short or looks like a placeholder. Rotate it to a random value of at least 32 characters.');
+  }
+}
+
 const hasSupabaseUrl = Boolean(process.env.SUPABASE_URL);
 const hasSupabaseKey = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
 if (hasSupabaseUrl !== hasSupabaseKey) {
