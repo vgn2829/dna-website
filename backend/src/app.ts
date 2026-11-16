@@ -1,5 +1,6 @@
 import inspirationRouter from './routes/inspiration';
 import showcaseRouter from './routes/showcase';
+import showcaseCollabRouter from './routes/showcaseCollab';
 import creatorsRouter from './routes/creators';
 import express from 'express';
 import cors from 'cors';
@@ -168,6 +169,7 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
   app.use('/api/assets',        assetsRouter);
   app.use('/api/asset-collections', assetCollectionsRouter);
   app.use('/api/inspiration',   inspirationRouter);
+  app.use('/api/showcase/collab', showcaseCollabRouter);
   app.use('/api/showcase',      showcaseRouter);
   app.use('/api/creators',      creatorsRouter);
   app.use('/api/projects',      projectsRouter);

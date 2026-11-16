@@ -12,7 +12,7 @@ import { LIMITS, WORK_MIME_TYPES } from './showcaseValidation';
 // accepted as works at all (script/animation risk).
 // ─────────────────────────────────────────────────────────────────────────
 
-export interface WorkRow { id: string; asset_id: string | null }
+export interface WorkRow { id: string; asset_id: string | null; added_by_roll?: string | null }
 export interface PublicCopy { workId: string; key: string; mime: string; width: number; height: number }
 
 const EXT: Record<string, { ext: string; mime: string }> = {
@@ -34,8 +34,10 @@ export async function copyWorksToPublic(projectId: string, ownerRoll: string, wo
       if (!w.asset_id) return fail('An image’s source file no longer exists');
       const a = (await pool.query('SELECT * FROM assets WHERE id = $1', [w.asset_id])).rows[0] as
         { owner_roll: string; status: string; kind: string; storage_key: string | null; mime_type: string | null; size_bytes: number | null } | undefined;
-      if (!a || a.owner_roll !== ownerRoll || a.status !== 'active' || a.kind !== 'image' || !a.storage_key) {
-        return fail('An image is no longer available to this project’s owner');
+      // The image must still belong to whoever contributed it (the owner for the owner's own and all pre-collaboration works).
+      // A removed collaborator's images are deleted from the project at removal; this is the belt-and-braces check.
+      if (!a || a.owner_roll !== (w.added_by_roll ?? ownerRoll) || a.status !== 'active' || a.kind !== 'image' || !a.storage_key) {
+        return fail('An image is no longer available to the person who added it');
       }
       if (!a.mime_type || !(WORK_MIME_TYPES as readonly string[]).includes(a.mime_type)) return fail('Only PNG, JPG and WebP images can be published');
       if ((a.size_bytes ?? 0) > LIMITS.workBytes) return fail('An image is larger than 25 MB');

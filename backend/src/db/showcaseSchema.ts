@@ -115,4 +115,70 @@ export async function initShowcaseSchema(db: Pool): Promise<void> {
     )
   `);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_showcase_events_project ON showcase_events (project_id, created_at)`);
+
+  // ── Collaboration (DNA 2.0 V1, Milestone F) ─────────────────────────────
+  // ACCESS to a project, kept deliberately separate from showcase_credits
+  // (PUBLIC ATTRIBUTION). A person can be an editor with no public credit, or
+  // credited without any access; accepting access never implies consent to be
+  // named. The owner is not a row here: showcase_projects.owner_roll is the one
+  // source of truth for ownership, so ownership cannot be granted or transferred
+  // through this table.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS showcase_collaborators (
+      id           TEXT PRIMARY KEY,
+      project_id   TEXT NOT NULL REFERENCES showcase_projects(id) ON DELETE CASCADE,
+      roll         TEXT NOT NULL,
+      access_role  TEXT NOT NULL CHECK (access_role IN ('editor','viewer')),
+      status       TEXT NOT NULL CHECK (status IN ('pending','accepted','declined','withdrawn','removed')),
+      invited_by   TEXT NOT NULL,
+      invited_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      responded_at TIMESTAMPTZ,
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (project_id, roll)
+    )
+  `);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_showcase_collab_roll ON showcase_collaborators (roll, status)`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_showcase_collab_inviter ON showcase_collaborators (invited_by, invited_at)`);
+
+  // Who added each work, so an editor's own Asset Library image is published
+  // only while that editor still consents, and removal of a collaborator takes
+  // their contributed images with them. NULL = added by the owner (all rows
+  // that predate collaboration).
+  await db.query(`ALTER TABLE showcase_assets ADD COLUMN IF NOT EXISTS added_by_roll TEXT`);
+
+  // An invitee can refuse all future invitations from one inviter.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS showcase_collab_blocks (
+      id          TEXT PRIMARY KEY,
+      blocker_roll TEXT NOT NULL,
+      blocked_roll TEXT NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (blocker_roll, blocked_roll)
+    )
+  `);
+
+  // Append-only project activity. detail holds ids/labels only: never rolls, emails or comment text.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS showcase_activity (
+      id         BIGSERIAL PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES showcase_projects(id) ON DELETE CASCADE,
+      actor_roll TEXT,
+      kind       TEXT NOT NULL,
+      detail     JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_showcase_activity_project ON showcase_activity (project_id, id DESC)`);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS showcase_comments (
+      id          TEXT PRIMARY KEY,
+      project_id  TEXT NOT NULL REFERENCES showcase_projects(id) ON DELETE CASCADE,
+      author_roll TEXT NOT NULL,
+      body        TEXT NOT NULL CHECK (length(body) BETWEEN 1 AND 2000),
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      deleted_at  TIMESTAMPTZ
+    )
+  `);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_showcase_comments_project ON showcase_comments (project_id, created_at DESC) WHERE deleted_at IS NULL`);
 }

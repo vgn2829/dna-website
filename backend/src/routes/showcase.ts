@@ -17,6 +17,7 @@ import {
 } from '../lib/showcaseValidation';
 import { copyWorksToPublic, deleteObjects } from '../lib/showcasePublish';
 import { identityCapabilities, ownsArtwork, publicProfileHandles } from '../lib/creatorIdentity';
+import { accessFor, can, collaboratorList, contentIsEditable, logActivity, type Access, type Permission } from '../lib/showcaseAccess';
 
 const router = Router();
 
@@ -48,7 +49,7 @@ interface ProjectRow {
   review_note: string | null; featured_at: string | null; submitted_at: string | null; published_at: string | null;
   created_at: string; updated_at: string;
 }
-interface WorkRowFull { id: string; project_id: string; asset_id: string | null; caption: string | null; position: number; is_cover: boolean; public_key: string | null; width: number | null; height: number | null }
+interface WorkRowFull { id: string; project_id: string; asset_id: string | null; caption: string | null; position: number; is_cover: boolean; public_key: string | null; width: number | null; height: number | null; added_by_roll: string | null }
 interface CreditRow { id: string; project_id: string; roll: string; role_label: string | null; contribution: string | null; display_name: string | null; position: number; status: 'accepted' | 'pending' | 'declined'; is_owner: boolean; invited_at: string; responded_at: string | null }
 
 const isUnique = (e: unknown) => (e as { code?: string })?.code === '23505';
@@ -82,6 +83,14 @@ async function loadOwned(id: string, roll: string): Promise<ProjectRow | null> {
   return p && p.owner_roll === roll ? p : null;
 }
 
+/** Loads a project the caller may open as owner / editor / viewer. Anyone else — including a pending invitee — gets null (callers answer 404). */
+async function loadAccessible(id: string, roll: string): Promise<{ project: ProjectRow; access: Access } | null> {
+  const project = await loadProject(id);
+  if (!project) return null;
+  const access = await accessFor(project, roll);
+  return access ? { project, access } : null;
+}
+
 async function projectParts(id: string) {
   const [disc, works, credits] = await Promise.all([
     pool.query('SELECT d.id, d.title FROM showcase_project_disciplines pd JOIN domains d ON d.id = pd.domain_id WHERE pd.project_id = $1 ORDER BY d.display_order, d.title', [id]),
@@ -110,6 +119,7 @@ async function moveProject(p: ProjectRow, to: ShowcaseStatus, actor: Actor, acto
     if (res.rowCount === 0) { await client.query('ROLLBACK'); return { ok: false, status: 409, error: 'This project was just changed — refresh and try again' }; }
     if (extra) await extra(client);
     await logEvent(client, p.id, p.status, to, actor === 'admin' ? 'admin' : 'student', actorRoll, reason);
+    await logActivity(client, p.id, actor === 'admin' ? null : actorRoll, 'status.changed', { from: p.status, to });
     await client.query('COMMIT');
     return { ok: true };
   } catch (err) {
@@ -242,8 +252,9 @@ router.get('/projects/:slug', async (req: Request, res: Response) => {
 
 // ── STUDENT: own projects ────────────────────────────────────────────────
 
-async function ownerView(p: ProjectRow, roll: string) {
+async function ownerView(p: ProjectRow, roll: string, access: Access = 'owner') {
   const parts = await projectParts(p.id);
+  const isOwner = access === 'owner';
   const assetIds = parts.works.flatMap(w => (w.asset_id ? [w.asset_id] : []));
   const assets = assetIds.length ? (await pool.query('SELECT * FROM assets WHERE id = ANY($1::text[])', [assetIds])).rows as AssetRow[] : [];
   const boards = (await pool.query('SELECT b.id, b.name FROM showcase_boards sb JOIN boards b ON b.id = sb.board_id WHERE sb.project_id = $1 ORDER BY b.name', [p.id])).rows;
@@ -266,14 +277,22 @@ async function ownerView(p: ProjectRow, roll: string) {
       return {
         id: w.id, assetId: w.asset_id, caption: w.caption, isCover: w.is_cover, position: w.position,
         filename: a?.filename ?? null, previewUrl: a ? assetImageUrl(a) : null, width: a?.width ?? null, height: a?.height ?? null,
-        sourceMissing: !w.asset_id, published: !!w.public_key,
+        sourceMissing: !w.asset_id, published: !!w.public_key, addedByYou: (w.added_by_roll ?? p.owner_roll) === roll,
       };
     }),
-    credits: parts.credits.map(c => ({ id: c.id, roll: c.roll, roleLabel: c.role_label, contribution: c.contribution, displayName: c.display_name, status: c.status, isOwner: c.is_owner })),
-    boards, artworks,
+    // Roll numbers are the owner's working data only. Everyone else sees names, and only people who have accepted.
+    credits: parts.credits
+      .filter(c => isOwner || c.status === 'accepted' || c.roll === roll)
+      .map(c => ({ id: c.id, roll: isOwner || c.roll === roll ? c.roll : null, roleLabel: c.role_label, contribution: c.contribution, displayName: c.display_name, status: c.status, isOwner: c.is_owner })),
+    access,
+    permissions: (['view', 'comment', 'edit_content', 'edit_works', 'remove_any_work', 'edit_references', 'manage_collaborators', 'manage_credits', 'lifecycle', 'delete_project', 'moderate_comments'] as Permission[]).filter(x => can(access, x)),
+    contentEditable: contentIsEditable(p.status),
+    collaborators: await collaboratorList(p, roll, access),
+    // Moodboard links are the owner's private process notes: names and ids stay with the owner.
+    boards: isOwner ? boards : [], artworks,
     events: events.map((e: { from_status: string | null; to_status: string; actor_kind: string; reason: string | null; created_at: string }) => ({ from: e.from_status, to: e.to_status, by: e.actor_kind, reason: e.reason, at: e.created_at })),
     problems,
-    viewerIsOwner: p.owner_roll === roll,
+    viewerIsOwner: isOwner,
   };
 }
 
@@ -339,9 +358,9 @@ router.post('/mine', requireStudent, writeLimiter, async (req, res) => {
 
 router.get('/mine/:id', requireStudent, async (req, res) => {
   try {
-    const p = await loadOwned(param(req.params.id), req.studentRoll!);
-    if (!p) return res.status(404).json({ error: 'Project not found' });
-    res.json(await ownerView(p, req.studentRoll!));
+    const found = await loadAccessible(param(req.params.id), req.studentRoll!);
+    if (!found) return res.status(404).json({ error: 'Project not found' });
+    res.json(await ownerView(found.project, req.studentRoll!, found.access));
   } catch (err) {
     console.error('Showcase get error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -361,14 +380,24 @@ const patchSchema = z.object({
   owner_role_label: z.string().trim().max(40).nullable().optional(),
 }).refine(v => Object.keys(v).length > 0, { message: 'Nothing to update' });
 
-async function requireEditable(req: Request, res: Response): Promise<ProjectRow | null> {
-  const p = await loadOwned(param(req.params.id), req.studentRoll!);
-  if (!p) { res.status(404).json({ error: 'Project not found' }); return null; }
-  if (!(OWNER_EDITABLE as readonly string[]).includes(p.status)) {
-    res.status(409).json({ error: p.status === 'published' ? 'Archive a published project before editing it' : 'Withdraw this submission to edit it' });
+/**
+ * Loads a project for a CONTENT change. Non-members get 404; a member lacking `permission` gets 403;
+ * everyone (owner included) gets 409 while the project is frozen for review/publication.
+ */
+async function requireEditableFor(req: Request, res: Response, permission: Permission): Promise<{ project: ProjectRow; access: Access } | null> {
+  const found = await loadAccessible(param(req.params.id), req.studentRoll!);
+  if (!found) { res.status(404).json({ error: 'Project not found' }); return null; }
+  if (!can(found.access, permission)) { res.status(403).json({ error: 'You don’t have permission to do that on this project' }); return null; }
+  if (!contentIsEditable(found.project.status)) {
+    res.status(409).json({ error: found.project.status === 'published' ? 'Archive a published project before editing it' : 'Withdraw this submission to edit it' });
     return null;
   }
-  return p;
+  return found;
+}
+/** Owner-only content change (credits, references). Collaborators of any role get the same 404 as strangers would not — they get an honest 403. */
+async function requireEditable(req: Request, res: Response): Promise<ProjectRow | null> {
+  const found = await requireEditableFor(req, res, 'manage_credits');
+  return found?.project ?? null;
 }
 
 router.patch('/mine/:id', requireStudent, writeLimiter, async (req, res) => {
@@ -376,9 +405,14 @@ router.patch('/mine/:id', requireStudent, writeLimiter, async (req, res) => {
     const roll = req.studentRoll!;
     const parsed = patchSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid request' });
-    const p = await requireEditable(req, res);
-    if (!p) return;
+    const found = await requireEditableFor(req, res, 'edit_content');
+    if (!found) return;
+    const p = found.project;
     const b = parsed.data;
+    // The owner's own public credit (name + role shown on the project) is theirs alone to change.
+    if ((b.owner_display_name !== undefined || b.owner_role_label !== undefined) && !can(found.access, 'manage_credits')) {
+      return res.status(403).json({ error: 'Only the project owner can change the owner’s credit' });
+    }
     let links = p.links;
     if (b.links !== undefined) {
       const cleaned = normalizeLinks(b.links);
@@ -410,13 +444,14 @@ router.patch('/mine/:id', requireStudent, writeLimiter, async (req, res) => {
           [p.id, b.owner_display_name ?? null, b.owner_role_label !== undefined, b.owner_role_label ?? null],
         );
       }
+      await logActivity(client, p.id, roll, 'content.updated', { fields: Object.keys(b).filter(k => (b as Record<string, unknown>)[k] !== undefined) });
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {});
       if (isUnique(err)) return res.status(409).json({ error: 'Try a slightly different title' });
       throw err;
     } finally { client.release(); }
-    res.json(await ownerView((await loadProject(p.id))!, roll));
+    res.json(await ownerView((await loadProject(p.id))!, roll, found.access));
   } catch (err) {
     console.error('Showcase patch error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -432,36 +467,60 @@ router.put('/mine/:id/works', requireStudent, writeLimiter, async (req, res) => 
     const roll = req.studentRoll!;
     const parsed = worksSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: `Add up to ${LIMITS.works} images` });
-    const p = await requireEditable(req, res);
-    if (!p) return;
+    const found = await requireEditableFor(req, res, 'edit_works');
+    if (!found) return;
+    const { project: p, access } = found;
     const list = parsed.data.works;
     const ids = list.map(w => w.asset_id);
     if (new Set(ids).size !== ids.length) return res.status(400).json({ error: 'An image was added twice' });
     if (list.filter(w => w.is_cover).length > 1) return res.status(400).json({ error: 'Choose one cover image' });
+
+    const existing = (await pool.query('SELECT * FROM showcase_assets WHERE project_id = $1', [p.id])).rows as WorkRowFull[];
+    const byAsset = new Map(existing.filter(w => w.asset_id).map(w => [w.asset_id as string, w]));
+    const contributor = (w: WorkRowFull) => w.added_by_roll ?? p.owner_roll;
+
+    // Removing an image: the owner may remove any; anyone else only what they added themselves.
+    for (const w of existing) {
+      const kept = w.asset_id ? ids.includes(w.asset_id) : false;
+      if (!kept && !can(access, 'remove_any_work') && contributor(w) !== roll) {
+        return res.status(403).json({ error: 'Only the owner can remove images that someone else added' });
+      }
+    }
+
     const assets = ids.length ? (await pool.query('SELECT * FROM assets WHERE id = ANY($1::text[])', [ids])).rows as AssetRow[] : [];
     let total = 0;
     for (const id of ids) {
       const a = assets.find(x => x.id === id);
-      // Only the owner's OWN assets: someone else's Community asset is not theirs to showcase.
-      if (!a || a.owner_roll !== roll || a.status !== 'active' || a.kind !== 'image') return res.status(404).json({ error: 'Image not found in your Asset Library' });
+      const already = byAsset.get(id);
+      // A NEW image must be the caller's OWN active Asset Library image (someone else's Community asset is not theirs to showcase).
+      // An image already in the project stays valid while its contributor still owns it, whoever is saving the list.
+      const requiredOwner = already ? contributor(already) : roll;
+      if (!a || a.owner_roll !== requiredOwner || a.status !== 'active' || a.kind !== 'image') return res.status(404).json({ error: 'Image not found in your Asset Library' });
       if (!a.mime_type || !(WORK_MIME_TYPES as readonly string[]).includes(a.mime_type)) return res.status(400).json({ error: 'Showcase images must be PNG, JPG or WebP' });
       if ((a.size_bytes ?? 0) > LIMITS.workBytes) return res.status(400).json({ error: 'Images must be 25 MB or smaller' });
       total += a.size_bytes ?? 0;
     }
     if (total > LIMITS.totalBytes) return res.status(400).json({ error: 'Images add up to more than 100 MB' });
     const coverIdx = list.some(w => w.is_cover) ? list.findIndex(w => w.is_cover) : 0;
+    const added = ids.filter(id => !byAsset.has(id)).length;
+    const removed = existing.filter(w => !w.asset_id || !ids.includes(w.asset_id)).length;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       await client.query('DELETE FROM showcase_assets WHERE project_id = $1', [p.id]);
       for (let i = 0; i < list.length; i++) {
-        await client.query('INSERT INTO showcase_assets (id, project_id, asset_id, caption, position, is_cover, width, height) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-          [uuidv4(), p.id, list[i].asset_id, list[i].caption ?? null, i, i === coverIdx, assets.find(a => a.id === list[i].asset_id)!.width, assets.find(a => a.id === list[i].asset_id)!.height]);
+        const a = assets.find(x => x.id === list[i].asset_id)!;
+        const prior = byAsset.get(list[i].asset_id);
+        // owner-added images stay NULL (the pre-collaboration meaning); everyone else is recorded by roll.
+        const addedBy = prior ? prior.added_by_roll : (roll === p.owner_roll ? null : roll);
+        await client.query('INSERT INTO showcase_assets (id, project_id, asset_id, caption, position, is_cover, width, height, added_by_roll) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+          [uuidv4(), p.id, list[i].asset_id, list[i].caption ?? null, i, i === coverIdx, a.width, a.height, addedBy]);
       }
       await client.query('UPDATE showcase_projects SET updated_at = NOW() WHERE id = $1', [p.id]);
+      if (added || removed) await logActivity(client, p.id, roll, 'works.updated', { added, removed });
       await client.query('COMMIT');
     } catch (err) { await client.query('ROLLBACK').catch(() => {}); throw err; } finally { client.release(); }
-    res.json(await ownerView((await loadProject(p.id))!, roll));
+    res.json(await ownerView((await loadProject(p.id))!, roll, access));
   } catch (err) {
     console.error('Showcase works error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -474,7 +533,7 @@ router.put('/mine/:id/boards', requireStudent, writeLimiter, async (req, res) =>
     const roll = req.studentRoll!;
     const parsed = z.object({ board_ids: z.array(z.string().min(1).max(100)).max(10) }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid request' });
-    const p = await requireEditable(req, res);
+    const p = (await requireEditableFor(req, res, 'edit_references'))?.project;
     if (!p) return;
     const ids = [...new Set(parsed.data.board_ids)];
     const ok = ids.length ? (await pool.query(
@@ -495,7 +554,7 @@ router.put('/mine/:id/artworks', requireStudent, writeLimiter, async (req, res) 
     const roll = req.studentRoll!;
     const parsed = z.object({ artwork_ids: z.array(z.string().min(1).max(100)).max(12) }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid request' });
-    const p = await requireEditable(req, res);
+    const p = (await requireEditableFor(req, res, 'edit_references'))?.project;
     if (!p) return;
     const ids = [...new Set(parsed.data.artwork_ids)];
     for (const id of ids) if (!(await ownsArtwork(roll, id))) return res.status(403).json({ error: 'You can only add artwork you are credited on' });
@@ -519,8 +578,10 @@ router.post('/mine/:id/credits', requireStudent, inviteLimiter, async (req, res)
     if (!p) return;
     const target = normRoll(parsed.data.roll);
     if (target === roll) return res.status(400).json({ error: 'You are already credited as the creator' });
+    // Same answer whether the roll is unknown or the student has blocked this owner — no roster probing.
     const exists = await pool.query('SELECT 1 FROM student_sessions WHERE roll_number = $1', [target]);
-    if (exists.rows.length === 0) return res.status(404).json({ error: 'No student found with that roll number' });
+    const blocked = await pool.query('SELECT 1 FROM showcase_collab_blocks WHERE blocker_roll = $1 AND blocked_roll = $2', [target, roll]);
+    if (exists.rows.length === 0 || blocked.rows.length > 0) return res.status(404).json({ error: 'That student can’t be invited to this project' });
     const count = (await pool.query(`SELECT COUNT(*)::int AS n FROM showcase_credits WHERE project_id = $1 AND NOT is_owner AND status <> 'declined'`, [p.id])).rows[0].n as number;
     const prior = (await pool.query('SELECT * FROM showcase_credits WHERE project_id = $1 AND roll = $2', [p.id, target])).rows[0] as CreditRow | undefined;
     if (prior && prior.status !== 'declined') return res.status(409).json({ error: 'Already invited' });
