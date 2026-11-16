@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import type { Editor } from 'tldraw';
 import { LibraryDialog } from './assets/LibraryDialog';
@@ -6,6 +6,7 @@ import {
   describeExportTarget,
   exportBoardImage,
   planBoardExport,
+  renderBoardPreview,
   type ExportFormat,
   type ExportScope,
 } from '../lib/tldrawBoardTools';
@@ -46,6 +47,31 @@ export default function ExportBoardDialog({
   const target = useMemo(() => describeExportTarget(editor, scope), [editor, scope]);
   const plan = target ? planBoardExport(target, scale) : null;
   const raster = format !== 'svg';
+
+  // Preview of exactly what the file will contain. Re-rendered (debounced) when
+  // the area, format or background changes; stale renders are dropped and every
+  // object URL is revoked so reopening the dialog never leaks memory.
+  const [preview, setPreview] = useState<{ url: string; forKey: string } | null>(null);
+  const [previewState, setPreviewState] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const previewKey = `${scope}|${format}|${background}`;
+  useEffect(() => {
+    if (!target) { setPreview(null); return; }
+    let live = true;
+    let made: string | null = null;
+    setPreviewState('loading');
+    const t = setTimeout(() => {
+      renderBoardPreview(editor, { scope, format, background })
+        .then(blob => {
+          if (!live) return;
+          if (!blob || blob.size === 0) { setPreview(null); setPreviewState('failed'); return; }
+          made = URL.createObjectURL(blob);
+          setPreview({ url: made, forKey: previewKey });
+          setPreviewState('ready');
+        })
+        .catch(() => { if (live) { setPreview(null); setPreviewState('failed'); } });
+    }, 150);
+    return () => { live = false; clearTimeout(t); if (made) URL.revokeObjectURL(made); };
+  }, [editor, scope, format, background, previewKey, target]);
 
   const run = async () => {
     setBusy(true);
@@ -90,6 +116,26 @@ export default function ExportBoardDialog({
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div
+          aria-label="Export preview"
+          style={{
+            minHeight: 140, maxHeight: 260, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-hairline)', overflow: 'hidden',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 8, boxSizing: 'border-box',
+            // Checkerboard shows transparency honestly.
+            backgroundColor: 'var(--color-surface-1)',
+            backgroundImage: !background && format !== 'jpeg'
+              ? 'conic-gradient(#8883 25%, transparent 0 50%, #8883 0 75%, transparent 0)' : undefined,
+            backgroundSize: '16px 16px',
+          }}
+        >
+          {preview && previewState !== 'failed' && (
+            <img src={preview.url} alt="Preview of the exported image" style={{ maxWidth: '100%', maxHeight: 240, objectFit: 'contain', opacity: previewState === 'loading' ? 0.5 : 1, transition: 'opacity 0.15s' }} />
+          )}
+          {!preview && previewState === 'loading' && target && <span className="type-micro" role="status">Rendering preview…</span>}
+          {!target && <span className="type-micro">Nothing to preview — this board is empty.</span>}
+          {previewState === 'failed' && target && <span className="type-micro" role="status">Preview unavailable — you can still export.</span>}
+        </div>
+
         {group('Format', (
           <div className="segmented is-block" role="group" aria-label="Format">
             {FORMATS.map(f => (

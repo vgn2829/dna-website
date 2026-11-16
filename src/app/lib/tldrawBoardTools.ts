@@ -9,7 +9,7 @@ import {
   type TLShapePartial,
 } from 'tldraw';
 import type { StarterColor, StarterLayout, StarterShape } from './boardStarters';
-import { exportFileName, fitInsertSize, planExport, planTidyGrid, type ExportPlan } from './boardLayout';
+import { exportFileName, fitInsertSize, planExport, planTidyGrid, previewScale, type ExportPlan } from './boardLayout';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Editor-side tools for Moodboards (Milestone B): starter layouts, Asset
@@ -306,6 +306,25 @@ const EXPORT_PADDING = 32;
 
 export function planBoardExport(target: ExportTarget, scale: number): ExportPlan {
   return planExport(target.width, target.height, scale, EXPORT_PADDING);
+}
+
+/**
+ * A small PNG of what an export would contain RIGHT NOW (same scope, same
+ * SVG→bitmap path, same light theme and background rules as the real export),
+ * for the dialog's preview. Returns null for an empty board. Never downloads.
+ */
+export async function renderBoardPreview(
+  editor: Editor,
+  opts: Pick<ExportOptions, 'scope' | 'background' | 'format'>,
+  maxEdge = 420,
+): Promise<Blob | null> {
+  const target = describeExportTarget(editor, opts.scope);
+  if (!target) return null;
+  const svg = await editor.getSvgString(target.ids, {
+    scale: 1, background: opts.format === 'jpeg' ? true : opts.background, padding: EXPORT_PADDING, darkMode: false,
+  });
+  if (!svg) return null;
+  return getSvgAsImage(editor, svg.svg, { type: 'png', quality: 0.8, scale: previewScale(target.width, target.height, EXPORT_PADDING, maxEdge), width: svg.width, height: svg.height });
 }
 
 /**
