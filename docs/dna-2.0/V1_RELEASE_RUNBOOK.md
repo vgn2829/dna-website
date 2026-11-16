@@ -114,4 +114,19 @@ Milestone G — learning achievements, badges, gamification; real-time co-editin
 * A large bundle warning (`AdminPage` ≈ 1.1 MB, entry ≈ 1.1 MB) is pre-existing and not addressed here.
 
 ## 9. Test and verification record
-{{TEST_RECORD}}
+| Gate | Result |
+|---|---|
+| Backend full suite, CI configuration (fresh PostgreSQL 14, database `dna_club_test`), **5 consecutive runs** | **5/5 passed** — 68 files, 1,070 tests each ; after the final application change (`e00fe18`) one more full run: **68 files, 1,071 tests passed** |
+| Backend typecheck | clean |
+| Frontend tests | **58 files, 721 tests passed** |
+| Frontend typecheck | clean |
+| Production build (`vite build`) | succeeds (the large-chunk warning is pre-existing) |
+| Route-collision guard (`scripts/check-route-collisions.mjs`) | 18 routes, 9 root entries, **no collisions** (the new `/profile` is safe) |
+| **Browser journey** — real Chromium, real backend, fresh isolated database, local-disk storage, no hosted services | **44 / 44 steps passed, 0 failed, 0 skipped**; no page errors and no 5xx responses |
+
+Browser journey coverage (five students + admin): real email-OTP sign-in issues an identity-verified token and a legacy token is told to verify (server also refuses it); profile create/edit/avatar/skills/links/visibility/preview and anonymous public view (no roll/email; avatar stored as re-encoded WebP); private profile leaves the directory at once; Halftone result saved to the private Asset Library; moodboard and Inspiration pages; Showcase project built in the editor (details, image from Assets, moodboard); invitations by roll and by public username; accept-access-only vs accept-and-be-credited; **owner / editor / viewer / stranger** boundaries; discussion and activity (names, never rolls); role change then removal with immediate loss of access; admin review → approve → publish in the admin UI; public page shows credited names only; "More by this creator"; creators directory and contributor profile; credit withdrawal disappears at once; Gallery credit link and withdrawal (legacy text no longer republishes the name); 10 pages at 390 px with no horizontal scroll; 14 existing public/signed-in pages and 5 admin tabs without page errors.
+
+Defects found by the journey and fixed: the profile page offered **Remove my credit** for a primary creator, whom the server (correctly) will not let leave without an admin — the page now explains instead (`e00fe18`). Everything else it flagged was harness-side (selectors, and the app's global 300 req/min per-IP limiter being tripped by one loopback client).
+
+**Not covered by automation (owner/manual):** real e-mail delivery (the journey reads the dev-mode OTP log), the real Supabase project/Data API/RLS, the real scheduler, load/performance, and browsers other than headless Chromium (no Safari/Firefox, and no PDF viewer in headless Chromium).
+
