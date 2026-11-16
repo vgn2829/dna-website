@@ -2,15 +2,13 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { localRequest } from './localServer';
 import { v4 as uuidv4 } from 'uuid';
 import { createApp } from '../src/app';
-import { pool, query } from '../src/db/client';
+import { query } from '../src/db/client';
 import { signStudentToken } from '../src/middleware/studentAuth';
 import { resetDirectoryCapabilityCache, previewBio, isValidHandle, clampLimit, clampOffset, likePattern } from '../src/lib/creatorDirectory';
-import { initDesignerSchema } from './fixtures/pr84Schema';
-import { initShowcaseSchema } from './fixtures/pr100Schema';
 
-// Creator Discovery (Milestone E). Integration tests run against SNAPSHOTS of
-// PR #84's profile/credit tables and PR #100's showcase tables (tests/fixtures),
-// created for this file and dropped afterwards, so main's test DB is left as it was.
+// Creator Discovery (Milestone E). Integration tests run against the REAL
+// schema (#84 designer/credit tables + #100 showcase tables) that the shared
+// tests/setup.ts builds with initSchema(); nothing here creates or drops tables.
 
 const app = createApp();
 const request = localRequest(app);
@@ -44,14 +42,7 @@ async function project(owner: string, title: string, o: { status?: string; categ
   return id;
 }
 
-async function dropFixtures() {
-  for (const t of ['showcase_events', 'showcase_artworks', 'showcase_boards', 'showcase_credits', 'showcase_assets', 'showcase_project_disciplines', 'showcase_projects',
-    'artwork_credits', 'creator_audit_log', 'designer_profile_links', 'designer_profile_disciplines', 'designer_profiles']) await query(`DROP TABLE IF EXISTS ${t} CASCADE`);
-  for (const c of ['status', 'source_kind', 'source_asset_id', 'created_by_roll', 'description', 'published_at']) await query(`ALTER TABLE artworks DROP COLUMN IF EXISTS ${c}`);
-}
-
-beforeAll(async () => { await dropFixtures(); });
-afterAll(async () => { await dropFixtures(); resetDirectoryCapabilityCache(); });
+afterAll(() => { resetDirectoryCapabilityCache(); });
 
 describe('pure helpers', () => {
   it('validates handles and clamps paging so a scraper cannot request big pages', () => {
@@ -68,20 +59,23 @@ describe('pure helpers', () => {
   });
 });
 
-describe('before PR #84 / #100 are merged (tables absent)', () => {
-  beforeEach(async () => { resetDirectoryCapabilityCache(); if (!adminToken) adminToken = (await request(app).post('/api/auth/admin/login').send({ password: process.env.ADMIN_PASSWORD })).body.token as string; });
-  it('degrades to honest empty responses instead of failing', async () => {
-    expect((await dir('/capabilities')).body).toEqual({ profiles: false, projects: false, artworkCredits: false });
+describe('capabilities and empty states on the real schema', () => {
+  beforeEach(async () => {
+    resetDirectoryCapabilityCache();
+    await query('TRUNCATE "student_sessions", "domains", "showcase_projects", "creator_features", "creator_audit_log" CASCADE');
+    if (!adminToken) adminToken = (await request(app).post('/api/auth/admin/login').send({ password: process.env.ADMIN_PASSWORD })).body.token as string;
+  });
+  it('reports every capability as available and answers an empty directory honestly', async () => {
+    expect((await dir('/capabilities')).body).toEqual({ profiles: true, projects: true, artworkCredits: true });
     expect((await dir()).body).toEqual({ creators: [], total: 0, hasMore: false });
     expect((await dir('/featured')).body).toEqual({ creators: [] });
     expect((await dir('/facets')).body).toMatchObject({ total: 0, disciplines: [] });
     expect((await dir('/someone/projects')).status).toBe(404);
-    expect((await request(app).put('/api/creators/admin/x/featured').set(adm()).send({ featured: true })).status).toBe(409);
   });
 });
 
 describe('with canonical profiles (#84) and showcase (#100)', () => {
-  beforeAll(async () => { await initDesignerSchema(pool); await initShowcaseSchema(pool); resetDirectoryCapabilityCache(); });
+  beforeAll(() => { resetDirectoryCapabilityCache(); });
   beforeEach(async () => {
     await query('TRUNCATE "student_sessions", "domains", "showcase_projects", "creator_features", "creator_audit_log" CASCADE');
     await query(`INSERT INTO domains (id, title, full_name, color, display_order) VALUES ('illus','Illustration','Illustration & Art','#ff0000',1),('uiux','UI/UX','UI/UX Design','#0000ff',2),('motion','Motion','Motion Design','#00ff00',3)`);
@@ -224,7 +218,7 @@ describe('with canonical profiles (#84) and showcase (#100)', () => {
 });
 
 describe('featured creators', () => {
-  beforeAll(async () => { await initDesignerSchema(pool); await initShowcaseSchema(pool); resetDirectoryCapabilityCache(); });
+  beforeAll(() => { resetDirectoryCapabilityCache(); });
   beforeEach(async () => {
     await query('TRUNCATE "student_sessions", "domains", "creator_features", "creator_audit_log" CASCADE');
     resetDirectoryCapabilityCache();

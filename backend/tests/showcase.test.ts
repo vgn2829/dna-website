@@ -449,38 +449,31 @@ describe('moodboards and Gallery artwork integration', () => {
     expect(detail).not.toContain('Process');
   });
 
-  it('keeps artwork attachment closed until PR #84 credits exist, then honours credited ownership and profile links', async () => {
+  it('only lets a student attach Gallery artwork they hold an accepted credit on, and links only PUBLIC profiles', async () => {
     const { id } = await readyProject('ALICE');
     await query(`INSERT INTO artworks (id, title, artist, domain, image_url) VALUES ('art1','Gallery Piece','Someone','Illustration','/uploads/x.png')`);
-    expect((await pub('/capabilities')).body).toEqual({ profiles: false, artworkCredits: false });
+    resetIdentityCapabilityCache();
+    expect((await pub('/capabilities')).body).toEqual({ profiles: true, artworkCredits: true });
+    // Real #84 tables: no profile and no credit yet, so attaching is refused.
     expect((await put('ALICE', `/mine/${id}/artworks`, { artwork_ids: ['art1'] })).status).toBe(403);
 
-    // Simulate #84's tables (test-only) to prove the adapter lights up without any change here.
-    await query(`CREATE TABLE designer_profiles (id TEXT PRIMARY KEY, owner_roll TEXT UNIQUE, handle TEXT, display_name TEXT, visibility TEXT, moderation_status TEXT)`);
-    await query(`CREATE TABLE artwork_credits (id TEXT PRIMARY KEY, artwork_id TEXT, profile_id TEXT, role TEXT, status TEXT)`);
-    await query(`ALTER TABLE artworks ADD COLUMN status TEXT NOT NULL DEFAULT 'published'`);
-    try {
-      resetIdentityCapabilityCache();
-      await query(`INSERT INTO designer_profiles VALUES ('p1','ALICE','alice-draws','Alice','public','active'),('p2','BOB','bob-private','Bob','private','active')`);
-      expect((await pub('/capabilities')).body).toEqual({ profiles: true, artworkCredits: true });
-      expect((await put('ALICE', `/mine/${id}/artworks`, { artwork_ids: ['art1'] })).status).toBe(403); // not credited yet
-      await query(`INSERT INTO artwork_credits VALUES ('c1','art1','p1','creator','accepted')`);
-      expect((await put('ALICE', `/mine/${id}/artworks`, { artwork_ids: ['art1'] })).status).toBe(200);
-      expect((await put('BOB', `/mine/${(await post('BOB', '/mine', { title: 'Bobs project' })).body.id}/artworks`, { artwork_ids: ['art1'] })).status).toBe(403);
+    await query(`INSERT INTO designer_profiles (id, owner_roll, handle, display_name, visibility) VALUES ('p1','ALICE','alice-draws','Alice','public'),('p2','BOB','bob-private','Bob','private')`);
+    expect((await put('ALICE', `/mine/${id}/artworks`, { artwork_ids: ['art1'] })).status).toBe(403); // profile but not credited yet
+    await query(`INSERT INTO artwork_credits (id, artwork_id, profile_id, role, status, source) VALUES ('c1','art1','p1','creator','pending','invite')`);
+    expect((await put('ALICE', `/mine/${id}/artworks`, { artwork_ids: ['art1'] })).status).toBe(403); // pending is not consent
+    await query(`UPDATE artwork_credits SET status = 'accepted' WHERE id = 'c1'`);
+    expect((await put('ALICE', `/mine/${id}/artworks`, { artwork_ids: ['art1'] })).status).toBe(200);
+    expect((await put('BOB', `/mine/${(await post('BOB', '/mine', { title: 'Bobs project' })).body.id}/artworks`, { artwork_ids: ['art1'] })).status).toBe(403);
 
-      const inv = await post('ALICE', `/mine/${id}/credits`, { roll: 'BOB' });
-      await post('BOB', `/invitations/${inv.body.credits.find((c: { roll: string }) => c.roll === 'BOB').id}/accept`, { display_name: 'Bob' });
-      await post('ALICE', `/mine/${id}/submit`);
-      await publish(id);
-      const slug = (await get('ALICE', `/mine/${id}`)).body.slug;
-      const detail = (await pub(`/projects/${slug}`)).body;
-      expect(detail.artworks).toEqual([{ id: 'art1', title: 'Gallery Piece', imageUrl: '/uploads/x.png', mediaType: 'image' }]);
-      expect(detail.credits[0].profile).toEqual({ handle: 'alice-draws' });   // public profile → link
-      expect(detail.credits[1].profile).toBeUndefined();                      // private profile → no link
-    } finally {
-      await query('DROP TABLE artwork_credits'); await query('DROP TABLE designer_profiles'); await query('ALTER TABLE artworks DROP COLUMN status');
-      await query('DELETE FROM artworks WHERE id = $1', ['art1']);
-      resetIdentityCapabilityCache();
-    }
+    const inv = await post('ALICE', `/mine/${id}/credits`, { roll: 'BOB' });
+    await post('BOB', `/invitations/${inv.body.credits.find((c: { roll: string }) => c.roll === 'BOB').id}/accept`, { display_name: 'Bob' });
+    await post('ALICE', `/mine/${id}/submit`);
+    await publish(id);
+    const slug = (await get('ALICE', `/mine/${id}`)).body.slug;
+    const detail = (await pub(`/projects/${slug}`)).body;
+    expect(detail.artworks).toEqual([{ id: 'art1', title: 'Gallery Piece', imageUrl: '/uploads/x.png', mediaType: 'image' }]);
+    expect(detail.credits[0].profile).toEqual({ handle: 'alice-draws' });   // public profile → link
+    expect(detail.credits[1].profile).toBeUndefined();                      // private profile → no link
+    await query('DELETE FROM artworks WHERE id = $1', ['art1']);
   });
 });
