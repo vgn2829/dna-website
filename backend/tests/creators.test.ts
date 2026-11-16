@@ -94,7 +94,7 @@ describe('with canonical profiles (#84) and showcase (#100)', () => {
     expect(res.body.total).toBe(1);
     expect(res.body.creators).toEqual([{
       handle: 'asha-draws', displayName: 'Asha Rao', headline: 'Illustrator', bio: 'Hand-drawn posters', avatarUrl: expect.stringContaining('profiles/a.png'),
-      verified: true, featured: false, skills: ['procreate'], disciplines: [{ id: 'illus', title: 'Illustration', color: '#ff0000' }], projectCount: 0, projects: [],
+      verified: true, featured: false, editorialNote: null, skills: ['procreate'], disciplines: [{ id: 'illus', title: 'Illustration', color: '#ff0000' }], projectCount: 0, projects: [],
     }]);
     const blob = JSON.stringify([res.body, (await dir('/facets')).body, (await dir('/featured')).body]);
     for (const roll of ['ASHA', 'BALA', 'CHITRA', 'DEV', 'IITK-DnA']) expect(blob, roll).not.toContain(roll);   // roll numbers / unique ids (case-sensitive)

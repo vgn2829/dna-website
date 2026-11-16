@@ -119,7 +119,7 @@ export default function JoinPrompt() {
               fontFamily: 'var(--font-body)', lineHeight: 1.6,
             }}>
               Register with your IITK roll number to like artwork, leave comments,
-              use Design Studio tools, and track your learning progress in Academy.
+              use Creator Studio tools, and track your learning progress in Academy.
             </p>
 
             {/* Buttons */}

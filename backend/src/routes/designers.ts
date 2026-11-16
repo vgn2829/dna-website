@@ -43,13 +43,13 @@ const listLimiter = limiter(60 * 1000, 60);
 interface ProfileRow {
   id: string; owner_roll: string; handle: string; handle_changed_at: Date | null;
   display_name: string; headline: string | null; bio: string | null; department: string | null;
-  show_batch: boolean; skills: string[]; avatar_key: string | null; cover_key: string | null;
+  show_batch: boolean; skills: string[]; tools: string[]; avatar_key: string | null; cover_key: string | null;
   visibility: ProfileVisibility; moderation_status: 'active' | 'hidden';
   verified_at: Date | null; created_at: Date;
 }
 // Explicit column list: adding a column to the table never changes a response.
 const PROFILE_COLUMNS = `id, owner_roll, handle, handle_changed_at, display_name, headline, bio, department,
-  show_batch, skills, avatar_key, cover_key, visibility, moderation_status, verified_at, created_at`;
+  show_batch, skills, tools, avatar_key, cover_key, visibility, moderation_status, verified_at, created_at`;
 
 const mediaUrl = (key: string | null) => (key ? getStorage().getPublicUrl(key) : null);
 
@@ -86,6 +86,7 @@ function toPublicProfile(row: ProfileRow, kids: Awaited<ReturnType<typeof childr
     coverUrl: mediaUrl(row.cover_key),
     disciplines: kids.disciplines,
     skills: row.skills,
+    tools: row.tools,
     links: kids.links,
     worksCount: kids.worksCount,
   };
@@ -288,6 +289,16 @@ designersRouter.put('/me/skills', requireVerifiedStudent, writeLimiter, async (r
     [req.studentRoll, parsed.data.skills]);
   if (!r.rows.length) return res.status(404).json({ error: 'Designer profile not found' });
   return res.json({ skills: r.rows[0].skills });
+});
+
+designersRouter.put('/me/tools', requireVerifiedStudent, writeLimiter, async (req, res) => {
+  const parsed = z.object({ tools: skillsSchema }).strict().safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid tools' });
+  const r = await pool.query<{ tools: string[] }>(
+    'UPDATE designer_profiles SET tools = $2, updated_at = NOW() WHERE owner_roll = $1 RETURNING tools',
+    [req.studentRoll, parsed.data.tools]);
+  if (!r.rows.length) return res.status(404).json({ error: 'Designer profile not found' });
+  return res.json({ tools: r.rows[0].tools });
 });
 
 designersRouter.patch('/me/visibility', requireVerifiedStudent, writeLimiter, async (req, res) => {

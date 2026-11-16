@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Bell } from 'lucide-react';
 import { api, type Notification } from '../lib/api';
 import { useModalA11y } from './hooks/useModalA11y';
+import { OPEN_NOTIFICATIONS_EVENT } from './AccountMenu';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Basic Notifications (Phase C) — a bell in the global nav (Navigation.tsx),
@@ -60,6 +61,13 @@ export function NotificationBell({ roll, isDark }: { roll: string; isDark: boole
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
   const dialogRef = useModalA11y(open, () => setOpen(false));
+
+  // The account menu's "Notifications" entry opens this same panel.
+  useEffect(() => {
+    const openPanel = () => setOpen(true);
+    window.addEventListener(OPEN_NOTIFICATIONS_EVENT, openPanel);
+    return () => window.removeEventListener(OPEN_NOTIFICATIONS_EVENT, openPanel);
+  }, []);
 
   // Lightweight background refresh of just the unread count, independent
   // of opening the panel — so the badge can reflect new activity without

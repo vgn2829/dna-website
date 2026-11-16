@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { toast } from 'sonner';
 import { ExternalLink, Eye, Loader2, Plus, ShieldCheck, Trash2, Upload, X } from 'lucide-react';
 import { api, getStudentToken, type MyArtworkCredit, type OwnerProfile, type ProfilePreview, type ProfileVisibility } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
+import { publishMyProfile } from '../lib/myProfile';
+import { profileCompletion } from '../lib/profileCompletion';
 import { CreatorAvatar, DisciplineChips, VerifiedMark } from '../components/creators/CreatorParts';
 import { profilePath } from '../lib/creators';
 import {
@@ -34,9 +36,9 @@ function Field({ id, label, hint, error, children }: { id: string; label: string
   );
 }
 
-function Section({ title, intro, children, actions }: { title: string; intro?: string; children: React.ReactNode; actions?: React.ReactNode }) {
+function Section({ title, intro, children, actions, id }: { title: string; intro?: string; children: React.ReactNode; actions?: React.ReactNode; id?: string }) {
   return (
-    <section style={{ ...card, display: 'flex', flexDirection: 'column', gap: 16 }} aria-label={title}>
+    <section id={id} style={{ ...card, display: 'flex', flexDirection: 'column', gap: 16, scrollMarginTop: 96 }} aria-label={title}>
       <div>
         <h2 className="type-headline" style={{ margin: 0 }}>{title}</h2>
         {intro && <p className="type-body-sm" style={{ margin: '6px 0 0', color: 'var(--color-ink-muted)' }}>{intro}</p>}
@@ -54,6 +56,7 @@ export default function ProfilePage() {
   const [loadError, setLoadError] = useState(false);
   const [disciplines, setDisciplines] = useState<Array<{ id: string; title: string }>>([]);
   const [credits, setCredits] = useState<MyArtworkCredit[]>([]);
+  const [publishedProjects, setPublishedProjects] = useState(0);
   const verified = useMemo(() => tokenIdentityVerified(getStudentToken()), [studentSession]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const expired = useCallback((e: unknown) => {
@@ -65,13 +68,31 @@ export default function ProfilePage() {
     if (!roll) return;
     setLoadError(false);
     try {
-      const [me, d, c] = await Promise.all([api.designers.me(roll), api.showcase.disciplines(), api.designers.credits(roll)]);
+      const [me, d, c, mine] = await Promise.all([
+        api.designers.me(roll), api.showcase.disciplines(), api.designers.credits(roll),
+        // Only feeds the completion hint; a failure here must never break the page.
+        api.showcase.mine(roll).catch(() => ({ projects: [] as Array<{ status: string }> })),
+      ]);
       setProfile(me); setDisciplines(d.disciplines); setCredits(c);
+      setPublishedProjects(mine.projects.filter(p => p.status === 'published').length);
     } catch (e) {
       if (!expired(e)) setLoadError(true);
     }
   }, [roll, expired]);
   useEffect(() => { void load(); }, [load]);
+
+  // Keep the navbar's avatar/name in step with every save, with no reload.
+  useEffect(() => {
+    if (!roll || profile === undefined) return;
+    publishMyProfile(roll, profile ? { handle: profile.handle, displayName: profile.displayName, avatarUrl: profile.avatarUrl } : null);
+  }, [roll, profile]);
+
+  // "Edit Profile" in the account menu links to /profile#edit-profile; the section mounts after load.
+  const location = useLocation();
+  useEffect(() => {
+    if (location.hash !== '#edit-profile' || !profile) return;
+    document.getElementById('edit-profile')?.scrollIntoView({ block: 'start' });
+  }, [location.hash, profile === undefined || profile === null]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // A failed save must say why in plain words; the session-needs-OTP case gets its own banner.
   const fail = useCallback((e: unknown, fallback = 'Could not save — please try again') => {
@@ -125,6 +146,7 @@ export default function ProfilePage() {
         : (
           <>
             <Header profile={profile} disabled={!verified} roll={roll} onChange={setProfile} fail={fail} />
+            <CompletionCard profile={profile} projectCount={publishedProjects} />
             {profile.moderationStatus === 'hidden' && (
               <p role="alert" className="type-body-sm" style={{ ...card, margin: 0, borderColor: 'var(--color-danger, #c0392b)' }}>
                 An administrator has hidden this profile. You can still edit it; contact the club to have it restored.
@@ -132,7 +154,12 @@ export default function ProfilePage() {
             )}
             <BasicsSection profile={profile} disabled={!verified} roll={roll} onSaved={setProfile} fail={fail} />
             <DisciplinesSection profile={profile} options={disciplines} disabled={!verified} roll={roll} onSaved={d => setProfile({ ...profile, disciplines: d })} fail={fail} />
-            <SkillsSection profile={profile} disabled={!verified} roll={roll} onSaved={skills => setProfile({ ...profile, skills })} fail={fail} />
+            <ChipListSection id="skills" title="Skills" noun="skill" limit={PROFILE_LIMITS.skills} saved={profile.skills} disabled={!verified} fail={fail}
+              intro="Techniques and strengths, like “motion graphics” or “illustration”. Shown on your profile and used by search."
+              save={async v => (await api.designers.setSkills(roll, v)).skills} onSaved={skills => setProfile({ ...profile, skills })} />
+            <ChipListSection id="tools" title="Tools" noun="tool" limit={PROFILE_LIMITS.tools} saved={profile.tools ?? []} disabled={!verified} fail={fail}
+              intro="Software and hardware you work in, like “figma”, “blender” or “procreate”. Shown on your profile and searchable."
+              save={async v => (await api.designers.setTools(roll, v)).tools} onSaved={tools => setProfile({ ...profile, tools })} />
             <LinksSection profile={profile} disabled={!verified} roll={roll} onSaved={links => setProfile({ ...profile, links })} fail={fail} />
             <VisibilitySection profile={profile} disabled={!verified} roll={roll} onSaved={v => setProfile({ ...profile, visibility: v })} fail={fail} />
             <PreviewSection roll={roll} profile={profile} fail={fail} />
@@ -209,7 +236,7 @@ function Header({ profile, disabled, roll, onChange, fail }: { profile: OwnerPro
   };
   const isPublic = profile.visibility === 'public' && profile.moderationStatus === 'active';
   return (
-    <div style={{ ...card, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+    <div id="profile-image" style={{ ...card, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', scrollMarginTop: 96 }}>
       <CreatorAvatar name={profile.displayName} src={profile.avatarUrl} size={84} />
       <div style={{ flex: '1 1 220px', minWidth: 0 }}>
         <p className="type-headline" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', overflowWrap: 'anywhere' }}>
@@ -265,7 +292,7 @@ function BasicsSection({ profile, disabled, roll, onSaved, fail }: { profile: Ow
   };
 
   return (
-    <Section title="About you" intro="Basic details shown on your public page. Your roll number and email are never shown."
+    <Section id="edit-profile" title="About you" intro="Basic details shown on your public page. Your roll number and email are never shown."
       actions={<><button type="button" className="btn-primary touch-target" disabled={disabled || busy || !dirty || !!hp} onClick={() => void save()}>{busy ? 'Saving…' : 'Save changes'}</button>{dirty && <button type="button" className="btn-translucent touch-target" onClick={() => setForm(initial)}>Discard</button>}</>}>
       <Field id="pe-name" label="Display name"><input id="pe-name" className="input-base" style={full} maxLength={PROFILE_LIMITS.displayName} value={form.displayName} onChange={e => set('displayName', e.target.value)} disabled={disabled} /></Field>
       <Field id="pe-handle" label="Public username" error={hp}
@@ -325,49 +352,84 @@ function DisciplinesSection({ profile, options, disabled, roll, onSaved, fail }:
   );
 }
 
-// ── Skills ────────────────────────────────────────────────────────────────
+// ── Skills & tools ────────────────────────────────────────────────────────
 
-function SkillsSection({ profile, disabled, roll, onSaved, fail }: { profile: OwnerProfile; disabled: boolean; roll: string; onSaved: (s: string[]) => void; fail: (e: unknown) => void }) {
-  const [skills, setSkills] = useState(profile.skills);
-  useEffect(() => setSkills(profile.skills), [profile.skills]);
+interface ChipListProps {
+  id: string; title: string; intro: string; noun: string; saved: string[]; limit: number; disabled: boolean;
+  save: (values: string[]) => Promise<string[]>; onSaved: (v: string[]) => void; fail: (e: unknown) => void;
+}
+function ChipListSection({ id, title, intro, noun, saved, limit, disabled, save: persist, onSaved, fail }: ChipListProps) {
+  const [items, setItems] = useState(saved);
+  useEffect(() => setItems(saved), [saved]);
   const [draft, setDraft] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const dirty = skills.join('|') !== profile.skills.join('|');
+  const dirty = items.join('|') !== saved.join('|');
   const add = () => {
     const value = draft.trim();
     if (!value) return;
     const p = skillProblem(value);
     if (p) { setProblem(p); return; }
-    if (skills.length >= PROFILE_LIMITS.skills) { setProblem(`You can list up to ${PROFILE_LIMITS.skills} skills`); return; }
-    setSkills(cleanSkills([...skills, value])); setDraft(''); setProblem(null);
+    if (items.length >= limit) { setProblem(`You can list up to ${limit} ${noun}s`); return; }
+    setItems(cleanSkills([...items, value])); setDraft(''); setProblem(null);
   };
   const save = async () => {
     setBusy(true);
-    try { const r = await api.designers.setSkills(roll, skills); onSaved(r.skills); toast.success('Skills saved'); }
+    try { onSaved(await persist(items)); toast.success(`${title} saved`); }
     catch (e) { fail(e); } finally { setBusy(false); }
   };
   return (
-    <Section title="Skills" intro="Tools and techniques, like “figma” or “motion graphics”. Shown on your profile and used by search."
-      actions={<button type="button" className="btn-primary touch-target" disabled={disabled || busy || !dirty} onClick={() => void save()}>{busy ? 'Saving…' : 'Save skills'}</button>}>
+    <Section id={id} title={title} intro={intro}
+      actions={<button type="button" className="btn-primary touch-target" disabled={disabled || busy || !dirty} onClick={() => void save()}>{busy ? 'Saving…' : `Save ${title.toLowerCase()}`}</button>}>
       <div style={{ display: 'flex', gap: 8 }}>
-        <input aria-label="Add a skill" className="input-base" style={{ flex: 1, minWidth: 0 }} maxLength={30} value={draft} placeholder="Add a skill"
+        <input aria-label={`Add a ${noun}`} className="input-base" style={{ flex: 1, minWidth: 0 }} maxLength={30} value={draft} placeholder={`Add a ${noun}`}
           onChange={e => { setDraft(e.target.value); setProblem(null); }} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} disabled={disabled} />
         <button type="button" className="btn-translucent touch-target" onClick={add} disabled={disabled || !draft.trim()}><Plus size={15} aria-hidden="true" /> Add</button>
       </div>
       {problem && <p role="alert" className="type-micro" style={{ margin: 0, color: 'var(--color-danger, #c0392b)' }}>{problem}</p>}
-      {skills.length === 0 ? <p className="type-body-sm" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>No skills added yet.</p> : (
+      {items.length === 0 ? <p className="type-body-sm" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>No {noun}s added yet.</p> : (
         <ul style={{ display: 'flex', flexWrap: 'wrap', gap: 8, listStyle: 'none', margin: 0, padding: 0 }}>
-          {skills.map(s => (
+          {items.map(s => (
             <li key={s} className="type-caption" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 6px 4px 12px', border: '1px solid var(--color-hairline)', borderRadius: 999 }}>
               {s}
-              <button type="button" aria-label={`Remove ${s}`} disabled={disabled} onClick={() => setSkills(skills.filter(x => x !== s))} style={{ background: 'none', border: 0, cursor: 'pointer', display: 'inline-flex', padding: 4, color: 'inherit' }}><X size={13} aria-hidden="true" /></button>
+              <button type="button" aria-label={`Remove ${s}`} disabled={disabled} onClick={() => setItems(items.filter(x => x !== s))} style={{ background: 'none', border: 0, cursor: 'pointer', display: 'inline-flex', padding: 4, color: 'inherit' }}><X size={13} aria-hidden="true" /></button>
             </li>
           ))}
         </ul>
       )}
-      <p className="type-micro" style={{ margin: 0 }}>{skills.length}/{PROFILE_LIMITS.skills}</p>
+      <p className="type-micro" style={{ margin: 0 }}>{items.length}/{limit}</p>
     </Section>
+  );
+}
+
+// ── Completion ────────────────────────────────────────────────────────────
+
+function CompletionCard({ profile, projectCount }: { profile: OwnerProfile; projectCount: number }) {
+  const c = profileCompletion({ avatarUrl: profile.avatarUrl, headline: profile.headline, bio: profile.bio, skills: profile.skills, worksCount: profile.worksCount, projectCount });
+  if (c.complete) return null;
+  return (
+    <section aria-label="Profile completion" style={{ ...card, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+        <h2 className="type-headline" style={{ margin: 0 }}>Profile {c.percent}% complete</h2>
+        <span className="type-caption">{c.doneCount} of {c.total} done</span>
+      </div>
+      <div role="progressbar" aria-label="Profile completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={c.percent} style={{ height: 6, borderRadius: 999, background: 'var(--color-surface-2)', overflow: 'hidden' }}>
+        <div style={{ width: `${c.percent}%`, height: '100%', background: 'var(--color-brand)', transition: 'width 0.3s' }} />
+      </div>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {c.steps.map(s => (
+          <li key={s.id} className="type-body-sm" style={{ display: 'flex', gap: 10, alignItems: 'baseline', color: s.done ? 'var(--color-ink-muted)' : 'var(--color-ink)' }}>
+            <span aria-hidden="true">{s.done ? '✓' : '○'}</span>
+            <span style={{ minWidth: 0 }}>
+              {s.done ? <span style={{ textDecoration: 'line-through' }}>{s.label}</span>
+                : s.href.startsWith('#') ? <a href={s.href} style={{ color: 'inherit', fontWeight: 600 }}>{s.label}</a> : <Link to={s.href} style={{ color: 'inherit', fontWeight: 600 }}>{s.label}</Link>}
+              {!s.done && <span className="type-caption"> — {s.hint}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="type-micro" style={{ margin: 0 }}>Nothing here is required — you can use all of DnA with an incomplete profile.</p>
+    </section>
   );
 }
 

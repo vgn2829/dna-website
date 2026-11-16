@@ -35,11 +35,19 @@ describe('tool output → asset: privacy and validation rules', () => {
   });
 });
 
+describe('image-converter outputs', () => {
+  it('accepts converter images but refuses a PDF (the library stores images only)', () => {
+    expect(checkToolOutput({ size: 10, type: 'image/webp' })).toBeNull();
+    expect(checkToolOutput({ size: 10, type: 'application/pdf' })).toBe('type');
+  });
+});
+
 describe('toolAssetFilename', () => {
   it('names the file from the source and tool, with the extension taken from the real MIME type', () => {
     expect(toolAssetFilename('portrait.jpg', 'background-remover', 'image/png')).toBe('portrait - Background Remover.png');
     expect(toolAssetFilename('logo', 'svg-converter', 'image/svg+xml')).toBe('logo - SVG Converter.svg');
     expect(toolAssetFilename('shot.PNG', 'halftone', 'image/jpeg')).toBe('shot - Halftone.jpg');
+    expect(toolAssetFilename('scan.pdf', 'image-converter', 'image/webp')).toBe('scan - Image Converter.webp');
   });
 
   it('strips path-like and unsafe characters and bounds the length', () => {

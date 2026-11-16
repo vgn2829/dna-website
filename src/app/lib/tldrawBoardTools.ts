@@ -9,7 +9,8 @@ import {
   type TLShapePartial,
 } from 'tldraw';
 import type { StarterColor, StarterLayout, StarterShape } from './boardStarters';
-import { exportFileName, fitInsertSize, planExport, planTidyGrid, type ExportPlan } from './boardLayout';
+import { readingOrder, type BoardImageShape, type LightboxImage } from './lightbox';
+import { exportFileName, fitInsertSize, planExport, planTidyGrid, previewScale, type ExportPlan } from './boardLayout';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Editor-side tools for Moodboards (Milestone B): starter layouts, Asset
@@ -274,6 +275,28 @@ export function wrapSelectionInFrame(editor: Editor, name = 'Group'): ArrangeRes
   return { ok: true, count: ids.length };
 }
 
+// ── Image viewing ─────────────────────────────────────────────────────────
+
+/**
+ * Every image on the current page, in reading order, for the lightbox. Uses the same
+ * page-space bounds the canvas shows (so frames and nesting don't matter) and drops any
+ * image whose asset has no usable source.
+ */
+export function collectBoardImages(editor: Editor): LightboxImage[] {
+  const shapes: BoardImageShape[] = [];
+  for (const shape of editor.getCurrentPageShapes()) {
+    if (shape.type !== 'image') continue;
+    const props = shape.props as { assetId?: string | null };
+    const asset = props.assetId ? editor.getAsset(props.assetId as never) : undefined;
+    const src = (asset?.props as { src?: string | null } | undefined)?.src;
+    const b = editor.getShapePageBounds(shape.id);
+    if (!b) continue;
+    const name = (asset?.props as { name?: string } | undefined)?.name;
+    shapes.push({ id: shape.id, x: b.x, y: b.y, w: b.w, h: b.h, src, label: name || undefined });
+  }
+  return readingOrder(shapes);
+}
+
 // ── Export ────────────────────────────────────────────────────────────────
 
 export type ExportFormat = 'png' | 'jpeg' | 'svg';
@@ -306,6 +329,25 @@ const EXPORT_PADDING = 32;
 
 export function planBoardExport(target: ExportTarget, scale: number): ExportPlan {
   return planExport(target.width, target.height, scale, EXPORT_PADDING);
+}
+
+/**
+ * A small PNG of what an export would contain RIGHT NOW (same scope, same
+ * SVG→bitmap path, same light theme and background rules as the real export),
+ * for the dialog's preview. Returns null for an empty board. Never downloads.
+ */
+export async function renderBoardPreview(
+  editor: Editor,
+  opts: Pick<ExportOptions, 'scope' | 'background' | 'format'>,
+  maxEdge = 420,
+): Promise<Blob | null> {
+  const target = describeExportTarget(editor, opts.scope);
+  if (!target) return null;
+  const svg = await editor.getSvgString(target.ids, {
+    scale: 1, background: opts.format === 'jpeg' ? true : opts.background, padding: EXPORT_PADDING, darkMode: false,
+  });
+  if (!svg) return null;
+  return getSvgAsImage(editor, svg.svg, { type: 'png', quality: 0.8, scale: previewScale(target.width, target.height, EXPORT_PADDING, maxEdge), width: svg.width, height: svg.height });
 }
 
 /**

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { BadgeCheck, Star } from 'lucide-react';
 import type { CreatorCard, CreatorDiscipline } from '../../lib/api';
@@ -13,6 +13,8 @@ import { bylineParts, initials, profilePath, projectCountLabel } from '../../lib
 /** Profile picture with an initials fallback — a missing or deleted image never shows a broken icon. */
 export function CreatorAvatar({ name, src, size = 56 }: { name: string; src: string | null; size?: number }) {
   const [failed, setFailed] = useState(false);
+  // A new image (e.g. just uploaded) gets a fresh chance after an earlier one failed.
+  useEffect(() => { setFailed(false); }, [src]);
   const show = src && !failed;
   return (
     <div aria-hidden="true" style={{
@@ -67,6 +69,7 @@ export function CreatorCardView({ creator }: { creator: CreatorCard }) {
         </div>
       </div>
       {creator.headline && <p className="type-body-sm" style={{ margin: 0, color: 'var(--color-ink)' }}>{creator.headline}</p>}
+      {creator.featured && creator.editorialNote && <p className="type-caption" style={{ margin: 0, fontStyle: 'italic', color: 'var(--color-ink)' }}>“{creator.editorialNote}”</p>}
       {creator.bio && <p className="type-caption" style={{ margin: 0, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{creator.bio}</p>}
       <DisciplineChips disciplines={creator.disciplines} />
       {creator.projects.length > 0 && (

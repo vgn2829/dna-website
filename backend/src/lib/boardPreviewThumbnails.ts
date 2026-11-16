@@ -29,13 +29,15 @@ function previewImageSources(board: PublicBoard): string[] {
   return out;
 }
 
-export async function withPreviewThumbnails<T extends PublicBoard>(boards: T[]): Promise<Array<T & { preview_thumbnails: Record<string, string> }>> {
-  const perBoard = boards.map(previewImageSources);
-  const unique = [...new Set(perBoard.flat())];
+/**
+ * One batched lookup: original src → its READY t512 thumbnail URL. A mapping is accepted
+ * only when it is exactly the derivative of THIS src's own managed source key; anything
+ * else (external URLs, SVGs, malformed/unknown URLs, missing/failed/skipped derivatives)
+ * is simply absent, and callers fall back to the original.
+ */
+export async function thumbnailsForSources(sources: string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(sources)];
   const resolved = unique.length > 0 ? await resolveDerivativeUrls(unique) : new Map<string, string>();
-
-  // Accept a mapping only when it is exactly the derivative of THIS src's
-  // own managed source key.
   const thumbFor = new Map<string, string>();
   for (const src of unique) {
     const mapped = resolved.get(src);
@@ -43,6 +45,12 @@ export async function withPreviewThumbnails<T extends PublicBoard>(boards: T[]):
     if (!mapped || !key || !isDerivableSourceKey(key)) continue;
     if (mapped === getStorage().getPublicUrl(derivativeKey(key))) thumbFor.set(src, mapped);
   }
+  return thumbFor;
+}
+
+export async function withPreviewThumbnails<T extends PublicBoard>(boards: T[]): Promise<Array<T & { preview_thumbnails: Record<string, string> }>> {
+  const perBoard = boards.map(previewImageSources);
+  const thumbFor = await thumbnailsForSources(perBoard.flat());
 
   return boards.map((board, i) => {
     const thumbnails: Record<string, string> = {};

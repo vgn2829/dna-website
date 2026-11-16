@@ -397,18 +397,19 @@ export interface CreatorDiscipline { id: string; title: string; color: string }
 export interface CreatorProjectThumb { slug: string; title: string; category: string | null; coverUrl: string | null }
 export interface CreatorCard {
   handle: string; displayName: string; headline: string | null; bio: string | null; avatarUrl: string | null;
-  verified: boolean; featured: boolean; skills: string[]; disciplines: CreatorDiscipline[];
+  verified: boolean; featured: boolean; editorialNote?: string | null; skills: string[]; disciplines: CreatorDiscipline[];
   projectCount: number; projects: CreatorProjectThumb[];
 }
 export interface CreatorFacets {
   total: number; disciplines: Array<CreatorDiscipline & { count: number }>;
   skills: Array<{ skill: string; count: number }>; categories: Array<{ category: string; count: number }>;
+  tools?: Array<{ tool: string; count: number }>; departments?: Array<{ department: string; count: number }>;
 }
-export interface CreatorQuery { q?: string; discipline?: string; skill?: string; category?: string; sort?: 'featured' | 'name' | 'newest'; limit?: number; offset?: number }
+export interface CreatorQuery { q?: string; discipline?: string; skill?: string; tool?: string; department?: string; featured?: boolean; category?: string; sort?: 'featured' | 'name' | 'newest'; limit?: number; offset?: number }
 export interface CreatorCapabilities { profiles: boolean; projects: boolean; artworkCredits: boolean }
 export interface DesignerProfile {
   handle: string; displayName: string; headline: string | null; bio: string | null; department: string | null; batch: string | null;
-  verified: boolean; avatarUrl: string | null; coverUrl: string | null; disciplines: CreatorDiscipline[]; skills: string[];
+  verified: boolean; avatarUrl: string | null; coverUrl: string | null; disciplines: CreatorDiscipline[]; skills: string[]; tools?: string[];
   links: Array<{ kind: string; url: string }>; worksCount: number;
 }
 // Owner view of PR #84's /api/designers/me (never includes roll numbers or email).
@@ -425,7 +426,7 @@ export interface MyArtworkCredit {
 export interface ProfileUpdate { handle?: string; displayName?: string; headline?: string | null; bio?: string | null; department?: string | null; showBatch?: boolean }
 export interface DesignerWork { id: string; title: string; domain: string; mediaType: string; coverUrl: string | null; role: string; roleLabel: string | null; publishedAt: string }
 export interface CreatorProject { slug: string; title: string; summary: string | null; category: string | null; featured: boolean; publishedAt: string; roleLabel: string | null; isOwner: boolean; coverUrl: string | null }
-export interface CreatorAdminItem { id: string; handle: string; displayName: string; ownerRoll: string; verified: boolean; featured: boolean; featuredAt: string | null }
+export interface CreatorAdminItem { id: string; handle: string; displayName: string; ownerRoll: string; verified: boolean; featured: boolean; featuredAt: string | null; displayOrder?: number | null; editorialNote?: string | null }
 
 
 function libraryAdminQuery(filters: LibraryAdminFilters): string {
@@ -959,7 +960,7 @@ export const api = {
         { body: { canvas_data: canvasData }, roll }
       ),
     loadCanvas: (boardId: string, roll?: string) =>
-      request<{ canvas_data: string | null }>(
+      request<{ canvas_data: string | null; image_thumbnails?: Record<string, string> }>(
         'GET', `/boards/${boardId}/canvas`,
         roll ? { roll } : {}
       ),
@@ -1323,6 +1324,9 @@ export const api = {
       if (q.q) p.set('q', q.q);
       if (q.discipline) p.set('discipline', q.discipline);
       if (q.skill) p.set('skill', q.skill);
+      if (q.tool) p.set('tool', q.tool);
+      if (q.department) p.set('department', q.department);
+      if (q.featured) p.set('featured', '1');
       if (q.category) p.set('category', q.category);
       if (q.sort) p.set('sort', q.sort);
       if (q.limit) p.set('limit', String(q.limit));
@@ -1341,6 +1345,8 @@ export const api = {
       const qs = p.toString();
       return request<{ creators: CreatorAdminItem[]; featuredCount: number; max: number; available: boolean }>('GET', `/creators/admin/list${qs ? `?${qs}` : ''}`, { admin: true });
     },
+    adminEditFeatured: (id: string, body: { displayOrder?: number | null; editorialNote?: string | null }) =>
+      request<{ displayOrder: number | null; editorialNote: string | null }>('PATCH', `/creators/admin/${id}/featured`, { admin: true, body }),
     adminFeature: (id: string, featured: boolean) =>
       request<{ featured: boolean; changed: boolean }>('PUT', `/creators/admin/${id}/featured`, { admin: true, body: { featured } }),
   },
@@ -1357,6 +1363,7 @@ export const api = {
     setLinks: (roll: string, links: Array<{ kind: string; url: string }>) => request<{ links: Array<{ kind: string; url: string }> }>('PUT', '/designers/me/links', { roll, body: { links } }),
     setDisciplines: (roll: string, domainIds: string[]) => request<{ domainIds: string[] }>('PUT', '/designers/me/disciplines', { roll, body: { domainIds } }),
     setSkills: (roll: string, skills: string[]) => request<{ skills: string[] }>('PUT', '/designers/me/skills', { roll, body: { skills } }),
+    setTools: (roll: string, tools: string[]) => request<{ tools: string[] }>('PUT', '/designers/me/tools', { roll, body: { tools } }),
     setVisibility: (roll: string, visibility: ProfileVisibility) => request<{ visibility: ProfileVisibility }>('PATCH', '/designers/me/visibility', { roll, body: { visibility } }),
     preview: (roll: string) => request<ProfilePreview>('GET', '/designers/me/preview', { roll }),
     handleAvailable: (roll: string, handle: string) =>

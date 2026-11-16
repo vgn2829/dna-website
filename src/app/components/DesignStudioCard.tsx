@@ -35,7 +35,7 @@ export function DesignStudioCard() {
               Built for designers
             </p>
             <h2 className="type-display-lg" style={{ marginBottom: 12 }}>
-              Design Studio
+              Creator Studio
             </h2>
             <p className="type-body" style={{ maxWidth: 560 }}>
               A suite of free design tools — generate semantic color palettes,
@@ -94,7 +94,7 @@ export function DesignStudioCard() {
             className="btn-primary"
             onClick={() => navigate("/design-studio")}
           >
-            Open Design Studio
+            Open Creator Studio
           </button>
         </motion.div>
       </div>

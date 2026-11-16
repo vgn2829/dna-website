@@ -1,3 +1,4 @@
+import { SaveToAssetsButton } from "../assets/SaveToAssetsButton";
 import {readImageDraft,saveImageDraft,clearImageDraft} from "../../lib/image-drafts";
 import { useState, useRef, useEffect } from "react";
 import type {
@@ -364,11 +365,22 @@ export function ImageConverter() {
                   Download {output.ext.toUpperCase()}
                 </a>
               )}
+              {output && output.config === config && (
+                <SaveToAssetsButton
+                  tool="image-converter"
+                  baseName={source?.name ?? ""}
+                  getBlob={async () => (await fetch(output.url)).blob()}
+                  disabled={busy || output.ext === "pdf"}
+                />
+              )}
               <button className="btn-translucent" onClick={reset}>
                 {busy ? "Cancel and clear" : "Clear input"}
               </button>
             </div>
           </div>
+          {output && output.config === config && output.ext === "pdf" && (
+            <p className="studio-help">The Asset Library stores images only, so a PDF can be downloaded but not saved there.</p>
+          )}
           {output && output.config !== config && (
             <p role="status" className="studio-help">
               Settings changed. Convert again to download the updated output.

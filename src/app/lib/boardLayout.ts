@@ -71,6 +71,13 @@ export interface ExportPlan {
   ok: boolean;
 }
 
+/** Scale that fits content (plus padding on every side) inside `maxEdge` px on its longest side; never upscales. */
+export function previewScale(contentWidth: number, contentHeight: number, padding: number, maxEdge = 420): number {
+  const longest = Math.max(contentWidth, contentHeight) + padding * 2;
+  if (!Number.isFinite(longest) || longest <= 0 || !Number.isFinite(maxEdge) || maxEdge <= 0) return 1;
+  return Math.min(1, maxEdge / longest);
+}
+
 export function planExport(
   contentWidth: number,
   contentHeight: number,

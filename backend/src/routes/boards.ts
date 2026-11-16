@@ -15,7 +15,8 @@ import { getBoardRole, roleCanWriteCanvas } from '../realtime/roomAccess';
 import { notifyBoardShared } from '../services/notificationService';
 import { canvasSummaryColumns } from '../lib/canvasSummary';
 import { toPublicBoard, BOARD_ITEM_COUNT_SQL, BOARD_LIST_COLUMNS, MARK_PLACED_BOARD_ITEMS_SQL } from '../lib/boardRows';
-import { withPreviewThumbnails } from '../lib/boardPreviewThumbnails';
+import { withPreviewThumbnails, thumbnailsForSources } from '../lib/boardPreviewThumbnails';
+import { collectCanvasImageSources } from '../lib/canvasImageSources';
 
 const router = Router();
 
@@ -556,7 +557,15 @@ router.get('/:id/canvas', optionalStudent, async (req: Request, res: Response) =
       }
     }
 
-    res.json({ canvas_data: board.canvas_data ?? null });
+    // Read-time only (never stored): original src → ready t512 thumbnail, so the canvas can draw
+    // small images from small files. Best effort — a lookup failure just means "no thumbnails".
+    let image_thumbnails: Record<string, string> = {};
+    try {
+      const sources = collectCanvasImageSources(board.canvas_data);
+      if (sources.length > 0) image_thumbnails = Object.fromEntries(await thumbnailsForSources(sources));
+    } catch (e) { console.error('Canvas thumbnail lookup failed (serving originals):', e); }
+
+    res.json({ canvas_data: board.canvas_data ?? null, image_thumbnails });
   } catch (err) {
     console.error('Load canvas error:', err);
     res.status(500).json({ error: 'Internal server error' });

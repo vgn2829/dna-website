@@ -24,12 +24,13 @@ export const TOOL_ASSET_MIME: Record<string, string> = {
 
 export const TOOL_ASSET_VISIBILITY = 'personal' as const;
 
-export type ToolId = 'background-remover' | 'halftone' | 'svg-converter';
+export type ToolId = 'background-remover' | 'halftone' | 'svg-converter' | 'image-converter';
 
 const TOOL_LABEL: Record<ToolId, string> = {
   'background-remover': 'Background Remover',
   halftone: 'Halftone',
   'svg-converter': 'SVG Converter',
+  'image-converter': 'Image Converter',
 };
 export const toolLabel = (tool: ToolId): string => TOOL_LABEL[tool];
 

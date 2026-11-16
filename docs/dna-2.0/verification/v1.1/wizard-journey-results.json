@@ -1,0 +1,207 @@
+[
+  {
+    "n": "new draft opens at step 1 of 7",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "step 1: Continue blocked with specific messages",
+    "ok": true,
+    "d": "Before you continue: |  | Add a short summary (at least 10 characters) | Choose a category | Pick at least one discipline"
+  },
+  {
+    "n": "step 1: nothing saved while invalid",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "step 1 → 2 saved to the server",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "URL carries the step (?step=2)",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "step 2: Continue blocked without an image",
+    "ok": true,
+    "d": "Before you continue:  Add at least one image"
+  },
+  {
+    "n": "step 2 → 3 with an image and cover",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "step 3: prompt appended to the description",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "step 3: short story blocked",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "Back goes to step 2 without validation",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "story preserved after going back and forward",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "step 4: owner credit name present",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "step 4: pending contributor warning shown (not blocking)",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "step 5: shows process moodboards section",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "step 5: private/localhost link blocked",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "step 6: visibility explained",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "step 7 reached",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "review summarises all six sections",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "review shows the contributor as waiting",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "review: server blocks submit until the contributor accepts",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "\"Go to step\" jumps to Contributors (step 4)",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "refresh keeps step 4 (URL) and server data",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "contributor sees the invitation",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "contributor accepts",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "after consent the review has no blocking problems",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "success state shown after submit",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "double-click sent exactly ONE submit request",
+    "ok": true,
+    "d": "submit POSTs: 1"
+  },
+  {
+    "n": "wizard replaced by the read-only page once submitted",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "server status is submitted",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "edit is frozen server-side while in review",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "changes requested: reviewer note visible and wizard editable again",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "resubmit via the review step",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "admin publishes → appears in public Showcase",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "another student sees \"Project not found\", never the wizard or its data",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "390px: compact stepper (Step 1 of 7) instead of seven labels",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "390px: step 1 has no horizontal scroll",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "390px: step 2 has no horizontal scroll",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "390px: step 4 has no horizontal scroll",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "390px: step 7 has no horizontal scroll",
+    "ok": true,
+    "d": ""
+  },
+  {
+    "n": "390px: every step button is >= 36px tall or uses the design system's touch-target hit area",
+    "ok": true,
+    "d": "14 buttons; small without touch-target: none"
+  },
+  {
+    "n": "no uncaught page errors",
+    "ok": true,
+    "d": ""
+  }
+]

@@ -50,7 +50,14 @@ describe('workspace buttons use the product button language (H4)', () => {
       expect(board).toContain(`onClick={() => ${h}}\n                  title=`);
     }
     expect(board).toMatch(/aria-label="Delete board"\n\s*title="Delete board"\n\s*className="btn-translucent btn-icon btn-sm is-danger touch-target"/);
-    expect(board.match(/className="btn-translucent btn-sm touch-target"/g)?.length).toBe(5); // Assets, Export, History, Save as Template + the Arrange menu trigger
+    expect(board.match(/className="btn-translucent btn-sm touch-target"/g)?.length).toBe(6); // Assets, Images (lightbox), Export, History, Save as Template + the Arrange menu trigger
+  });
+
+  it('board header: the image viewer opens from both the desktop row and the compact (phone) overflow menu, through one shared handler', () => {
+    const board = read('pages/BoardPage.tsx');
+    expect(board).toMatch(/onClick=\{openImageViewer\}\n\s*title="View the images on this board full size"\n\s*aria-label="View board images"/);
+    expect(board).toMatch(/onSelect=\{\(\) => void openImageViewer\(\)\}>\n\s*<ImageIcon size=\{15\} \/> View board images/);
+    expect(board.match(/const openImageViewer = async/g)?.length).toBe(1);
   });
 
   it('Share dialog: Private/Shared and edit-mode are segmented toggles; Add/Copy/Remove are pills', () => {

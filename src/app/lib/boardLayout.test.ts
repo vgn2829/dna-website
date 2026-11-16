@@ -6,6 +6,7 @@ import {
   fitInsertSize,
   planExport,
   planTidyGrid,
+  previewScale,
   type LayoutBox,
 } from './boardLayout';
 
@@ -115,5 +116,17 @@ describe('fitInsertSize', () => {
   it('falls back to a square for unknown dimensions', () => {
     expect(fitInsertSize(0, 0)).toEqual({ w: 300, h: 300 });
     expect(fitInsertSize(Number.NaN, 10)).toEqual({ w: 300, h: 300 });
+  });
+});
+
+describe('previewScale', () => {
+  it('shrinks big content so its longest edge (with padding) fits, and never upscales', () => {
+    expect(previewScale(2000, 1000, 32, 420)).toBeCloseTo(420 / 2064, 6);
+    expect(previewScale(100, 80, 32, 420)).toBe(1);
+  });
+  it('is safe for degenerate input', () => {
+    expect(previewScale(0, 0, 0, 420)).toBe(1);
+    expect(previewScale(NaN, 10, 32, 420)).toBe(1);
+    expect(previewScale(500, 500, 32, 0)).toBe(1);
   });
 });

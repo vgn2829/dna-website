@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { Plus, Sparkles, Mail } from 'lucide-react';
 import { api, type ShowcaseInvitation, type ShowcaseListItem } from '../lib/api';
@@ -38,6 +38,12 @@ export default function ShowcaseManagePage() {
   }, [roll, openRollModal]);
   useEffect(() => { void load(); }, [load]);
 
+  // Sidebar "Collaborations" → /showcase/manage#collaborations; the block mounts once data is in.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash === '#collaborations' && projects) document.getElementById('collaborations')?.scrollIntoView({ block: 'start' });
+  }, [hash, projects]);
+
   if (!studentSession) {
     return (
       <div style={{ padding: '80px 0', textAlign: 'center' }}>
@@ -71,6 +77,7 @@ export default function ShowcaseManagePage() {
         </div>
       </div>
 
+      <div id="collaborations" style={{ scrollMarginTop: 96 }}>
       {invites.length > 0 && (
         <section aria-label="Credit invitations" style={{ marginBottom: 'var(--space-lg)', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <h2 className="type-headline" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}><Mail size={16} aria-hidden="true" /> Credit invitations</h2>
@@ -95,6 +102,7 @@ export default function ShowcaseManagePage() {
       )}
 
       <SharedProjects roll={roll} studentName={studentSession.name ?? ''} onSessionExpired={openRollModal} />
+      </div>
 
       {error && <div role="alert" style={{ padding: '48px 0', textAlign: 'center' }}><p className="type-body" style={{ color: 'var(--color-ink-muted)', margin: '0 0 12px' }}>Couldn’t load your projects.</p><button className="btn-translucent" onClick={() => void load()}>Try again</button></div>}
       {!error && projects === null && <div role="status" style={{ padding: '60px 0', textAlign: 'center', color: 'var(--color-ink-muted)' }}>Loading…</div>}

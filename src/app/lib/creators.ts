@@ -27,8 +27,8 @@ export const CATEGORY_LABELS: Record<string, string> = {
 };
 export const categoryLabel = (c: string | null | undefined) => (c ? CATEGORY_LABELS[c] ?? c : null);
 
-export function hasCreatorFilters(f: { q: string; discipline: string; skill: string; category: string }): boolean {
-  return !!(f.q.trim() || f.discipline || f.skill || f.category);
+export function hasCreatorFilters(f: { q: string; discipline: string; skill: string; category: string; tool?: string; department?: string }): boolean {
+  return !!(f.q.trim() || f.discipline || f.skill || f.category || f.tool || f.department);
 }
 
 /** "3 projects", "1 project", "" */

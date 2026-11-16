@@ -4,6 +4,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ArrowLeft, Home, MessageCircle, MoreHorizontal, Image as ImageIcon, History, LayoutTemplate, Trash2, Download, Grid2x2, Frame } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { startIndexFor, type LightboxImage } from '../lib/lightbox';
 import { useStudent } from '../context/StudentContext';
 import { api, type BoardDetail, type Workspace, type LibraryVisibility } from '../lib/api';
 import { useModalA11y } from '../components/hooks/useModalA11y';
@@ -30,6 +31,7 @@ const TldrawCanvas = lazy(() =>
 // Lazy-loaded the same way TldrawCanvas already is, so a board that never
 // uses realtime never pays for @tldraw/sync's bundle weight.
 const ExportBoardDialog = lazy(() => import('../components/ExportBoardDialog'));
+const ImageLightbox = lazy(() => import('../components/ImageLightbox').then(m => ({ default: m.ImageLightbox })));
 
 const TldrawCanvasSync = lazy(() =>
   import('./TldrawCanvasSync').then(m => ({ default: m.TldrawCanvasSync }))
@@ -76,6 +78,7 @@ export default function BoardPage() {
   const [error, setError] = useState('');
   const [theme, setTheme] = useState<'dark' | 'light'>(getSiteTheme);
   const [canvasData, setCanvasData] = useState<unknown>(null);
+  const [imageThumbnails, setImageThumbnails] = useState<Record<string, string>>({});
   const [canvasLoading, setCanvasLoading] = useState(true);
   const [canvasReady, setCanvasReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -179,6 +182,7 @@ export default function BoardPage() {
     setReadyEditor({ editor, realtime: realtimeCanvasRef.current });
   }, []);
   const [showExport, setShowExport] = useState(false);
+  const [lightbox, setLightbox] = useState<{ items: LightboxImage[]; index: number } | null>(null);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -392,6 +396,7 @@ export default function BoardPage() {
           const canvasResult = await api.boards.loadCanvas(id, rollRef.current);
           if (canvasResult.canvas_data) {
             setCanvasData(JSON.parse(canvasResult.canvas_data));
+            setImageThumbnails(canvasResult.image_thumbnails ?? {});
           }
         } catch {
           // No saved canvas — start fresh
@@ -513,6 +518,17 @@ export default function BoardPage() {
   // Organization tools (Milestone B). Tidy acts on a selection of 2+ items or
   // else the whole page; wrap needs a selection. Both are one undo step and
   // go through the normal editor store, so saving/sync behave as for any edit.
+  // Opens the full-size image viewer on every image on the board (desktop button and the
+  // compact-header menu share this). tldraw helpers load on demand, like the other board tools.
+  const openImageViewer = async () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const { collectBoardImages } = await import('../lib/tldrawBoardTools');
+    const items = collectBoardImages(editor);
+    if (items.length === 0) { toast('No images on this board yet'); return; }
+    setLightbox({ items, index: startIndexFor(items, editor.getSelectedShapeIds()) });
+  };
+
   const runArrange = async (which: 'tidy' | 'frame') => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -838,6 +854,15 @@ export default function BoardPage() {
                 )}
 
                 <button
+                  onClick={openImageViewer}
+                  title="View the images on this board full size"
+                  aria-label="View board images"
+                  className="btn-translucent btn-sm touch-target"
+                >
+                  Images
+                </button>
+
+                <button
                   onClick={() => setShowExport(true)}
                   title="Export as image"
                   className="btn-translucent btn-sm touch-target"
@@ -910,6 +935,9 @@ export default function BoardPage() {
                         </DropdownMenu.Item>
                       </>
                     )}
+                    <DropdownMenu.Item className="dna-menu-item" onSelect={() => void openImageViewer()}>
+                      <ImageIcon size={15} /> View board images
+                    </DropdownMenu.Item>
                     <DropdownMenu.Item className="dna-menu-item" onSelect={() => setShowExport(true)}>
                       <Download size={15} /> Export as image
                     </DropdownMenu.Item>
@@ -1071,6 +1099,7 @@ export default function BoardPage() {
                 boardId={id!}
                 theme={theme}
                 initialData={canvasData}
+                imageThumbnails={imageThumbnails}
                 pendingItems={board.items}
                 onSave={handleSave}
                 readOnly={!isMember && board.edit_mode === 'members_only'}
@@ -1105,6 +1134,13 @@ export default function BoardPage() {
             if (patch.member_count !== undefined) loadBoard();
           }}
         />
+      )}
+
+      {lightbox && (
+        <Suspense fallback={null}>
+          <ImageLightbox items={lightbox.items} index={lightbox.index} label={`${board?.name ?? 'Board'} images`}
+            onIndexChange={i => setLightbox(l => (l ? { ...l, index: i } : l))} onClose={() => setLightbox(null)} />
+        </Suspense>
       )}
 
       {showExport && board && editorRef.current && (

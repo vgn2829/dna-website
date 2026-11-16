@@ -1,0 +1,408 @@
+{
+  "results": [
+    {
+      "name": "navbar says \"Creator Studio\"",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no \"Design Studio\" label remains in the navbar",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "account trigger visible (desktop)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "account menu entries",
+      "ok": true,
+      "detail": "My Profile|Edit Profile|Account Settings|Notifications|Invitations|Sign out"
+    },
+    {
+      "name": "Escape closes menu and refocuses trigger",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "/design-studio still routes (old bookmarks)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "profile created",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "completion card visible on a fresh profile",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "navbar shows initials before an image exists",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "navbar avatar appears after upload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "…without a full-page reload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "profile completion advanced",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tools saved via UI",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "navbar name updates after rename (no reload)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Edit Profile lands on #edit-profile",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "profile set public",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "asset uploaded",
+      "ok": true,
+      "detail": "status 201"
+    },
+    {
+      "name": "cover attached",
+      "ok": true,
+      "detail": "{\"id\":\"cfe46916-4ea6-4f51-acf7-f97951663f3a\",\"slug\":\"retro-poster-series\",\"title\":\"Retro Poster Series\",\"summary\":\"Retro"
+    },
+    {
+      "name": "contributor invited",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "submit before contributor consent is handled (200 or explicit 4xx)",
+      "ok": true,
+      "detail": "status 400"
+    },
+    {
+      "name": "contributor sees invitation",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "contributor accepts (consent)",
+      "ok": true,
+      "detail": "status 200 {\"success\":true}"
+    },
+    {
+      "name": "project submitted",
+      "ok": true,
+      "detail": "status 200 {\"id\":\"cfe46916-4ea6-4f51-acf7-f97951663f3a\",\"slug\":\"retro-poster-series\",\"title\":\"Retro Poster Series\",\"summary\":\"Retro"
+    },
+    {
+      "name": "unapproved project NOT public",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "admin login",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "student token cannot moderate",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "admin requests changes with feedback",
+      "ok": true,
+      "detail": "status 200 (in_review 400)"
+    },
+    {
+      "name": "student sees moderator feedback",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "resubmission works",
+      "ok": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "approve",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "publish",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "published project is public",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "admin sees public creator",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "feature creator",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "edit order+note",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "student cannot edit featured",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Showcase lists the published project",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "project page shows contributors with roles",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "project page leaks no roll/email",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Creators page shows featured creator with editorial note",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Creators page filters expose tools",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tool filter finds the creator",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "tool filter empty state",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "public profile shows tools and the published project",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "public profile leaks no roll/email",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "homepage shows Featured Creators",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "private profile 404 publicly",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "private profile absent from directory",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "sidebar groups Create/Discover/Manage",
+      "ok": true,
+      "detail": "CREATE|DISCOVER|MANAGE"
+    },
+    {
+      "name": "sidebar has no \"My profile\"",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Collaborations is the only active item on its hash",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "direct load /home",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "direct load /moodboards",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "direct load /assets",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "direct load /templates",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "direct load /inspiration",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "direct load /creators",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "direct load /showcase",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "direct load /projects",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "direct load /showcase/manage",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "board created",
+      "ok": true,
+      "detail": "status 201"
+    },
+    {
+      "name": "export dialog renders a preview image",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "preview is a local blob (nothing uploaded)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "preview has real pixels",
+      "ok": true,
+      "detail": "{\"w\":284,\"h\":214}"
+    },
+    {
+      "name": "preview still present after toggling transparency",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "390px no horizontal scroll: /",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "390px no horizontal scroll: /home",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "390px no horizontal scroll: /profile",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "390px no horizontal scroll: /creators",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "390px no horizontal scroll: /showcase",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "390px no horizontal scroll: /designers/asha-draws",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "390px no horizontal scroll: /showcase/manage",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "390px no horizontal scroll: /assets",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "390px no horizontal scroll: /design-studio",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile menu has Creator Studio + account entries",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile drawer lists the three groups",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no uncaught page errors",
+      "ok": true,
+      "detail": "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0) || console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22) || console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)"
+    }
+  ],
+  "errors": [
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)",
+    "console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 1)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)"
+  ]
+}

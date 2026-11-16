@@ -7,6 +7,33 @@ import { VerifiedMark } from '../creators/CreatorParts';
 // Admin: feature / unfeature public creators. Only profiles that are public
 // and active are listed; the server re-checks on every change, caps the set,
 // and writes an audit entry. Verification is set elsewhere — shown read-only.
+// Display order (lower first; blank = after ordered ones) and an optional editorial line
+// shown on the creator's featured card. Saved with the featured row; nothing else changes.
+function FeatureMetaEditor({ creator, onSaved }: { creator: CreatorAdminItem; onSaved: () => Promise<void> | void }) {
+  const [order, setOrder] = useState(creator.displayOrder == null ? '' : String(creator.displayOrder));
+  const [note, setNote] = useState(creator.editorialNote ?? '');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setOrder(creator.displayOrder == null ? '' : String(creator.displayOrder)); setNote(creator.editorialNote ?? ''); }, [creator.displayOrder, creator.editorialNote]);
+  const orderNum = order.trim() === '' ? null : Number(order);
+  const orderBad = orderNum !== null && (!Number.isInteger(orderNum) || orderNum < 0 || orderNum > 999);
+  const dirty = (orderNum ?? null) !== (creator.displayOrder ?? null) || note.trim() !== (creator.editorialNote ?? '');
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.creators.adminEditFeatured(creator.id, { displayOrder: orderNum, editorialNote: note.trim() || null });
+      toast.success('Featured details saved');
+      await onSaved();
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Couldn’t save'); } finally { setBusy(false); }
+  };
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', flex: '1 1 320px', minWidth: 0 }}>
+      <input className="input-base" type="number" min={0} max={999} inputMode="numeric" aria-label={`Display order for ${creator.displayName}`} placeholder="Order" value={order} onChange={e => setOrder(e.target.value)} aria-invalid={orderBad} style={{ width: 80 }} />
+      <input className="input-base" aria-label={`Editorial note for ${creator.displayName}`} placeholder="Editorial note (optional, 200 max)" maxLength={200} value={note} onChange={e => setNote(e.target.value)} style={{ flex: '1 1 180px', minWidth: 0 }} />
+      <button type="button" className="btn-translucent btn-sm" disabled={busy || !dirty || orderBad} onClick={() => void save()}>{busy ? 'Saving…' : 'Save'}</button>
+    </div>
+  );
+}
+
 export function CreatorFeaturingTab() {
   const [q, setQ] = useState('');
   const [onlyFeatured, setOnlyFeatured] = useState(false);
@@ -52,6 +79,7 @@ export function CreatorFeaturingTab() {
               <p className="type-body-sm" style={{ margin: 0, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>{c.displayName}{c.verified && <VerifiedMark />}</p>
               <p className="type-caption" style={{ margin: 0 }}>@{c.handle} · {c.ownerRoll}</p>
             </div>
+            {c.featured && <FeatureMetaEditor creator={c} onSaved={load} />}
             <button type="button" className={c.featured ? 'btn-translucent btn-sm' : 'btn-primary btn-sm'} disabled={busy === c.id} onClick={() => void toggle(c)} aria-label={`${c.featured ? 'Unfeature' : 'Feature'} ${c.displayName}`}>
               <Star size={13} aria-hidden="true" /> {c.featured ? 'Unfeature' : 'Feature'}
             </button>

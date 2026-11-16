@@ -69,7 +69,7 @@ export function previewBio(bio: string | null | undefined, max = BIO_PREVIEW): s
 export const DIRECTORY_SORTS = ['featured', 'name', 'newest'] as const;
 export type DirectorySort = typeof DIRECTORY_SORTS[number];
 export const SORT_SQL: Record<DirectorySort, string> = {
-  featured: '(f.featured_at IS NULL) ASC, f.featured_at DESC, lower(p.display_name) ASC, p.handle ASC',
+  featured: '(f.featured_at IS NULL) ASC, (f.display_order IS NULL) ASC, f.display_order ASC, f.featured_at DESC, lower(p.display_name) ASC, p.handle ASC',
   name: 'lower(p.display_name) ASC, p.handle ASC',
   newest: 'p.created_at DESC, p.handle ASC',
 };

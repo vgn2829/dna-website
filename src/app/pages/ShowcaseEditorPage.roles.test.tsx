@@ -50,10 +50,10 @@ function project(access: 'owner' | 'editor' | 'viewer', over: object = {}) {
   };
 }
 
-async function mount() {
+async function mount(step = 1) {
   const host = document.createElement('div'); document.body.appendChild(host);
   const root = createRoot(host);
-  await act(async () => root.render(<MemoryRouter initialEntries={['/showcase/manage/p1']}><Routes><Route path="/showcase/manage/:id" element={<ShowcaseEditorPage />} /></Routes></MemoryRouter>));
+  await act(async () => root.render(<MemoryRouter initialEntries={[`/showcase/manage/p1?step=${step}`]}><Routes><Route path="/showcase/manage/:id" element={<ShowcaseEditorPage />} /></Routes></MemoryRouter>));
   await act(async () => { await new Promise(r => setTimeout(r, 0)); });
   const btn = (label: string) => [...host.querySelectorAll('button')].find(b => b.textContent?.trim() === label) as HTMLButtonElement | undefined;
   const disabled = (sel: string) => (host.querySelector(sel) as HTMLInputElement).closest('fieldset[disabled]') !== null || (host.querySelector(sel) as HTMLInputElement).disabled;
@@ -65,43 +65,63 @@ beforeEach(() => {
 });
 
 describe('ShowcaseEditorPage by role', () => {
-  it('OWNER sees every control', async () => {
+  it('OWNER sees every control, step by step', async () => {
     m.getMine.mockResolvedValue(project('owner'));
-    const { text, btn, host } = await mount();
-    expect(btn('Submit for review')).toBeDefined();
-    expect(btn('Save details')).toBeDefined();
-    expect(host.querySelector('#sc-credit-name')).not.toBeNull();
-    expect(text()).toContain('Process moodboards');
-    expect(host.querySelector('form[aria-label="Invite a collaborator"]')).not.toBeNull();
-    expect(host.querySelector('button[aria-label="Remove image 1"]')).not.toBeNull();
-    expect(host.querySelector('button[aria-label="Remove image 2"]')).not.toBeNull();
+    const basics = await mount(1);
+    expect(basics.host.querySelector('#sc-title')).not.toBeNull();
+    expect(basics.btn('Save draft')).toBeDefined();
+    expect(basics.host.querySelector('#sc-credit-name')).toBeNull();          // belongs to step 4, not step 1
+    document.body.innerHTML = '';
+    const media = await mount(2);
+    expect(media.host.querySelector('button[aria-label="Remove image 1"]')).not.toBeNull();
+    expect(media.host.querySelector('button[aria-label="Remove image 2"]')).not.toBeNull();
+    document.body.innerHTML = '';
+    const people = await mount(4);
+    expect(people.host.querySelector('#sc-credit-name')).not.toBeNull();
+    expect(people.host.querySelector('form[aria-label="Invite a collaborator"]')).not.toBeNull();
+    document.body.innerHTML = '';
+    const resources = await mount(5);
+    expect(resources.text()).toContain('Process moodboards');
+    document.body.innerHTML = '';
+    const review = await mount(7);
+    expect(review.btn('Submit for review')).toBeDefined();
+    expect(review.btn('Submit for review')!.disabled).toBe(false);
   });
 
   it('EDITOR edits details and their own images only — no owner credit, moodboards, lifecycle, invitations or removing others’ images', async () => {
     m.getMine.mockResolvedValue(project('editor'));
-    const { text, btn, host } = await mount();
-    expect(text()).toContain('You’re an editor');
-    expect(btn('Save details')).toBeDefined();
-    expect(btn('Submit for review')).toBeUndefined();
-    expect(btn('Delete')).toBeUndefined();
-    expect(host.querySelector('#sc-credit-name')).toBeNull();
-    expect(text()).not.toContain('Process moodboards');
-    expect(text()).not.toContain('Secret moodboard');
-    expect(host.querySelector('form[aria-label="Invite a collaborator"]')).toBeNull();
-    expect(host.querySelector('select[aria-label^="Role for"]')).toBeNull();
-    expect(host.querySelector('button[aria-label="Remove image 1"]')).toBeNull();     // the owner's image
-    expect(host.querySelector('button[aria-label="Remove image 2"]')).not.toBeNull();  // their own
-    expect(host.querySelector('#sc-title')!.closest('fieldset[disabled]')).toBeNull();
-    expect(btn('Leave project')).toBeDefined();
+    const basics = await mount(1);
+    expect(basics.text()).toContain('You’re an editor');
+    expect(basics.btn('Save draft')).toBeDefined();
+    expect(basics.btn('Delete')).toBeUndefined();
+    expect(basics.host.querySelector('#sc-title')!.closest('fieldset[disabled]')).toBeNull();
+    expect(basics.btn('Leave project')).toBeDefined();
+    document.body.innerHTML = '';
+    const media = await mount(2);
+    expect(media.host.querySelector('button[aria-label="Remove image 1"]')).toBeNull();     // the owner's image
+    expect(media.host.querySelector('button[aria-label="Remove image 2"]')).not.toBeNull();  // their own
+    document.body.innerHTML = '';
+    const people = await mount(4);
+    expect(people.host.querySelector('#sc-credit-name')).toBeNull();
+    expect(people.host.querySelector('form[aria-label="Invite a collaborator"]')).toBeNull();
+    expect(people.host.querySelector('select[aria-label^="Role for"]')).toBeNull();
+    document.body.innerHTML = '';
+    const resources = await mount(5);
+    expect(resources.text()).not.toContain('Process moodboards');
+    expect(resources.text()).not.toContain('Secret moodboard');
+    document.body.innerHTML = '';
+    const review = await mount(7);
+    expect(review.text()).toContain('Only the project owner can submit it for review');
+    expect(review.btn('Submit for review')!.disabled).toBe(true);
   });
 
   it('EDITOR never sends the owner-credit fields when saving', async () => {
     m.getMine.mockResolvedValue(project('editor'));
     m.update.mockResolvedValue(project('editor', { title: 'Renamed' }));
-    const { host, btn } = await mount();
+    const { host, btn } = await mount(1);
     const title = host.querySelector('#sc-title') as HTMLInputElement;
-    await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(title, 'Renamed'); title.dispatchEvent(new Event('input', { bubbles: true })); });
-    await act(async () => { btn('Save details')!.click(); });
+    await act(async () => { Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!.call(title, 'Renamed'); title.dispatchEvent(new Event('input', { bubbles: true })); });
+    await act(async () => { btn('Save draft')!.click(); });
     expect(m.update).toHaveBeenCalledTimes(1);
     const sent = m.update.mock.calls[0][2];
     expect(sent.title).toBe('Renamed');

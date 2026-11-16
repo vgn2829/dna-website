@@ -119,6 +119,12 @@ export default function CreatorProfilePage() {
                       {profile.skills.map(s => <Link key={s} to={`/creators?skill=${encodeURIComponent(s)}`} className="type-micro" style={{ padding: '2px 9px', borderRadius: 'var(--radius-pill)', background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)', textDecoration: 'none' }}>{s}</Link>)}
                     </div>
                   )}
+                  {!!profile.tools?.length && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }} aria-label="Tools">
+                      <span className="type-micro" style={{ marginRight: 2 }}>Tools</span>
+                      {profile.tools.map(t => <Link key={t} to={`/creators?tool=${encodeURIComponent(t)}`} className="type-micro" style={{ padding: '2px 9px', borderRadius: 'var(--radius-pill)', border: '1px solid var(--color-hairline)', color: 'var(--color-ink-muted)', textDecoration: 'none' }}>{t}</Link>)}
+                    </div>
+                  )}
                   {profile.links.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                       {profile.links.map((l, i) => <a key={i} href={l.url} target="_blank" rel="noopener noreferrer nofollow ugc" className="btn-translucent btn-sm"><ExternalLink size={13} aria-hidden="true" /> {LINK_LABEL[l.kind] ?? 'Link'}</a>)}

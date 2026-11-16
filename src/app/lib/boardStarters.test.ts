@@ -8,7 +8,7 @@ import {
   DefaultVerticalAlignStyle,
   GeoShapeGeoStyle,
 } from 'tldraw';
-import { STARTER_LAYOUTS, cellGrid, countStarterShapes, getStarterLayout, type StarterShape } from './boardStarters';
+import { STARTER_LAYOUTS, cellGrid, countImageSlots, countStarterShapes, getStarterLayout, starterPreview, type StarterShape } from './boardStarters';
 import { starterShapeToPartial } from './tldrawBoardTools';
 
 const NOTE = 200;
@@ -107,5 +107,35 @@ describe('cellGrid', () => {
       expect(c.x + c.w).toBeLessThanOrEqual(510);
       expect(c.y + c.h).toBeLessThanOrEqual(320);
     }
+  });
+});
+
+describe('starter catalogue and previews', () => {
+  it('covers the creative workflows the club works in (ten layouts, one per use case)', () => {
+    expect(STARTER_LAYOUTS.map(l => l.id)).toEqual(expect.arrayContaining(['inspiration', 'palette-type', 'character-sheet', 'brand-identity', 'storyboard', 'project-brief', 'ui-ux-reference', 'motion-style-frames', 'photo-series', 'poster-exploration']));
+    expect(STARTER_LAYOUTS).toHaveLength(10);
+    for (const l of STARTER_LAYOUTS) expect(l.description.length, l.id).toBeGreaterThan(30);
+  });
+  it('every layout has a non-degenerate preview whose items all sit inside its bounds', () => {
+    for (const l of STARTER_LAYOUTS) {
+      const p = starterPreview(l);
+      expect(p.width, l.id).toBeGreaterThan(100); expect(p.height, l.id).toBeGreaterThan(100);
+      expect(p.items.length, l.id).toBeGreaterThan(4);
+      for (const i of p.items) {
+        expect(i.x, l.id).toBeGreaterThanOrEqual(0); expect(i.y, l.id).toBeGreaterThanOrEqual(0);
+        expect(i.x + i.w, l.id).toBeLessThanOrEqual(p.width + 0.001); expect(i.y + i.h, l.id).toBeLessThanOrEqual(p.height + 0.001);
+      }
+    }
+  });
+  it('the preview is derived from the real shapes (item count tracks the layout, nested frames are absolute)', () => {
+    const sb = getStarterLayout('storyboard')!;
+    expect(starterPreview(sb).items.filter(i => i.kind === 'frame')).toHaveLength(6);
+    const brand = starterPreview(getStarterLayout('brand-identity')!);
+    expect(brand.items.filter(i => i.kind === 'swatch')).toHaveLength(4);
+  });
+  it('counts image slots, including those nested in frames', () => {
+    expect(countImageSlots(getStarterLayout('photo-series')!.shapes)).toBe(7);
+    expect(countImageSlots(getStarterLayout('ui-ux-reference')!.shapes)).toBe(10);
+    expect(countImageSlots([])).toBe(0);
   });
 });

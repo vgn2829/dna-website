@@ -17,6 +17,8 @@ export default function CreatorsPage() {
   const [params, setParams] = useSearchParams();
   const discipline = params.get('discipline') ?? '';
   const skill = params.get('skill') ?? '';
+  const tool = params.get('tool') ?? '';
+  const department = params.get('department') ?? '';
   const category = params.get('category') ?? '';
   const sort = (params.get('sort') as CreatorSortId) || 'featured';
   const urlQ = params.get('q') ?? '';
@@ -46,7 +48,7 @@ export default function CreatorsPage() {
     api.creators.featured().then(r => setFeatured(r.creators)).catch(() => {});
   }, []);
 
-  const query = useMemo(() => ({ q: urlQ, discipline, skill, category, sort }), [urlQ, discipline, skill, category, sort]);
+  const query = useMemo(() => ({ q: urlQ, discipline, skill, tool, department, category, sort }), [urlQ, discipline, skill, tool, department, category, sort]);
   const seq = useRef(0);
   const load = useCallback(async () => {
     const mine = ++seq.current;
@@ -67,7 +69,7 @@ export default function CreatorsPage() {
     } catch { /* keep what we have */ } finally { setMore(false); }
   };
 
-  const filtersOn = hasCreatorFilters({ q: urlQ, discipline, skill, category });
+  const filtersOn = hasCreatorFilters({ q: urlQ, discipline, skill, category, tool, department });
   const clear = () => { setSearch(''); setParams(sort === 'featured' ? {} : { sort }, { replace: true }); };
   const unavailable = caps !== null && !caps.profiles;
   // While the Featured strip is showing (no filters), don't repeat those creators in the main grid.
@@ -105,7 +107,7 @@ export default function CreatorsPage() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
               <div style={{ position: 'relative', flex: '1 1 260px', minWidth: 0 }}>
                 <Search size={15} aria-hidden="true" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-ink-muted)' }} />
-                <input className="input-base" type="search" aria-label="Search creators" placeholder="Search by name, username, discipline or skill" value={search} onChange={e => setSearch(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', paddingLeft: 34 }} />
+                <input className="input-base" type="search" aria-label="Search creators" placeholder="Search by name, username, skill, tool or discipline" value={search} onChange={e => setSearch(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', paddingLeft: 34 }} />
               </div>
               <select className="input-base" aria-label="Discipline" value={discipline} onChange={e => set({ discipline: e.target.value || null })} style={{ flex: '0 1 180px' }}>
                 <option value="">All disciplines</option>
@@ -115,6 +117,18 @@ export default function CreatorsPage() {
                 <select className="input-base" aria-label="Project category" value={category} onChange={e => set({ category: e.target.value || null })} style={{ flex: '0 1 190px' }}>
                   <option value="">Any project category</option>
                   {facets.categories.map(c => <option key={c.category} value={c.category}>{CATEGORY_LABELS[c.category] ?? c.category} ({c.count})</option>)}
+                </select>
+              )}
+              {!!facets?.tools?.length && (
+                <select className="input-base" aria-label="Tool" value={tool} onChange={e => set({ tool: e.target.value || null })} style={{ flex: '0 1 160px' }}>
+                  <option value="">Any tool</option>
+                  {facets.tools.map(t => <option key={t.tool} value={t.tool}>{t.tool} ({t.count})</option>)}
+                </select>
+              )}
+              {!!facets?.departments?.length && (
+                <select className="input-base" aria-label="Department" value={department} onChange={e => set({ department: e.target.value || null })} style={{ flex: '0 1 190px' }}>
+                  <option value="">Any department</option>
+                  {facets.departments.map(d => <option key={d.department} value={d.department}>{d.department} ({d.count})</option>)}
                 </select>
               )}
               <select className="input-base" aria-label="Sort" value={sort} onChange={e => set({ sort: e.target.value === 'featured' ? null : e.target.value })} style={{ flex: '0 1 170px' }}>
@@ -158,7 +172,7 @@ export default function CreatorsPage() {
               <div style={{ padding: '56px 16px', textAlign: 'center', border: '1px dashed var(--color-hairline)', borderRadius: 'var(--radius-xl)' }}>
                 <h2 className="type-headline" style={{ margin: '0 0 6px' }}>{filtersOn ? 'No creators match these filters' : 'No public creators yet'}</h2>
                 <p className="type-body-sm" style={{ margin: '0 auto 14px', maxWidth: 440, color: 'var(--color-ink-muted)' }}>
-                  {filtersOn ? 'Try a different search, discipline or skill.' : 'Creators appear here once they choose to make their profile public.'}
+                  {filtersOn ? 'Try a different search, discipline, skill or tool.' : 'Creators appear here once they choose to make their profile public.'}
                 </p>
                 {filtersOn && <button type="button" className="btn-translucent" onClick={clear}>Clear filters</button>}
               </div>

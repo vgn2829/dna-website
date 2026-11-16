@@ -6,6 +6,7 @@ import { EventSpotlight } from '../components/EventSpotlight';
 import { ResourcesPreview } from '../components/ResourcesPreview';
 import { Team } from '../components/Team';
 import { DesignStudioCard } from '../components/DesignStudioCard';
+import { FeaturedCreators } from '../components/FeaturedCreators';
 import { usePageMeta } from '../components/hooks/use-page-meta';
 
 export function HomePage() {
@@ -23,6 +24,7 @@ export function HomePage() {
       <GalleryPreview />
       <EventSpotlight />
       <DesignStudioCard />
+      <FeaturedCreators />
       <ResourcesPreview />
       <Team />
     </div>

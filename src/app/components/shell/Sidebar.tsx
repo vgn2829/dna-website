@@ -1,42 +1,72 @@
-import { NavLink } from 'react-router';
-import { Home, LayoutGrid, Image, Lightbulb, FolderKanban, LayoutTemplate, Sparkles, UserRound, X } from 'lucide-react';
+import { Link, useLocation } from 'react-router';
+import { Home, LayoutGrid, Image, Lightbulb, FolderKanban, LayoutTemplate, Sparkles, Users, Handshake, Globe, X } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 // ─────────────────────────────────────────────────────────────────────────
-// Sidebar (V2.0 Phase 2) — persistent left-rail navigation for the
-// workspace app surface (Home/Moodboards/Assets/Projects/Templates).
-// Deliberately separate from the existing top-bar Navigation.tsx, which
-// keeps serving the public/marketing site + Design Studio/Academy/etc
-// unchanged (see WorkspaceShell.tsx for the route boundary between the
-// two shells).
+// Sidebar — persistent left-rail navigation for Creator Studio's workspace
+// surface. Deliberately separate from the top-bar Navigation.tsx, which
+// keeps serving the public site (see WorkspaceShell.tsx for the boundary).
 //
-// Mobile/tablet: rendered inside a slide-in drawer by WorkspaceShell, not
-// duplicated here — this component only knows how to render the nav list
-// itself; open/close/backdrop is the shell's responsibility so there is
-// exactly one place that owns "is the drawer open."
+// V1.1 groups the destinations by what a creator is doing:
+//   CREATE   make things             DISCOVER  look around
+//   MANAGE   publish & collaborate
+// Every destination is an existing route; nothing was renamed or moved
+// (the old flat list's "Showcase" is "Showcase submissions" below, and
+// "My profile" now lives in the navbar's account menu).
+//
+// Mobile/tablet: rendered inside a slide-in drawer by WorkspaceShell; this
+// component only renders the list, the shell owns open/close/backdrop.
 // ─────────────────────────────────────────────────────────────────────────
 
-const NAV_ITEMS = [
-  { to: '/home', label: 'Overview', icon: Home },
-  { to: '/moodboards', label: 'Moodboards', icon: LayoutGrid },
-  { to: '/assets', label: 'Assets', icon: Image },
-  { to: '/inspiration', label: 'Inspiration', icon: Lightbulb },
-  { to: '/showcase/manage', label: 'Showcase', icon: Sparkles },
-  { to: '/projects', label: 'Projects', icon: FolderKanban },
-  { to: '/templates', label: 'Templates', icon: LayoutTemplate },
-  { to: '/profile', label: 'My profile', icon: UserRound },
+interface NavItem { to: string; label: string; icon: LucideIcon; end?: boolean }
+export const NAV_GROUPS: Array<{ id: string; label: string; items: NavItem[] }> = [
+  {
+    id: 'create', label: 'Create',
+    items: [
+      { to: '/home', label: 'Overview', icon: Home },
+      { to: '/moodboards', label: 'Moodboards', icon: LayoutGrid },
+      { to: '/assets', label: 'Asset Library', icon: Image },
+      { to: '/templates', label: 'Templates', icon: LayoutTemplate },
+    ],
+  },
+  {
+    id: 'discover', label: 'Discover',
+    items: [
+      { to: '/inspiration', label: 'Inspiration Library', icon: Lightbulb },
+      { to: '/creators', label: 'Creator Discovery', icon: Users },
+      { to: '/showcase', label: 'Public Showcase', icon: Globe, end: true },
+    ],
+  },
+  {
+    id: 'manage', label: 'Manage',
+    items: [
+      { to: '/projects', label: 'My Projects', icon: FolderKanban },
+      { to: '/showcase/manage', label: 'Showcase submissions', icon: Sparkles },
+      { to: '/showcase/manage#collaborations', label: 'Collaborations', icon: Handshake },
+    ],
+  },
 ];
 
+/** Hash-aware active check: '/showcase/manage#collaborations' is its own destination, not a second highlight of '/showcase/manage'. */
+export function isNavItemActive(item: NavItem, pathname: string, hash: string): boolean {
+  const [path, itemHash] = item.to.split('#');
+  const onPath = item.end ? pathname === path : pathname === path || pathname.startsWith(`${path}/`);
+  if (!onPath) return false;
+  if (itemHash) return hash === `#${itemHash}`;
+  // A plain item yields to a sibling that owns the current hash on the same path.
+  const hashOwners = NAV_GROUPS.flatMap(g => g.items).filter(i => i.to.startsWith(`${path}#`));
+  return !hashOwners.some(i => hash === `#${i.to.split('#')[1]}`);
+}
+
 export function Sidebar({ onNavigate, onCloseMobile }: { onNavigate?: () => void; onCloseMobile?: () => void }) {
+  const { pathname, hash } = useLocation();
   return (
     <nav
-      aria-label="Workspace navigation"
-      style={{
-        display: 'flex', flexDirection: 'column', height: '100%',
-        padding: '16px 14px', gap: 4,
-      }}
+      aria-label="Creator Studio navigation"
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px 14px', gap: 4 }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div style={{ flex: 1 }}>
           <WorkspaceSwitcher />
         </div>
@@ -56,24 +86,25 @@ export function Sidebar({ onNavigate, onCloseMobile }: { onNavigate?: () => void
         )}
       </div>
 
-      <p className="type-caption" style={{ margin: '0 0 6px', padding: '0 12px' }}>
-        Workspace
-      </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {/* Visual treatment lives in theme.css (.ws-nav-link) so hover and
-            the active state (NavLink sets aria-current="page") can share
-            the public nav's pill language. */}
-        {NAV_ITEMS.map(item => (
-          <NavLink key={item.to} to={item.to} onClick={onNavigate} className="ws-nav-link">
-            {({ isActive }) => (
-              <>
+      {NAV_GROUPS.map(group => (
+        <div key={group.id} role="group" aria-labelledby={`ws-nav-${group.id}`} style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 10 }}>
+          <p id={`ws-nav-${group.id}`} className="type-caption" style={{ margin: '0 0 4px', padding: '0 12px', textTransform: 'uppercase', letterSpacing: '0.08em', fontSize: 11 }}>
+            {group.label}
+          </p>
+          {/* Visual treatment lives in theme.css (.ws-nav-link): hover and the
+              active state (NavLink sets aria-current="page") share the public
+              nav's pill language. */}
+          {group.items.map(item => {
+            const isActive = isNavItemActive(item, pathname, hash);
+            return (
+              <Link key={item.to} to={item.to} onClick={onNavigate} className="ws-nav-link" aria-current={isActive ? 'page' : undefined}>
                 <item.icon size={16} strokeWidth={isActive ? 2.25 : 1.9} style={{ flexShrink: 0 }} />
                 {item.label}
-              </>
-            )}
-          </NavLink>
-        ))}
-      </div>
+              </Link>
+            );
+          })}
+        </div>
+      ))}
     </nav>
   );
 }
