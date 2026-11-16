@@ -238,6 +238,12 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// For components that also render outside the shell (e.g. the asset
+// browser inside BoardPage's library modal): null there instead of throwing.
+export function useOptionalWorkspace(): WorkspaceContextValue | null {
+  return useContext(WorkspaceContext);
+}
+
 export function useWorkspace(): WorkspaceContextValue {
   const ctx = useContext(WorkspaceContext);
   if (!ctx) throw new Error('useWorkspace must be used within a WorkspaceProvider');

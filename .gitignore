@@ -20,3 +20,8 @@ tests/.debug-bundle*.cjs
 
 # Codex CLI local config (personal, machine-specific)
 .codex/
+
+# Optional loopback Studio helper environments and Python bytecode
+.venv-studio-helper/
+**/__pycache__/
+*.pyc

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LIBRARY_STATUSES, LIBRARY_VISIBILITIES } from './libraryVisibility';
+import { ASSET_VISIBILITIES, LIBRARY_STATUSES, LIBRARY_VISIBILITIES } from './libraryVisibility';
 
 // ── Admin moderation ────────────────────────────────────────────────────
 // requireAdmin: the site admin JWT (role 'admin', issued by POST
@@ -7,9 +7,11 @@ import { LIBRARY_STATUSES, LIBRARY_VISIBILITIES } from './libraryVisibility';
 // owner/admin's, is refused with 401. Admins see every item, active and
 // hidden, across all workspaces, and may change visibility or status (and
 // delete assets). They never change workspace_id, ownership or storage_key,
-// so community visibility set by an admin reaches exactly who the owner's
-// own choice would: the item's workspace members, plus — for an asset —
-// the members of workspaces it has been explicitly shared with.
+// so a visibility set by an admin reaches exactly who the owner's own
+// choice would: a template's Community is its workspace's members; an
+// asset's Workspace is its workspace's members plus explicit grants, and an
+// asset's Community is every signed-in student, in any workspace
+// (lib/libraryVisibility.ts).
 export const adminListQuery = z.object({
   q: z.string().trim().max(100).optional(),
   status: z.enum(['active', 'hidden', 'all']).optional(),
@@ -21,8 +23,17 @@ export const adminUpdateSchema = z.object({
   status: z.enum(LIBRARY_STATUSES).optional(),
 }).refine(v => v.visibility !== undefined || v.status !== undefined, { message: 'Nothing to update' });
 
+// Assets have a third visibility, 'workspace' (lib/libraryVisibility.ts).
+export const adminAssetListQuery = adminListQuery.extend({
+  visibility: z.enum(['personal', 'workspace', 'community', 'all']).optional(),
+});
+export const adminAssetUpdateSchema = z.object({
+  visibility: z.enum(ASSET_VISIBILITIES).optional(),
+  status: z.enum(LIBRARY_STATUSES).optional(),
+}).refine(v => v.visibility !== undefined || v.status !== undefined, { message: 'Nothing to update' });
+
 // WHERE clause for the admin list over alias a (+ workspaces w).
-export function adminListWhere(parsed: z.infer<typeof adminListQuery>, nameColumn: string, params: unknown[]): string {
+export function adminListWhere(parsed: z.infer<typeof adminListQuery> | z.infer<typeof adminAssetListQuery>, nameColumn: string, params: unknown[]): string {
   const where: string[] = [];
   if (parsed.status && parsed.status !== 'all') { params.push(parsed.status); where.push(`a.status = $${params.length}`); }
   if (parsed.visibility && parsed.visibility !== 'all') { params.push(parsed.visibility); where.push(`a.visibility = $${params.length}`); }

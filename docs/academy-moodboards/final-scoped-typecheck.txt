@@ -1,0 +1,2 @@
+TypeScript: 16 existing diagnostic identities; 0 new, 0 resolved.
+Affected source files: no diagnostics. Full typecheck retains the documented baseline failures.

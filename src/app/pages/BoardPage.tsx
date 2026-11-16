@@ -631,12 +631,12 @@ export default function BoardPage() {
             )}
             {saveStatus === 'saving' && (
               <span style={{ marginLeft: 8, fontSize: 11, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', color: textMuted, flexShrink: 0 }}>
-                {compactHeader ? '…' : 'Saving...'}
+                <span role="status" aria-label="Saving board">{compactHeader ? '…' : 'Saving...'}</span>
               </span>
             )}
             {saveStatus === 'saved' && (
               <span style={{ marginLeft: 8, fontSize: 11, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', color: 'var(--color-success)', flexShrink: 0 }}>
-                {compactHeader ? '✓' : 'Saved'}
+                <span role="status" aria-label="Board saved">{compactHeader ? '✓' : 'Saved'}</span>
               </span>
             )}
           </nav>
@@ -799,10 +799,10 @@ export default function BoardPage() {
                 <DropdownMenu.Portal container={portalContainerEl ?? undefined}>
                   <DropdownMenu.Content className="dna-menu" align="end" sideOffset={8} collisionPadding={8}>
                     <DropdownMenu.Item className="dna-menu-item" onSelect={() => setShowAssetLibrary(true)}>
-                      <ImageIcon size={15} /> Assets
+                      <ImageIcon size={15} /> Insert from asset library
                     </DropdownMenu.Item>
                     <DropdownMenu.Item className="dna-menu-item" onSelect={() => setShowVersionHistory(true)}>
-                      <History size={15} /> Version history
+                      <History size={15} /> View version history
                     </DropdownMenu.Item>
                     {isOwner && (
                       <DropdownMenu.Item className="dna-menu-item" onSelect={openSaveAsTemplate}>
@@ -831,20 +831,20 @@ export default function BoardPage() {
             seconds is exactly how that goes unnoticed. Anchored just below
             the top bar (which is 48px tall), same as the canvas area. */}
         {saveStatus === 'error' && (
-          <div style={{
+          <div role="alert" style={{
             position: 'absolute', top: 48, left: 0, right: 0,
             padding: '8px 16px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+            display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 12,
             background: 'var(--color-error-fill)', color: '#fff',
             fontSize: 12, fontFamily: 'var(--font-body)', fontWeight: 500,
-            zIndex: 20,
+            zIndex: 1000,
           }}>
             <span>Save failed — your last change to this board hasn&apos;t been saved.</span>
             <button
               onClick={handleRetrySave}
               disabled={retryingSave}
               style={{
-                padding: '3px 10px', background: 'rgba(255,255,255,0.2)',
+                minHeight: 44, padding: '6px 12px', background: 'rgba(255,255,255,0.2)',
                 border: '1px solid rgba(255,255,255,0.4)', borderRadius: 'var(--radius-pill)',
                 color: '#fff', fontSize: 11, fontFamily: 'var(--font-body)', fontWeight: 600,
                 cursor: retryingSave ? 'default' : 'pointer', opacity: retryingSave ? 0.7 : 1,
@@ -855,7 +855,7 @@ export default function BoardPage() {
             <button
               onClick={handleDismissSaveError}
               style={{
-                padding: '3px 8px', background: 'none', border: 'none',
+                minHeight: 44, padding: '6px 12px', background: 'none', border: 'none',
                 color: 'rgba(255,255,255,0.85)', fontSize: 11, fontFamily: 'var(--font-body)',
                 cursor: 'pointer', textDecoration: 'underline',
               }}

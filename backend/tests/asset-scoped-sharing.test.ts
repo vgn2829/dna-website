@@ -22,8 +22,8 @@ beforeEach(async () => {
   }
   await query(`INSERT INTO asset_collections(id,workspace_id,name,created_by_roll,created_at,updated_at) VALUES('pack','source','Pack','OWNER',now(),now())`);
   for (const [id, visibility, status, kind, collection] of [
-    ['shared','community','active','image','pack'], ['personal','personal','active','image',null],
-    ['hidden','community','hidden','image','pack'], ['file','community','active','file',null],
+    ['shared','workspace','active','image','pack'], ['personal','personal','active','image',null],
+    ['hidden','workspace','hidden','image','pack'], ['file','workspace','active','file',null],
   ]) {
     await query(`INSERT INTO assets(id,workspace_id,owner_roll,filename,storage_key,mime_type,size_bytes,created_at,visibility,status,kind,collection_id)
       VALUES($1,'source','OWNER',$1,'assets/source/' || $1 || '.png','image/png',68,$2,$3,$4,$5,$6)`,
@@ -33,15 +33,17 @@ beforeEach(async () => {
 const list = (roll: string, workspace = 'source', filters = '') => request(app).get(`/api/assets?workspace_id=${workspace}${filters}`).set(auth(roll));
 
 describe('scoped asset discovery', () => {
-  it('Community plus a named collection binds the collection independently of workspace', async () => {
-    const res = await list('MEMBER','source','&scope=community&collection_id=pack');
+  it('a named collection binds the collection independently of workspace', async () => {
+    const res = await list('MEMBER','source','&collection_id=pack');
     expect(res.status).toBe(200);
     expect(ids(res)).toEqual(['shared']);
   });
-  it('does not expose Community assets in an unrelated workspace', async () => {
+  it('does not expose Workspace assets in an unrelated workspace — or as Community', async () => {
+    expect(ids(await list('OUTSIDER','outside'))).toEqual([]);
     expect(ids(await list('OUTSIDER','outside','&scope=community'))).toEqual([]);
+    expect(ids(await list('MEMBER','source','&scope=community'))).toEqual([]);
   });
-  it('non-owners cannot move a Community asset to a collection', async () => {
+  it('non-owners cannot move a Workspace asset to a collection', async () => {
     expect((await request(app).patch('/api/assets/shared').set(auth('MEMBER')).send({collection_id:null})).status).toBe(403);
   });
 });
@@ -101,14 +103,14 @@ describe('explicit workspace grants', () => {
     expect((await grant()).status).toBe(404);
     expect(await query('SELECT * FROM asset_workspace_grants')).toHaveLength(0);
   });
-  it('hiding/unpublishing suspend grants; restoring Community restores their explicit access', async () => {
+  it('hiding/unpublishing suspend grants; restoring Workspace restores their explicit access', async () => {
     await grant();
     for (const change of ["status='hidden'", "status='active', visibility='personal'"]) {
       await query(`UPDATE assets SET ${change} WHERE id='shared'`);
       expect(ids(await list('RECIPIENT','target'))).toEqual([]);
       expect((await request(app).get('/api/assets/shared').set(auth('RECIPIENT'))).status).toBe(404);
     }
-    await query(`UPDATE assets SET visibility='community' WHERE id='shared'`);
+    await query(`UPDATE assets SET visibility='workspace' WHERE id='shared'`);
     expect(ids(await list('RECIPIENT','target'))).toEqual(['shared']);
     await query(`DELETE FROM workspace_members WHERE workspace_id='target' AND roll_number='RECIPIENT'`);
     expect((await list('RECIPIENT','target')).status).toBe(403);
@@ -142,7 +144,7 @@ describe('query filter matrix', () => {
       const res = await list(roll,ws,filters);
       expect(res.status).toBe(200);
       const candidates = ws==='source' ? (roll==='OWNER' ? ['shared','personal','file'] : scope==='mine'?[]:['shared','file']) : ws==='target' && scope!=='mine'?['shared']:[];
-      const expected = candidates.filter(id => (scope!=='community' || id!=='personal') && (kind==='file' ? id==='file' : id!=='file') && (!q || id.includes(q)) && (!collection || (ws==='source' && (collection==='pack' ? id==='shared' : id!=='shared'))));
+      const expected = candidates.filter(id => scope!=='community' && (kind==='file' ? id==='file' : id!=='file') && (!q || id.includes(q)) && (!collection || (ws==='source' && (collection==='pack' ? id==='shared' : id!=='shared'))));
       expect(ids(res).sort()).toEqual(expected.sort());
       if (expected.length) {
         const page = await list(roll,ws,filters+'&limit=1');

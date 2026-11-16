@@ -126,7 +126,7 @@ export function Navigation() {
                   color: 'var(--color-ink)',
                   letterSpacing: '-0.4px',
                 }}
-                className="hidden sm:inline"
+                className="hidden xl:inline"
               >
                 DnA
               </span>
@@ -134,7 +134,7 @@ export function Navigation() {
 
             {/* ── Center: Nav links (desktop) ── */}
             <nav
-              className="hidden md:flex"
+              className="hidden xl:flex"
               style={{
                 alignItems: 'center',
                 gap: 2,
@@ -203,7 +203,7 @@ export function Navigation() {
 
             {/* ── Center: DnA text (mobile only) ── */}
             <span
-              className="md:hidden"
+              className="xl:hidden"
               style={{
                 position: 'absolute',
                 left: '50%',
@@ -230,7 +230,7 @@ export function Navigation() {
               }}
             >
               {/* Student session pill — desktop */}
-              <div className="hidden md:flex items-center">
+              <div className="hidden xl:flex items-center">
                 {studentSession ? (
                   <div
                     style={{
@@ -372,7 +372,7 @@ export function Navigation() {
               {/* Hamburger — mobile + tablet */}
               <button
                 onClick={() => setMenuOpen(o => !o)}
-                className="md:hidden"
+                className="flex xl:hidden"
                 aria-label="Menu"
                 style={{
                   width: 34,
@@ -383,7 +383,6 @@ export function Navigation() {
                     ? isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'
                     : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
                   color: 'var(--color-ink)',
-                  display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',

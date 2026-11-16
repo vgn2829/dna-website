@@ -8,12 +8,14 @@ import { param } from '../routeParams';
 // Asset sharing — explicit per-workspace grants (asset_workspace_grants,
 // db/assetSharingSchema.ts). Mounted under /api/assets by routes/assets.ts.
 //
-// A grant makes ONE active community asset visible to, and usable by, the
-// members of ONE target workspace (lib/libraryVisibility.ts assetScopeSql /
+// A grant makes ONE active Workspace-visibility asset visible to, and
+// usable by, the members of ONE target workspace (lib/libraryVisibility.ts assetScopeSql /
 // canSeeAsset). It never copies the stored object, never changes the
 // asset's owner, workspace_id or storage_key, and never creates a second
-// asset row. Hiding or unpublishing the asset suspends its grants (the
-// visibility checks require active + community); revoking deletes the
+// asset row. Hiding the asset, or changing it away from Workspace, suspends
+// its grants (the visibility checks only honour a grant on an active
+// 'workspace' asset; a Community asset needs none, since every signed-in
+// student can already use it); revoking deletes the
 // grant. Neither touches storage: boards that already placed the asset keep
 // its URL (storage/references.ts protects the object from deletion).
 //
@@ -94,7 +96,7 @@ async function grant(id: string, target: string, roll: string | null): Promise<n
       );
       if (asset.owner_roll !== roll || !member.rowCount) { await client.query('ROLLBACK'); return 404; }
     }
-    if (asset.status !== 'active' || asset.visibility !== 'community' || asset.workspace_id === target) {
+    if (asset.status !== 'active' || asset.visibility !== 'workspace' || asset.workspace_id === target) {
       await client.query('ROLLBACK');
       return 409;
     }
@@ -152,7 +154,7 @@ async function revoke(id: string, target: string, roll: string | null): Promise<
 
 const GRANT_ERRORS: Record<number, string> = {
   404: 'Asset or authorized target not found',
-  409: 'Only active Community assets can be shared to another workspace',
+  409: 'Only active Workspace assets can be shared to another workspace',
 };
 
 assetSharingRouter.put('/:id/shares/:workspaceId', requireStudent, async (req, res) => {

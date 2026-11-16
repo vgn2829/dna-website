@@ -1,0 +1,15 @@
+
+> @figma/my-make-file@0.0.1 test
+> vitest run
+
+
+ RUN  v5.0.1 /Users/venugopal/Downloads/dna_website
+
+
+ Test Files  24 passed (24)
+      Tests  222 passed (222)
+   Start at  02:03:39
+   Duration  1.06s (tests 64%, transform 21%, import 12%, worker 3%)
+
+    Isolate  24 workers spawned · ~114ms startup each (spawn + environment, per file)
+             at least ~276ms faster with isolate: false — reuses workers across files instead of one per file

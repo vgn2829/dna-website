@@ -1,0 +1,12 @@
+
+> @figma/my-make-file@0.0.1 test
+> vitest run
+
+
+ RUN  v5.0.1 /Users/venugopal/Downloads/dna_website
+
+
+ Test Files  21 passed (21)
+      Tests  217 passed (217)
+   Start at  01:28:00
+   Duration  781ms (tests 66%, transform 22%, import 11%, worker 2%)

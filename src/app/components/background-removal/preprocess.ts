@@ -28,16 +28,30 @@ function resizeMask(mask: Uint8ClampedArray, sw: number, sh: number, dw: number,
   return out;
 }
 
-/** Resize source RGBA to inputSize² and produce an NCHW float32 input tensor. */
+/** MODNet's dynamic export accepts multiples of 32. Preserve aspect ratio, bound work to 1024px. */
+export function modelInputDimensions(srcW: number, srcH: number, cfg: ModelConfig) {
+  if (cfg.id !== 'portrait') return { width: cfg.inputSize, height: cfg.inputSize };
+  let scale = Math.max(srcW, srcH) < 512 || Math.min(srcW, srcH) > 512 ? 512 / Math.min(srcW, srcH) : 1;
+  scale = Math.min(scale, 1024 / Math.max(srcW, srcH));
+  return { width: Math.max(32, Math.floor(srcW * scale / 32) * 32), height: Math.max(32, Math.floor(srcH * scale / 32) * 32) };
+}
+
+/** Resize source RGBA to validated model dimensions and produce an NCHW float32 input tensor. */
 export function toInputTensor(rgba: Uint8ClampedArray, srcW: number, srcH: number, cfg: ModelConfig): Float32Array {
-  const n = cfg.inputSize;
-  const px = resizeRGBA(rgba, srcW, srcH, n, n);
-  const out = new Float32Array(3 * n * n);
-  const plane = n * n;
+  const dimensions = modelInputDimensions(srcW, srcH, cfg);
+  const px = resizeRGBA(rgba, srcW, srcH, dimensions.width, dimensions.height);
+  const plane = dimensions.width * dimensions.height;
+  const out = new Float32Array(3 * plane);
+  let divisor = cfg.scaleDiv;
+  if (cfg.id === 'general') {
+    // Match rembg/U2NETP: normalize RGB by the resized image maximum, excluding alpha.
+    divisor = 1;
+    for (let i = 0; i < px.length; i += 4) divisor = Math.max(divisor, px[i], px[i + 1], px[i + 2]);
+  }
   for (let i = 0; i < plane; i++) {
-    const r = px[i * 4] / cfg.scaleDiv;
-    const g = px[i * 4 + 1] / cfg.scaleDiv;
-    const b = px[i * 4 + 2] / cfg.scaleDiv;
+    const r = px[i * 4] / divisor;
+    const g = px[i * 4 + 1] / divisor;
+    const b = px[i * 4 + 2] / divisor;
     out[i] = (r - cfg.mean[0]) / cfg.std[0];
     out[plane + i] = (g - cfg.mean[1]) / cfg.std[1];
     out[2 * plane + i] = (b - cfg.mean[2]) / cfg.std[2];
@@ -46,17 +60,19 @@ export function toInputTensor(rgba: Uint8ClampedArray, srcW: number, srcH: numbe
 }
 
 /**
- * Convert model output (inputSize²) into a full-resolution alpha mask (0–255).
+ * Convert model output into a full-resolution alpha mask (0–255).
  * Saliency maps are contrast-stretched (min-max) like rembg; mattes are used
  * directly as alpha.
  */
 export function toFullResMask(
   output: Float32Array,
-  modelN: number,
+  modelN: number | { width: number; height: number },
   srcW: number,
   srcH: number,
   cfg: ModelConfig,
 ): Uint8ClampedArray {
+  const dimensions = typeof modelN === "number" ? { width: modelN, height: modelN } : modelN;
+  if (output.length !== dimensions.width * dimensions.height || output.some(v => !Number.isFinite(v))) throw new Error("Invalid segmentation output");
   let lo = 0;
   let span = 1;
   if (cfg.output === 'saliency') {
@@ -70,10 +86,10 @@ export function toFullResMask(
     lo = min;
     span = max - min || 1;
   }
-  const small = new Uint8ClampedArray(modelN * modelN);
+  const small = new Uint8ClampedArray(dimensions.width * dimensions.height);
   for (let i = 0; i < small.length; i++) {
-    const v = cfg.output === 'saliency' ? (output[i] - lo) / span : output[i];
+    const v = cfg.output === 'saliency' ? (output[i] - lo) / span : cfg.output === 'logits' ? 1 / (1 + Math.exp(-output[i])) : output[i];
     small[i] = Math.round(clamp01(v) * 255);
   }
-  return resizeMask(small, modelN, modelN, srcW, srcH);
+  return resizeMask(small, dimensions.width, dimensions.height, srcW, srcH);
 }

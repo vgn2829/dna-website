@@ -1,15 +1,12 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from "vitest/config";
 
-// Frontend unit tests. Deliberately minimal and deliberately node-env:
-// this config exists for PURE logic only (string/label helpers), not for
-// rendering components. There is no jsdom and no testing-library here on
-// purpose — component tests over tldraw's editor context would be brittle
-// and would duplicate what the two-client browser QA already verifies for
-// real. See src/app/components/hooks/presenceLabels.ts's own comment.
+// Pure helpers use Node by default. Focused component/security tests opt into
+// jsdom with a per-file environment directive; no tldraw editor is mounted.
 export default defineConfig({
+  esbuild: { jsx: "automatic" },
   test: {
-    environment: 'node',
+    environment: "node",
     globals: false,
-    include: ['src/**/*.test.ts'],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
   },
 });

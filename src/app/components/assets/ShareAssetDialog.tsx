@@ -31,8 +31,8 @@ export function ShareAssetDialog({
   asset: Asset;
   roll: string;
   onClose: () => void;
-  // Publishes a Personal asset to Community (only community assets can be
-  // shared); resolves once the browser holds the updated asset.
+  // Sets a Personal asset to Workspace (only Workspace assets can be shared
+  // with chosen workspaces); resolves once the browser holds the update.
   onPublish: (asset: Asset) => Promise<void>;
 }) {
   const [data, setData] = useState<Sharing | null>(null);
@@ -50,9 +50,11 @@ export function ShareAssetDialog({
     return () => { active = false; };
   }, [load]);
 
-  const isCommunity = asset.visibility === 'community';
+  // Shares are live only while the asset is Workspace: a Community asset
+  // needs none, a Personal one isn't shared at all (its shares are paused).
+  const sharesLive = asset.visibility === 'workspace';
   // Until sharing info loads, assume the owner may share (the common case).
-  const mode = shareDialogMode(data?.canShare ?? true, isCommunity);
+  const mode = shareDialogMode(data?.canShare ?? true, asset.visibility);
 
   // One row per workspace: every current grant, plus every workspace the
   // owner may still share into.
@@ -101,7 +103,7 @@ export function ShareAssetDialog({
         <button type="button" className="btn-secondary" onClick={onClose} style={{ minHeight: 40 }}>Done</button>
         {mode === 'publish-first' && (
           <button type="button" className="btn-primary" onClick={publish} disabled={publishing} style={{ minHeight: 40, opacity: publishing ? 0.6 : 1 }}>
-            {publishing ? 'Publishing…' : 'Publish to Community'}
+            {publishing ? 'Saving…' : 'Set to Workspace'}
           </button>
         )}
       </>}
@@ -111,7 +113,9 @@ export function ShareAssetDialog({
           ? 'You’re no longer a member of this asset’s workspace, so you can’t share it with new workspaces. You can still stop sharing it where it’s shared now — boards that already use it keep it.'
           : mode === 'share'
             ? 'Everyone in a workspace you share with can find and use this asset. It stays yours, and the file is never copied. If you stop sharing, boards that already use it keep it.'
-            : 'Only Community assets can be shared with other workspaces. Publish it to Community first — it stays yours, and the file is never copied.'}
+            : mode === 'community'
+              ? 'This asset is in Community, so every signed-in DnA member can already find and use it from any workspace — no share needed. To share it with chosen workspaces only, set it to Workspace from its ⋯ menu.'
+              : 'Only Workspace assets can be shared with other workspaces. Set it to Workspace first — it stays yours, and the file is never copied.'}
       </p>
 
       {!data && !error && (
@@ -136,7 +140,7 @@ export function ShareAssetDialog({
                 borderRadius: 'var(--radius-md)',
                 border: `1px solid ${row.shared ? 'var(--color-brand)' : 'var(--color-hairline)'}`,
                 background: row.shared ? 'color-mix(in srgb, var(--color-brand) 6%, transparent)' : 'none',
-                opacity: !isCommunity && !row.shared ? 0.6 : 1,
+                opacity: !sharesLive && !row.shared ? 0.6 : 1,
               }}
             >
               <Users size={15} style={{ flexShrink: 0, color: 'var(--color-ink-muted)' }} />
@@ -145,14 +149,14 @@ export function ShareAssetDialog({
               </span>
               {row.shared && (
                 <span className="type-micro" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--color-brand-text)', flexShrink: 0 }}>
-                  <Check size={13} /> {isCommunity ? 'Shared' : 'Paused'}
+                  <Check size={13} /> {sharesLive ? 'Shared' : 'Paused'}
                 </span>
               )}
               <button
                 type="button"
                 className={row.shared ? 'btn-translucent btn-sm touch-target' : 'btn-secondary btn-sm touch-target'}
                 onClick={() => toggle(row)}
-                disabled={busyId !== null || (!isCommunity && !row.shared)}
+                disabled={busyId !== null || (!sharesLive && !row.shared)}
                 aria-label={row.shared ? `Stop sharing with ${row.name}` : `Share with ${row.name}`}
                 style={{ flexShrink: 0 }}
               >

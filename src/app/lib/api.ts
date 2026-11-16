@@ -225,18 +225,22 @@ export interface Project {
 // template was originally saved from), never a live dependency — it may
 // be null if that board was later deleted.
 // Shared Creative Library — mirrors backend/src/lib/libraryVisibility.ts.
-// personal: only the owner sees/uses it. community: every member of the
-// item's workspace — and, for an asset, of each workspace its owner has
-// explicitly shared it with (assets.shares/grant/revoke). Never public,
-// never club-wide. Only the owner manages it either way.
+// Templates (LibraryVisibility): personal — only the owner; community —
+// every member of the template's workspace.
+// Assets (AssetVisibility): personal — only the owner; workspace — every
+// member of the asset's workspace and of each workspace its owner has
+// explicitly shared it with (assets.shares/grant/revoke); community —
+// published to the whole club: every signed-in student, from any workspace.
+// Never public. Only the owner manages it either way.
 export type LibraryVisibility = 'personal' | 'community';
-// List scope: all = mine + other members' community items; mine; community.
+export type AssetVisibility = 'personal' | 'workspace' | 'community';
+// List scope: all = everything the caller may use here; mine; community.
 export type LibraryScope = 'all' | 'mine' | 'community';
 // Admin moderation: a hidden item is out of every normal flow until an admin
 // restores it (normal list/detail responses only ever contain 'active').
 export type LibraryStatus = 'active' | 'hidden';
 // Admin list filters (GET /…/admin/all) and the workspace label rows carry.
-export interface LibraryAdminFilters { q?: string; status?: LibraryStatus | 'all'; visibility?: LibraryVisibility | 'all' }
+export interface LibraryAdminFilters { q?: string; status?: LibraryStatus | 'all'; visibility?: AssetVisibility | 'all' }
 interface LibraryAdminExtra { workspace_name: string; workspace_is_personal: boolean }
 
 export interface Template {
@@ -294,13 +298,17 @@ export interface Asset {
   width: number | null;
   height: number | null;
   created_at: string;
-  visibility: LibraryVisibility;
+  visibility: AssetVisibility;
   status: LibraryStatus;
   url: string | null;
   // Read-time t512 WebP derivative of an image asset, set only when one is
   // ready (null otherwise). For card/preview rendering ONLY — `url` stays
   // the original for opening, downloading and placing on a board.
   thumb_url?: string | null;
+  // Attachment (Content-Disposition) URL of the same stored object, for an
+  // explicit Download: equals `url` for files, null for links. Optional:
+  // fall back to `url` when absent.
+  download_url?: string | null;
 }
 
 export type AdminAsset = Asset & LibraryAdminExtra;
@@ -823,6 +831,12 @@ export const api = {
       request<BoardItem[]>('GET', `/boards/${id}/items`, { roll }),
     addItem: (boardId: string, roll: string, data: { image_url: string; note?: string; source_url?: string }) =>
       request<BoardItem>('POST', `/boards/${boardId}/items`, { body: data, roll }),
+    // Assets "Add to Moodboard": the server resolves the library asset and
+    // re-checks it may be used on this board's workspace (404 otherwise).
+    // duplicate: the same image was already pending on the board; the
+    // existing item is returned instead of a second one.
+    addAssetItem: (boardId: string, roll: string, assetId: string, sourceUrl?: string) =>
+      request<BoardItem & { duplicate?: boolean }>('POST', `/boards/${boardId}/items`, { body: { asset_id: assetId, source_url: sourceUrl }, roll }),
     deleteItem: (boardId: string, itemId: string, roll: string) =>
       request<{ success: boolean }>('DELETE', `/boards/${boardId}/items/${itemId}`, { roll }),
     addMember: (boardId: string, roll: string, memberRoll: string) =>
@@ -1032,7 +1046,7 @@ export const api = {
     // clientUploadId makes a retry idempotent (the server returns the asset
     // an earlier attempt created). Rejects with UploadError.
     upload: (workspaceId: string, file: File, opts?: {
-      kind?: 'file'; collectionId?: string | null; visibility?: LibraryVisibility;
+      kind?: 'file'; collectionId?: string | null; visibility?: AssetVisibility;
       clientUploadId?: string; onProgress?: (fraction: number) => void;
     }) => {
       const formData = new FormData();
@@ -1046,11 +1060,11 @@ export const api = {
       formData.append('file', file);
       return studentUploadWithProgress<Asset>('/assets', formData, opts?.onProgress);
     },
-    createLink: (roll: string, body: { workspace_id: string; name: string; url: string; collection_id?: string | null; visibility?: LibraryVisibility }) =>
+    createLink: (roll: string, body: { workspace_id: string; name: string; url: string; collection_id?: string | null; visibility?: AssetVisibility }) =>
       request<Asset>('POST', '/assets/links', { roll, body }),
     // collection_id: an id, or null to ungroup. filename: rename (owner only).
     // visibility: publish/unpublish (owner only).
-    update: (roll: string, id: string, body: { filename?: string; collection_id?: string | null; visibility?: LibraryVisibility }) =>
+    update: (roll: string, id: string, body: { filename?: string; collection_id?: string | null; visibility?: AssetVisibility }) =>
       request<Asset>('PATCH', `/assets/${id}`, { roll, body }),
     // filters.collectionId: an id, or 'none' for ungrouped assets.
     list: (roll: string, workspaceId: string, cursor?: string, filters?: { kind?: AssetKind; q?: string; collectionId?: string; limit?: number; scope?: LibraryScope }) => {
@@ -1075,7 +1089,7 @@ export const api = {
     // Admin moderation (admin token; requireAdmin server-side).
     adminList: (filters: LibraryAdminFilters = {}) =>
       request<{ assets: AdminAsset[] }>('GET', `/assets/admin/all${libraryAdminQuery(filters)}`, { admin: true }),
-    adminUpdate: (id: string, body: { visibility?: LibraryVisibility; status?: LibraryStatus }) =>
+    adminUpdate: (id: string, body: { visibility?: AssetVisibility; status?: LibraryStatus }) =>
       request<AdminAsset>('PATCH', `/assets/admin/${id}`, { body, admin: true }),
     // Admin removal: row always; stored file only when nothing references it.
     adminDelete: (id: string) =>

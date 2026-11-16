@@ -1,0 +1,28 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+? Verifying lockfile against supply-chain policies (526 entries)...
+
+   ╭──────────────────────────────────────────╮
+   │                                          │
+   │   Update available! 11.6.0 → 12.16.1.    │
+   │   Changelog: https://pnpm.io/v/12.16.1   │
+   │     To update, run: pnpm add -g pnpm     │
+   │                                          │
+   ╰──────────────────────────────────────────╯
+
+[WARN] Request took 15104ms: https://registry.npmjs.org/tldraw
+✓ Lockfile passes supply-chain policies (526 entries in 23.7s)
+Progress: resolved 1, reused 0, downloaded 0, added 0
+[WARN] deprecated recharts@2.15.2: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
+Progress: resolved 78, reused 0, downloaded 0, added 0
+Progress: resolved 330, reused 0, downloaded 0, added 0
+Progress: resolved 357, reused 0, downloaded 0, added 0
+Progress: resolved 450, reused 0, downloaded 0, added 0
+Progress: resolved 502, reused 0, downloaded 0, added 0
+Progress: resolved 507, reused 0, downloaded 0, added 0
+Progress: resolved 508, reused 0, downloaded 0, added 0
+Progress: resolved 510, reused 0, downloaded 0, added 0
+Progress: resolved 513, reused 0, downloaded 0, added 0
+[WARN] 1 deprecated subdependencies found: lodash.isequal@4.5.0
+Progress: resolved 529, reused 0, downloaded 0, added 0, done
+
+Done in 34.1s using pnpm v11.6.0

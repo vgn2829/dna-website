@@ -55,37 +55,11 @@ ctx.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       (_m, a, w, b, h, c) => `<svg${a} width="${w}"${b} height="${h}"${c} viewBox="0 0 ${w} ${h}">`,
     );
 
-    // Spline curve-fitting doesn't route through the canvas's true corners —
-    // it smooths a diagonal chord across each one instead (verified: for a
-    // background/frame-covering shape, the fitted curve crosses two adjacent
-    // edges 150-275px from the corner rather than meeting at the corner
-    // itself, on all four corners). The clipPath above correctly removes the
-    // shape's out-of-bounds overshoot, but that also removes the only
-    // coverage those corner wedges had — before clipping, the overshoot
-    // geometry happened to still paint over them; after, they're uncovered.
-    // A small square in each corner's own sampled pixel color, placed under
-    // every traced path, guarantees real coverage there regardless of
-    // preset/mode. Sampling actual source pixels (rather than assuming the
-    // first path is a uniform background) stays correct even if the four
-    // corners differ in color, and for presets whose first path isn't a
-    // background layer at all (e.g. Line Art's binary mode).
-    const cw = Math.min(300, msg.width);
-    const ch = Math.min(300, msg.height);
-    const corners = [
-      { x: 0, y: 0, sx: 0, sy: 0 },
-      { x: msg.width - cw, y: 0, sx: msg.width - 1, sy: 0 },
-      { x: 0, y: msg.height - ch, sx: 0, sy: msg.height - 1 },
-      { x: msg.width - cw, y: msg.height - ch, sx: msg.width - 1, sy: msg.height - 1 },
-    ];
-    const cornerRects = corners
-      .map(c => `<rect x="${c.x}" y="${c.y}" width="${cw}" height="${ch}" fill="${rgbaToHex(pixels, msg.width, c.sx, c.sy)}"/>`)
-      .join('');
-
     const svg = withViewBox.replace(
       /(<svg[^>]*>)([\s\S]*)(<\/svg>)/,
       (_m, open, body, close) =>
         `${open}<defs><clipPath id="vt-bounds"><rect x="0" y="0" width="${msg.width}" height="${msg.height}"/></clipPath></defs>` +
-        `<g clip-path="url(#vt-bounds)">${cornerRects}${body}</g>${close}`,
+        `<g clip-path="url(#vt-bounds)">${body}</g>${close}`,
     );
 
     const res: VectorizeResult = { type: 'result', id: msg.id, svg };

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Clock, Calendar, List, CheckCircle2, Loader2, FileText, ExternalLink } from 'lucide-react';
+import { MapPin, Clock, Calendar, List, CheckCircle2, Loader2, FileText, ExternalLink, Download } from 'lucide-react';
 import { useAppData } from '../context/AppDataContext';
 import { useStudent } from '../context/StudentContext';
 import { api, LiveSession } from '../lib/api';
@@ -65,7 +65,7 @@ function EventCard({ event, view, delay, onRSVP, onCancel, rsvpPending }: {
   // Optional extras (both null for most events, which render exactly as
   // before). The form link is only ever the server's allowlisted value.
   const actions = eventCardActions(event, status === 'past');
-  const { formUrl, formLabel } = actions;
+  const { formUrl, formLabel, attachment, showCancel } = actions;
   // Re-check every second, but only re-render when the status actually flips
   // (upcoming → live → past); an unchanged value bails out of the update.
   const [, setLiveStatus] = useState(status);
@@ -95,6 +95,41 @@ function EventCard({ event, view, delay, onRSVP, onCancel, rsvpPending }: {
     </button>
   );
 
+  // Cancel registration (form events, once registered): a compact control
+  // in the card's top-right — beside the date badge when the card stacks
+  // (grid view; list view on small screens), at the end of the status row
+  // in list view's row layout. Same handler, pending state and visibility
+  // as before.
+  const cancelControl = showCancel && (
+    <button
+      type="button"
+      onClick={onCancel}
+      disabled={rsvpPending}
+      aria-busy={rsvpPending}
+      aria-label={`Cancel registration for ${event.title}`}
+      className="btn-translucent btn-sm touch-target shrink-0"
+    >
+      {rsvpPending ? 'Updating…' : 'Cancel registration'}
+    </button>
+  );
+
+  const dateBadge = (
+    <div
+      className="shrink-0 w-14 h-14 rounded-xl flex flex-col items-center justify-center"
+      style={{ background: status === 'live' ? 'rgba(229,72,77,0.12)' : 'var(--color-surface-2)' }}
+    >
+      <span
+        className="type-headline leading-none"
+        style={{ color: status === 'live' ? '#e5484d' : 'var(--color-ink)' }}
+      >
+        {formatEventDate(event.date).slice(0, 2)}
+      </span>
+      <span className="type-micro" style={{ color: status === 'live' ? '#e5484d' : 'var(--color-ink-muted)' }}>
+        {new Date(event.date + 'T12:00').toLocaleString('en-IN', { month: 'short' })}
+      </span>
+    </div>
+  );
+
   return (
     // Position-only layout animation: animating size would scale-distort the
     // card's text mid-switch. The entrance stagger `delay` is kept off the
@@ -108,26 +143,21 @@ function EventCard({ event, view, delay, onRSVP, onCancel, rsvpPending }: {
       transition={{ delay, layout: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } }}
       className={`card flex gap-5 ${view === 'list' ? 'flex-col md:flex-row p-5' : 'flex-col p-5'} ${status === 'past' ? 'opacity-50' : ''}`}
     >
-      {/* Date badge */}
-      <div
-        className="shrink-0 w-14 h-14 rounded-xl flex flex-col items-center justify-center"
-        style={{ background: status === 'live' ? 'rgba(229,72,77,0.12)' : 'var(--color-surface-2)' }}
-      >
-        <span
-          className="type-headline leading-none"
-          style={{ color: status === 'live' ? '#e5484d' : 'var(--color-ink)' }}
-        >
-          {formatEventDate(event.date).slice(0, 2)}
-        </span>
-        <span className="type-micro" style={{ color: status === 'live' ? '#e5484d' : 'var(--color-ink-muted)' }}>
-          {new Date(event.date + 'T12:00').toLocaleString('en-IN', { month: 'short' })}
-        </span>
-      </div>
+      {/* Date badge — with Cancel registration at its right whenever the
+          card stacks vertically: always in grid view, and in list view below
+          md (from md up, list view lays out in a row and Cancel moves to the
+          end of the status row instead). */}
+      {cancelControl ? (
+        <div className={`flex items-start justify-between gap-3 ${view === 'list' ? 'shrink-0' : ''}`}>
+          {dateBadge}
+          <span className={`shrink-0 ${view === 'list' ? 'md:hidden' : ''}`}>{cancelControl}</span>
+        </div>
+      ) : dateBadge}
 
       <div className="flex-1 flex flex-col gap-3 min-w-0">
         {/* Status + title */}
         <div>
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
             {status === 'live' && (
               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
             )}
@@ -137,6 +167,12 @@ function EventCard({ event, view, delay, onRSVP, onCancel, rsvpPending }: {
             >
               {status === 'live' ? 'LIVE' : status === 'past' ? 'Past' : 'Upcoming'}
             </span>
+            {showCancel && (
+              <span className="type-micro flex items-center gap-1" style={{ color: '#3ecf5f' }}>
+                <CheckCircle2 size={12} /> Place reserved
+              </span>
+            )}
+            {view === 'list' && cancelControl && <span className="ml-auto hidden md:inline-flex">{cancelControl}</span>}
           </div>
           <h3 className="type-body font-semibold leading-snug" style={{ color: 'var(--color-ink)' }}>{event.title}</h3>
         </div>
@@ -155,55 +191,41 @@ function EventCard({ event, view, delay, onRSVP, onCancel, rsvpPending }: {
         {/* Countdown */}
         {status === 'upcoming' && view === 'grid' && <Countdown event={event} />}
 
-        {/* RSVP — plus, when configured, the problem statement and the
-            registration form (Problem Statement first: read the brief, then
-            register / respond). */}
-        {actions.problemStatement || formUrl ? (
+        {/* Actions, anchored to the bottom: the problem statement (when the
+            event has one) as a secondary button directly above the primary
+            action — Register / Registered ✓, or the form's Submit Response /
+            Complete Registration once registered. */}
+        {(attachment || actions.primary !== 'none') && (
           <div className="mt-auto flex flex-col gap-2">
-            {event.attachment && (
+            {attachment && (
               <a
-                href={event.attachment.url}
+                href={attachment.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                title={event.attachment.name}
-                aria-label={`Problem Statement for ${event.title} (${event.attachment.name})`}
-                className="btn-secondary w-full flex items-center justify-center gap-2"
+                title={`${attachment.name} · ${attachment.meta}`}
+                aria-label={`${attachment.label} for ${event.title}: ${attachment.name}, ${attachment.meta}${attachment.opensInBrowser ? ' (opens in a new tab)' : ''}`}
+                className="btn-translucent w-full flex items-center justify-center gap-2"
+                style={{ border: '1px solid var(--color-hairline)' }}
               >
-                <FileText size={14} /> Problem Statement
+                {attachment.opensInBrowser ? <FileText size={14} aria-hidden="true" /> : <Download size={14} aria-hidden="true" />}
+                {attachment.label}
               </a>
             )}
-            {actions.primary !== 'none' && (actions.primary === 'form' && formUrl ? (
-              <>
-                {/* Persistent: works even if the browser blocked the tab
-                    opened right after registering. */}
-                <a
-                  href={formUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`${formLabel} for ${event.title} (opens Google Forms)`}
-                  className="btn-primary w-full flex items-center justify-center gap-2"
-                >
-                  {formLabel} <ExternalLink size={14} />
-                </a>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="type-micro flex items-center gap-1" style={{ color: '#3ecf5f' }}>
-                    <CheckCircle2 size={12} /> Place reserved
-                  </span>
-                  <button
-                    type="button"
-                    onClick={onCancel}
-                    disabled={rsvpPending}
-                    aria-busy={rsvpPending}
-                    aria-label={`Cancel registration for ${event.title}`}
-                    className="btn-translucent btn-sm touch-target"
-                  >
-                    {rsvpPending ? 'Updating…' : 'Cancel registration'}
-                  </button>
-                </div>
-              </>
-            ) : rsvpButton(''))}
+            {actions.primary === 'form' && formUrl ? (
+              // Persistent: works even if the browser blocked the tab opened
+              // right after registering.
+              <a
+                href={formUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`${formLabel} for ${event.title} (opens Google Forms)`}
+                className="btn-primary w-full flex items-center justify-center gap-2"
+              >
+                {formLabel} <ExternalLink size={14} />
+              </a>
+            ) : actions.primary !== 'none' && rsvpButton('')}
           </div>
-        ) : actions.primary !== 'none' && rsvpButton('mt-auto')}
+        )}
       </div>
     </motion.div>
   );

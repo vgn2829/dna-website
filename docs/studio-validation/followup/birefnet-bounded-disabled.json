@@ -1,0 +1,21 @@
+{
+  "capabilities": {
+    "gpu": true,
+    "float16": true,
+    "adapterMaxStorageBuffers": 10,
+    "defaultDeviceStorageBuffers": 8
+  },
+  "downloadMs": 403.09999999403954,
+  "results": [
+    {
+      "backend": "webgpu",
+      "stage": "inference",
+      "initMs": 3819.800000011921,
+      "error": "failed to call OrtRun(). ERROR_CODE: 1, ERROR_MESSAGE: /mnt/azure_nvme_temp/_work/1/s/onnxruntime/core/providers/webgpu/shader_helper.cc:293 ShaderVariableHelper &onnxruntime::webgpu::ShaderHelper::AddVariableImpl(bool, const std::string &, ShaderUsage, const TensorShape &, uint32_t) numbers_storage_buffers_ <= limits_.maxStorageBuffersPerShaderStage was false. Too many storage buffers in shader. Current: 11, Max is 10\n"
+    }
+  ],
+  "hardware": {
+    "cpu": "Apple M2",
+    "memoryGB": 8
+  }
+}

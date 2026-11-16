@@ -1,18 +1,22 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { toast } from 'sonner';
-import { MoreHorizontal, Download, ExternalLink, Trash2, ImagePlus, FolderInput, Pencil, Copy, Layers, Users, Lock, Unlink } from 'lucide-react';
-import type { Asset, LibraryVisibility } from '../../lib/api';
-import { VISIBILITY_LABEL, isLibraryOwner, libraryAttribution } from '../../lib/libraryVisibility';
+import { MoreHorizontal, Download, ExternalLink, Trash2, ImagePlus, FolderInput, Pencil, Copy, Layers, Users, Lock, Unlink, Globe } from 'lucide-react';
+import type { Asset, AssetVisibility } from '../../lib/api';
+import { VISIBILITY_LABEL, foreignAssetLabel, isLibraryOwner, libraryAttribution } from '../../lib/libraryVisibility';
 import { VisibilityBadge } from '../library/LibraryVisibility';
 import { assetMetaLine, displayUrl, FAMILY_LABEL, fileFamily } from '../../lib/assetLibrary';
 import { usePortalContainer } from '../PortalContainer';
 import { AssetPreview } from './AssetPreview';
+import { opensPreview } from '../../lib/assetPreview';
 
 // ─────────────────────────────────────────────────────────────────────────
 // One library item. The preview area is the card's primary action:
 //   image → insert onto the board when the library is open from a board
-//           (onInsert), otherwise open the full image
-//   file  → download (asset.url is already a download URL for files)
+//           (onInsert), otherwise open the preview (onOpen — the Assets
+//           lightbox with Download and Add to Moodboard), or without one
+//           open the full image
+//   file  → open the preview (onOpen), or without one download (asset.url
+//           is already a download URL for files)
 //   link  → open the external URL in a new tab (noopener/noreferrer)
 // Everything else lives in the "⋯" menu (Radix — keyboard accessible, and
 // portalled so it isn't clipped by the card's overflow:hidden; that
@@ -35,6 +39,7 @@ export function AssetCard({
   onRemoveShare,
   collectionName,
   onInsert,
+  onOpen,
   onMove,
   onRename,
   onDelete,
@@ -53,14 +58,16 @@ export function AssetCard({
   // to that collection).
   collectionName?: string | null;
   onInsert?: (asset: Asset) => void;
+  // Opens the preview for images and files (never links, never while
+  // inserting onto a board).
+  onOpen?: (asset: Asset) => void;
   onMove: (asset: Asset) => void;
   onRename: (asset: Asset) => void;
   onDelete: (asset: Asset) => void;
   roll: string;
-  onVisibility: (asset: Asset, visibility: LibraryVisibility) => void;
-  // false where there is no one to publish to. Assets can always be
-  // published: from a personal workspace, Community is what makes an asset
-  // shareable with a team workspace (Share with workspace…).
+  onVisibility: (asset: Asset, visibility: AssetVisibility) => void;
+  // false hides the visibility actions. Assets can always be published:
+  // Community reaches every member, Workspace this workspace plus shares.
   canPublish?: boolean;
   // false unless the viewer owns the asset and it lives in this workspace —
   // collections are per workspace and only the owner files an asset.
@@ -71,9 +78,11 @@ export function AssetCard({
   const canInsert = asset.kind === 'image' && !!onInsert;
   const typeLabel = asset.kind === 'image' ? 'Image' : asset.kind === 'link' ? 'Link' : FAMILY_LABEL[fileFamily(asset.extension)];
   const href = asset.kind === 'link' ? asset.link_url : asset.url;
+  const canOpen = !canInsert && !!onOpen && opensPreview(asset);
 
   const primaryLabel = canInsert
     ? `Insert ${asset.filename} onto the board`
+    : canOpen ? `Preview ${asset.filename}`
     : asset.kind === 'image' ? `Open ${asset.filename}`
     : asset.kind === 'link' ? `Open link ${asset.filename}`
     : `Download ${asset.filename}`;
@@ -122,6 +131,17 @@ export function AssetCard({
         >
           {previewInner}
         </button>
+      ) : canOpen ? (
+        <button
+          type="button"
+          onClick={() => onOpen!(asset)}
+          aria-label={primaryLabel}
+          title={primaryLabel}
+          aria-haspopup="dialog"
+          style={{ display: 'block', width: '100%', padding: 0, border: 'none', background: 'none', cursor: 'zoom-in' }}
+        >
+          {previewInner}
+        </button>
       ) : href ? (
         <a href={href} target="_blank" rel="noopener noreferrer" aria-label={primaryLabel} title={primaryLabel} style={{ display: 'block' }}>
           {previewInner}
@@ -149,7 +169,7 @@ export function AssetCard({
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 6, rowGap: 2, marginTop: 4, minWidth: 0 }}>
           <VisibilityBadge visibility={asset.visibility} />
-          {asset.workspace_id !== workspaceId && <span className="type-micro">Shared from another workspace</span>}
+          {foreignAssetLabel(asset, workspaceId) && <span className="type-micro">{foreignAssetLabel(asset, workspaceId)}</span>}
           {!isOwner && (
             <span className="type-micro" style={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {libraryAttribution(asset, roll)}
@@ -220,15 +240,23 @@ export function AssetCard({
               <DropdownMenu.Item className="dna-menu-item" onSelect={() => onRename(asset)}>
                 <Pencil size={15} /> Rename…
               </DropdownMenu.Item>
-              {canPublish && (asset.visibility === 'community' ? (
+              {/* Every visibility the asset isn't in now: Community reaches
+                  the whole club, Workspace this workspace plus shares. */}
+              {canPublish && asset.visibility !== 'community' && (
+                <DropdownMenu.Item className="dna-menu-item" onSelect={() => onVisibility(asset, 'community')}>
+                  <Globe size={15} /> Publish to Community
+                </DropdownMenu.Item>
+              )}
+              {canPublish && asset.visibility !== 'workspace' && (
+                <DropdownMenu.Item className="dna-menu-item" onSelect={() => onVisibility(asset, 'workspace')}>
+                  <Users size={15} /> {asset.visibility === 'community' ? 'Limit to Workspace' : 'Set to Workspace'}
+                </DropdownMenu.Item>
+              )}
+              {canPublish && asset.visibility !== 'personal' && (
                 <DropdownMenu.Item className="dna-menu-item" onSelect={() => onVisibility(asset, 'personal')}>
                   <Lock size={15} /> Make Personal
                 </DropdownMenu.Item>
-              ) : (
-                <DropdownMenu.Item className="dna-menu-item" onSelect={() => onVisibility(asset, 'community')}>
-                  <Users size={15} /> Publish to Community
-                </DropdownMenu.Item>
-              ))}
+              )}
               <DropdownMenu.Separator className="dna-menu-sep" />
               <DropdownMenu.Item className="dna-menu-item" data-danger="true" onSelect={() => onDelete(asset)}>
                 <Trash2 size={15} /> Delete

@@ -1,12 +1,14 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { Heart, MessageCircle, X, ZoomIn, ZoomOut, Send, FileText, Play, ExternalLink } from 'lucide-react';
+import { Heart, MessageCircle, Send, FileText, Play, ExternalLink } from 'lucide-react';
 import { useAppData, type Artwork } from '../context/AppDataContext';
 import { useStudent } from '../context/StudentContext';
 import { api, type Board } from '../lib/api';
 import { usePageMeta } from '../components/hooks/use-page-meta';
 import { thumbUrl, displayUrl } from '../lib/utils';
+import { ArtworkLightbox, ZoomImage, useIsNarrowViewport } from '../components/ArtworkLightbox';
+import { SaveToMoodboardDialog } from '../components/SaveToMoodboardDialog';
 
 const DOMAIN_COLORS: Record<string, string> = {
   'UI/UX Design': '#007AFF', Photoshop: '#BF5AF2', Illustrator: '#FF9F0A', '3D Animation': '#FF375F',
@@ -27,67 +29,6 @@ function LikeBurst({ active }: { active: boolean }) {
         );
       })}
     </AnimatePresence>
-  );
-}
-
-function ZoomImage({ src, alt, onAspectRatio }: { src: string; alt: string; onAspectRatio?: (ratio: number) => void }) {
-  const [scale, setScale] = useState(1);
-  const [pos, setPos] = useState({ x: 0, y: 0 });
-  const [imgError, setImgError] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const dragging = useRef(false);
-  const last = useRef({ x: 0, y: 0 });
-  return (
-    <div
-      style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', background: 'var(--color-canvas)', cursor: scale > 1 ? 'grab' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'inherit' }}
-      onMouseDown={e => { dragging.current = true; last.current = { x: e.clientX, y: e.clientY }; }}
-      onMouseMove={e => { if (!dragging.current) return; setPos(p => ({ x: p.x + e.clientX - last.current.x, y: p.y + e.clientY - last.current.y })); last.current = { x: e.clientX, y: e.clientY }; }}
-      onMouseUp={() => { dragging.current = false; }}>
-      {imgError ? (
-        <div style={{ color: 'var(--color-ink-muted)', fontSize: 13, padding: 24, textAlign: 'center' }}>
-          Image could not be loaded
-        </div>
-      ) : (
-        <img
-          src={src}
-          alt={alt}
-          draggable={false}
-          loading="lazy"
-          onLoad={e => {
-            const img = e.currentTarget;
-            if (onAspectRatio && img.naturalWidth && img.naturalHeight) {
-              onAspectRatio(img.naturalWidth / img.naturalHeight);
-            }
-            setLoaded(true);
-          }}
-          onError={() => setImgError(true)}
-          style={{
-            maxWidth: '100%',
-            maxHeight: '100%',
-            width: 'auto',
-            height: 'auto',
-            objectFit: 'contain',
-            display: 'block',
-            userSelect: 'none',
-            opacity: loaded ? 1 : 0,
-            transform: `scale(${scale}) translate(${pos.x / scale}px, ${pos.y / scale}px)`,
-            transition: dragging.current ? 'none' : 'opacity 0.2s, transform 0.2s',
-            borderRadius: 'inherit',
-          }}
-        />
-      )}
-      {!imgError && !loaded && (
-        <div className="absolute inset-0 flex items-center justify-center" style={{ pointerEvents: 'none' }}>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', border: '2.5px solid var(--color-hairline)', borderTopColor: 'var(--color-ink-muted)', animation: 'spin 0.8s linear infinite' }} />
-        </div>
-      )}
-      {!imgError && (
-        <div className="absolute bottom-3 right-3 flex gap-1.5">
-          <button onClick={() => setScale(s => Math.max(1, s - 0.5))} className="btn-icon" style={{ width: 32, height: 32 }}><ZoomOut size={13} /></button>
-          <button onClick={() => setScale(s => Math.min(4, s + 0.5))} className="btn-icon" style={{ width: 32, height: 32 }}><ZoomIn size={13} /></button>
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -161,20 +102,8 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
   const [burst, setBurst] = useState(false);
   const [text, setText] = useState('');
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const isMobile = useIsNarrowViewport();
   const forceUpper = localStorage.getItem('forceUppercase') !== 'false';
-
-  useEffect(() => {
-    const fn = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', fn);
-    return () => window.removeEventListener('keydown', fn);
-  }, [onClose]);
-
-  useEffect(() => {
-    const fn = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', fn);
-    return () => window.removeEventListener('resize', fn);
-  }, []);
 
   if (!artwork) return null;
 
@@ -194,29 +123,13 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
 
   const domainColor = DOMAIN_COLORS[artwork.domain] ?? '#007AFF';
 
+  const media = <MediaViewer artwork={artwork} onAspectRatio={setAspectRatio} isMobile={isMobile} />;
+  const mediaLayout = artwork.mediaType === 'pdf' ? 'document' : 'media';
+
   // ── Mobile: full-screen sheet sliding up from bottom ──────────────────────
   if (isMobile) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: '100%' }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: '100%' }}
-        transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-        style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'var(--color-surface-1)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}
-      >
-        {/* Sticky header — always reachable */}
-        <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--color-surface-1)', borderBottom: '1px solid var(--color-hairline)' }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 8 }}>
-            {artwork.title}
-          </span>
-          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--color-surface-2)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <X size={16} style={{ color: 'var(--color-ink)' }} />
-          </button>
-        </div>
-
-        {/* Image */}
-        <div style={{ width: '100%', height: artwork.mediaType === 'pdf' ? 'auto' : 'min(60vw, 55vh)', minHeight: artwork.mediaType === 'pdf' ? '400px' : undefined, background: 'var(--color-canvas)', display: 'flex', alignItems: artwork.mediaType === 'pdf' ? 'flex-start' : 'center', justifyContent: 'center', overflow: artwork.mediaType === 'pdf' ? 'visible' : 'hidden', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', padding: artwork.mediaType === 'pdf' ? 12 : 0 }}>
-          <MediaViewer artwork={artwork} onAspectRatio={setAspectRatio} isMobile={isMobile} />
-        </div>
-
+      <ArtworkLightbox label={artwork.title} isMobile onClose={onClose} media={media} mediaLayout={mediaLayout}>
         {/* Info */}
         <div style={{ padding: 16, borderBottom: '1px solid var(--color-hairline-soft)' }}>
           <span className="type-micro inline-block mb-2 px-2 py-0.5 rounded-full" style={{ background: `${domainColor}18`, color: 'var(--color-ink)' }}>{artwork.domain}</span>
@@ -271,93 +184,71 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
             <button onClick={openRollModal} className="btn-secondary">Enter Roll Number</button>
           </div>
         )}
-      </motion.div>
+      </ArtworkLightbox>
     );
   }
 
   // ── Desktop: centered floating card ───────────────────────────────────────
-  const imagePanelWidth = artwork.mediaType === 'pdf' ? '62%'
-    : aspectRatio === null ? '55%'
-    : aspectRatio < 0.8  ? '40%'
-    : aspectRatio > 1.3  ? '65%'
-    : '50%';
-
   return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(0,0,0,0.85)' }}
-      onClick={onClose}
+    <ArtworkLightbox
+      label={artwork.title}
+      isMobile={false}
+      onClose={onClose}
+      media={media}
+      mediaLayout={mediaLayout}
+      aspectRatio={aspectRatio}
+      heading={<>
+        <span className="type-micro inline-block mb-2 px-2 py-0.5 rounded-full" style={{ background: `${domainColor}18`, color: 'var(--color-ink)' }}>{artwork.domain}</span>
+        <div className="flex items-center gap-2 mb-1">
+          <h2 className="type-headline leading-tight" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>{artwork.title}</h2>
+          <span className="type-micro px-2 py-0.5 rounded-full uppercase" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)' }}>{artwork.mediaType}</span>
+        </div>
+        {artwork.artist?.trim() && <p className="type-caption mt-1" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>by {artwork.artist}</p>}
+      </>}
+      headingExtra={
+        <div className="flex items-center gap-2">
+          <button onClick={handleLike} className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full type-body-sm transition-colors" style={{ background: 'var(--color-surface-2)' }}>
+            <LikeBurst active={burst} />
+            <Heart size={14} fill={artwork.likedByUser ? '#ff4d6d' : 'none'} style={{ color: artwork.likedByUser ? '#ff4d6d' : 'var(--color-ink-muted)' }} />
+            <span className="tabular-nums" style={{ color: 'var(--color-ink)' }}>{artwork.likes}</span>
+          </button>
+          <div className="flex items-center gap-1 ml-auto type-caption" style={{ color: 'var(--color-ink-muted)' }}>
+            <MessageCircle size={12} /> {artwork.comments.length}
+          </div>
+        </div>
+      }
     >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.94, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.94, y: 16 }}
-        transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-        onClick={e => e.stopPropagation()}
-        style={{ width: '100%', maxWidth: 1024, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'row', background: 'var(--color-surface-1)', borderRadius: 'var(--radius-xxl)', boxShadow: 'var(--shadow-level-2)' }}
-      >
-        {/* Media panel */}
-        <div style={{ width: imagePanelWidth, flexShrink: 0, background: 'var(--color-canvas)', display: 'flex', alignItems: artwork.mediaType === 'pdf' ? 'flex-start' : 'center', justifyContent: 'center', padding: 16, minHeight: artwork.mediaType === 'pdf' ? '600px' : 0, maxHeight: '90vh', borderRadius: 'var(--radius-xl) 0 0 var(--radius-xl)', overflow: artwork.mediaType === 'pdf' ? 'auto' : 'hidden' }}>
-          <MediaViewer artwork={artwork} onAspectRatio={setAspectRatio} isMobile={isMobile} />
-        </div>
-
-        {/* Info panel */}
-        <div style={{ width: `calc(100% - ${imagePanelWidth})`, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', maxHeight: '90vh' }}>
-          <div className="p-6" style={{ borderBottom: '1px solid var(--color-hairline-soft)' }}>
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div className="flex-1 min-w-0">
-                <span className="type-micro inline-block mb-2 px-2 py-0.5 rounded-full" style={{ background: `${domainColor}18`, color: 'var(--color-ink)' }}>{artwork.domain}</span>
-                <div className="flex items-center gap-2 mb-1">
-                  <h2 className="type-headline leading-tight" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>{artwork.title}</h2>
-                  <span className="type-micro px-2 py-0.5 rounded-full uppercase" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)' }}>{artwork.mediaType}</span>
-                </div>
-                {artwork.artist?.trim() && <p className="type-caption mt-1" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>by {artwork.artist}</p>}
-              </div>
-              <button onClick={onClose} className="btn-icon" style={{ width: 32, height: 32 }}><X size={15} /></button>
+      <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        {artwork.comments.length === 0 && <p className="type-caption text-center py-6" style={{ color: 'var(--color-ink-muted)' }}>No comments yet.</p>}
+        {artwork.comments.map(c => (
+          <div key={c.id}>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-5 h-5 rounded-full flex items-center justify-center type-micro font-bold" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)' }}>{c.sender[0]}</div>
+              <span className="type-body-sm">{c.sender}</span>
+              <span className="type-micro">{c.date}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={handleLike} className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full type-body-sm transition-colors" style={{ background: 'var(--color-surface-2)' }}>
-                <LikeBurst active={burst} />
-                <Heart size={14} fill={artwork.likedByUser ? '#ff4d6d' : 'none'} style={{ color: artwork.likedByUser ? '#ff4d6d' : 'var(--color-ink-muted)' }} />
-                <span className="tabular-nums" style={{ color: 'var(--color-ink)' }}>{artwork.likes}</span>
-              </button>
-              <div className="flex items-center gap-1 ml-auto type-caption" style={{ color: 'var(--color-ink-muted)' }}>
-                <MessageCircle size={12} /> {artwork.comments.length}
-              </div>
-            </div>
+            <p className="type-body ml-7" style={{ color: 'var(--color-ink-muted)' }}>{c.text}</p>
           </div>
+        ))}
+      </div>
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-5">
-            {artwork.comments.length === 0 && <p className="type-caption text-center py-6" style={{ color: 'var(--color-ink-muted)' }}>No comments yet.</p>}
-            {artwork.comments.map(c => (
-              <div key={c.id}>
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-5 h-5 rounded-full flex items-center justify-center type-micro font-bold" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)' }}>{c.sender[0]}</div>
-                  <span className="type-body-sm">{c.sender}</span>
-                  <span className="type-micro">{c.date}</span>
-                </div>
-                <p className="type-body ml-7" style={{ color: 'var(--color-ink-muted)' }}>{c.text}</p>
-              </div>
-            ))}
+      {studentSession ? (
+        <form onSubmit={handleComment} className="p-4 space-y-2" style={{ borderTop: '1px solid var(--color-hairline-soft)' }}>
+          <p style={{ fontSize: 12, color: 'var(--color-ink-muted)', margin: 0, fontFamily: 'var(--font-body)' }}>
+            Commenting as <strong style={{ color: 'var(--color-ink)' }}>{studentSession.name || studentSession.rollNumber}</strong>
+          </p>
+          <div className="flex gap-2">
+            <input type="text" value={text} onChange={e => setText(e.target.value)} placeholder="Add a comment…" className="input-base" style={{ borderRadius: 'var(--radius-md)' }} />
+            <button type="submit" className="btn-primary shrink-0" style={{ width: 38, height: 38, minHeight: 38, padding: 0, borderRadius: 'var(--radius-md)' }}><Send size={14} /></button>
           </div>
-
-          {studentSession ? (
-            <form onSubmit={handleComment} className="p-4 space-y-2" style={{ borderTop: '1px solid var(--color-hairline-soft)' }}>
-              <p style={{ fontSize: 12, color: 'var(--color-ink-muted)', margin: 0, fontFamily: 'var(--font-body)' }}>
-                Commenting as <strong style={{ color: 'var(--color-ink)' }}>{studentSession.name || studentSession.rollNumber}</strong>
-              </p>
-              <div className="flex gap-2">
-                <input type="text" value={text} onChange={e => setText(e.target.value)} placeholder="Add a comment…" className="input-base" style={{ borderRadius: 'var(--radius-md)' }} />
-                <button type="submit" className="btn-primary shrink-0" style={{ width: 38, height: 38, minHeight: 38, padding: 0, borderRadius: 'var(--radius-md)' }}><Send size={14} /></button>
-              </div>
-            </form>
-          ) : (
-            <div style={{ borderTop: '1px solid var(--color-hairline-soft)', textAlign: 'center', padding: '16px' }}>
-              <p style={{ color: 'var(--color-ink-muted)', fontSize: 13, marginBottom: 8 }}>Enter your roll number to comment</p>
-              <button onClick={openRollModal} className="btn-secondary">Enter Roll Number</button>
-            </div>
-          )}
+        </form>
+      ) : (
+        <div style={{ borderTop: '1px solid var(--color-hairline-soft)', textAlign: 'center', padding: '16px' }}>
+          <p style={{ color: 'var(--color-ink-muted)', fontSize: 13, marginBottom: 8 }}>Enter your roll number to comment</p>
+          <button onClick={openRollModal} className="btn-secondary">Enter Roll Number</button>
         </div>
-      </motion.div>
-    </motion.div>
+      )}
+    </ArtworkLightbox>
   );
 }
 
@@ -608,62 +499,12 @@ export function GalleryPage() {
       {/* Save to moodboard picker */}
       <AnimatePresence>
         {savingArtwork && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
-            onClick={() => setSavingArtwork(null)}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 24, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 16 }}
-              onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 360, background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '80vh', overflowY: 'auto' }}
-            >
-              <h2 className="type-headline" style={{ margin: 0 }}>
-                Save to Moodboard
-              </h2>
-
-              {myBoards.length === 0 ? (
-                <div>
-                  <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-                    You don't have any boards yet.
-                  </p>
-                  <a
-                    href="/moodboards"
-                    style={{ display: 'inline-block', padding: '8px 16px', background: 'var(--color-brand)', color: '#fff', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', textDecoration: 'none' }}
-                  >
-                    Create a Board
-                  </a>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {myBoards.map(board => (
-                    <button
-                      key={board.id}
-                      onClick={() => handleSaveToSelectedBoard(board.id)}
-                      disabled={saving}
-                      style={{ width: '100%', textAlign: 'left', padding: '12px 14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-canvas)', cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                    >
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)' }}>
-                        {board.name}
-                      </span>
-                      <span style={{ fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>
-                        {board.item_count} items
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <button
-                onClick={() => setSavingArtwork(null)}
-                style={{ padding: '10px 20px', background: 'none', color: 'var(--color-ink-muted)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-            </motion.div>
-          </motion.div>
+          <SaveToMoodboardDialog
+            boards={myBoards}
+            busy={saving}
+            onSelect={board => handleSaveToSelectedBoard(board.id)}
+            onClose={() => setSavingArtwork(null)}
+          />
         )}
       </AnimatePresence>
     </div>

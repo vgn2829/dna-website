@@ -1,725 +1,50 @@
-// @ts-nocheck
-/**
- * PaletteStudio
- * Self-contained palette generator.
- * No external dependencies required (uses only React hooks).
- *
- * Tabler Icons (outline) loaded dynamically by PalettePage on mount.
- */
-
-import { useState, useCallback } from "react";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// COLOR SCIENCE — OKLCH, gamut mapping, sRGB conversions
-// ─────────────────────────────────────────────────────────────────────────────
-
-function clamp(v, min = 0, max = 1) {
-  return Math.max(min, Math.min(max, v));
-}
-
-function hexToRgb(hex) {
-  const c = hex.replace("#", "");
-  return {
-    r: parseInt(c.slice(0, 2), 16) / 255,
-    g: parseInt(c.slice(2, 4), 16) / 255,
-    b: parseInt(c.slice(4, 6), 16) / 255,
-  };
-}
-
-function rgbToHex(rgb) {
-  return (
-    "#" +
-    [rgb.r, rgb.g, rgb.b]
-      .map((v) => Math.round(clamp(v) * 255).toString(16).padStart(2, "0"))
-      .join("")
-      .toUpperCase()
-  );
-}
-
-function srgbToLinear(c) {
-  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-}
-
-function linearToSrgb(c) {
-  return c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
-}
-
-function rgbToOKLCH(rgb) {
-  const r = srgbToLinear(rgb.r),
-    g = srgbToLinear(rgb.g),
-    b = srgbToLinear(rgb.b);
-  const l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
-  const m = 0.2119034982 * r + 0.6806995451 * g + 0.1073970466 * b;
-  const s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
-  const l_ = Math.cbrt(l), m_ = Math.cbrt(m), s_ = Math.cbrt(s);
-  const L = 0.2104542553 * l_ + 0.793617785 * m_ - 0.0040720468 * s_;
-  const a = 1.9779984951 * l_ - 2.428592205 * m_ + 0.4505937099 * s_;
-  const b2 = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.808675766 * s_;
-  const C = Math.sqrt(a * a + b2 * b2);
-  let H = (Math.atan2(b2, a) * 180) / Math.PI;
-  if (H < 0) H += 360;
-  return { L, C, H };
-}
-
-function oklchToRgbRaw(c) {
-  const hRad = (c.H * Math.PI) / 180;
-  const a = c.C * Math.cos(hRad), b = c.C * Math.sin(hRad);
-  const l_ = c.L + 0.3963377774 * a + 0.2158037573 * b;
-  const m_ = c.L - 0.1055613458 * a - 0.0638541728 * b;
-  const s_ = c.L - 0.0894841775 * a - 1.291485548 * b;
-  const lc = l_ * l_ * l_, mc = m_ * m_ * m_, sc = s_ * s_ * s_;
-  return {
-    r: linearToSrgb(4.0767416621 * lc - 3.3077115913 * mc + 0.2309699292 * sc),
-    g: linearToSrgb(-1.2684380046 * lc + 2.6097574011 * mc - 0.3413193965 * sc),
-    b: linearToSrgb(-0.0041960863 * lc - 0.7034186147 * mc + 1.707614701 * sc),
-  };
-}
-
-function inGamut(rgb) {
-  return (
-    rgb.r >= -0.001 && rgb.r <= 1.001 &&
-    rgb.g >= -0.001 && rgb.g <= 1.001 &&
-    rgb.b >= -0.001 && rgb.b <= 1.001
-  );
-}
-
-function gamutMap(color) {
-  const initial = oklchToRgbRaw(color);
-  if (inGamut(initial)) return { ...color };
-  let lo = 0, hi = color.C;
-  for (let i = 0; i < 32; i++) {
-    const mid = (lo + hi) / 2;
-    if (inGamut(oklchToRgbRaw({ ...color, C: mid }))) lo = mid;
-    else hi = mid;
-  }
-  return { ...color, C: lo };
-}
-
-function oklchToHex(color) {
-  const mapped = gamutMap(color);
-  const rgb = oklchToRgbRaw(mapped);
-  return rgbToHex({ r: clamp(rgb.r), g: clamp(rgb.g), b: clamp(rgb.b) });
-}
+import { useState, useCallback, useEffect, useMemo, useReducer, useRef, useId, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { Check, Copy, Crosshair, Dices, Download, Lock, LockOpen, Pipette, Redo2, Undo2 } from "lucide-react";
+import { loadEditor, persistEditor, serializeEditor } from "../lib/palette/persistence";
+import { paletteCSS, type Editor, type EditorAction, type Theme } from "../lib/palette/editor";
+import {
+  deriveVisualPalette,
+  scorePalette,
+  analyzeCB,
+  HARMONY_MODES,
+  hexToRgb,
+  rgbToHex,
+  rgbToOKLCH,
+  contrastRatio,
+  simulateCB,
+  getSeedSymbolism,
+  type Harmony,
+  type Palette,
+  type Role,
+} from "../lib/palette/engine";
+import { CREATIVE_MODES, foreground, paletteWarnings, randomSeedColour } from "../lib/palette-engine";
+import { createUndoable, loadMood, newVariation, paletteShortcut, persistMood, serializeMood, undoableReducer, undoHistory, redoHistory, HISTORY_LIMIT, MOODS, type MoodState, type StudioAction } from "../lib/palette/studio";
+import { colourName } from "../lib/palette/naming";
+import { tonalScale } from "../lib/palette/scales";
+import { contrastGrade, nonTextChecks, semanticCollisions, COLLISION_DISTANCE } from "../lib/palette/contrast";
+import { EXPORT_FORMATS, exportPalette, moodCss, type ExportFormat } from "../lib/palette/export";
+import { studioDrafts, useStudioDraft } from "./studio/drafts";
+import { copyText, saveBlob } from "./StudioUI";
+import { LibraryDialog } from "./assets/LibraryDialog";
+export {
+  derivePalette,
+  deriveVisualPalette,
+  scorePalette,
+  analyzeCB,
+  HARMONY_MODES,
+} from "../lib/palette/engine";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ACCESSIBILITY — WCAG luminance, contrast ratio, APCA
+// SHARED LABELS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function wcagLuminance(rgb) {
-  const r = srgbToLinear(rgb.r), g = srgbToLinear(rgb.g), b = srgbToLinear(rgb.b);
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+/** WCAG grade chip. Colour is supportive; the AA/AAA/Fail label carries meaning. */
+function GradeChip({ ratio }: { ratio: number }) {
+  const g = contrastGrade(ratio);
+  return <span className="palette-grade" data-level={g.level === "AA Large" ? "large" : g.level.toLowerCase()}>{g.level}</span>;
 }
 
-function contrastRatio(fg, bg) {
-  const l1 = wcagLuminance(fg), l2 = wcagLuminance(bg);
-  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
-}
-
-function apcaLuminance(rgb) {
-  const r = srgbToLinear(rgb.r), g = srgbToLinear(rgb.g), b = srgbToLinear(rgb.b);
-  return (
-    0.2126729 * Math.pow(Math.max(0, r), 2.4) +
-    0.7151522 * Math.pow(Math.max(0, g), 2.4) +
-    0.0721750 * Math.pow(Math.max(0, b), 2.4)
-  );
-}
-
-function apcaContrast(textRgb, bgRgb) {
-  const SA = { Ntxt: 0.57, Nbg: 0.56, Rtxt: 0.62, Rbg: 0.65, W: 1.14, Ofs: 0.027 };
-  const Yt = apcaLuminance(textRgb), Yb = apcaLuminance(bgRgb);
-  if (Yt < 0.0005 || Yt > 10 || Yb < 0.0005 || Yb > 10) return 0;
-  let S =
-    Yb > Yt
-      ? (Math.pow(Yb, SA.Nbg) - Math.pow(Yt, SA.Ntxt)) * SA.W
-      : (Math.pow(Yb, SA.Rbg) - Math.pow(Yt, SA.Rtxt)) * SA.W;
-  if (Math.abs(S) < SA.Ofs) return 0;
-  return S > 0 ? (S - SA.Ofs) * 100 : (S + SA.Ofs) * 100;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CONTRAST-SEEKING LIGHTNESS
-// ─────────────────────────────────────────────────────────────────────────────
-
-function findAccessibleLightness(hue, chroma, bgHex, targetL, minCR = 4.5) {
-  const bgRgb = hexToRgb(bgHex);
-  const originalRgb = hexToRgb(oklchToHex(gamutMap({ L: targetL, C: chroma, H: hue })));
-  if (contrastRatio(originalRgb, bgRgb) >= minCR) return targetL;
-  const bgLum = wcagLuminance(bgRgb);
-  const searchDark = bgLum > 0.5;
-  let lo = searchDark ? 0.05 : targetL;
-  let hi = searchDark ? targetL : 0.95;
-  for (let i = 0; i < 32; i++) {
-    const mid = (lo + hi) / 2;
-    const testRgb = hexToRgb(oklchToHex(gamutMap({ L: mid, C: chroma, H: hue })));
-    const cr = contrastRatio(testRgb, bgRgb);
-    if (cr >= minCR) {
-      if (searchDark) hi = mid; else lo = mid;
-    } else {
-      if (searchDark) lo = mid; else hi = mid;
-    }
-  }
-  return searchDark ? hi : lo;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DELTA E 2000
-// ─────────────────────────────────────────────────────────────────────────────
-
-function oklchToLab(oklch) {
-  const hRad = (oklch.H * Math.PI) / 180;
-  return {
-    L: oklch.L * 100,
-    a: oklch.C * Math.cos(hRad) * 100,
-    b: oklch.C * Math.sin(hRad) * 100,
-  };
-}
-
-function deltaE2000(lab1, lab2) {
-  const d2r = (d) => (d * Math.PI) / 180;
-  const avgL = (lab1.L + lab2.L) / 2;
-  const C1 = Math.sqrt(lab1.a ** 2 + lab1.b ** 2);
-  const C2 = Math.sqrt(lab2.a ** 2 + lab2.b ** 2);
-  const avgC = (C1 + C2) / 2;
-  const avgC7 = Math.pow(avgC, 7), p25_7 = Math.pow(25, 7);
-  const G = 0.5 * (1 - Math.sqrt(avgC7 / (avgC7 + p25_7)));
-  const a1p = lab1.a * (1 + G), a2p = lab2.a * (1 + G);
-  const C1p = Math.sqrt(a1p ** 2 + lab1.b ** 2);
-  const C2p = Math.sqrt(a2p ** 2 + lab2.b ** 2);
-  const avgCp = (C1p + C2p) / 2;
-  let h1p = (Math.atan2(lab1.b, a1p) * 180) / Math.PI; if (h1p < 0) h1p += 360;
-  let h2p = (Math.atan2(lab2.b, a2p) * 180) / Math.PI; if (h2p < 0) h2p += 360;
-  let dhp =
-    Math.abs(h1p - h2p) <= 180
-      ? h2p - h1p
-      : h2p <= h1p
-      ? h2p - h1p + 360
-      : h2p - h1p - 360;
-  const dLp = lab2.L - lab1.L, dCp = C2p - C1p;
-  const dHp = 2 * Math.sqrt(C1p * C2p) * Math.sin(d2r(dhp / 2));
-  const avgHp = Math.abs(h1p - h2p) > 180 ? (h1p + h2p + 360) / 2 : (h1p + h2p) / 2;
-  const T =
-    1 - 0.17 * Math.cos(d2r(avgHp - 30)) +
-    0.24 * Math.cos(d2r(2 * avgHp)) +
-    0.32 * Math.cos(d2r(3 * avgHp + 6)) -
-    0.2 * Math.cos(d2r(4 * avgHp - 63));
-  const alm50 = (avgL - 50) ** 2;
-  const SL = 1 + (0.015 * alm50) / Math.sqrt(20 + alm50);
-  const SC = 1 + 0.045 * avgCp, SH = 1 + 0.015 * avgCp * T;
-  const aCp7 = Math.pow(avgCp, 7), hpT = (avgHp - 275) / 25;
-  const RT =
-    -2 * Math.sqrt(aCp7 / (aCp7 + p25_7)) *
-    Math.sin(d2r(60 * Math.exp(-(hpT ** 2))));
-  const ds = dLp / SL, dcs = dCp / SC, dhs = dHp / SH;
-  return Math.sqrt(ds ** 2 + dcs ** 2 + dhs ** 2 + RT * dcs * dhs);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HARMONY MODES
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const HARMONY_MODES = {
-  complementary: {
-    label: "Complementary",
-    description: "Bold contrast — opposite hue",
-    getHues: (h) => ({ secondary: (h + 180) % 360, accent: (h + 150) % 360 }),
-  },
-  analogous: {
-    label: "Analogous",
-    description: "Harmonious — neighboring hues",
-    getHues: (h) => ({ secondary: (h + 30) % 360, accent: (h - 30 + 360) % 360 }),
-  },
-  triadic: {
-    label: "Triadic",
-    description: "Vibrant — three equal hue steps",
-    getHues: (h) => ({ secondary: (h + 120) % 360, accent: (h + 240) % 360 }),
-  },
-  splitComplementary: {
-    label: "Split Comp",
-    description: "Balanced — two near-complements",
-    getHues: (h) => ({ secondary: (h + 150) % 360, accent: (h + 210) % 360 }),
-  },
-  tetradic: {
-    label: "Tetradic",
-    description: "Rich — four hues in a rectangle",
-    getHues: (h) => ({ secondary: (h + 90) % 360, accent: (h + 270) % 360 }),
-  },
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// COLOR SYMBOLISM
-// ─────────────────────────────────────────────────────────────────────────────
-
-function getSeedSymbolism(hex) {
-  try {
-    const rgb = hexToRgb(hex);
-    const { L, C, H } = rgbToOKLCH(rgb);
-
-    if (C < 0.04) {
-      if (L > 0.85) return {
-        label: 'White', emoji: '⬜',
-        keywords: ['Purity', 'Clarity', 'Simplicity'],
-        mood: 'Clean and minimal — conveys openness and space.',
-        use: 'Backgrounds, negative space, minimal UI',
-      };
-      if (L < 0.20) return {
-        label: 'Black', emoji: '⬛',
-        keywords: ['Power', 'Elegance', 'Mystery'],
-        mood: 'Authoritative and sophisticated — commands attention.',
-        use: 'Luxury brands, high contrast UI, editorial design',
-      };
-      return {
-        label: 'Gray', emoji: '🩶',
-        keywords: ['Neutrality', 'Balance', 'Professionalism'],
-        mood: 'Calm and balanced — lets other colors breathe.',
-        use: 'UI surfaces, text, supporting elements',
-      };
-    }
-
-    if ((H >= 0 && H < 30) || H >= 345) return {
-      label: 'Red', emoji: '🔴',
-      keywords: ['Energy', 'Urgency', 'Passion'],
-      mood: 'Bold and attention-grabbing — stimulates action and excitement.',
-      use: 'CTAs, alerts, food & entertainment brands',
-    };
-    if (H >= 30 && H < 60) return {
-      label: 'Orange', emoji: '🟠',
-      keywords: ['Enthusiasm', 'Warmth', 'Playfulness'],
-      mood: 'Energetic and friendly — encourages optimism and creativity.',
-      use: 'Consumer apps, food brands, creative platforms',
-    };
-    if (H >= 60 && H < 95) return {
-      label: 'Yellow', emoji: '🟡',
-      keywords: ['Optimism', 'Attention', 'Warmth'],
-      mood: 'Cheerful and energizing — draws the eye and conveys positivity.',
-      use: 'Highlights, warnings, youth-oriented brands',
-    };
-    if (H >= 95 && H < 165) return {
-      label: 'Green', emoji: '🟢',
-      keywords: ['Nature', 'Health', 'Growth'],
-      mood: 'Calming and restorative — signals safety, progress, and balance.',
-      use: 'Health & wellness, finance, sustainability brands',
-    };
-    if (H >= 165 && H < 220) return {
-      label: 'Teal / Cyan', emoji: '🩵',
-      keywords: ['Clarity', 'Innovation', 'Calm'],
-      mood: 'Fresh and modern — balances the trust of blue with the energy of green.',
-      use: 'Tech products, healthcare, communication tools',
-    };
-    if (H >= 220 && H < 270) return {
-      label: 'Blue', emoji: '🔵',
-      keywords: ['Trust', 'Reliability', 'Calm'],
-      mood: 'Stable and professional — the most universally trusted color in UI.',
-      use: 'Corporate, SaaS, finance, social platforms',
-    };
-    if (H >= 270 && H < 310) return {
-      label: 'Purple / Violet', emoji: '🟣',
-      keywords: ['Luxury', 'Creativity', 'Mystery'],
-      mood: 'Imaginative and refined — evokes premium quality and artistic depth.',
-      use: 'Luxury brands, creative tools, beauty & fashion',
-    };
-    if (H >= 310 && H < 345) return {
-      label: 'Pink / Magenta', emoji: '🩷',
-      keywords: ['Romance', 'Playfulness', 'Energy'],
-      mood: 'Warm and expressive — ranges from gentle and romantic to vibrant and bold.',
-      use: 'Beauty, lifestyle, entertainment, youth brands',
-    };
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// COLOR BLINDNESS SIMULATION
-// ─────────────────────────────────────────────────────────────────────────────
-
-const CB_MATRICES = {
-  protanopia:   [[0.567, 0.433, 0], [0.558, 0.442, 0], [0, 0.242, 0.758]],
-  deuteranopia: [[0.625, 0.375, 0], [0.70,  0.30,  0], [0, 0.30,  0.70 ]],
-  tritanopia:   [[0.95,  0.05,  0], [0,     0.433, 0.567], [0, 0.475, 0.525]],
-};
-
-function simulateCB(rgb, type) {
-  const m = CB_MATRICES[type];
-  return {
-    r: clamp(rgb.r * m[0][0] + rgb.g * m[0][1] + rgb.b * m[0][2]),
-    g: clamp(rgb.r * m[1][0] + rgb.g * m[1][1] + rgb.b * m[1][2]),
-    b: clamp(rgb.r * m[2][0] + rgb.g * m[2][1] + rgb.b * m[2][2]),
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PALETTE DERIVATION ENGINE
-// ─────────────────────────────────────────────────────────────────────────────
-
-function nudgeLightnessForContrast(
-  hue,
-  chroma,
-  bgHex,
-  targetL,
-  minCR = 4.5,
-  maxNudge = 0.22
-) {
-  const bgRgb = hexToRgb(bgHex);
-  const original = hexToRgb(oklchToHex(gamutMap({ L: targetL, C: chroma, H: hue })));
-  if (contrastRatio(original, bgRgb) >= minCR) return targetL;
-
-  const bgLum = wcagLuminance(bgRgb);
-  const searchDark = bgLum > 0.5;
-
-  let lo = searchDark ? Math.max(0.04, targetL - maxNudge) : targetL;
-  let hi = searchDark ? targetL : Math.min(0.96, targetL + maxNudge);
-
-  for (let i = 0; i < 24; i++) {
-    const mid = (lo + hi) / 2;
-    const rgb = hexToRgb(oklchToHex(gamutMap({ L: mid, C: chroma, H: hue })));
-    const cr = contrastRatio(rgb, bgRgb);
-    if (cr >= minCR) {
-      if (searchDark) hi = mid; else lo = mid;
-    } else {
-      if (searchDark) lo = mid; else hi = mid;
-    }
-  }
-
-  const result = searchDark ? hi : lo;
-  const resultRgb = hexToRgb(oklchToHex(gamutMap({ L: result, C: chroma, H: hue })));
-
-  if (contrastRatio(resultRgb, bgRgb) >= minCR) return result;
-  return findAccessibleLightness(hue, chroma, bgHex, targetL, minCR);
-}
-
-// ── Figma Palette Analysis Constants (1149 palettes analyzed) ──────────────
-// Median hue shift: 57° (not 120° or 180° — real designers use mid-angles)
-// Average chroma: 0.092 (much lower than algorithmic generators)
-// Lightness spread: 0.45 (guaranteed min distance between darkest/lightest)
-const FIGMA_MEDIAN_CHROMA = 0.092;
-const FIGMA_LIGHTNESS_SPREAD = 0.45;
-
-const STRATEGY_POOL = [
-  { name: 'analogous',       offsets: [0, 28, 55, -28, -55],    chromaScale: [1.0, 0.75, 0.55, 0.45, 0.30] },
-  { name: 'split-comp',      offsets: [0, 150, 210, 30, -30],   chromaScale: [1.0, 0.85, 0.65, 0.40, 0.25] },
-  { name: 'complementary',   offsets: [0, 180, 15, 195, 90],    chromaScale: [1.0, 0.90, 0.60, 0.50, 0.30] },
-  { name: 'triadic',         offsets: [0, 120, 240, 60, 300],   chromaScale: [1.0, 0.80, 0.70, 0.40, 0.25] },
-  { name: 'mid-angle',       offsets: [0, 57, 114, -57, 171],   chromaScale: [1.0, 0.80, 0.65, 0.50, 0.30] },
-  { name: 'earthy',          offsets: [0, 20, 40, 15, -15],     chromaScale: [0.70, 0.55, 0.45, 0.25, 0.15] },
-  { name: 'pop',             offsets: [0, 155, 205, 30, 90],    chromaScale: [1.0, 1.00, 0.80, 0.25, 0.10] },
-  { name: 'tetrad',          offsets: [0, 90, 180, 270, 45],    chromaScale: [1.0, 0.75, 0.65, 0.55, 0.30] },
-  { name: 'near-analogous',  offsets: [0, 18, 36, -18, -36],   chromaScale: [1.0, 0.70, 0.50, 0.40, 0.20] },
-  { name: 'split-analogous', offsets: [0, 57, -57, 114, 180],  chromaScale: [1.0, 0.85, 0.75, 0.45, 0.25] },
-];
-
-let _lastStrategyIdx = -1;
-function pickStrategy() {
-  let idx;
-  do {
-    idx = Math.floor(Math.random() * STRATEGY_POOL.length);
-  } while (idx === _lastStrategyIdx && STRATEGY_POOL.length > 1);
-  _lastStrategyIdx = idx;
-  return STRATEGY_POOL[idx];
-}
-
-export function derivePalette(seedHex, darkMode, harmonyKey, lockedColors = {}) {
-  const seedRgb = hexToRgb(seedHex);
-  const seed = rgbToOKLCH(seedRgb);
-  const seedChroma = seed.C;
-  const seedHue = seed.H;
-
-  const isWarmSeed = (seedHue >= 0 && seedHue <= 100) || seedHue >= 300;
-  const neutralHue = isWarmSeed ? 230 : 65;
-
-  const bgHex    = oklchToHex(gamutMap({ L: darkMode ? 0.09  : 0.985, C: 0.004, H: neutralHue }));
-  const surfHex  = oklchToHex(gamutMap({ L: darkMode ? 0.13  : 0.955, C: 0.005, H: neutralHue }));
-  const surf2Hex = oklchToHex(gamutMap({ L: darkMode ? 0.17  : 0.920, C: 0.006, H: neutralHue }));
-
-  const textHex   = oklchToHex(gamutMap({ L: darkMode ? 0.94 : 0.11, C: 0.003, H: neutralHue }));
-  const textMHex  = oklchToHex(gamutMap({ L: darkMode ? 0.58 : 0.44, C: 0.006, H: neutralHue }));
-  const borderHex = oklchToHex(gamutMap({ L: darkMode ? 0.26 : 0.83, C: 0.005, H: neutralHue }));
-
-  const strategy = pickStrategy();
-
-  const jitterHue = (offset) =>
-    ((seedHue + offset + (Math.random() - 0.5) * 16) + 360) % 360;
-
-  const secondaryHue = jitterHue(strategy.offsets[1]);
-  const accentHue    = jitterHue(strategy.offsets[2]);
-  const _hue4 = jitterHue(strategy.offsets[3]);
-  const _hue5 = jitterHue(strategy.offsets[4]);
-
-  const [cs0, cs1, cs2] = strategy.chromaScale;
-
-  const primaryChroma = Math.min(seedChroma * cs0 * 1.05, 0.38);
-
-  const secondaryChroma = Math.min(
-    seedChroma * cs1,
-    Math.max(FIGMA_MEDIAN_CHROMA * 2.2, seedChroma * 0.65)
-  );
-
-  const accentChroma = Math.min(
-    seedChroma * cs2 * 1.1,
-    Math.max(FIGMA_MEDIAN_CHROMA * 2.8, seedChroma * 0.80)
-  );
-
-  const lightnessBudget = FIGMA_LIGHTNESS_SPREAD;
-
-  const primaryL = nudgeLightnessForContrast(
-    seedHue, primaryChroma, bgHex, seed.L
-  );
-
-  const secondaryTargetL = darkMode
-    ? Math.min(seed.L + lightnessBudget * 0.4, 0.88)
-    : Math.max(seed.L - lightnessBudget * 0.4, 0.12);
-  const secondaryL = nudgeLightnessForContrast(
-    secondaryHue, secondaryChroma, bgHex, secondaryTargetL
-  );
-
-  const accentTargetL = darkMode
-    ? Math.min(seed.L + lightnessBudget * 0.7, 0.92)
-    : Math.max(seed.L - lightnessBudget * 0.7, 0.08);
-  const accentL = nudgeLightnessForContrast(
-    accentHue, accentChroma, bgHex, accentTargetL
-  );
-
-  const primaryHex   = oklchToHex(gamutMap({ L: primaryL,   C: primaryChroma,   H: seedHue      }));
-  const primaryFgHex = oklchToHex(gamutMap({
-    L: darkMode ? 0.97 : 0.03,
-    C: 0.003,
-    H: seedHue
-  }));
-  const secondaryHex = oklchToHex(gamutMap({ L: secondaryL, C: secondaryChroma, H: secondaryHue }));
-  const accentHex    = oklchToHex(gamutMap({ L: accentL,    C: accentChroma,    H: accentHue    }));
-
-  // Near-neutral anchor (internal — no new palette key)
-  const neutralAnchorChroma = Math.min(seedChroma * 0.12, FIGMA_MEDIAN_CHROMA * 1.3);
-  const neutralAnchorL = darkMode ? 0.35 : 0.65;
-
-  const successL = nudgeLightnessForContrast(145, 0.20, bgHex,
-    darkMode ? 0.75 : 0.35, 4.5, 0.20);
-  const warningL = nudgeLightnessForContrast(75, 0.22, bgHex,
-    darkMode ? 0.82 : 0.50, 4.5, 0.20);
-  const errorL = nudgeLightnessForContrast(25, 0.26, bgHex,
-    darkMode ? 0.72 : 0.40, 4.5, 0.20);
-  const infoL = nudgeLightnessForContrast(240, 0.20, bgHex,
-    darkMode ? 0.72 : 0.40, 4.5, 0.20);
-
-  const successHex = oklchToHex(gamutMap({ L: successL, C: 0.20, H: 145 }));
-  const warningHex = oklchToHex(gamutMap({ L: warningL, C: 0.22, H: 75  }));
-  const errorHex   = oklchToHex(gamutMap({ L: errorL,   C: 0.26, H: 25  }));
-  const infoHex    = oklchToHex(gamutMap({ L: infoL,    C: 0.20, H: 240 }));
-
-  const base = {
-    bg:             bgHex,
-    surface:        surfHex,
-    surfaceElevated: surf2Hex,
-    text:           textHex,
-    textMuted:      textMHex,
-    border:         borderHex,
-    primary:        primaryHex,
-    primaryFg:      primaryFgHex,
-    secondary:      secondaryHex,
-    accent:         accentHex,
-    success:        successHex,
-    successBg:      oklchToHex(gamutMap({ L: darkMode ? 0.15 : 0.94, C: 0.04, H: 145 })),
-    warning:        warningHex,
-    warningBg:      oklchToHex(gamutMap({ L: darkMode ? 0.15 : 0.95, C: 0.04, H: 75  })),
-    error:          errorHex,
-    errorBg:        oklchToHex(gamutMap({ L: darkMode ? 0.15 : 0.95, C: 0.05, H: 25  })),
-    info:           infoHex,
-    infoBg:         oklchToHex(gamutMap({ L: darkMode ? 0.15 : 0.95, C: 0.04, H: 240 })),
-  };
-
-  Object.keys(lockedColors).forEach((k) => {
-    if (lockedColors[k] && base[k] !== undefined) base[k] = lockedColors[k];
-  });
-
-  return base;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SCORING
-// ─────────────────────────────────────────────────────────────────────────────
-
-export function scorePalette(palette) {
-  const pairs = [
-    { name: "Text / BG",           fg: "text",      bg: "bg",        w: 3.0 },
-    { name: "TextMuted / BG",      fg: "textMuted", bg: "bg",        w: 2.0 },
-    { name: "TextMuted / Surface", fg: "textMuted", bg: "surface",   w: 1.5 },
-    { name: "Primary / BG",        fg: "primary",   bg: "bg",        w: 2.0 },
-    { name: "Primary / Surface",   fg: "primary",   bg: "surface",   w: 1.5 },
-    { name: "PrimaryFg / Primary", fg: "primaryFg", bg: "primary",   w: 2.5 },
-    { name: "Secondary / BG",      fg: "secondary", bg: "bg",        w: 1.5 },
-    { name: "Accent / BG",         fg: "accent",    bg: "bg",        w: 1.5 },
-    { name: "Text / Surface",      fg: "text",      bg: "surface",   w: 2.0 },
-    { name: "Success / SuccessBg", fg: "success",   bg: "successBg", w: 1.0 },
-    { name: "Error / ErrorBg",     fg: "error",     bg: "errorBg",   w: 1.0 },
-    { name: "Warning / WarningBg", fg: "warning",   bg: "warningBg", w: 1.0 },
-  ];
-
-  let total = 0, wSum = 0;
-  const pairData = {};
-  for (const p of pairs) {
-    const fg = hexToRgb(palette[p.fg]), bg = hexToRgb(palette[p.bg]);
-    const cr = contrastRatio(fg, bg);
-    const ap = Math.abs(apcaContrast(fg, bg));
-    let s = cr >= 7 ? 1.0 : cr >= 4.5 ? 0.78 : cr >= 3 ? 0.42 : 0.12;
-    if (ap >= 75) s = Math.min(1.0, s + 0.08);
-    pairData[p.name] = { cr: cr.toFixed(2), apca: ap.toFixed(1), score: s };
-    total += s * p.w;
-    wSum += p.w;
-  }
-
-  const roles = ["primary", "secondary", "accent", "success", "warning", "error"];
-  let dTotal = 0, dCount = 0;
-  for (let i = 0; i < roles.length; i++) {
-    for (let j = i + 1; j < roles.length; j++) {
-      dTotal += Math.min(
-        deltaE2000(
-          oklchToLab(rgbToOKLCH(hexToRgb(palette[roles[i]]))),
-          oklchToLab(rgbToOKLCH(hexToRgb(palette[roles[j]])))
-        ) / 30,
-        1.0
-      );
-      dCount++;
-    }
-  }
-  const dScore = dTotal / dCount;
-  total += dScore * 2.0;
-  wSum += 2.0;
-
-  return {
-    score: Math.round((total / wSum) * 100),
-    pairs: pairData,
-    dScore: Math.round(dScore * 100),
-  };
-}
-
-export function analyzeCB(palette) {
-  const out = {};
-  for (const type of ["protanopia", "deuteranopia", "tritanopia"]) {
-    const st = simulateCB(hexToRgb(palette.text), type);
-    const sb = simulateCB(hexToRgb(palette.bg), type);
-    const sp = simulateCB(hexToRgb(palette.primary), type);
-    out[type] = {
-      textBgCR:    contrastRatio(st, sb).toFixed(2),
-      primaryBgCR: contrastRatio(sp, sb).toFixed(2),
-    };
-  }
-  return out;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// VISUAL PALETTE ENGINE
-// ─────────────────────────────────────────────────────────────────────────────
-
-function simpleColorName(hex) {
-  const { L, C, H } = rgbToOKLCH(hexToRgb(hex));
-  if (C < 0.04) {
-    if (L > 0.90) return "White";
-    if (L > 0.70) return "Light Gray";
-    if (L > 0.45) return "Gray";
-    if (L > 0.22) return "Dark Gray";
-    return "Black";
-  }
-  const satWord   = C > 0.22 ? "" : C > 0.12 ? "Muted " : "Faint ";
-  const lightWord = L > 0.80 ? "Light " : L < 0.28 ? "Deep " : L < 0.42 ? "Dark " : "";
-  const hue =
-    H < 18 || H >= 345 ? "Red"    :
-    H < 45             ? "Orange" :
-    H < 70             ? "Amber"  :
-    H < 100            ? "Yellow" :
-    H < 150            ? "Green"  :
-    H < 190            ? "Teal"   :
-    H < 230            ? "Cyan"   :
-    H < 260            ? "Blue"   :
-    H < 295            ? "Violet" :
-    H < 330            ? "Pink"   : "Rose";
-  return (lightWord + satWord + hue).trim();
-}
-
-function jitter(value, amount = 0.04, min = 0, max = 1) {
-  return Math.max(min, Math.min(max, value + (Math.random() - 0.5) * amount));
-}
-
-export function deriveVisualPalette(seedHex, harmonyKey = "complementary", paletteMode = "visual") {
-  const { L, C, H } = rgbToOKLCH(hexToRgb(seedHex));
-
-  const harmony = HARMONY_MODES[harmonyKey] || HARMONY_MODES.complementary;
-  const { secondary: H2, accent: H3 } = harmony.getHues(H);
-
-  // Softened harmony angles — break rigid geometry
-  const H2soft = (H2 + (Math.random() - 0.5) * 60 + 360) % 360;
-  const H3soft = (H3 + (Math.random() - 0.5) * 50 + 360) % 360;
-
-  // Adaptive chroma cap — yellow-green stays clean, blue-purple gets headroom
-  const chromaCap =
-    H >= 60 && H <= 110  ? 0.22 :
-    H >= 240 && H <= 280 ? 0.32 :
-    0.28;
-
-  // Temperature-skewed neutrals — warm seed → cool slate, cool seed → warm amber
-  const isWarmSeed = (H >= 0 && H <= 100) || H >= 300;
-  const neutralH = isWarmSeed ? 250 : 70;
-
-  const profiles = {
-    visual: [
-      { L: jitter(L, 0.06), C: jitter(C, 0.03, 0, chromaCap), H: (H + (Math.random()-0.5)*12 + 360) % 360 },
-      { L: jitter(Math.min(L+0.15,0.85), 0.10),  C: jitter(C*0.65, 0.04, 0, chromaCap),        H: H2soft },
-      { L: jitter(Math.max(L-0.15,0.15), 0.10),  C: jitter(C*0.50, 0.04, 0, chromaCap),        H       },
-      { L: jitter(L,                     0.10),  C: jitter(C*0.80, 0.04, 0, chromaCap),         H: H3soft },
-      { L: jitter(Math.min(L+0.28,0.93), 0.10),  C: jitter(C*0.18, 0.04, 0, chromaCap),        H: H2soft },
-    ],
-    poster: [
-      { L: jitter(0.52, 0.10), C: jitter(Math.min(C*1.1, chromaCap), 0.04, 0, chromaCap), H       },
-      { L: jitter(0.60, 0.10), C: jitter(Math.min(C*1.1, chromaCap), 0.04, 0, chromaCap), H: H2soft },
-      { L: jitter(0.42, 0.10), C: jitter(Math.min(C*1.1, chromaCap), 0.04, 0, chromaCap), H: H3soft },
-      { L: jitter(0.15, 0.06), C: jitter(0.010, 0.02, 0, 0.05),                           H       },
-      { L: jitter(0.95, 0.06), C: jitter(0.006, 0.02, 0, 0.03),                           H       },
-    ],
-    luxury: [
-      { L: jitter(0.12, 0.05), C: jitter(0.015,                  0.03, 0, 0.06),          H: neutralH },
-      { L: jitter(0.28, 0.05), C: jitter(Math.min(C*0.5,  0.14), 0.03, 0, chromaCap),    H       },
-      { L: jitter(0.48, 0.05), C: jitter(Math.min(C*0.35, 0.10), 0.03, 0, chromaCap),    H       },
-      { L: jitter(0.72, 0.05), C: jitter(0.018,                  0.03, 0, 0.06),          H: neutralH },
-      { L: jitter(0.88, 0.05), C: jitter(0.012,                  0.03, 0, 0.05),          H: neutralH },
-    ],
-    minimal: [
-      { L: jitter(0.97, 0.05), C: jitter(0.004,                  0.02, 0, 0.03),          H: neutralH },
-      { L: jitter(0.88, 0.05), C: jitter(0.007,                  0.02, 0, 0.04),          H: neutralH },
-      { L: jitter(0.68, 0.05), C: jitter(0.010,                  0.02, 0, 0.05),          H: neutralH },
-      { L: jitter(0.32, 0.05), C: jitter(0.012,                  0.02, 0, 0.05),          H: neutralH },
-      { L: jitter(L,    0.05), C: jitter(Math.min(C*0.7, 0.20),  0.03, 0, chromaCap),    H       },
-    ],
-    cyberpunk: [
-      { L: jitter(0.07, 0.04), C: jitter(0.008,                     0.02, 0, 0.04),       H       },
-      { L: jitter(0.11, 0.04), C: jitter(0.012,                     0.02, 0, 0.05),       H       },
-      { L: jitter(0.72, 0.05), C: jitter(Math.min(C*1.4, chromaCap), 0.03, 0, chromaCap), H       },
-      { L: jitter(0.68, 0.05), C: jitter(Math.min(C*1.3, chromaCap), 0.03, 0, chromaCap), H: H2soft },
-      { L: jitter(0.65, 0.05), C: jitter(Math.min(C*1.2, chromaCap), 0.03, 0, chromaCap), H: H3soft },
-    ],
-  };
-
-  const swatchDefs = profiles[paletteMode] || profiles.visual;
-  return swatchDefs.map((p, i) => {
-    const hex = oklchToHex(gamutMap({ L: p.L, C: p.C, H: p.H }));
-    return { index: i, hex, name: simpleColorName(hex) };
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// UI HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
-
-const GRADE = (cr) => {
-  const n = parseFloat(cr);
-  if (n >= 7.0) return { label: "AAA", color: "var(--color-success)" };
-  if (n >= 4.5) return { label: "AA",  color: "#84cc16" };
-  if (n >= 3.0) return { label: "AA+", color: "#eab308" };
-  return { label: "Fail", color: "var(--color-error)" };
-};
-
-const SCORE_COLOR = (s) =>
-  s >= 85 ? "var(--color-success)" : s >= 70 ? "#84cc16" : s >= 55 ? "#eab308" : "var(--color-error)";
-
-const ROLES = [
+const ROLES: { key: Role; label: string; group: "base" | "brand" | "semantic" }[] = [
   { key: "bg",             label: "Background",        group: "base"     },
   { key: "surface",        label: "Surface",           group: "base"     },
   { key: "surfaceElevated",label: "Surface Elevated",  group: "base"     },
@@ -740,383 +65,403 @@ const ROLES = [
   { key: "infoBg",         label: "Info BG",           group: "semantic" },
 ];
 
-const GROUP_LABELS = {
+const GROUP_LABELS: Record<string, string> = {
   base:     "Neutrals & Structure",
   brand:    "Brand Colors",
   semantic: "Semantic States",
 };
 
+const UI_TABS = [
+  { id: "palette",       label: "Roles"         },
+  { id: "accessibility", label: "Accessibility" },
+  { id: "colorblind",    label: "Colour blind"  },
+];
+
+/** "OKLCH hue offsets +120° / +240°" — derived from the engine's own harmony angles. */
+const harmonyOffsets = (key: Harmony) => {
+  const { secondary, accent } = HARMONY_MODES[key].getHues(0);
+  return `OKLCH hue offsets +${Math.round(secondary)}° / +${Math.round(accent)}°`;
+};
+const isSixDigitHex = (value: string) => /^#?[0-9a-f]{6}$/i.test(value);
+const toHex = (value: string) => (value.startsWith("#") ? value : `#${value}`).toUpperCase();
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN COMPONENT
+// State, history, persistence and exports are the shared lib/palette modules:
+// the role editor (both themes, exact locks) and the mood palette share one
+// undo history; this component only presents them.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function PaletteStudio() {
-  const [seed, setSeed]         = useState("#6366F1");
-  const [darkMode, setDarkMode] = useState(false);
-  const [harmony, setHarmony]   = useState("complementary");
-  const [palette, setPalette]   = useState(null);
-  const [fitness, setFitness]   = useState(null);
-  const [cbData, setCbData]     = useState(null);
-  const [loading, setLoading]   = useState(false);
-  const [tab, setTab]               = useState("palette");
-  const [copied, setCopied]         = useState("");
-  const [locked, setLocked]         = useState({});
-  const [visualMode, setVisualMode] = useState("visual");
-  const [visualPalette, setVisualPalette] = useState(null);
+  const [initial] = useState(() => loadEditor(studioDrafts.get("palette.editor") as Editor | undefined));
+  const [initialMood] = useState(() => loadMood(studioDrafts.get("palette.mood") as MoodState | undefined));
+  const [studio, dispatchStudio] = useReducer(undoableReducer, undefined, () => createUndoable({ editor: initial.editor, mood: initialMood.mood }));
+  const { editor, mood } = studio.history.present;
+  const apply = useCallback((action: StudioAction, coalesce = "") => dispatchStudio({ type: "apply", action, coalesce, at: Date.now() }), []);
+  const editRoles = (action: EditorAction, coalesce = "") => apply({ type: "editor", action }, coalesce);
 
-  const symbolism = seed && /^#[0-9A-Fa-f]{6}$/.test(seed)
-    ? getSeedSymbolism(seed)
-    : null;
+  const [theme, setTheme] = useStudioDraft<Theme>("palette.theme", "light");
+  const [savedTab, setTab] = useStudioDraft("palette.tab", "palette");
+  const tab = UI_TABS.some((t) => t.id === savedTab) ? savedTab : "palette";
+  const [compare, setCompare] = useState(false);
+  const [seedInput, setSeedInput] = useState(editor.seed);
+  const [message, setMessage] = useState(initial.error || initialMood.error || (initial.shared || initialMood.shared ? "Shared palette recipe loaded." : ""));
+  const [copied, setCopied] = useState("");
+  const [exportOpen, setExportOpen] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(copyTimer.current), []);
+
+  useEffect(() => { studioDrafts.set("palette.editor", editor); persistEditor(editor); }, [editor]);
+  useEffect(() => { studioDrafts.set("palette.mood", mood); persistMood(mood); }, [mood]);
+  // The seed field follows the committed seed (generation, use-as-seed, undo).
+  useEffect(() => setSeedInput(editor.seed), [editor.seed]);
+  useEffect(() => {
+    if (!initial.shared && !initialMood.shared) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("palette");
+    url.searchParams.delete("mood");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  }, [initial.shared, initialMood.shared]);
+
+  const palette = editor.variants[theme];
+  const creative = useMemo(
+    () => deriveVisualPalette(editor.seed, editor.harmony, mood.mode, mood.variation, mood.locks),
+    [editor.seed, editor.harmony, mood],
+  );
+
+  /** Regenerates both theme variants (locks preserved) and optionally patches the mood, as one undo step. */
+  const regenerate = useCallback((next: { seed?: string; harmony?: Harmony; variation?: string }, moodPatch: Partial<MoodState> = {}, note = "", coalesce = "") => {
+    const actions: StudioAction[] = [{ type: "editor", action: { type: "generate", seed: next.seed ?? editor.seed, harmony: next.harmony ?? editor.harmony, variation: next.variation ?? editor.variation } }];
+    if (Object.keys(moodPatch).length) actions.push({ type: "mood", patch: moodPatch });
+    apply({ type: "batch", actions }, coalesce);
+    setMessage(note);
+  }, [apply, editor.seed, editor.harmony, editor.variation]);
 
   const generate = useCallback(() => {
-    setLoading(true);
-    setTimeout(() => {
-      try {
-        const p = derivePalette(seed, darkMode, harmony, locked);
-        setPalette(p);
-        setFitness(scorePalette(p));
-        setCbData(analyzeCB(p));
-        setVisualPalette(deriveVisualPalette(seed, harmony, visualMode));
-      } catch (e) {
-        console.error(e);
-      }
-      setLoading(false);
-    }, 30);
-  }, [seed, darkMode, harmony, locked, visualMode]);
+    const variation = newVariation();
+    regenerate({ variation }, { variation }, "New variation generated. Locked colours were kept.");
+  }, [regenerate]);
+  const randomSeed = () => {
+    const variation = newVariation();
+    regenerate({ seed: randomSeedColour(variation), variation }, { variation }, "Random seed generated.");
+  };
+  const travel = useCallback((direction: "undo" | "redo") => {
+    const history = direction === "undo" ? undoHistory(studio.history) : redoHistory(studio.history);
+    if (history === studio.history) return;
+    dispatchStudio({ type: direction });
+    setMessage(direction === "undo" ? "Undone." : "Redone.");
+  }, [studio.history]);
 
-  const rerollVisual = useCallback(() => {
+  // Space / Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y — policy in paletteShortcut (lib/palette/studio.ts).
+  const keyHandlers = useRef({ generate, travel, exportOpen });
+  keyHandlers.current = { generate, travel, exportOpen };
+  // Input modality: a control focused by a pointer click yields Space to Generate
+  // (so Space after clicking a lock does not toggle it again); keyboard focus
+  // keeps native activation.
+  const pointerFocused = useRef(false);
+  useEffect(() => {
+    const onPointer = () => { pointerFocused.current = true; };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Tab" || e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End") pointerFocused.current = false;
+      if (keyHandlers.current.exportOpen) return;
+      const action = paletteShortcut({
+        key: e.key, code: e.code, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, altKey: e.altKey,
+        repeat: e.repeat, defaultPrevented: e.defaultPrevented, isComposing: e.isComposing, target: e.target,
+        pointerFocused: pointerFocused.current,
+      });
+      if (!action) return;
+      e.preventDefault();
+      if (action === "generate") keyHandlers.current.generate();
+      else if (action !== "suppress") keyHandlers.current.travel(action);
+    };
+    window.addEventListener("pointerdown", onPointer, true);
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("pointerdown", onPointer, true); window.removeEventListener("keydown", onKey); };
+  }, []);
+
+  const shareRecipe = async () => {
     try {
-      setVisualPalette(deriveVisualPalette(seed, harmony, visualMode));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [seed, harmony, visualMode]);
-
-  const changeVisualMode = useCallback((mode) => {
-    setVisualMode(mode);
-    try {
-      setVisualPalette(deriveVisualPalette(seed, harmony, mode));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [seed, harmony]);
-
-  const toggleLock = (key) => {
-    if (!palette) return;
-    setLocked((prev) => {
-      const next = { ...prev };
-      if (next[key]) delete next[key];
-      else next[key] = palette[key];
-      return next;
-    });
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", "palette");
+      url.searchParams.set("palette", serializeEditor(editor));
+      url.searchParams.set("mood", serializeMood(mood));
+      await copyText(url.toString());
+      setMessage("Reproducible palette link copied.");
+      return true;
+    } catch { setMessage("Link copy failed. Check clipboard permission."); return false; }
   };
 
-  const copyColor = (hex) => {
-    navigator.clipboard.writeText(hex).catch(() => {});
-    setCopied(hex);
-    setTimeout(() => setCopied(""), 1500);
+  const copyColor = async (hex: string, id = hex) => {
+    try { await copyText(hex); } catch { setMessage("Clipboard unavailable. Select and copy the hex value manually."); return; }
+    setCopied(id); setMessage(`Copied ${hex}.`);
+    clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopied(""), 1500);
   };
 
-  const exportCSS = () => {
-    if (!palette) return;
-    const vars = Object.entries(palette)
-      .map(([k, v]) => `  --color-${k.replace(/([A-Z])/g, (m) => "-" + m.toLowerCase())}: ${v};`)
-      .join("\n");
-    navigator.clipboard.writeText(`:root {\n${vars}\n}`).catch(() => {});
-    setCopied("css");
-    setTimeout(() => setCopied(""), 2000);
+  const toggleCreativeLock = (index: number, hex: string, name: string) => {
+    const locks = { ...mood.locks };
+    if (locks[index]) delete locks[index]; else locks[index] = hex;
+    apply({ type: "mood", patch: { locks } });
+    setMessage(`${name} ${locks[index] ? "locked" : "unlocked"}.`);
+  };
+  const editCreative = (index: number, hex: string, name: string) => {
+    apply({ type: "mood", patch: { locks: { ...mood.locks, [index]: hex.toUpperCase() } } }, `mood-${index}`);
+    setMessage(`${name} set to ${hex.toUpperCase()} and locked.`);
   };
 
-  const s = styles;
-  const lockedCount = Object.keys(locked).length;
+  const symbolism = getSeedSymbolism(editor.seed);
+  const warnings = paletteWarnings(palette);
+  const lockedCount = Object.keys(mood.locks).length;
+  const roleLockCount = Object.keys(editor.locks).length;
+  const fitness = useMemo(() => scorePalette(palette), [palette]);
+  const cbData = useMemo(() => analyzeCB(palette), [palette]);
+  const pairs = Object.values(fitness.pairs);
+  const passRate = Math.round((pairs.filter((p) => p.cr >= 4.5).length / pairs.length) * 100);
+  const ids = useId();
+  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+
+  const onTabKey = (e: ReactKeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const next = UI_TABS[(index + (e.key === "ArrowRight" ? 1 : UI_TABS.length - 1)) % UI_TABS.length];
+    setTab(next.id);
+    document.getElementById(`${ids}-tab-${next.id}`)?.focus();
+  };
 
   return (
-    <div style={s.wrap}>
-
-      {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
-      {/* Title/eyebrow intentionally omitted — the Design Studio shell already
-          renders the tool title + subtitle, so this is a lighter controls-only row. */}
-      <header style={s.toolbar}>
-        <div style={s.toolbarControls}>
-          {/* Seed input — color picker + hex field grouped as one pill */}
-          <label style={s.seedGroup} aria-label="Seed color">
-            <span style={s.seedLabel}>Seed</span>
-            {/* The native colour input renders its chip inset inside its own box,
-                so it reads smaller than its footprint. Painting the swatch on the
-                wrapper and overlaying a transparent input gives a full-bleed chip. */}
-            <span style={{ ...s.swatchWrap, background: seed }}>
-              <input
-                type="color"
-                value={seed}
-                onChange={(e) => setSeed(e.target.value)}
-                style={s.colorInput}
-                aria-label="Pick seed color"
-              />
+    <div className="palette-tool palette-studio" data-palette-shortcuts="">
+      {/* ── Generation controls ─────────────────────────────────────────── */}
+      <div className="palette-toolbar">
+        <div className="palette-toolbar-group">
+          <label className="palette-seed">
+            <span className="palette-seed-label">Seed</span>
+            {/* Swatch painted on the wrapper with a transparent native picker over it. */}
+            <span className="palette-seed-chip" style={{ background: editor.seed }}>
+              <input type="color" value={editor.seed.toLowerCase()} onChange={(e) => regenerate({ seed: e.target.value.toUpperCase() }, {}, "", "seed")} className="palette-color-overlay" aria-label="Pick seed colour" />
             </span>
-            <span style={s.seedDivider} aria-hidden="true" />
+            <span className="palette-seed-divider" aria-hidden="true" />
             <input
-              type="text"
-              value={seed}
+              type="text" value={seedInput} spellCheck={false} maxLength={7}
+              className="palette-seed-input" aria-label="Seed hex"
               onChange={(e) => {
-                if (/^#[0-9A-Fa-f]{0,6}$/.test(e.target.value)) setSeed(e.target.value);
+                const value = e.target.value.trim();
+                if (!/^#?[0-9A-Fa-f]{0,6}$/.test(value)) return;
+                setSeedInput(value.startsWith("#") || !value ? value : `#${value}`);
+                if (isSixDigitHex(value) && toHex(value) !== editor.seed) regenerate({ seed: toHex(value) }, {}, "", "seed");
               }}
-              style={s.hexInput}
-              aria-label="Hex value"
-              spellCheck={false}
-              maxLength={7}
+              onBlur={() => setSeedInput(editor.seed)}
             />
           </label>
-
-          {/* Dark / light toggle */}
-          <button
-            onClick={() => setDarkMode((d) => !d)}
-            style={s.modeBtn}
-            aria-label={`Switch to ${darkMode ? "light" : "dark"} mode`}
-          >
-            {darkMode ? "Dark" : "Light"}
-          </button>
-
-          {/* Generate — primary CTA */}
-          <button
-            onClick={generate}
-            disabled={loading}
-            style={{ ...s.generateBtn, opacity: loading ? 0.6 : 1 }}
-            aria-live="polite"
-          >
-            {loading ? "Generating…" : "Generate"}
-          </button>
-
-          {/* Export CSS */}
-          {palette && (
-            <button onClick={exportCSS} style={s.exportBtn}>
-              {copied === "css" ? "✓ Copied!" : "Export CSS"}
-            </button>
-          )}
+          <button type="button" className="btn-icon" onClick={randomSeed} aria-label="Random seed colour" title="Random seed colour"><Dices size={18} aria-hidden="true" /></button>
         </div>
-      </header>
-
-      {/* ── Harmony selector ────────────────────────────────────────────────── */}
-      <div style={s.harmonyBar}>
-        <span style={s.harmonyLabel} aria-hidden="true">Harmony</span>
-        <div style={s.harmonySegment} role="group" aria-label="Harmony mode">
-          {Object.entries(HARMONY_MODES).map(([key, mode]) => (
-            <button
-              key={key}
-              onClick={() => setHarmony(key)}
-              aria-pressed={harmony === key}
-              style={{ ...s.harmonyBtn, ...(harmony === key ? s.harmonyBtnActive : {}) }}
-            >
-              {mode.label}
-            </button>
-          ))}
+        <div className="palette-toolbar-group palette-toolbar-actions">
+          <button type="button" className="btn-icon" onClick={() => travel("undo")} disabled={!studio.history.past.length} aria-label="Undo" title={`Undo (${isMac ? "⌘Z" : "Ctrl+Z"})`}><Undo2 size={18} aria-hidden="true" /></button>
+          <button type="button" className="btn-icon" onClick={() => travel("redo")} disabled={!studio.history.future.length} aria-label="Redo" title={`Redo (${isMac ? "⇧⌘Z" : "Ctrl+Shift+Z"})`}><Redo2 size={18} aria-hidden="true" /></button>
+          <button type="button" className="btn-secondary" onClick={() => setExportOpen(true)}><Download size={16} aria-hidden="true" />Export</button>
+          <button type="button" className="btn-primary" onClick={generate}>Generate</button>
         </div>
-        <span style={s.harmonyDesc}>{HARMONY_MODES[harmony]?.description}</span>
       </div>
 
-      {/* ── Color Symbolism caption ─────────────────────────────────────────── */}
-      {/* Restrained single line; the mood + suggested uses move into a hover
-          tooltip so the metadata stays available without adding visual noise. */}
-      {symbolism && (
-        <div
-          style={s.symbolismBar}
-          title={`${symbolism.mood}${symbolism.use ? `  ·  Ideal for ${symbolism.use}` : ""}`}
-        >
-          <span
-            style={{ ...s.symbolismSwatch, background: seed }}
-            aria-hidden="true"
-          />
-          <span style={s.symbolismName}>{symbolism.label}</span>
-          <span style={s.symbolismSep} aria-hidden="true">·</span>
-          <span style={s.symbolismKeywords}>{symbolism.keywords.join(", ")}</span>
-          <span style={s.symbolismInfo} aria-hidden="true">&#9432;</span>
+      {/* ── Harmony and creative mode ──────────────────────────────────── */}
+      <div className="palette-config">
+        <div className="palette-config-group">
+          <span className="palette-control-label" id={`${ids}-harmony`}>Harmony</span>
+          <div className="segmented studio-choice" role="group" aria-labelledby={`${ids}-harmony`}>
+            {Object.entries(HARMONY_MODES).map(([key, m]) => (
+              <button type="button" key={key} className="segmented-item" aria-pressed={editor.harmony === key} onClick={() => regenerate({ harmony: key as Harmony })}>{m.label}</button>
+            ))}
+          </div>
+          <p className="palette-hint">{harmonyOffsets(editor.harmony)}</p>
         </div>
-      )}
+        <div className="palette-config-group">
+          <span className="palette-control-label" id={`${ids}-mode`}>Creative mode</span>
+          <div className="segmented studio-choice" role="group" aria-labelledby={`${ids}-mode`}>
+            {MOODS.map((key) => (
+              <button type="button" key={key} className="segmented-item" aria-pressed={mood.mode === key} onClick={() => apply({ type: "mood", patch: { mode: key } })}>{CREATIVE_MODES[key].label}</button>
+            ))}
+          </div>
+          <p className="palette-hint">{CREATIVE_MODES[mood.mode].description}</p>
+        </div>
+      </div>
 
-      {/* ── Output tabs ─────────────────────────────────────────────────────── */}
-      {palette && (
-        <div style={s.tabBar} role="tablist">
-          {[
-            { id: "palette",       label: "Palette"       },
-            { id: "accessibility", label: "Accessibility"  },
-            { id: "colorblind",    label: "Color Blind"    },
-            { id: "mood",          label: "Mood"           },
-          ].map((t2) => (
-            <button
-              key={t2.id}
-              role="tab"
-              aria-selected={tab === t2.id}
-              onClick={() => setTab(t2.id)}
-              style={{ ...s.tab, ...(tab === t2.id ? s.tabActive : {}) }}
-            >
-              {t2.label}
-            </button>
+      {/* ── Main palette workspace ─────────────────────────────────────── */}
+      <section aria-label="Palette" className="palette-workspace">
+        <div className="palette-columns">
+          {creative.map((swatch) => {
+            const locked = !!mood.locks[swatch.index];
+            const name = colourName(swatch.hex), { L, C, H } = rgbToOKLCH(hexToRgb(swatch.hex));
+            const id = `col-${swatch.index}`;
+            return (
+              <div key={swatch.index} className="palette-column" role="group" aria-label={`${swatch.name}: ${name}, ${swatch.hex}${locked ? ", locked" : ""}`} style={{ background: swatch.hex, color: foreground(swatch.hex) }}>
+                <div className="palette-column-actions">
+                  <button type="button" className="btn-icon btn-sm touch-target" aria-pressed={locked} onClick={() => toggleCreativeLock(swatch.index, swatch.hex, swatch.name)} aria-label={`${locked ? "Unlock" : "Lock"} ${swatch.name} swatch`} title={locked ? "Unlock" : "Lock"}>
+                    {locked ? <Lock size={15} aria-hidden="true" /> : <LockOpen size={15} aria-hidden="true" />}
+                  </button>
+                  <label className="btn-icon btn-sm touch-target palette-edit" title="Edit colour">
+                    <Pipette size={15} aria-hidden="true" />
+                    <input type="color" className="palette-color-overlay" value={swatch.hex.toLowerCase()} onChange={(e) => editCreative(swatch.index, e.target.value, swatch.name)} aria-label={`Edit ${swatch.name} swatch`} />
+                  </label>
+                  <button type="button" className="btn-icon btn-sm touch-target" onClick={() => regenerate({ seed: swatch.hex }, {}, `${swatch.hex} is now the seed.`)} aria-label={`Use ${swatch.name} swatch as seed`} title="Use as seed" disabled={swatch.hex === editor.seed}>
+                    <Crosshair size={15} aria-hidden="true" />
+                  </button>
+                </div>
+                <div className="palette-column-info">
+                  <span className="palette-column-role">{swatch.name}{locked && <span className="sr-only"> (locked)</span>}</span>
+                  <button type="button" className="palette-column-hex" onClick={() => copyColor(swatch.hex, id)} aria-label={`Copy ${swatch.name} ${swatch.hex}`}>
+                    {copied === id ? <><Check size={16} aria-hidden="true" />Copied</> : <>{swatch.hex}<Copy size={14} aria-hidden="true" className="palette-copy-icon" /></>}
+                  </button>
+                  <span className="palette-column-name">{name}</span>
+                  <span className="palette-column-oklch" title={`oklch(${(L * 100).toFixed(1)}% ${C.toFixed(3)} ${H.toFixed(1)})`}>
+                    <span>L {(L * 100).toFixed(1)}</span><span>C {C.toFixed(3)}</span><span>H {C < 1e-4 ? "—" : H.toFixed(0)}</span>
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="palette-meta">
+          <p className="palette-hint">
+            <kbd>Space</kbd> generates · <kbd>{isMac ? "⌘" : "Ctrl"}</kbd>+<kbd>Z</kbd> undo · Locked colours stay exact{lockedCount > 0 && <> · {lockedCount} locked <button type="button" className="btn-secondary btn-sm" onClick={() => apply({ type: "mood", patch: { locks: {} } })}>Unlock all</button></>}
+          </p>
+          <p className="palette-status" role="status">{message}</p>
+        </div>
+        {symbolism && (
+          <p className="palette-hint palette-symbolism">
+            <span className="palette-dot" style={{ background: editor.seed }} aria-hidden="true" />
+            <strong>{symbolism.label}</strong> · {symbolism.keywords.join(", ")} — {symbolism.mood}
+          </p>
+        )}
+        <details className="palette-disclosure">
+          <summary>Reproducible variation: <code>{mood.variation}</code></summary>
+          <label className="palette-variation">
+            The same seed, harmony, mode, locks and variation always reproduce this palette.
+            <input className="input-base" maxLength={128} value={mood.variation} onChange={(e) => regenerate({ variation: e.target.value }, { variation: e.target.value }, "", "variation")} aria-label="Palette variation" />
+          </label>
+          <p className="palette-hint">History keeps the last {HISTORY_LIMIT} states for this session.</p>
+        </details>
+      </section>
+
+      {/* ── Tonal scales ───────────────────────────────────────────────── */}
+      <section className="palette-section" aria-labelledby={`${ids}-scales`}>
+        <h2 className="type-headline palette-section-title" id={`${ids}-scales`}>Tonal scales</h2>
+        <p className="palette-hint">100–900 at constant OKLCH hue. The marked step is the swatch itself; select any step to copy it.</p>
+        <div className="palette-scales">
+          {creative.map((swatch) => (
+            <div key={swatch.index} className="palette-scale-row" role="group" aria-label={`${swatch.name} tonal scale`}>
+              <div className="palette-scale-label"><strong>{swatch.name}</strong><span>{colourName(swatch.hex)}</span></div>
+              <div className="palette-scale-steps">
+                {tonalScale(swatch.hex).map((step) => {
+                  const id = `scale-${swatch.index}-${step.step}`;
+                  return (
+                    <button type="button" key={step.step} className="palette-scale-step" style={{ background: step.hex, color: foreground(step.hex) }} onClick={() => copyColor(step.hex, id)} aria-label={`Copy ${swatch.name} ${step.step} ${step.hex}${step.source ? " (source colour)" : ""}`}>
+                      <span>{step.step}{step.source && <span aria-hidden="true"> ●</span>}</span>
+                      <span className="palette-scale-hex">{copied === id ? "Copied" : step.hex}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           ))}
         </div>
-      )}
+      </section>
 
-      {/* ── Content ─────────────────────────────────────────────────────────── */}
-      <main style={s.content}>
+      {/* ── Accessibility of the creative palette ──────────────────────── */}
+      <details className="palette-section palette-disclosure">
+        <summary>Colour details and contrast pairs</summary>
+        <PaletteContrast swatches={creative} />
+      </details>
 
-        {/* Empty state */}
-        {!palette && (
-          <div style={s.empty}>
-            <div style={s.emptyIcon} aria-hidden="true">◈</div>
-            <p style={s.emptyTitle}>Pick a seed color and hit Generate</p>
-            <p style={s.emptySub}>
-              OKLCH · contrast-seeking lightness · 5 harmony modes · WCAG + APCA · per-slot locking
-            </p>
-          </div>
-        )}
-
-        {/* ── Palette tab ───────────────────────────────────────────────────── */}
-        {palette && tab === "palette" && (
+      {/* ── UI system ──────────────────────────────────────────────────── */}
+      <section className="palette-section" aria-labelledby={`${ids}-ui`}>
+        <div className="palette-section-head">
           <div>
-
-            {/* Score summary — lightweight results block on canvas, no card chrome */}
-            {fitness && (
-              <div style={s.scoreBar}>
-                <div style={s.scoreHead}>
-                  <div style={s.scoreBlock}>
-                    <span style={s.scoreLabel}>Quality Score</span>
-                    <span style={{ ...s.scoreNum, color: SCORE_COLOR(fitness.score) }}>
-                      {fitness.score}
-                      <span style={s.scoreOutOf}>/100</span>
-                    </span>
-                  </div>
-                  <div style={s.scoreBlock}>
-                    <span style={s.scoreLabel}>ΔE Distance</span>
-                    <span style={{ ...s.deltaVal, color: SCORE_COLOR(fitness.dScore) }}>
-                      {fitness.dScore}%
-                    </span>
-                  </div>
-                </div>
-
-                <div style={s.pairGrid}>
-                  {Object.entries(fitness.pairs).slice(0, 6).map(([name, data]) => {
-                    const g = GRADE(data.cr);
-                    const isFail = g.label === "Fail";
-                    return (
-                      <div key={name} style={s.pairItem}>
-                        <span style={s.pairName}>{name}</span>
-                        <span style={s.pairRow}>
-                          <span style={{ ...s.gradeChip, color: g.color, background: g.color + "22" }}>
-                            {g.label}
-                          </span>
-                          <span style={{ ...s.pairRatio, ...(isFail ? s.pairRatioFail : {}) }}>
-                            {data.cr}
-                          </span>
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Swatch groups */}
-            {["base", "brand", "semantic"].map((group) => (
-              <section key={group} style={s.swatchSection}>
-                <h2 style={s.groupLabel}>{GROUP_LABELS[group]}</h2>
-                <div style={s.swatchGrid}>
-                  {ROLES.filter((r) => r.group === group).map((role) => {
-                    const hex = palette[role.key];
-                    const lum = wcagLuminance(hexToRgb(hex));
-                    const onColor = lum > 0.28 ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.85)";
-                    const isLocked = !!locked[role.key];
-                    return (
-                      <div
-                        key={role.key}
-                        style={{
-                          ...s.swatch,
-                          outline: isLocked
-                            ? "2px solid var(--color-accent-blue)"
-                            : "1px solid var(--color-hairline)",
-                          outlineOffset: isLocked ? 2 : 0,
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = "translateY(-2px)";
-                          e.currentTarget.style.boxShadow = "var(--shadow-level-1)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "none";
-                          e.currentTarget.style.boxShadow = "none";
-                        }}
-                      >
-                        {/* Color area — click to copy */}
-                        <button
-                          onClick={() => copyColor(hex)}
-                          aria-label={`Copy ${role.label} ${hex}`}
-                          style={{ ...s.swatchColor, background: hex }}
-                        >
-                          <span style={{ ...s.swatchHex, color: onColor }}>
-                            {copied === hex ? "✓ Copied" : hex}
-                          </span>
-                        </button>
-
-                        {/* Footer row */}
-                        <div style={s.swatchFoot}>
-                          <span style={s.swatchName}>{role.label}</span>
-                          <button
-                            onClick={() => toggleLock(role.key)}
-                            aria-label={`${isLocked ? "Unlock" : "Lock"} ${role.label}`}
-                            style={{
-                              ...s.lockBtn,
-                              color: isLocked ? "var(--color-accent-blue)" : "var(--color-ink-muted)",
-                            }}
-                          >
-                            <i
-                              className={isLocked ? "ti ti-lock" : "ti ti-lock-open"}
-                              aria-hidden="true"
-                            />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
-
-            {/* Lock hint */}
-            {lockedCount > 0 && (
-              <div style={s.lockHint}>
-                <i
-                  className="ti ti-lock"
-                  style={{ fontSize: 12, color: "var(--color-accent-blue)", flexShrink: 0 }}
-                  aria-hidden="true"
-                />
-                {lockedCount} color{lockedCount > 1 ? "s" : ""} locked — regenerating preserves{" "}
-                {lockedCount > 1 ? "them" : "it"}.
-                <button onClick={() => setLocked({})} style={s.clearBtn}>
-                  Clear all
-                </button>
-              </div>
-            )}
-
-            {/* Preview */}
-            <hr style={s.previewDivider} />
-            <h2 style={s.previewLabel}>Preview</h2>
-            <Preview palette={palette} />
+            <h2 className="type-headline palette-section-title" id={`${ids}-ui`}>UI system</h2>
+            <p className="palette-hint">18 interface roles from the same seed and harmony, repaired to WCAG AA (4.5:1) unless a lock prevents it.</p>
           </div>
-        )}
+          <div className="segmented" role="group" aria-label="UI system theme">
+            <button type="button" className="segmented-item" aria-pressed={theme === "light"} onClick={() => setTheme("light")}>Light</button>
+            <button type="button" className="segmented-item" aria-pressed={theme === "dark"} onClick={() => setTheme("dark")}>Dark</button>
+          </div>
+        </div>
+        {warnings.length > 0 && <p role="alert" className="palette-warning">{warnings.join(" ")}</p>}
+        <div className="segmented palette-result-tabs" role="tablist" aria-label="UI system views">
+          {UI_TABS.map((t2, index) => (
+            <button type="button" key={t2.id} id={`${ids}-tab-${t2.id}`} role="tab" aria-selected={tab === t2.id} aria-controls={`${ids}-panel`} tabIndex={tab === t2.id ? 0 : -1} onKeyDown={(e) => onTabKey(e, index)} onClick={() => setTab(t2.id)} className="segmented-item">{t2.label}</button>
+          ))}
+        </div>
+        <div role="tabpanel" id={`${ids}-panel`} aria-labelledby={`${ids}-tab-${tab}`} className="palette-tabpanel">
+          {tab === "palette" && (
+            <>
+              <div className="palette-score">
+                <div><span className="palette-score-label">Role pass rate</span><span className="palette-score-value">{passRate}<small>/100</small></span></div>
+                <div><span className="palette-score-label">Colour separation (heuristic)</span><span className="palette-score-value is-secondary">{fitness.dScore}%</span></div>
+              </div>
+              {(["base", "brand", "semantic"] as const).map((group) => (
+                <section key={group} className="palette-role-group">
+                  <h3 className="palette-group-title">{GROUP_LABELS[group]}</h3>
+                  <div className="palette-role-grid">
+                    {ROLES.filter((r) => r.group === group).map((role) => {
+                      const hex = palette[role.key], isLocked = !!editor.locks[role.key], id = `role-${role.key}`;
+                      return (
+                        <div key={role.key} className="palette-role" data-locked={isLocked || undefined}>
+                          <button type="button" className="palette-role-colour" data-role={role.key} onClick={() => copyColor(hex, id)} aria-label={`Copy ${role.label} ${hex}`} style={{ background: hex, color: foreground(hex) }}>
+                            {copied === id ? "Copied" : hex}
+                          </button>
+                          <div className="palette-role-foot">
+                            <span>{role.label}</span>
+                            <input className="palette-role-picker" type="color" aria-label={`Edit ${role.label}`} value={hex.toLowerCase()} onChange={(e) => editRoles({ type: "edit", theme, role: role.key, value: e.target.value }, `edit-${theme}-${role.key}`)} />
+                            <button type="button" onClick={() => editRoles({ type: "lock", theme, role: role.key })} aria-label={`${isLocked ? "Unlock" : "Lock"} ${role.label}`} className="btn-icon btn-sm touch-target" aria-pressed={isLocked}>
+                              {isLocked ? <Lock size={14} aria-hidden="true" /> : <LockOpen size={14} aria-hidden="true" />}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+              {roleLockCount > 0 && (
+                <p className="palette-hint">
+                  {roleLockCount} role{roleLockCount > 1 ? "s" : ""} locked — regenerating preserves them.{" "}
+                  <button type="button" className="btn-secondary btn-sm" onClick={() => editRoles({ type: "unlockAll" })}>Clear all</button>
+                </p>
+              )}
+              <div className="palette-preview-head">
+                <h3 className="palette-group-title">Preview</h3>
+                <button type="button" className="btn-secondary btn-sm" aria-pressed={compare} onClick={() => setCompare((v) => !v)}>Compare light and dark</button>
+              </div>
+              {compare ? (
+                <div className="palette-compare">
+                  {(["light", "dark"] as const).map((t) => (
+                    <section key={t} aria-label={`${t} preview`}>
+                      <h4 className="palette-hint">{t === "light" ? "Light" : "Dark"}</h4>
+                      <Preview palette={editor.variants[t]} />
+                    </section>
+                  ))}
+                </div>
+              ) : (
+                <Preview palette={palette} />
+              )}
+            </>
+          )}
+          {tab === "accessibility" && (
+            <>
+              <AccessibilityTab palette={palette} fitness={fitness} />
+              <RoleChecks palette={palette} theme={theme} />
+            </>
+          )}
+          {tab === "colorblind" && <ColorBlindTab palette={palette} cbData={cbData} />}
+        </div>
+      </section>
 
-        {palette && tab === "accessibility" && fitness && (
-          <AccessibilityTab palette={palette} fitness={fitness} />
-        )}
-
-        {palette && tab === "colorblind" && cbData && (
-          <ColorBlindTab palette={palette} cbData={cbData} />
-        )}
-
-        {palette && tab === "mood" && (
-          <MoodTab
-            palette={visualPalette}
-            visualMode={visualMode}
-            onChangeMode={changeVisualMode}
-            onReroll={rerollVisual}
-          />
-        )}
-      </main>
+      {exportOpen && (
+        <ExportDialog
+          onClose={() => setExportOpen(false)}
+          editor={editor}
+          swatches={creative}
+          title={`${CREATIVE_MODES[mood.mode].label} · ${HARMONY_MODES[editor.harmony].label} · seed ${editor.seed}`}
+          onShare={shareRecipe}
+        />
+      )}
     </div>
   );
 }
@@ -1125,11 +470,171 @@ export default function PaletteStudio() {
 // SUB-COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Preview({ palette: p }) {
+type Swatch = ReturnType<typeof deriveVisualPalette>[number];
+
+/** Pairwise WCAG contrast for the creative palette: harmony is not accessibility. */
+function PaletteContrast({ swatches }: { swatches: Swatch[] }) {
+  const pairs: { a: Swatch; b: Swatch; ratio: number }[] = [];
+  for (let i = 0; i < swatches.length; i++) for (let j = i + 1; j < swatches.length; j++) {
+    const [a, b] = [swatches[i], swatches[j]];
+    // Show the lighter colour as background so the pair reads as text-on-surface.
+    const ordered = rgbToOKLCH(hexToRgb(a.hex)).L >= rgbToOKLCH(hexToRgb(b.hex)).L ? { a: b, b: a } : { a, b };
+    pairs.push({ ...ordered, ratio: contrastRatio(hexToRgb(a.hex), hexToRgb(b.hex)) });
+  }
+  pairs.sort((x, y) => y.ratio - x.ratio);
+  return (
+    <div className="palette-details">
+      <div className="palette-table-wrap" tabIndex={0} role="region" aria-label="Colour values (scrolls horizontally on small screens)">
+        <table className="palette-table">
+          <caption className="sr-only">Colour values for each swatch</caption>
+          <thead><tr><th scope="col">Role</th><th scope="col">Name</th><th scope="col">HEX</th><th scope="col">RGB</th><th scope="col">OKLCH</th><th scope="col">Best text</th></tr></thead>
+          <tbody>
+            {swatches.map((s) => {
+              const { r, g, b } = hexToRgb(s.hex), { L, C, H } = rgbToOKLCH(hexToRgb(s.hex)), fg = foreground(s.hex), ratio = contrastRatio(hexToRgb(fg), hexToRgb(s.hex));
+              return (
+                <tr key={s.index}>
+                  <th scope="row"><span className="palette-dot" style={{ background: s.hex }} aria-hidden="true" />{s.name}</th>
+                  <td>{colourName(s.hex)}</td>
+                  <td className="is-mono">{s.hex}</td>
+                  <td className="is-mono">{[r, g, b].map((v) => Math.round(v * 255)).join(", ")}</td>
+                  <td className="is-mono">{(L * 100).toFixed(1)}% {C.toFixed(3)} {C < 1e-4 ? 0 : H.toFixed(1)}</td>
+                  <td><span className="is-mono">{fg === "#FFFFFF" ? "White" : "Black"} {ratio.toFixed(2)}:1</span> <GradeChip ratio={ratio} /></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="palette-hint">Harmonious colours are not automatically readable together. AA needs 4.5:1 for body text (3:1 for large text and UI parts); AAA needs 7:1.</p>
+      <div className="palette-pairs">
+        {pairs.map(({ a, b, ratio }) => {
+          const g = contrastGrade(ratio);
+          return (
+            <div key={`${a.index}-${b.index}`} className="palette-pair">
+              {/* Only the sample uses the pair's own colours; its label stays readable on the card. */}
+              <div className="palette-pair-sample" style={{ background: b.hex, color: a.hex }} aria-hidden="true">Aa</div>
+              <div className="palette-pair-meta">
+                <span className="palette-pair-name">{a.name} on {b.name}</span>
+                <span className="is-mono">{ratio.toFixed(2)}:1</span>
+                <GradeChip ratio={ratio} />
+                <span className="palette-pair-uses">{g.normalAAA ? "Any text" : g.normalAA ? "Body text (AA)" : g.largeAA ? "Large text / UI only" : "Decorative only"}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ExportDialog({ onClose, editor, swatches, title, onShare }: { onClose: () => void; editor: Editor; swatches: Swatch[]; title: string; onShare: () => Promise<boolean> }) {
+  type Format = "css" | ExportFormat | "json";
+  const formats: { id: Format; label: string; filename: string; mime: string }[] = [
+    { id: "css", label: "CSS variables", filename: "dna-palette.css", mime: "text/css" },
+    ...EXPORT_FORMATS,
+    { id: "json", label: "Mood JSON", filename: "dna-mood.json", mime: "application/json" },
+  ];
+  const [format, setFormat] = useState<Format>("css");
+  const [includeScales, setIncludeScales] = useState(true);
+  const [includeRoles, setIncludeRoles] = useState(true);
+  const [status, setStatus] = useState("");
+  const meta = formats.find((f) => f.id === format)!;
+  const input = { swatches: swatches.map((s) => ({ role: s.name, hex: s.hex })), themes: includeRoles ? editor.variants : undefined, includeScales, title };
+  let output = "", error = "";
+  try {
+    output =
+      format === "css" ? (includeRoles ? paletteCSS(editor) : "") + moodCss(input)
+      : format === "json" ? JSON.stringify(swatches, null, 2) + "\n"
+      : exportPalette(format, input);
+  } catch (e) { error = e instanceof Error ? e.message : "Export failed"; }
+  const copy = async () => {
+    try { await copyText(output); setStatus(`${meta.label} copied.`); }
+    catch { setStatus("Copy failed. Select the code and copy it manually, or download the file."); }
+  };
+  const download = () => { saveBlob(new Blob([output], { type: meta.mime }), meta.filename); setStatus(`Downloaded ${meta.filename}.`); };
+  const svgOnly = format === "svg", jsonOnly = format === "json";
+  return (
+    <LibraryDialog
+      title="Export palette"
+      subtitle={title}
+      onClose={onClose}
+      maxWidth={760}
+      footer={<>
+        <button type="button" className="btn-secondary" onClick={async () => setStatus(await onShare() ? "Reproducible palette link copied." : "Link copy failed. Check clipboard permission.")}>Copy share link</button>
+        <button type="button" className="btn-secondary" onClick={copy} disabled={!!error}><Copy size={16} aria-hidden="true" />Copy</button>
+        <button type="button" className="btn-primary" onClick={download} disabled={!!error}><Download size={16} aria-hidden="true" />Download {meta.filename.split(".").pop()?.toUpperCase()}</button>
+      </>}
+    >
+      <div className="palette-export">
+        <div className="segmented studio-choice" role="group" aria-label="Export format">
+          {formats.map((f) => <button type="button" key={f.id} className="segmented-item" aria-pressed={format === f.id} onClick={() => { setFormat(f.id); setStatus(""); }}>{f.label}</button>)}
+        </div>
+        <div className="palette-export-options">
+          <label className="studio-check"><input type="checkbox" checked={includeScales} disabled={svgOnly || jsonOnly} onChange={(e) => setIncludeScales(e.target.checked)} />Include 100–900 tonal scales</label>
+          <label className="studio-check"><input type="checkbox" checked={includeRoles} disabled={svgOnly || jsonOnly} onChange={(e) => setIncludeRoles(e.target.checked)} />Include UI system roles (light and dark)</label>
+        </div>
+        {error ? <p role="alert" className="palette-warning">{error}</p> : svgOnly ? (
+          <img className="palette-export-preview" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(output)}`} alt="SVG swatch card preview" />
+        ) : (
+          <pre className="palette-export-code" tabIndex={0} aria-label={`${meta.label} output`}><code>{output}</code></pre>
+        )}
+        <p className="palette-status" role="status">{status}</p>
+      </div>
+    </LibraryDialog>
+  );
+}
+
+const ROLE_LABEL: Record<string, string> = Object.fromEntries(ROLES.map((r) => [r.key, r.label]));
+/** Checks that pair-wise text contrast does not cover: non-text borders and semantic-role confusion. */
+function RoleChecks({ palette, theme }: { palette: Palette; theme: Theme }) {
+  const borders = nonTextChecks(palette);
+  const collisions = semanticCollisions(palette);
+  return (
+    <div className="palette-role-checks">
+      <h3 className="palette-group-title">Non-text contrast · {theme}</h3>
+      <p className="palette-hint">WCAG 1.4.11 asks for 3:1 when a border is what identifies a control, such as an input outline. Decorative separators between surfaces are exempt.</p>
+      <div className="palette-pairs">
+        {borders.map((check) => (
+          <div key={check.name} className="palette-pair">
+            <div className="palette-pair-sample" style={{ background: palette[check.bg as Role] }} aria-hidden="true">
+              <span className="palette-border-sample" style={{ borderColor: palette[check.fg as Role] }} />
+            </div>
+            <div className="palette-pair-meta">
+              <span className="palette-pair-name">{check.name}</span>
+              <span className="is-mono">{check.ratio.toFixed(2)}:1</span>
+              <span className="palette-grade" data-level={check.pass ? "aa" : "large"}>{check.pass ? "3:1 pass" : "Below 3:1"}</span>
+              <span className="palette-pair-uses">{check.pass ? "Usable for control outlines" : "Decorative separators only"}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <h3 className="palette-group-title">Semantic colour distinctness · {theme}</h3>
+      <p className="palette-hint">Brand colours that resemble a status colour, and status colours that converge under simulated colour-vision deficiency (Brettel 1997), measured as OKLab distance below {COLLISION_DISTANCE}. A heuristic: pair status colours with icons or text either way.</p>
+      {collisions.length === 0 ? (
+        <p className="palette-hint"><strong>No close pairs found.</strong> Brand and status colours stay apart, including under the three simulations.</p>
+      ) : (
+        <ul className="palette-checklist">
+          {collisions.map((c) => (
+            <li key={`${c.a}-${c.b}-${c.condition}`}>
+              <span className="palette-checklist-swatches" aria-hidden="true">
+                <span style={{ background: palette[c.a as Role] }} />
+                <span style={{ background: palette[c.b as Role] }} />
+              </span>
+              <span><strong>{ROLE_LABEL[c.a]}</strong> and <strong>{ROLE_LABEL[c.b]}</strong> are close {c.condition === "typical vision" ? "for typical colour vision" : `under ${c.condition}`}</span>
+              <span className="is-mono">ΔOK {c.distance.toFixed(3)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function Preview({ palette: p }: { palette: Palette }) {
   return (
     <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
       {/* Dashboard card */}
-      <div style={{ background: p.bg, border: `1px solid ${p.border}`, borderRadius: 'var(--radius-lg)', padding: 22, width: 400, flexShrink: 0 }}>
+      <div style={{ background: p.bg, border: `1px solid ${p.border}`, borderRadius: "var(--radius-lg)", padding: 22, flex: "1 1 320px", maxWidth: 440, minWidth: 0, boxSizing: "border-box" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
           <div>
             <div style={{ color: p.textMuted, fontSize: 9, textTransform: "uppercase", letterSpacing: ".12em", marginBottom: 2 }}>Overview</div>
@@ -1144,13 +649,13 @@ function Preview({ palette: p }) {
             { label: "Pending", val: "6",  col: p.warning },
             { label: "Issues",  val: "2",  col: p.error   },
           ].map((stat) => (
-            <div key={stat.label} style={{ background: p.surface, border: `1px solid ${p.border}`, borderRadius: 'var(--radius-sm)', padding: "9px 11px" }}>
+            <div key={stat.label} style={{ background: p.surface, border: `1px solid ${p.border}`, borderRadius: "var(--radius-sm)", padding: "9px 11px" }}>
               <div style={{ color: p.textMuted, fontSize: 8, textTransform: "uppercase", letterSpacing: ".1em", opacity: .5, marginBottom: 2 }}>{stat.label}</div>
               <div style={{ color: stat.col, fontSize: 18, fontWeight: 800 }}>{stat.val}</div>
             </div>
           ))}
         </div>
-        <div style={{ background: p.surfaceElevated, border: `1px solid ${p.border}`, borderRadius: 'var(--radius-sm)', padding: "10px 12px", marginBottom: 12 }}>
+        <div style={{ background: p.surfaceElevated, border: `1px solid ${p.border}`, borderRadius: "var(--radius-sm)", padding: "10px 12px", marginBottom: 12 }}>
           <div style={{ color: p.text, fontSize: 11, fontWeight: 600, marginBottom: 7 }}>Recent Activity</div>
           {[
             { msg: "Deploy to production succeeded", type: "success" },
@@ -1169,8 +674,8 @@ function Preview({ palette: p }) {
         <div style={{ display: "flex", gap: 7 }}>
           {[
             { bg: p.primary,   fg: p.primaryFg, label: "Primary"   },
-            { bg: p.secondary, fg: p.bg,         label: "Secondary" },
-            { bg: p.accent,    fg: p.bg,         label: "Accent"    },
+            { bg: p.secondary, fg: foreground(p.secondary), label: "Secondary" },
+            { bg: p.accent,    fg: foreground(p.accent), label: "Accent"    },
           ].map((b) => (
             <div key={b.label} style={{ flex: 1, background: b.bg, color: b.fg, padding: 8, borderRadius: 7, fontSize: 10, fontWeight: 700, textAlign: "center" }}>
               {b.label}
@@ -1180,8 +685,8 @@ function Preview({ palette: p }) {
       </div>
 
       {/* Typography + semantic cards */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minWidth: 260 }}>
-        <div style={{ background: p.bg, border: `1px solid ${p.border}`, borderRadius: 'var(--radius-lg)', padding: 22 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: "1 1 260px", minWidth: 0 }}>
+        <div style={{ background: p.bg, border: `1px solid ${p.border}`, borderRadius: "var(--radius-lg)", padding: 22 }}>
           <div style={{ color: p.textMuted, fontSize: 9, letterSpacing: ".16em", textTransform: "uppercase", marginBottom: 10 }}>Typography</div>
           <div style={{ color: p.primary, fontSize: 22, fontWeight: 900, letterSpacing: "-.025em", lineHeight: 1.1, marginBottom: 4 }}>Display Heading</div>
           <div style={{ color: p.text, fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Section Title</div>
@@ -1190,14 +695,14 @@ function Preview({ palette: p }) {
           <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
             {[
               { bg: p.primary,   fg: p.primaryFg, label: "Primary"   },
-              { bg: p.secondary, fg: p.bg,         label: "Secondary" },
-              { bg: p.accent,    fg: p.bg,         label: "Accent"    },
+              { bg: p.secondary, fg: foreground(p.secondary), label: "Secondary" },
+              { bg: p.accent,    fg: foreground(p.accent), label: "Accent"    },
             ].map((t) => (
-              <div key={t.label} style={{ background: t.bg, color: t.fg, padding: "3px 10px", borderRadius: 'var(--radius-xl)', fontSize: 9, fontWeight: 700 }}>{t.label}</div>
+              <div key={t.label} style={{ background: t.bg, color: t.fg, padding: "3px 10px", borderRadius: "var(--radius-xl)", fontSize: 9, fontWeight: 700 }}>{t.label}</div>
             ))}
           </div>
         </div>
-        <div style={{ background: p.bg, border: `1px solid ${p.border}`, borderRadius: 'var(--radius-lg)', padding: 22 }}>
+        <div style={{ background: p.bg, border: `1px solid ${p.border}`, borderRadius: "var(--radius-lg)", padding: 22 }}>
           <div style={{ color: p.textMuted, fontSize: 9, letterSpacing: ".16em", textTransform: "uppercase", marginBottom: 10 }}>Semantic States</div>
           {[
             { label: "Success", color: p.success, bg: p.successBg, msg: "Deploy completed"     },
@@ -1217,22 +722,21 @@ function Preview({ palette: p }) {
   );
 }
 
-function AccessibilityTab({ palette, fitness }) {
-  const keyMap = {
+function AccessibilityTab({ palette, fitness }: { palette: Palette; fitness: ReturnType<typeof scorePalette> }) {
+  const keyMap: Record<string, Role> = {
     Text: "text", TextMuted: "textMuted", Primary: "primary", PrimaryFg: "primaryFg",
     Secondary: "secondary", Accent: "accent", Success: "success", Error: "error",
     Warning: "warning", BG: "bg", Surface: "surface", SuccessBg: "successBg",
-    ErrorBg: "errorBg", WarningBg: "warningBg",
+    ErrorBg: "errorBg", WarningBg: "warningBg", Info: "info", InfoBg: "infoBg",
+    SurfaceElevated: "surfaceElevated",
   };
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 10 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 280px), 1fr))", gap: 10 }}>
       {Object.entries(fitness.pairs).map(([name, data]) => {
         const parts  = name.split(" / ");
         const fgHex  = palette[keyMap[parts[0]]] || palette.text;
         const bgHex  = palette[keyMap[parts[1]]] || palette.bg;
-        const g      = GRADE(data.cr);
-        const ap     = parseFloat(data.apca);
-        const apColor = ap >= 75 ? "var(--color-success)" : ap >= 60 ? "#eab308" : "var(--color-error)";
+
         return (
           <div
             key={name}
@@ -1254,25 +758,13 @@ function AccessibilityTab({ palette, fitness }) {
               <div>
                 <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-ink)", marginBottom: 3 }}>{name}</div>
                 <div style={{ fontSize: 10, color: "var(--color-ink-muted)" }}>
-                  APCA{" "}
-                  <span style={{ color: apColor, fontWeight: 700 }}>{data.apca} Lc</span>
+                  Normal AA needs 4.5:1; large AA 3:1; AAA 7:1
                 </div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                <span
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: g.color,
-                    background: g.color + "22",
-                    padding: "2px 8px",
-                    borderRadius: "var(--radius-xs)",
-                  }}
-                >
-                  {g.label}
-                </span>
+                <GradeChip ratio={data.cr} />
                 <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--color-ink-muted)" }}>
-                  {data.cr}:1
+                  {data.cr.toFixed(2)}:1
                 </span>
               </div>
             </div>
@@ -1283,741 +775,59 @@ function AccessibilityTab({ palette, fitness }) {
   );
 }
 
-function ColorBlindTab({ palette, cbData }) {
-  const names = {
+function ColorBlindTab({ palette, cbData }: { palette: Palette; cbData: ReturnType<typeof analyzeCB> }) {
+  const names: Record<string, string> = {
     protanopia:   "Protanopia (Red-blind)",
     deuteranopia: "Deuteranopia (Green-blind)",
     tritanopia:   "Tritanopia (Blue-blind)",
   };
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
-      {Object.entries(cbData).map(([type, data]) => {
-        const tCR = parseFloat(data.textBgCR), pCR = parseFloat(data.primaryBgCR);
-        const tG = GRADE(tCR), pG = GRADE(pCR);
-        return (
-          <div
-            key={type}
-            style={{
-              background: "var(--color-surface-1)",
-              border: "1px solid var(--color-hairline)",
-              borderRadius: "var(--radius-md)",
-              overflow: "hidden",
-            }}
-          >
-            {/* Card header */}
-            <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--color-hairline)" }}>
-              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--color-ink-muted)", marginBottom: 3 }}>
-                Simulation
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>
-                {names[type]}
-              </div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))", gap: 12 }}>
+      {Object.entries(cbData).map(([type, data]) => (
+        <div
+          key={type}
+          style={{
+            background: "var(--color-surface-1)",
+            border: "1px solid var(--color-hairline)",
+            borderRadius: "var(--radius-md)",
+            overflow: "hidden",
+          }}
+        >
+          {/* Card header */}
+          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--color-hairline)" }}>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--color-ink-muted)", marginBottom: 3 }}>
+              Approximate simulation (Brettel 1997)
             </div>
-            {/* Simulated color strip */}
-            <div style={{ padding: "12px 14px" }}>
-              <div style={{ display: "flex", height: 36, borderRadius: "var(--radius-sm)", overflow: "hidden", marginBottom: 12 }}>
-                {["bg", "surface", "primary", "secondary", "accent", "text"].map((k) => {
-                  const sim = simulateCB(hexToRgb(palette[k]), type);
-                  return <div key={k} style={{ flex: 1, background: rgbToHex(sim) }} />;
-                })}
-              </div>
-              {/* Contrast rows */}
-              {[
-                { label: "Text on BG",    cr: data.textBgCR,    g: tG },
-                { label: "Primary on BG", cr: data.primaryBgCR, g: pG },
-              ].map((row) => (
-                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 6 }}>
-                  <span style={{ fontSize: 11, color: "var(--color-ink-muted)" }}>{row.label}</span>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--color-ink-muted)" }}>
-                      {row.cr}:1
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: row.g.color,
-                        background: row.g.color + "22",
-                        padding: "2px 7px",
-                        borderRadius: "var(--radius-xs)",
-                      }}
-                    >
-                      {row.g.label}
-                    </span>
-                  </div>
-                </div>
-              ))}
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>
+              {names[type]}
             </div>
           </div>
-        );
-      })}
-    </div>
-  );
-}
-
-const VISUAL_MODES = [
-  { id: "visual",    label: "Visual"    },
-  { id: "poster",    label: "Poster"    },
-  { id: "luxury",    label: "Luxury"    },
-  { id: "minimal",   label: "Minimal"   },
-  { id: "cyberpunk", label: "Cyberpunk" },
-];
-
-const VISUAL_MODE_DESCRIPTIONS = {
-  visual:    "Tonal range built around the seed",
-  poster:    "High-chroma mid-tones with neutrals",
-  luxury:    "Restrained depth with tinted neutrals",
-  minimal:   "Near-achromatic — one colour accent",
-  cyberpunk: "Near-black darks with neon highlights",
-};
-
-function MoodTab({ palette, visualMode, onChangeMode, onReroll }) {
-  const s = styles;
-  const [copied, setCopied] = useState('');
-  return (
-    <div>
-      {/* Mode selector row */}
-      <div style={s.moodBar}>
-        <div style={s.harmonySegment} role="group" aria-label="Visual palette mood">
-          {VISUAL_MODES.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => onChangeMode(m.id)}
-              aria-pressed={visualMode === m.id}
-              style={{ ...s.harmonyBtn, ...(visualMode === m.id ? s.harmonyBtnActive : {}) }}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-        <span style={s.harmonyDesc}>{VISUAL_MODE_DESCRIPTIONS[visualMode]}</span>
-        <button onClick={onReroll} style={s.rerollBtn} aria-label="Generate visual palette">
-          <i className="ti ti-refresh" aria-hidden="true" style={{ fontSize: 13 }} />
-          Generate
-        </button>
-      </div>
-
-      {/* Swatch strip */}
-      {palette ? (
-        <div style={s.moodGrid}>
-          {palette.map((swatch) => {
-            const lum = wcagLuminance(hexToRgb(swatch.hex));
-            const onColor = lum > 0.28 ? "rgba(0,0,0,0.72)" : "rgba(255,255,255,0.85)";
-            return (
-              <button
-                key={swatch.index}
-                onClick={() => {
-                  navigator.clipboard.writeText(swatch.hex).catch(() => {});
-                  setCopied(swatch.hex);
-                  setTimeout(() => setCopied(''), 1500);
-                }}
-                aria-label={`Copy ${swatch.name} ${swatch.hex}`}
-                style={{ ...s.moodSwatch, background: swatch.hex }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-3px)";
-                  e.currentTarget.style.boxShadow = "var(--shadow-level-2)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "none";
-                  e.currentTarget.style.boxShadow = "none";
-                }}
-              >
-                <div style={{ ...s.moodSwatchInner, color: onColor }}>
-                  <span style={s.moodSwatchName}>{swatch.name}</span>
-                  <span style={s.moodSwatchHex}>{copied === swatch.hex ? '✓ Copied' : swatch.hex}</span>
+          {/* Simulated color strip */}
+          <div style={{ padding: "12px 14px" }}>
+            <div style={{ display: "flex", height: 36, borderRadius: "var(--radius-sm)", overflow: "hidden", marginBottom: 12 }}>
+              {(["bg", "surface", "primary", "secondary", "accent", "text"] as const).map((k) => {
+                const sim = simulateCB(hexToRgb(palette[k]), type as "protanopia" | "deuteranopia" | "tritanopia");
+                return <div key={k} style={{ flex: 1, background: rgbToHex(sim) }} />;
+              })}
+            </div>
+            {/* Contrast rows */}
+            {[
+              { label: "Text on BG",    ratio: data.textBgCR    },
+              { label: "Primary on BG", ratio: data.primaryBgCR },
+            ].map((row) => (
+              <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 6 }}>
+                <span style={{ fontSize: 11, color: "var(--color-ink-muted)" }}>{row.label}</span>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--color-ink-muted)" }}>
+                    {row.ratio.toFixed(2)}:1
+                  </span>
+                  <GradeChip ratio={row.ratio} />
                 </div>
-              </button>
-            );
-          })}
+              </div>
+            ))}
+          </div>
         </div>
-      ) : (
-        <div style={s.empty}>
-          <p style={s.emptySub}>Hit Generate to build a mood palette.</p>
-        </div>
-      )}
+      ))}
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STYLES
-// ─────────────────────────────────────────────────────────────────────────────
-
-const styles = {
-  // ── Page shell ──────────────────────────────────────────────────────────────
-  wrap: {
-    fontFamily: "var(--font-body)",
-    background: "var(--color-canvas)",
-    minHeight: "100vh",
-    color: "var(--color-ink)",
-  },
-
-  // ── Toolbar ─────────────────────────────────────────────────────────────────
-  toolbar: {
-    position: "sticky",
-    top: 56,           // clears the site nav (h-14 = 56 px)
-    zIndex: 100,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-end",   // controls-only row; title comes from the shell
-    gap: 12,
-    flexWrap: "wrap",
-    padding: "12px 24px",
-    background: "var(--color-canvas)",   // controls sit on plain canvas, like sibling tools
-  },
-  toolbarControls: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-
-  // ── Seed input group ────────────────────────────────────────────────────────
-  seedGroup: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 10,
-    background: "var(--color-surface-2)",
-    border: "1px solid var(--color-hairline)",
-    borderRadius: "var(--radius-pill)",
-    minHeight: 40,               // shared row height — primacy comes from the swatch, not height
-    boxSizing: "border-box",
-    padding: "0 16px 0 4px",
-    cursor: "default",
-  },
-  seedLabel: {
-    fontSize: 11,
-    fontWeight: 500,
-    color: "var(--color-ink-muted)",
-    userSelect: "none",
-    letterSpacing: ".04em",
-    lineHeight: 1,
-    display: "flex",
-    alignItems: "center",
-  },
-  swatchWrap: {
-    position: "relative",
-    display: "block",
-    width: 30,
-    height: 30,
-    borderRadius: "var(--radius-full)",   // circular dot — matches the pill's roundness
-    border: "1px solid var(--color-hairline)",
-    overflow: "hidden",
-    cursor: "pointer",
-    flexShrink: 0,
-  },
-  colorInput: {
-    position: "absolute",
-    inset: 0,
-    width: "100%",
-    height: "100%",
-    opacity: 0,
-    padding: 0,
-    border: "none",
-    background: "none",
-    cursor: "pointer",
-    outline: "none",
-  },
-  seedDivider: {
-    display: "inline-block",
-    width: 1,
-    height: 18,
-    background: "var(--color-hairline)",
-    flexShrink: 0,
-  },
-  hexInput: {
-    background: "none",
-    border: "none",
-    outline: "none",
-    color: "var(--color-ink)",
-    fontSize: 13,
-    fontFamily: "var(--font-mono)",
-    width: 74,          // fixed so the pill doesn't resize as the value is typed
-    textAlign: "center", // centre the value in that fixed box, rather than hugging the left
-    letterSpacing: ".04em",
-    padding: 0,
-    lineHeight: 1,
-    display: "block",
-  },
-
-  // ── Toolbar buttons ─────────────────────────────────────────────────────────
-  modeBtn: {
-    background: "var(--color-surface-2)",
-    color: "var(--color-ink)",
-    border: "none",
-    borderRadius: "var(--radius-pill)",
-    minHeight: 40,               // matches the Seed pill — one shared baseline across the row
-    boxSizing: "border-box",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "0 18px",
-    fontSize: 13,
-    fontWeight: 500,
-    fontFamily: "var(--font-body)",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    lineHeight: 1,
-    letterSpacing: "-0.13px",
-  },
-  generateBtn: {
-    background: "var(--color-inverse-canvas)",
-    color: "var(--color-canvas)",
-    border: "none",
-    borderRadius: "var(--radius-pill)",
-    minHeight: 40,               // matches the Seed pill — one shared baseline across the row
-    boxSizing: "border-box",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "0 18px",
-    fontSize: 13,
-    fontWeight: 500,
-    fontFamily: "var(--font-body)",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    lineHeight: 1,
-    letterSpacing: "-0.13px",
-  },
-  exportBtn: {
-    background: "var(--color-surface-2)",
-    color: "var(--color-ink)",
-    border: "none",
-    borderRadius: "var(--radius-pill)",
-    minHeight: 40,               // matches the Seed pill — one shared baseline across the row
-    boxSizing: "border-box",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "0 18px",
-    fontSize: 13,
-    fontWeight: 500,
-    fontFamily: "var(--font-body)",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    lineHeight: 1,
-    letterSpacing: "-0.13px",
-  },
-
-  // ── Harmony bar ─────────────────────────────────────────────────────────────
-  harmonyBar: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    padding: "4px 24px 10px",
-    flexWrap: "wrap",
-  },
-  harmonyLabel: {
-    fontSize: 11,
-    fontWeight: 400,
-    letterSpacing: ".06em",
-    textTransform: "uppercase",
-    color: "var(--color-ink-muted)",
-    flexShrink: 0,
-    lineHeight: 1,
-  },
-  harmonySegment: {
-    display: "flex",
-    overflowX: "auto",
-    scrollbarWidth: "none",
-    flexWrap: "nowrap",
-    background: "var(--color-surface-1)",
-    borderRadius: "var(--radius-pill)",
-    padding: 3,
-    gap: 2,
-  },
-  harmonyBtn: {
-    background: "none",
-    border: "none",
-    borderRadius: "var(--radius-pill)",
-    padding: "5px 13px",
-    fontSize: 12,
-    fontWeight: 500,
-    fontFamily: "var(--font-body)",
-    color: "var(--color-ink-muted)",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    lineHeight: 1,
-    transition: "background .12s, color .12s",
-  },
-  harmonyBtnActive: {
-    background: "var(--color-inverse-canvas)",   // vivid active state, matching Grid/Font pills
-    color: "var(--color-canvas)",
-  },
-  harmonyDesc: {
-    fontSize: 11,
-    color: "var(--color-ink-muted)",
-    lineHeight: 1,
-  },
-
-  // ── Color symbolism caption ─────────────────────────────────────────────────
-  symbolismBar: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    flexWrap: "wrap",
-    padding: "8px 24px 10px",
-    cursor: "help",
-  },
-  symbolismSwatch: {
-    width: 12,
-    height: 12,
-    borderRadius: "var(--radius-xs)",
-    border: "1px solid var(--color-hairline)",
-    flexShrink: 0,
-  },
-  symbolismName: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: "var(--color-ink)",
-    fontFamily: "var(--font-body)",
-    lineHeight: 1,
-  },
-  symbolismSep: {
-    fontSize: 12,
-    color: "var(--color-ink-muted)",
-    opacity: 0.5,
-    lineHeight: 1,
-  },
-  symbolismKeywords: {
-    fontSize: 11,
-    fontWeight: 400,
-    color: "var(--color-ink-muted)",
-    fontFamily: "var(--font-body)",
-    letterSpacing: ".02em",
-    lineHeight: 1,
-  },
-  symbolismInfo: {
-    fontSize: 12,
-    color: "var(--color-ink-muted)",
-    opacity: 0.55,
-    marginLeft: 2,
-    lineHeight: 1,
-  },
-
-  // ── Tab bar ─────────────────────────────────────────────────────────────────
-  tabBar: {
-    display: "flex",
-    padding: "0 24px",
-    borderBottom: "1px solid var(--color-hairline)",
-  },
-  tab: {
-    background: "none",
-    border: "none",
-    borderBottom: "2px solid transparent",
-    padding: "12px 18px",
-    fontSize: 13,
-    fontWeight: 500,
-    fontFamily: "var(--font-body)",
-    color: "var(--color-ink-muted)",
-    cursor: "pointer",
-    lineHeight: 1,
-    transition: "color .12s, border-color .12s",
-  },
-  tabActive: {
-    color: "var(--color-ink)",
-    borderBottomColor: "var(--color-ink)",
-  },
-
-  // ── Content ─────────────────────────────────────────────────────────────────
-  content: {
-    padding: "24px",
-    maxWidth: 1440,
-    margin: "0 auto",
-  },
-
-  // ── Empty state ─────────────────────────────────────────────────────────────
-  empty: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "96px 24px",
-    textAlign: "center",
-    gap: 10,
-  },
-  emptyIcon: {
-    fontSize: 40,
-    color: "var(--color-ink-muted)",
-    opacity: 0.35,
-    lineHeight: 1,
-    marginBottom: 6,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: 600,
-    letterSpacing: "-0.3px",
-    color: "var(--color-ink)",
-    fontFamily: "var(--font-display)",
-    margin: 0,
-  },
-  emptySub: {
-    fontSize: 13,
-    color: "var(--color-ink-muted)",
-    lineHeight: 1.65,
-    maxWidth: 380,
-    margin: 0,
-  },
-
-  // ── Score bar ────────────────────────────────────────────────────────────────
-  scoreBar: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-    marginBottom: 32,
-  },
-  scoreHead: {
-    display: "flex",
-    alignItems: "flex-end",
-    gap: 24,
-    flexWrap: "wrap",
-  },
-  scoreBlock: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 5,
-  },
-  scoreLabel: {
-    fontSize: 11,
-    fontWeight: 400,
-    letterSpacing: ".06em",
-    textTransform: "uppercase",
-    color: "var(--color-ink-muted)",
-    lineHeight: 1,
-  },
-  scoreNum: {
-    fontSize: 38,
-    fontWeight: 800,
-    lineHeight: 1,
-    fontFamily: "var(--font-display)",
-    letterSpacing: "-1.5px",
-  },
-  scoreOutOf: {
-    fontSize: 15,
-    fontWeight: 400,
-    color: "var(--color-ink-muted)",
-    marginLeft: 2,
-    letterSpacing: 0,
-  },
-  pairGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-    gap: 8,
-  },
-  pairItem: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-    padding: "8px 10px",
-    borderRadius: "var(--radius-sm)",
-    background: "var(--color-surface-1)",
-  },
-  pairName: {
-    fontSize: 10,
-    color: "var(--color-ink-muted)",
-    letterSpacing: ".04em",
-    whiteSpace: "nowrap",
-    lineHeight: 1,
-  },
-  pairRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 5,
-  },
-  gradeChip: {
-    fontSize: 10,
-    fontWeight: 700,
-    padding: "2px 6px",
-    borderRadius: "var(--radius-xs)",
-    letterSpacing: ".02em",
-    lineHeight: 1.4,
-  },
-  pairRatio: {
-    fontSize: 10,
-    fontFamily: "var(--font-mono)",
-    color: "var(--color-ink-muted)",
-    lineHeight: 1,
-  },
-  pairRatioFail: {
-    color: "var(--color-error)",
-    fontWeight: 700,
-  },
-  deltaVal: {
-    fontSize: 24,
-    fontWeight: 800,
-    lineHeight: 1,
-    fontFamily: "var(--font-display)",
-    letterSpacing: "-0.5px",
-  },
-
-  // ── Swatch groups ────────────────────────────────────────────────────────────
-  swatchSection: {
-    marginBottom: 28,
-  },
-  groupLabel: {
-    display: "block",
-    fontSize: 11,
-    fontWeight: 400,
-    letterSpacing: ".06em",
-    textTransform: "uppercase",
-    color: "var(--color-ink-muted)",
-    marginBottom: 12,
-    lineHeight: 1,
-  },
-  swatchGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-    gap: 8,
-  },
-  swatch: {
-    borderRadius: "var(--radius-md)",
-    overflow: "hidden",
-    background: "var(--color-surface-1)",
-    transition: "transform .12s, box-shadow .12s",
-  },
-  swatchColor: {
-    display: "flex",
-    alignItems: "flex-end",
-    padding: "8px 10px",
-    height: 88,
-    width: "100%",
-    border: "none",
-    cursor: "pointer",
-    textAlign: "left",
-  },
-  swatchHex: {
-    fontSize: 9,
-    fontFamily: "var(--font-mono)",
-    letterSpacing: ".06em",
-    textTransform: "uppercase",
-    lineHeight: 1,
-  },
-  swatchFoot: {
-    background: "var(--color-surface-1)",
-    padding: "7px 10px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 4,
-  },
-  swatchName: {
-    fontSize: 11,
-    fontWeight: 500,
-    color: "var(--color-ink-muted)",
-    lineHeight: 1.2,
-  },
-  lockBtn: {
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    padding: "2px 4px",
-    lineHeight: 1,
-    display: "flex",
-    alignItems: "center",
-    fontSize: 14,
-    borderRadius: "var(--radius-xs)",
-    flexShrink: 0,
-  },
-
-  // ── Lock hint ────────────────────────────────────────────────────────────────
-  lockHint: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    fontSize: 12,
-    color: "var(--color-ink-muted)",
-    marginTop: 4,
-    marginBottom: 20,
-  },
-  clearBtn: {
-    background: "none",
-    border: "none",
-    color: "var(--color-ink)",
-    cursor: "pointer",
-    fontSize: 12,
-    fontFamily: "var(--font-body)",
-    padding: 0,
-    textDecoration: "underline",
-    textUnderlineOffset: "2px",
-  },
-
-  // ── Preview section ─────────────────────────────────────────────────────────
-  previewDivider: {
-    border: "none",
-    borderTop: "1px solid var(--color-hairline)",
-    margin: "28px 0 24px",
-  },
-  previewLabel: {
-    display: "block",
-    fontSize: 11,
-    fontWeight: 400,
-    letterSpacing: ".06em",
-    textTransform: "uppercase",
-    color: "var(--color-ink-muted)",
-    marginBottom: 16,
-    lineHeight: 1,
-  },
-
-  // ── Mood tab ─────────────────────────────────────────────────────────────────
-  moodBar: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 20,
-    flexWrap: "wrap",
-  },
-  rerollBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 5,
-    background: "var(--color-surface-1)",
-    color: "var(--color-ink)",
-    border: "none",
-    borderRadius: "var(--radius-pill)",
-    padding: "10px 18px",
-    fontSize: 13,
-    fontWeight: 500,
-    fontFamily: "var(--font-body)",
-    cursor: "pointer",
-    lineHeight: 1,
-    whiteSpace: "nowrap",
-    marginLeft: "auto",
-  },
-  moodGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-    gap: 8,
-  },
-  moodSwatch: {
-    border: "1px solid var(--color-hairline)",
-    borderRadius: "var(--radius-md)",
-    cursor: "pointer",
-    padding: 0,
-    position: "relative",
-    minHeight: 200,
-    display: "block",
-    transition: "transform .12s, box-shadow .12s",
-  },
-  moodSwatchInner: {
-    position: "absolute",
-    bottom: 12,
-    left: 12,
-    right: 12,
-    display: "flex",
-    flexDirection: "column",
-    gap: 3,
-  },
-  moodSwatchName: {
-    fontSize: 12,
-    fontWeight: 600,
-    lineHeight: 1.2,
-  },
-  moodSwatchHex: {
-    fontSize: 9,
-    fontFamily: "var(--font-mono)",
-    letterSpacing: ".06em",
-    textTransform: "uppercase",
-    lineHeight: 1,
-    opacity: 0.85,
-  },
-};

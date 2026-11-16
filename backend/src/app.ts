@@ -11,6 +11,7 @@ import { domainsRouter } from './routes/domains';
 import { studentsRouter } from './routes/students';
 import { teamRouter }    from './routes/team';
 import notifyRouter      from './routes/notify';
+import emailCentreRouter from './routes/emailCentre';
 import liveSessionsRouter from './routes/liveSessions';
 import boardsRouter from './routes/boards';
 import workspacesRouter from './routes/workspaces';
@@ -128,6 +129,10 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
   // and silently drop the whole edit — worse than a slightly larger limit.
   app.use('/api/boards', express.json({ limit: '3mb' }));
   app.use('/api/notify', express.json({ limit: '1mb' }));
+  // Email Centre: the Resend webhook signature covers the exact request bytes, so
+  // that path gets a raw body parser; the rest carry rich-text documents + recipient lists.
+  app.use('/api/email/webhooks', express.raw({ type: '*/*', limit: '1mb' }));
+  app.use('/api/email', express.json({ limit: '2mb' }));
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({
     extended: true,
@@ -153,6 +158,7 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
   app.use('/api/students', studentsRouter);
   app.use('/api/team',     teamRouter);
   app.use('/api/notify',        notifyRouter);
+  app.use('/api/email',         emailCentreRouter);
   app.use('/api/live-sessions', liveSessionsRouter);
   app.use('/api/boards',        boardsRouter);
   app.use('/api/workspaces',    workspacesRouter);

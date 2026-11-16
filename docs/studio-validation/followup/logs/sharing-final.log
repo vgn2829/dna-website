@@ -1,0 +1,7 @@
+{
+  checks: [
+    'shared recipe matches controls and displayed result',
+    'invalid shared seed reports error',
+    'locked contrast explanation survives refresh'
+  ]
+}

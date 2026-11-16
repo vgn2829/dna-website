@@ -157,26 +157,35 @@ describe('admin moderation', () => {
     expect((await request(app).get('/api/templates/admin/all?status=gone').set(admin())).status).toBe(400);
   });
 
-  it('10 & 18: admin switches Personal ↔ Community; templates stay in their workspace, assets stay scoped without grants', async () => {
+  it('10 & 18: admin switches Personal ↔ Workspace/Community; templates stay in their workspace, Workspace assets stay scoped without grants', async () => {
     const board = await createBoardDirect(OWNER, ws);
     const t = (await createTemplate(OWNER, board)).body.id as string;
     const a = await insertAsset(OWNER, ws);
 
-    expect((await request(app).patch(`/api/assets/admin/${a}`).set(admin()).send({ visibility: 'community' })).body.visibility).toBe('community');
+    expect((await request(app).patch(`/api/assets/admin/${a}`).set(admin()).send({ visibility: 'workspace' })).body.visibility).toBe('workspace');
     expect((await request(app).patch(`/api/templates/admin/${t}`).set(admin()).send({ visibility: 'community' })).body.visibility).toBe('community');
     expect(ids((await listAssets(MEMBER, ws)).body.assets)).toEqual([a]);
     expect(ids((await listTemplates(MEMBER, ws)).body)).toEqual([t]);
-    // 23: an admin override never reaches another workspace: an asset's
-    // community reaches exactly who the owner's own choice would — its
-    // workspace's members, plus workspaces it is explicitly shared with
-    // (none here). Listing someone else's workspace still needs membership.
+    // 23: an admin override reaches exactly who the owner's own choice
+    // would. An asset's Workspace is its workspace's members plus explicit
+    // grants (none here); a template's Community is its workspace. Listing
+    // someone else's workspace still needs membership.
     expect((await listAssets(OUTSIDER, ws)).status).toBe(403);
     expect(ids((await listAssets(OUTSIDER, outsiderWs)).body.assets)).toEqual([]);
+    expect((await listTemplates(OUTSIDER, outsiderWs)).body).toEqual([]);
+    // Templates have no 'workspace' value.
+    expect((await request(app).patch(`/api/templates/admin/${t}`).set(admin()).send({ visibility: 'workspace' })).status).toBe(400);
+
+    // An asset's Community is club-wide: the outsider finds it from their own workspace.
+    expect((await request(app).patch(`/api/assets/admin/${a}`).set(admin()).send({ visibility: 'community' })).body.visibility).toBe('community');
+    expect(ids((await listAssets(OUTSIDER, outsiderWs)).body.assets)).toEqual([a]);
+    expect(ids((await listAssets(OUTSIDER, outsiderWs, 'community')).body.assets)).toEqual([a]);
     expect((await listTemplates(OUTSIDER, outsiderWs)).body).toEqual([]);
 
     await request(app).patch(`/api/assets/admin/${a}`).set(admin()).send({ visibility: 'personal' });
     await request(app).patch(`/api/templates/admin/${t}`).set(admin()).send({ visibility: 'personal' });
     expect((await listAssets(MEMBER, ws)).body.assets).toEqual([]);
+    expect((await listAssets(OUTSIDER, outsiderWs)).body.assets).toEqual([]);
     expect((await listTemplates(MEMBER, ws)).body).toEqual([]);
     // Ownership never moves.
     expect((await query<{ owner_roll: string }>('SELECT owner_roll FROM assets WHERE id = $1', [a]))[0].owner_roll).toBe(OWNER);

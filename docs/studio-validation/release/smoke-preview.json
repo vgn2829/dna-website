@@ -1,0 +1,56 @@
+[
+  {
+    "engine": "chromium",
+    "version": "145.0.7632.6",
+    "base": "http://127.0.0.1:4175",
+    "checks": [
+      "palette generation, exact lock across themes, shared edited variants, refresh recovery and invalid-input rejection",
+      "direct font query, actual selected weight and self-hosted licence",
+      "full-resolution PNG/SVG exports and source recovery after lazy tool switch",
+      "direct background route/refresh, real default General inference/export with helper absent and zero loopback requests"
+    ],
+    "assetFailures": [],
+    "pageErrors": [],
+    "environmentErrors": [],
+    "backendStatus": [
+      "CPU WASM fallback - larger images may take several seconds. Model sessions release after two idle minutes. Release browser model memory",
+      "Python helper is optional and not connected."
+    ]
+  },
+  {
+    "engine": "firefox",
+    "version": "146.0.1",
+    "base": "http://127.0.0.1:4175",
+    "checks": [
+      "palette generation, exact lock across themes, shared edited variants, refresh recovery and invalid-input rejection",
+      "direct font query, actual selected weight and self-hosted licence",
+      "full-resolution PNG/SVG exports and source recovery after lazy tool switch",
+      "direct background route/refresh, real default General inference/export with helper absent and zero loopback requests"
+    ],
+    "assetFailures": [],
+    "pageErrors": [],
+    "environmentErrors": [],
+    "backendStatus": [
+      "WebGPU acceleration (float32). Model sessions release after two idle minutes. Release browser model memory",
+      "Python helper is optional and not connected."
+    ]
+  },
+  {
+    "engine": "webkit",
+    "version": "26.0",
+    "base": "http://127.0.0.1:4175",
+    "checks": [
+      "palette generation, exact lock across themes, shared edited variants, refresh recovery and invalid-input rejection",
+      "direct font query, actual selected weight and self-hosted licence",
+      "full-resolution PNG/SVG exports and source recovery after lazy tool switch",
+      "direct background route/refresh, real default General inference/export with helper absent and zero loopback requests"
+    ],
+    "assetFailures": [],
+    "pageErrors": [],
+    "environmentErrors": [],
+    "backendStatus": [
+      "CPU WASM fallback - larger images may take several seconds. Model sessions release after two idle minutes. Release browser model memory",
+      "Python helper is optional and not connected."
+    ]
+  }
+]
