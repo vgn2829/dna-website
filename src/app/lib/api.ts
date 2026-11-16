@@ -300,6 +300,54 @@ export interface Asset {
 
 export type AdminAsset = Asset & LibraryAdminExtra;
 
+// Inspiration Library (Milestone C) — mirrors backend/src/routes/inspiration.ts.
+// An item points at an Asset Library asset (`asset`, resolved against the
+// caller's CURRENT access: null + `unavailable` once it is no longer usable)
+// or at an external link (`url`, never fetched by the server).
+export type InspirationCategory =
+  | 'illustration' | 'typography' | 'branding' | 'ui-ux' | 'photography'
+  | 'color' | 'motion' | '3d' | 'layout' | 'other';
+export type InspirationSort = 'newest' | 'oldest' | 'title';
+export interface InspirationAsset {
+  id: string; kind: AssetKind; filename: string; url: string | null; thumb_url: string | null;
+  width: number | null; height: number | null; visibility: AssetVisibility;
+  extension: string | null; link_url: string | null; workspace_id: string;
+}
+export interface InspirationItem {
+  id: string;
+  kind: 'asset' | 'link';
+  title: string;
+  description: string | null;
+  category: InspirationCategory | null;
+  tags: string[];
+  url: string | null;
+  image_url: string | null;
+  asset: InspirationAsset | null;
+  unavailable: boolean;
+  collection_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+export interface InspirationCollection {
+  id: string; name: string; description: string | null; visibility: 'private';
+  item_count: number; created_at: string; updated_at: string;
+}
+export interface InspirationQuery {
+  q?: string; tags?: string[]; category?: InspirationCategory | 'none' | '';
+  kind?: 'asset' | 'link' | ''; collectionId?: string; sort?: InspirationSort;
+  limit?: number; offset?: number;
+}
+export interface InspirationFacets {
+  tags: Array<{ tag: string; count: number }>;
+  categories: Array<{ category: InspirationCategory; count: number }>;
+  total: number;
+}
+export type InspirationDraft = {
+  title?: string; description?: string | null; category?: InspirationCategory | null;
+  tags?: string[]; collection_ids?: string[];
+};
+
+
 function libraryAdminQuery(filters: LibraryAdminFilters): string {
   const params = new URLSearchParams();
   if (filters.q?.trim()) params.set('q', filters.q.trim());
@@ -1081,6 +1129,43 @@ export const api = {
       request<AssetCollection>('PATCH', `/asset-collections/${id}`, { roll, body }),
     delete: (roll: string, id: string) =>
       request<{ success: boolean; ungroupedAssets: number }>('DELETE', `/asset-collections/${id}`, { roll }),
+  },
+  // Inspiration Library (Milestone C) — see InspirationItem above.
+  inspiration: {
+    list: (roll: string, q: InspirationQuery = {}) => {
+      const p = new URLSearchParams();
+      if (q.q) p.set('q', q.q);
+      if (q.tags?.length) p.set('tag', q.tags.join(','));
+      if (q.category) p.set('category', q.category);
+      if (q.kind) p.set('kind', q.kind);
+      if (q.collectionId) p.set('collection_id', q.collectionId);
+      if (q.sort) p.set('sort', q.sort);
+      if (q.limit) p.set('limit', String(q.limit));
+      if (q.offset) p.set('offset', String(q.offset));
+      const qs = p.toString();
+      return request<{ items: InspirationItem[]; total: number; hasMore: boolean }>('GET', `/inspiration/items${qs ? `?${qs}` : ''}`, { roll });
+    },
+    facets: (roll: string) => request<InspirationFacets>('GET', '/inspiration/facets', { roll }),
+    saveAsset: (roll: string, assetId: string, draft: InspirationDraft = {}) =>
+      request<InspirationItem>('POST', '/inspiration/items', { roll, body: { kind: 'asset', asset_id: assetId, ...draft } }),
+    saveLink: (roll: string, link: { url: string; image_url?: string | null } & InspirationDraft) =>
+      request<InspirationItem>('POST', '/inspiration/items', { roll, body: { kind: 'link', ...link } }),
+    update: (roll: string, id: string, draft: InspirationDraft) =>
+      request<InspirationItem>('PATCH', `/inspiration/items/${id}`, { roll, body: draft }),
+    remove: (roll: string, id: string) =>
+      request<{ success: boolean }>('DELETE', `/inspiration/items/${id}`, { roll }),
+    collections: (roll: string) =>
+      request<{ collections: InspirationCollection[] }>('GET', '/inspiration/collections', { roll }),
+    createCollection: (roll: string, body: { name: string; description?: string | null }) =>
+      request<InspirationCollection>('POST', '/inspiration/collections', { roll, body }),
+    updateCollection: (roll: string, id: string, body: { name?: string; description?: string | null }) =>
+      request<InspirationCollection>('PATCH', `/inspiration/collections/${id}`, { roll, body }),
+    deleteCollection: (roll: string, id: string) =>
+      request<{ success: boolean }>('DELETE', `/inspiration/collections/${id}`, { roll }),
+    addToCollection: (roll: string, collectionId: string, itemId: string) =>
+      request<{ success: boolean }>('POST', `/inspiration/collections/${collectionId}/items`, { roll, body: { item_id: itemId } }),
+    removeFromCollection: (roll: string, collectionId: string, itemId: string) =>
+      request<{ success: boolean }>('DELETE', `/inspiration/collections/${collectionId}/items/${itemId}`, { roll }),
   },
   // Basic Notifications (Phase C) — mirrors backend/src/routes/notifications.ts.
   // No realtime channel: the panel refetches on open (see NotificationBell.tsx).

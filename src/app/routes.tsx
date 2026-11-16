@@ -12,6 +12,7 @@ import BoardPage from './pages/BoardPage';
 import { WorkspaceShell } from './components/shell/WorkspaceShell';
 import HomeShellPage from './pages/HomeShellPage';
 import AssetsPage from './pages/AssetsPage';
+import InspirationPage from './pages/InspirationPage';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 import TemplatesPage from './pages/TemplatesPage';
@@ -66,6 +67,7 @@ export const router = createBrowserRouter([
           { path: 'home', Component: HomeShellPage },
           { path: 'moodboards', Component: MoodboardsPage },
           { path: 'assets', Component: AssetsPage },
+          { path: 'inspiration', Component: InspirationPage },
           { path: 'projects', Component: ProjectsPage },
           { path: 'projects/:id', Component: ProjectDetailPage },
           { path: 'templates', Component: TemplatesPage },
