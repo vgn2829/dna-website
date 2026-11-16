@@ -50,7 +50,7 @@ describe('workspace buttons use the product button language (H4)', () => {
       expect(board).toContain(`onClick={() => ${h}}\n                  title=`);
     }
     expect(board).toMatch(/aria-label="Delete board"\n\s*title="Delete board"\n\s*className="btn-translucent btn-icon btn-sm is-danger touch-target"/);
-    expect(board.match(/className="btn-translucent btn-sm touch-target"/g)?.length).toBe(5); // Assets, Export, History, Save as Template + the Arrange menu trigger
+    expect(board.match(/className="btn-translucent btn-sm touch-target"/g)?.length).toBe(6); // Assets, Images (lightbox), Export, History, Save as Template + the Arrange menu trigger
   });
 
   it('Share dialog: Private/Shared and edit-mode are segmented toggles; Add/Copy/Remove are pills', () => {
