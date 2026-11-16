@@ -78,6 +78,7 @@ export default function BoardPage() {
   const [error, setError] = useState('');
   const [theme, setTheme] = useState<'dark' | 'light'>(getSiteTheme);
   const [canvasData, setCanvasData] = useState<unknown>(null);
+  const [imageThumbnails, setImageThumbnails] = useState<Record<string, string>>({});
   const [canvasLoading, setCanvasLoading] = useState(true);
   const [canvasReady, setCanvasReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -395,6 +396,7 @@ export default function BoardPage() {
           const canvasResult = await api.boards.loadCanvas(id, rollRef.current);
           if (canvasResult.canvas_data) {
             setCanvasData(JSON.parse(canvasResult.canvas_data));
+            setImageThumbnails(canvasResult.image_thumbnails ?? {});
           }
         } catch {
           // No saved canvas — start fresh
@@ -1090,6 +1092,7 @@ export default function BoardPage() {
                 boardId={id!}
                 theme={theme}
                 initialData={canvasData}
+                imageThumbnails={imageThumbnails}
                 pendingItems={board.items}
                 onSave={handleSave}
                 readOnly={!isMember && board.edit_mode === 'members_only'}

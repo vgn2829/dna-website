@@ -960,7 +960,7 @@ export const api = {
         { body: { canvas_data: canvasData }, roll }
       ),
     loadCanvas: (boardId: string, roll?: string) =>
-      request<{ canvas_data: string | null }>(
+      request<{ canvas_data: string | null; image_thumbnails?: Record<string, string> }>(
         'GET', `/boards/${boardId}/canvas`,
         roll ? { roll } : {}
       ),

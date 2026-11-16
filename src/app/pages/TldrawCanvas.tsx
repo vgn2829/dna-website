@@ -23,12 +23,15 @@ import {
   randomFileId,
 } from './tldrawCanvasShared';
 import { CommentsOverlay } from '../components/CommentsOverlay';
+import { pickCanvasImageSrc } from '../lib/canvasThumbs';
 import type { CommentsProps } from './commentsProps';
 
 interface TldrawCanvasProps {
   boardId: string;
   theme: 'dark' | 'light';
   initialData: unknown;
+  // Read-time map: original image src → ready 512px thumbnail (see lib/canvasThumbs.ts).
+  imageThumbnails?: Record<string, string>;
   pendingItems?: BoardItem[];
   onSave: (snapshot: unknown) => void;
   readOnly?: boolean;
@@ -49,6 +52,7 @@ export function TldrawCanvas({
   boardId,
   theme,
   initialData,
+  imageThumbnails,
   pendingItems,
   onSave,
   readOnly = false,
@@ -70,12 +74,23 @@ export function TldrawCanvas({
   // endpoint) instead of Tldraw's default of inlining them as base64 data
   // URLs in canvas_data. Real URLs are stable, small, and identical for
   // every viewer — no payload-size races, no per-user visibility gap.
+  const thumbsRef = useRef<Record<string, string>>(imageThumbnails ?? {});
+  useEffect(() => { thumbsRef.current = imageThumbnails ?? {}; }, [imageThumbnails]);
+
   const assetStore: TLAssetStore = useMemo(() => ({
     upload: async (_asset: TLAsset, file: File) => {
       const { url } = await api.boards.uploadCanvasFile(
         boardIdRef.current, file, randomFileId()
       );
       return url;
+    },
+    // Draw small images from their 512px thumbnails and big ones from the original (never softer
+    // than the original; exports and copies always get the original). Everything else is untouched.
+    resolve: (asset, ctx) => {
+      const props = asset.props as { src?: string | null; w?: number; h?: number };
+      if (!props.src) return null;
+      if (asset.type !== 'image') return props.src;
+      return pickCanvasImageSrc({ src: props.src, w: props.w ?? 0, h: props.h ?? 0 }, thumbsRef.current, ctx);
     },
   }), []);
 
