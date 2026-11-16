@@ -16,6 +16,7 @@ import { JobOwner, dimensions } from "../lib/studio/jobs";
 import { prepareSvg, svgImageUrl } from "../lib/studio/svg";
 import type { TracerConfig } from "./svg-converter/types";
 import { StudioRange } from "./studio/StudioRange";
+import { SaveToAssetsButton } from "./assets/SaveToAssetsButton";
 
 const MAX_DIM = 1000;
 
@@ -757,6 +758,14 @@ export function SvgConverter() {
                     <Download size={16} aria-hidden="true" /> Download
                   </button>
                 )}
+                {svgData && (
+                  <SaveToAssetsButton
+                    tool="svg-converter"
+                    baseName={traceEngine === "vector" ? "vector-trace" : "line-drawing"}
+                    getBlob={async () => new Blob([svgData], { type: "image/svg+xml" })}
+                    className="btn-translucent"
+                  />
+                )}
                 <button
                   className="btn-translucent btn-icon"
                   onClick={reset}
@@ -870,6 +879,14 @@ export function SvgConverter() {
                 <button className="btn-translucent" onClick={downloadRaster}>
                   <Download size={16} aria-hidden="true" /> Download
                 </button>
+              )}
+              {rasterUrl && (
+                <SaveToAssetsButton
+                  tool="svg-converter"
+                  baseName="image"
+                  getBlob={async () => (await fetch(rasterUrl)).blob()}
+                  className="btn-translucent"
+                />
               )}
               <button
                 className="btn-translucent btn-icon"

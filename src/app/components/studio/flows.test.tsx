@@ -11,6 +11,10 @@ import { ImageConverter } from "./ImageConverter";
 import { ContrastChecker } from "./ContrastChecker";
 import { applyMask } from "../background-removal/compositing";
 import { recompositeRegion } from "../background-removal/refine";
+// These flows mount tools without the app's providers. "Save to Assets" needs
+// the student session + router and has its own suite (SaveToAssetsButton.test),
+// so it is stubbed here.
+vi.mock("../assets/SaveToAssetsButton", () => ({ SaveToAssetsButton: () => null }));
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let host: HTMLDivElement, root: Root;
 beforeEach(() => {
