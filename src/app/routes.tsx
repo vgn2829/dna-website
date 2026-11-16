@@ -19,6 +19,7 @@ import ShowcaseManagePage from './pages/ShowcaseManagePage';
 import ShowcaseEditorPage from './pages/ShowcaseEditorPage';
 import CreatorsPage from './pages/CreatorsPage';
 import CreatorProfilePage from './pages/CreatorProfilePage';
+import ProfilePage from './pages/ProfilePage';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 import TemplatesPage from './pages/TemplatesPage';
@@ -81,6 +82,7 @@ export const router = createBrowserRouter([
           { path: 'moodboards', Component: MoodboardsPage },
           { path: 'assets', Component: AssetsPage },
           { path: 'inspiration', Component: InspirationPage },
+          { path: 'profile', Component: ProfilePage },
           { path: 'showcase/manage', Component: ShowcaseManagePage },
           { path: 'showcase/manage/:id', Component: ShowcaseEditorPage },
           { path: 'projects', Component: ProjectsPage },

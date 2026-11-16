@@ -401,6 +401,18 @@ export interface DesignerProfile {
   verified: boolean; avatarUrl: string | null; coverUrl: string | null; disciplines: CreatorDiscipline[]; skills: string[];
   links: Array<{ kind: string; url: string }>; worksCount: number;
 }
+// Owner view of PR #84's /api/designers/me (never includes roll numbers or email).
+export type ProfileVisibility = 'private' | 'members' | 'public';
+export interface OwnerProfile extends DesignerProfile {
+  showBatch: boolean; visibility: ProfileVisibility; moderationStatus: 'active' | 'hidden';
+  handleChangeableAt: string | null; createdAt: string;
+}
+export interface ProfilePreview extends DesignerProfile { visibleToPublic: boolean }
+export interface MyArtworkCredit {
+  id: string; artworkId: string; artworkTitle: string; role: string; roleLabel: string | null;
+  status: 'pending' | 'accepted' | 'declined'; source: string; createdAt: string;
+}
+export interface ProfileUpdate { handle?: string; displayName?: string; headline?: string | null; bio?: string | null; department?: string | null; showBatch?: boolean }
 export interface DesignerWork { id: string; title: string; domain: string; mediaType: string; coverUrl: string | null; role: string; roleLabel: string | null; publishedAt: string }
 export interface CreatorProject { slug: string; title: string; summary: string | null; category: string | null; featured: boolean; publishedAt: string; roleLabel: string | null; isOwner: boolean; coverUrl: string | null }
 export interface CreatorAdminItem { id: string; handle: string; displayName: string; ownerRoll: string; verified: boolean; featured: boolean; featuredAt: string | null }
@@ -1309,6 +1321,32 @@ export const api = {
     get: (handle: string) => request<DesignerProfile>('GET', `/designers/${encodeURIComponent(handle)}`),
     works: (handle: string, cursor?: string) =>
       request<{ items: DesignerWork[]; next: string | null }>('GET', `/designers/${encodeURIComponent(handle)}/works?limit=12${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),
+    // ── Owner (the signed-in student's own profile). Ownership comes from the token; no id is ever sent. ──
+    me: (roll: string) => request<OwnerProfile | null>('GET', '/designers/me', { roll }),
+    create: (roll: string, body: { handle: string; displayName: string; headline?: string; bio?: string; department?: string; showBatch?: boolean }) =>
+      request<OwnerProfile>('POST', '/designers/me', { roll, body }),
+    update: (roll: string, body: ProfileUpdate) => request<OwnerProfile>('PATCH', '/designers/me', { roll, body }),
+    setLinks: (roll: string, links: Array<{ kind: string; url: string }>) => request<{ links: Array<{ kind: string; url: string }> }>('PUT', '/designers/me/links', { roll, body: { links } }),
+    setDisciplines: (roll: string, domainIds: string[]) => request<{ domainIds: string[] }>('PUT', '/designers/me/disciplines', { roll, body: { domainIds } }),
+    setSkills: (roll: string, skills: string[]) => request<{ skills: string[] }>('PUT', '/designers/me/skills', { roll, body: { skills } }),
+    setVisibility: (roll: string, visibility: ProfileVisibility) => request<{ visibility: ProfileVisibility }>('PATCH', '/designers/me/visibility', { roll, body: { visibility } }),
+    preview: (roll: string) => request<ProfilePreview>('GET', '/designers/me/preview', { roll }),
+    handleAvailable: (roll: string, handle: string) =>
+      request<{ available: boolean; reason?: string }>('GET', `/designers/handle-available?handle=${encodeURIComponent(handle)}`, { roll }),
+    credits: (roll: string) => request<MyArtworkCredit[]>('GET', '/designers/me/credits', { roll }),
+    respondToCredit: (roll: string, creditId: string, accept: boolean) =>
+      request<{ id: string; status: string; changed: boolean }>('POST', `/designers/me/credits/${creditId}/respond`, { roll, body: { accept } }),
+    uploadAvatar: async (file: File): Promise<{ avatarUrl: string | null }> => {
+      const fd = new FormData();
+      fd.append('avatar', file);
+      const tok = getStudentToken();
+      const res = await sendUpload('/designers/me/avatar', { method: 'POST', headers: tok ? { Authorization: `Bearer ${tok}` } : {}, body: fd });
+      const data = await res.json().catch(() => ({})) as { avatarUrl?: string | null; error?: string };
+      if (res.status === 401) { clearStudentToken(); throw new Error('SESSION_EXPIRED'); }
+      if (!res.ok) throw new Error(data.error ?? 'Upload failed — please try again');
+      return { avatarUrl: data.avatarUrl ?? null };
+    },
+    removeAvatar: (roll: string) => request<{ avatarUrl: null }>('DELETE', '/designers/me/avatar', { roll }),
   },
   // Basic Notifications (Phase C) — mirrors backend/src/routes/notifications.ts.
   // No realtime channel: the panel refetches on open (see NotificationBell.tsx).
