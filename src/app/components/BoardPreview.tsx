@@ -35,20 +35,25 @@ const color = (c?: string) => COLORS[c ?? ''] ?? COLORS.black;
 
 // A preview image that falls back to its original, once, if the
 // thumbnail fails to load (keyed by href in Item, so a new href remounts).
-function PreviewImageEl({ image, w, h }: { image: PreviewImage; w: number; h: number }) {
+function PreviewImageEl({ image, w, h, crop }: { image: PreviewImage; w: number; h: number; crop?: [number, number, number, number] }) {
   const [href, setHref] = useState(image.href);
-  return (
-    <image
-      href={href}
-      width={w}
-      height={h}
-      preserveAspectRatio="xMidYMid slice"
-      onError={() => {
-        const fallback = previewImageFallback(image, href);
-        if (fallback) setHref(fallback);
-      }}
-    />
-  );
+  const onError = () => {
+    const fallback = previewImageFallback(image, href);
+    if (fallback) setHref(fallback);
+  };
+  if (crop) {
+    // A cropped canvas image shows a sub-rectangle of its source: draw the
+    // whole picture scaled so that rectangle fills w×h, clipped by a nested
+    // <svg> (overflow hidden), instead of squashing the full image into it.
+    const [x0, y0, x1, y1] = crop;
+    const fw = w / (x1 - x0), fh = h / (y1 - y0);
+    return (
+      <svg x={0} y={0} width={w} height={h} viewBox={`0 0 ${w} ${h}`} overflow="hidden">
+        <image href={href} x={-x0 * fw} y={-y0 * fh} width={fw} height={fh} preserveAspectRatio="none" onError={onError} />
+      </svg>
+    );
+  }
+  return <image href={href} width={w} height={h} preserveAspectRatio="xMidYMid slice" onError={onError} />;
 }
 
 function Item({ it, image, loadImages }: { it: CanvasPreviewItem; image: PreviewImage | null; loadImages: boolean }) {
@@ -80,13 +85,18 @@ function Item({ it, image, loadImages }: { it: CanvasPreviewItem; image: Preview
       return (
         <g transform={transform}>
           <rect width={it.w} height={it.h} fill="var(--color-surface-1)" stroke="var(--color-hairline)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+          {it.t && (
+            <text x={0} y={-8} fontSize={Math.max(12, Math.min(28, it.w / 24))} fill="var(--color-ink-muted)" fontFamily="var(--font-body)">
+              {it.t.split('\n')[0].slice(0, 40)}
+            </text>
+          )}
         </g>
       );
     case 'image':
       return (
         <g transform={transform}>
           {image && loadImages
-            ? <PreviewImageEl key={image.href} image={image} w={it.w} h={it.h} />
+            ? <PreviewImageEl key={image.href} image={image} w={it.w} h={it.h} crop={it.cr} />
             : <rect width={it.w} height={it.h} fill="var(--color-surface-1)" stroke="var(--color-hairline)" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
         </g>
       );

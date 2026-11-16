@@ -46,11 +46,11 @@ describe('workspace buttons use the product button language (H4)', () => {
   it('board header: actions are compact lifted pills, Share is the primary, Delete is a separated destructive icon control', () => {
     const board = read('pages/BoardPage.tsx');
     expect(board).toMatch(/onClick=\{\(\) => setShowShare\(true\)\}\n\s*className="btn-primary btn-sm touch-target"/);
-    for (const h of ['setShowAssetLibrary(true)', 'setShowVersionHistory(true)']) {
+    for (const h of ['setShowAssetLibrary(true)', 'setShowExport(true)', 'setShowVersionHistory(true)']) {
       expect(board).toContain(`onClick={() => ${h}}\n                  title=`);
     }
     expect(board).toMatch(/aria-label="Delete board"\n\s*title="Delete board"\n\s*className="btn-translucent btn-icon btn-sm is-danger touch-target"/);
-    expect(board.match(/className="btn-translucent btn-sm touch-target"/g)?.length).toBe(3); // Assets, History, Save as Template
+    expect(board.match(/className="btn-translucent btn-sm touch-target"/g)?.length).toBe(5); // Assets, Export, History, Save as Template + the Arrange menu trigger
   });
 
   it('Share dialog: Private/Shared and edit-mode are segmented toggles; Add/Copy/Remove are pills', () => {

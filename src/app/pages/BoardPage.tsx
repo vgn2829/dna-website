@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
-import { useParams, useNavigate, Link } from 'react-router';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ArrowLeft, Home, MessageCircle, MoreHorizontal, Image as ImageIcon, History, LayoutTemplate, Trash2 } from 'lucide-react';
+import { ArrowLeft, Home, MessageCircle, MoreHorizontal, Image as ImageIcon, History, LayoutTemplate, Trash2, Download, Grid2x2, Frame } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { useStudent } from '../context/StudentContext';
@@ -20,6 +20,7 @@ import { boardCrumbs, isCompactBoardHeader, MOODBOARDS_HREF } from '../lib/board
 import type { Editor } from 'tldraw';
 import type { Asset } from '../lib/api';
 import { notifyAssetsChanged } from '../lib/assetRefresh';
+import { getStarterLayout } from '../lib/boardStarters';
 
 const TldrawCanvas = lazy(() =>
   import('./TldrawCanvas').then(m => ({ default: m.TldrawCanvas }))
@@ -28,6 +29,8 @@ const TldrawCanvas = lazy(() =>
 // TldrawCanvasSync.tsx's own architectural-decisions header comment.
 // Lazy-loaded the same way TldrawCanvas already is, so a board that never
 // uses realtime never pays for @tldraw/sync's bundle weight.
+const ExportBoardDialog = lazy(() => import('../components/ExportBoardDialog'));
+
 const TldrawCanvasSync = lazy(() =>
   import('./TldrawCanvasSync').then(m => ({ default: m.TldrawCanvasSync }))
 );
@@ -103,10 +106,11 @@ export default function BoardPage() {
   // is combined with board.realtime_enabled below to decide which canvas
   // component to render.
   const [realtimeGloballyEnabled, setRealtimeGloballyEnabled] = useState(false);
+  const [realtimeStatusKnown, setRealtimeStatusKnown] = useState(false);
   useEffect(() => {
     api.realtime.getStatus()
-      .then(res => setRealtimeGloballyEnabled(res.enabled))
-      .catch(() => setRealtimeGloballyEnabled(false));
+      .then(res => { setRealtimeGloballyEnabled(res.enabled); setRealtimeStatusKnown(true); })
+      .catch(() => { setRealtimeGloballyEnabled(false); setRealtimeStatusKnown(true); });
   }, []);
 
   // Fullscreen (V2.4 Phase 8/9 — Professional Canvas UX polish). The
@@ -162,6 +166,19 @@ export default function BoardPage() {
   // holds. A ref (not state) because it never needs to trigger a re-render
   // — only handleInsertAsset below ever reads it, on click.
   const editorRef = useRef<Editor | null>(null);
+  // Bumped each time a canvas hands up its editor, so effects that need the
+  // editor (starter layout) can wait for it without reading a ref in render.
+  // `realtime` records which kind of canvas produced the editor: while the
+  // realtime flag is still loading, a throwaway non-realtime canvas mounts and
+  // is then replaced by the synced one, so an editor only counts for the
+  // starter layout when its kind matches the board's final kind.
+  const realtimeCanvasRef = useRef(false);
+  const [readyEditor, setReadyEditor] = useState<{ editor: Editor; realtime: boolean } | null>(null);
+  const handleEditorReady = useCallback((editor: Editor) => {
+    editorRef.current = editor;
+    setReadyEditor({ editor, realtime: realtimeCanvasRef.current });
+  }, []);
+  const [showExport, setShowExport] = useState(false);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -216,6 +233,7 @@ export default function BoardPage() {
     ? (isOwner || board.members.some(m => m.roll_number === studentSession?.rollNumber))
     : false;
 
+
   // The one decision point for realtime vs. manual persistence — everything
   // else about which component to render flows from this single boolean.
   // All three must hold: the per-board opt-in (board.realtime_enabled,
@@ -230,6 +248,38 @@ export default function BoardPage() {
   // flight, which is always safe/correct behavior, never just a fallback
   // for a slow network.
   const useRealtimeSync = Boolean(board?.realtime_enabled) && realtimeGloballyEnabled && Boolean(board?.room_id);
+  realtimeCanvasRef.current = useRealtimeSync;
+
+  // Starter layout (Milestone B). The create dialog on /moodboards navigates
+  // here with ?starter=<id>. It is applied once, to the owner's brand-new,
+  // still-empty board, after the canvas has mounted and synced; any other
+  // situation (existing board, unknown id, not the owner) just drops the
+  // param. The board is never touched if it already has content.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const starterParam = searchParams.get('starter');
+  useEffect(() => {
+    if (!starterParam) return;
+    const clearParam = () => setSearchParams(prev => { prev.delete('starter'); return prev; }, { replace: true });
+    const layout = getStarterLayout(starterParam);
+    if (!board) return;
+    // GET /boards/:id has no item_count (list endpoints only); canvas_preview
+    // is set for any board with drawable content, and pending gallery items
+    // are about to be placed on the canvas, so either one means "not empty".
+    const hasContent = !!board.canvas_preview || (board.items?.length ?? 0) > 0 || (board.item_count ?? 0) > 0;
+    if (!layout || !isOwner || hasContent) { clearParam(); return; }
+    if (!realtimeStatusKnown || !readyEditor || readyEditor.realtime !== useRealtimeSync) return;
+    const { editor } = readyEditor;
+    // Give a legacy (non-realtime) canvas a beat to load its snapshot first.
+    const timer = setTimeout(() => {
+      import('../lib/tldrawBoardTools')
+        .then(({ applyStarterLayout }) => {
+          if (!editor.getInstanceState().isReadonly) applyStarterLayout(editor, layout);
+        })
+        .catch(() => toast.error('Could not load the starter layout'))
+        .finally(clearParam);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [starterParam, board, isOwner, readyEditor, realtimeStatusKnown, useRealtimeSync, setSearchParams]);
 
   // Comments (Commit 6) — see components/hooks/useBoardComments.ts's own
   // header comment for why this is owned here (BoardPage) rather than
@@ -460,6 +510,23 @@ export default function BoardPage() {
     }
   };
 
+  // Organization tools (Milestone B). Tidy acts on a selection of 2+ items or
+  // else the whole page; wrap needs a selection. Both are one undo step and
+  // go through the normal editor store, so saving/sync behave as for any edit.
+  const runArrange = async (which: 'tidy' | 'frame') => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    if (editor.getInstanceState().isReadonly) { toast.error('You can view this board but not edit it'); return; }
+    try {
+      const tools = await import('../lib/tldrawBoardTools');
+      const result = which === 'tidy' ? tools.tidyIntoGrid(editor) : tools.wrapSelectionInFrame(editor);
+      if (result.ok) toast.success(which === 'tidy' ? `Tidied ${result.count} items` : `Wrapped ${result.count} items in a frame`);
+      else toast.error(result.reason);
+    } catch {
+      toast.error('Could not arrange the board');
+    }
+  };
+
   // Asset Manager (Phase B) — places the chosen library asset onto the
   // canvas at the viewport center via the SAME tldraw asset APIs the
   // existing gallery-injection path already uses (see
@@ -482,7 +549,7 @@ export default function BoardPage() {
       // lazy() below), so a static import here would leak tldraw's bundle
       // weight into every page load, not just boards that actually insert
       // an asset.
-      const { insertImageAsset } = await import('./tldrawCanvasShared');
+      const { insertLibraryImages } = await import('../lib/tldrawBoardTools');
       // V2.4 Phase 6 — asset.id is the source-of-truth Asset Manager
       // record; passed through so the created tldraw asset's meta field
       // can carry sourceAssetId (see insertImageAsset's own comment).
@@ -499,7 +566,13 @@ export default function BoardPage() {
         return;
       }
       if (fresh.kind !== 'image' || !fresh.url) throw new Error('Asset unavailable');
-      await insertImageAsset(editor, fresh.url, fresh.filename, fresh.width, fresh.height, fresh.id);
+      if (editor.getInstanceState().isReadonly) {
+        toast.error('You can view this board but not edit it');
+        return;
+      }
+      await insertLibraryImages(editor, [
+        { id: fresh.id, url: fresh.url, name: fresh.filename, width: fresh.width, height: fresh.height },
+      ]);
       setShowAssetLibrary(false);
       toast.success('Asset added to board');
     } catch {
@@ -746,6 +819,32 @@ export default function BoardPage() {
                   Assets
                 </button>
 
+                {isMember && (
+                  <DropdownMenu.Root modal={false}>
+                    <DropdownMenu.Trigger title="Arrange items" className="btn-translucent btn-sm touch-target">
+                      Arrange
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Portal container={portalContainerEl ?? undefined}>
+                      <DropdownMenu.Content className="dna-menu" align="end" sideOffset={8} collisionPadding={8}>
+                        <DropdownMenu.Item className="dna-menu-item" onSelect={() => runArrange('tidy')}>
+                          <Grid2x2 size={15} /> Tidy into grid
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item className="dna-menu-item" onSelect={() => runArrange('frame')}>
+                          <Frame size={15} /> Wrap selection in frame
+                        </DropdownMenu.Item>
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Root>
+                )}
+
+                <button
+                  onClick={() => setShowExport(true)}
+                  title="Export as image"
+                  className="btn-translucent btn-sm touch-target"
+                >
+                  Export
+                </button>
+
                 <button
                   onClick={() => setShowVersionHistory(true)}
                   title="Version History"
@@ -800,6 +899,19 @@ export default function BoardPage() {
                   <DropdownMenu.Content className="dna-menu" align="end" sideOffset={8} collisionPadding={8}>
                     <DropdownMenu.Item className="dna-menu-item" onSelect={() => setShowAssetLibrary(true)}>
                       <ImageIcon size={15} /> Insert from asset library
+                    </DropdownMenu.Item>
+                    {isMember && (
+                      <>
+                        <DropdownMenu.Item className="dna-menu-item" onSelect={() => runArrange('tidy')}>
+                          <Grid2x2 size={15} /> Tidy into grid
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item className="dna-menu-item" onSelect={() => runArrange('frame')}>
+                          <Frame size={15} /> Wrap selection in frame
+                        </DropdownMenu.Item>
+                      </>
+                    )}
+                    <DropdownMenu.Item className="dna-menu-item" onSelect={() => setShowExport(true)}>
+                      <Download size={15} /> Export as image
                     </DropdownMenu.Item>
                     <DropdownMenu.Item className="dna-menu-item" onSelect={() => setShowVersionHistory(true)}>
                       <History size={15} /> View version history
@@ -913,7 +1025,7 @@ export default function BoardPage() {
                     roll={studentSession.rollNumber}
                     theme={theme}
                     pendingItems={board.items}
-                    onEditorReady={editor => { editorRef.current = editor; }}
+                    onEditorReady={handleEditorReady}
                     comments={{
                       commentsApi,
                       commentMode,
@@ -962,7 +1074,7 @@ export default function BoardPage() {
                 pendingItems={board.items}
                 onSave={handleSave}
                 readOnly={!isMember && board.edit_mode === 'members_only'}
-                onEditorReady={editor => { editorRef.current = editor; }}
+                onEditorReady={handleEditorReady}
                 comments={studentSession?.rollNumber ? {
                   commentsApi,
                   commentMode,
@@ -993,6 +1105,12 @@ export default function BoardPage() {
             if (patch.member_count !== undefined) loadBoard();
           }}
         />
+      )}
+
+      {showExport && board && editorRef.current && (
+        <Suspense fallback={null}>
+          <ExportBoardDialog editor={editorRef.current} boardName={board.name} onClose={() => setShowExport(false)} />
+        </Suspense>
       )}
 
       {showAssetLibrary && board && studentSession?.rollNumber && (
