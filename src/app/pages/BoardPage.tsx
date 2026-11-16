@@ -4,6 +4,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ArrowLeft, Home, MessageCircle, MoreHorizontal, Image as ImageIcon, History, LayoutTemplate, Trash2, Download, Grid2x2, Frame } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { startIndexFor, type LightboxImage } from '../lib/lightbox';
 import { useStudent } from '../context/StudentContext';
 import { api, type BoardDetail, type Workspace, type LibraryVisibility } from '../lib/api';
 import { useModalA11y } from '../components/hooks/useModalA11y';
@@ -30,6 +31,7 @@ const TldrawCanvas = lazy(() =>
 // Lazy-loaded the same way TldrawCanvas already is, so a board that never
 // uses realtime never pays for @tldraw/sync's bundle weight.
 const ExportBoardDialog = lazy(() => import('../components/ExportBoardDialog'));
+const ImageLightbox = lazy(() => import('../components/ImageLightbox').then(m => ({ default: m.ImageLightbox })));
 
 const TldrawCanvasSync = lazy(() =>
   import('./TldrawCanvasSync').then(m => ({ default: m.TldrawCanvasSync }))
@@ -179,6 +181,7 @@ export default function BoardPage() {
     setReadyEditor({ editor, realtime: realtimeCanvasRef.current });
   }, []);
   const [showExport, setShowExport] = useState(false);
+  const [lightbox, setLightbox] = useState<{ items: LightboxImage[]; index: number } | null>(null);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -838,6 +841,22 @@ export default function BoardPage() {
                 )}
 
                 <button
+                  onClick={async () => {
+                    const editor = editorRef.current;
+                    if (!editor) return;
+                    const { collectBoardImages } = await import('../lib/tldrawBoardTools');
+                    const items = collectBoardImages(editor);
+                    if (items.length === 0) { toast('No images on this board yet'); return; }
+                    setLightbox({ items, index: startIndexFor(items, editor.getSelectedShapeIds()) });
+                  }}
+                  title="View the images on this board full size"
+                  aria-label="View board images"
+                  className="btn-translucent btn-sm touch-target"
+                >
+                  Images
+                </button>
+
+                <button
                   onClick={() => setShowExport(true)}
                   title="Export as image"
                   className="btn-translucent btn-sm touch-target"
@@ -1105,6 +1124,13 @@ export default function BoardPage() {
             if (patch.member_count !== undefined) loadBoard();
           }}
         />
+      )}
+
+      {lightbox && (
+        <Suspense fallback={null}>
+          <ImageLightbox items={lightbox.items} index={lightbox.index} label={`${board?.name ?? 'Board'} images`}
+            onIndexChange={i => setLightbox(l => (l ? { ...l, index: i } : l))} onClose={() => setLightbox(null)} />
+        </Suspense>
       )}
 
       {showExport && board && editorRef.current && (

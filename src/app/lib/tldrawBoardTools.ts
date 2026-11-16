@@ -9,6 +9,7 @@ import {
   type TLShapePartial,
 } from 'tldraw';
 import type { StarterColor, StarterLayout, StarterShape } from './boardStarters';
+import { readingOrder, type BoardImageShape, type LightboxImage } from './lightbox';
 import { exportFileName, fitInsertSize, planExport, planTidyGrid, previewScale, type ExportPlan } from './boardLayout';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -272,6 +273,28 @@ export function wrapSelectionInFrame(editor: Editor, name = 'Group'): ArrangeRes
     editor.setSelectedShapes([frameId]);
   });
   return { ok: true, count: ids.length };
+}
+
+// ── Image viewing ─────────────────────────────────────────────────────────
+
+/**
+ * Every image on the current page, in reading order, for the lightbox. Uses the same
+ * page-space bounds the canvas shows (so frames and nesting don't matter) and drops any
+ * image whose asset has no usable source.
+ */
+export function collectBoardImages(editor: Editor): LightboxImage[] {
+  const shapes: BoardImageShape[] = [];
+  for (const shape of editor.getCurrentPageShapes()) {
+    if (shape.type !== 'image') continue;
+    const props = shape.props as { assetId?: string | null };
+    const asset = props.assetId ? editor.getAsset(props.assetId as never) : undefined;
+    const src = (asset?.props as { src?: string | null } | undefined)?.src;
+    const b = editor.getShapePageBounds(shape.id);
+    if (!b) continue;
+    const name = (asset?.props as { name?: string } | undefined)?.name;
+    shapes.push({ id: shape.id, x: b.x, y: b.y, w: b.w, h: b.h, src, label: name || undefined });
+  }
+  return readingOrder(shapes);
 }
 
 // ── Export ────────────────────────────────────────────────────────────────
