@@ -300,10 +300,10 @@ When `AppDataContext.tsx`'s `useEffect` fetch fails, `error` is set to a non-nul
 
 ### CRITICAL (fix before launch)
 
-1. **Rotate `JWT_SECRET` immediately** — `backend/.env` contains `JWT_SECRET=dev-only-secret-change-in-production`. This must be replaced with a cryptographically random secret of at least 32 characters (e.g., `openssl rand -hex 32`) in all environments before deploying. The current value is guessable and allows anyone to forge admin JWTs.
+1. **Rotate `JWT_SECRET` immediately** — `backend/.env` contains `JWT_SECRET=<redacted — rotate; value remains in git history>`. This must be replaced with a cryptographically random secret of at least 32 characters (e.g., `openssl rand -hex 32`) in all environments before deploying. The current value is guessable and allows anyone to forge admin JWTs.
    - *File:* `backend/.env` line 2
 
-2. **Confirm production deployment never uses the `backend/.env` credentials** — The `DATABASE_URL` in `backend/.env` contains the real Supabase Postgres connection string with a plaintext password (`Dna2019IITkanpur`). Verify that Render.com (or other deployment host) uses environment variables injected via the platform dashboard, not the `.env` file on disk. The `.env` file must never be committed or transferred to any server.
+2. **Confirm production deployment never uses the `backend/.env` credentials** — The `DATABASE_URL` in `backend/.env` contains the real Supabase Postgres connection string with a plaintext password (`<redacted>`). Verify that Render.com (or other deployment host) uses environment variables injected via the platform dashboard, not the `.env` file on disk. The `.env` file must never be committed or transferred to any server.
 
 3. **Fix `index.html` inline script to guard against `localStorage` throws** — Wrap the inline IIFE in `index.html` in a try/catch so Firefox Private Mode and hardened browsers do not crash before React loads:
    ```js

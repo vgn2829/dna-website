@@ -4,6 +4,7 @@ import { initInspirationSchema } from './inspirationSchema';
 import { initShowcaseSchema } from './showcaseSchema';
 import { initCreatorDiscoverySchema } from './creatorDiscoverySchema';
 import { initEmailCentreSchema } from './emailCentreSchema';
+import { enableRlsForNewTables } from './rls';
 import { pool } from './client';
 import { canvasSummaryColumns } from '../lib/canvasSummary';
 import { MARK_PLACED_BOARD_ITEMS_SQL } from '../lib/boardRows';
@@ -1684,6 +1685,7 @@ export async function initSchema(): Promise<void> {
   await initShowcaseSchema(pool);
   await initCreatorDiscoverySchema(pool);
   await initEmailCentreSchema(pool);
+  await enableRlsForNewTables(pool);
   console.log('library visibility migration done');
 }
 

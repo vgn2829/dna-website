@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomInt } from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
@@ -36,6 +37,10 @@ authRouter.post('/admin/login', loginLimiter, async (req, res) => {
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
+
+// Login and email-change codes are credentials, so they come from the OS CSPRNG (crypto.randomInt is uniform
+// over the range — no modulo bias). The non-cryptographic JS generator is predictable and must never produce a code.
+export const newOtpCode = (): string => String(randomInt(100000, 1000000));
 
 const otpRequestLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -121,7 +126,7 @@ authRouter.post('/student/request-otp', otpRequestLimiter, async (req, res) => {
     if (roster.name) targetName = roster.name;
   }
 
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = newOtpCode();
   const codeHash = await bcrypt.hash(code, 10);
   const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString();
 
@@ -362,7 +367,7 @@ authRouter.post('/student/change-email/request', changeEmailRequestLimiter, requ
     return;
   }
 
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = newOtpCode();
   const codeHash = await bcrypt.hash(code, 10);
   const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString();
 
