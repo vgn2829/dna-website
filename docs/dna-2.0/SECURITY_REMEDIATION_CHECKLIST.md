@@ -77,6 +77,20 @@ The backend uses a direct Postgres connection and the storage service key; it do
 
 All uploads share one public bucket addressed by unguessable paths, with no signed URLs. Student-created work is therefore published by **copying** to a separate `gallery/` key; a private workspace file's key is never exposed (see the [verification record](verification/PHASE_1_FOUNDATION_VERIFICATION.md)). Confirm in the dashboard that the bucket is intended to be public and has a file-size limit that matches the app (300 MB).
 
+## 7a. Added by the V1 integration review
+
+| ID | Finding | Severity | Resolution |
+|---|---|---|---|
+| V1-01 | `AUDIT_REPORT.md` still contained a JWT-secret-shaped value (line 303) and a database-password-shaped token (line 306) after the earlier scrub | **High** (public repo) | **Redacted in this release.** Both remain in git history → rotation (§2) is still mandatory; treat as compromised |
+| V1-02 | Login and email-change OTP codes were generated with `Math.random()` | Medium | **Fixed** — `crypto.randomInt`; regression test fails if the non-cryptographic generator returns |
+| V1-03 | New tables holding roll numbers, roster names/e-mails and project discussion had no row-level security | Medium (only if the Supabase Data API is on) | **Fixed for tables this release creates** (RLS on, no policies; boot never fails on it). Pre-existing tables are the owner's call — §6 |
+| V1-04 | `request-otp` reveals whether a roll number is registered (`isNew`) and a masked e-mail | Low | **Accepted for V1** (rate-limited; roll numbers are not secret on campus; the sign-in form depends on it). Tracked for V2 |
+| V1-05 | Weak/placeholder `JWT_SECRET` only logs a warning | Low (after rotation) | **Unchanged on purpose** — a hard failure before rotation would crash-loop production. Rotate (§2) |
+| V1-06 | Admin UI shows a placeholder meet passcode `DNA2025` when none is set; docs claim it is seeded | Low / cosmetic | Documented; backend does not seed it |
+| V1-07 | Collaboration invitations could be used to probe the roster, spam, or harass | — (new surface) | Uniform "can’t be invited" answer; 30 invites/day (DB-backed), 10/min, 10 active per project, 7-day decline cooldown, decline-and-block; OTP-verified sessions only — see COLLABORATION.md §3, with tests |
+
+Verified clean on the release branch: no tracked `.env` files with real values (only `.env.example` placeholders); no secret-shaped strings outside the two redacted lines; no `dangerouslySetInnerHTML` / `innerHTML` assignment introduced; no string-built SQL from request data in the code added; no server-side fetch of user-supplied URLs added; the only unauthenticated new routes are the public, allow-listed, rate-limited Showcase and Creator read endpoints.
+
 ## 8. Record of completion (fill in)
 
 | Item | Done by | Date | Provider-confirmed |
