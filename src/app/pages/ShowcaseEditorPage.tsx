@@ -61,7 +61,7 @@ export default function ShowcaseEditorPage() {
   const [submitting, setSubmitting] = useState(false);
   const [justSubmitted, setJustSubmitted] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const firstStep = useRef(true);
+  const userNavigated = useRef(false);   // only move focus after the user changes step, never when restoring one
   const submitLock = useRef(false);   // a second click/Enter while a submit is in flight is ignored
 
   const apply = useCallback((p: ShowcaseProject, resetForm = false) => { setProject(p); if (resetForm) { setForm(toForm(p)); setDirty(false); } }, []);
@@ -109,7 +109,7 @@ export default function ShowcaseEditorPage() {
   }, [ctx, stepReady, searchParams]);
   // After a step change, move focus to the new step's heading (not on first load).
   useEffect(() => {
-    if (firstStep.current) { firstStep.current = false; return; }
+    if (!userNavigated.current) return;
     headingRef.current?.focus();
   }, [step]);
   // Browser back/forward between steps.
@@ -200,6 +200,7 @@ export default function ShowcaseEditorPage() {
 
   const goTo = (i: number) => {
     const next = Math.min(Math.max(i, 0), STEP_COUNT - 1);
+    userNavigated.current = true;
     setStep(next); setShowErrors(false);
     setSearchParams({ step: String(next + 1) }, { replace: false });
     window.scrollTo({ top: 0 });
@@ -384,7 +385,7 @@ export default function ShowcaseEditorPage() {
 
         {/* Contributors */}
         {on('people') && <section aria-label="Contributors" style={card}>
-          <div><h2 className="type-headline" style={{ margin: 0 }}>Contributors</h2>
+          <div><h2 className="type-headline" style={{ margin: 0 }}>{wizard ? 'People you’ve credited' : 'Contributors'}</h2>
             <p className="type-micro" style={{ margin: '2px 0 0' }}>Everyone you credit must accept before you can submit, and chooses the name shown. Changing their role asks them again. They can withdraw their credit at any time.</p></div>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {project.credits.map(c => (
@@ -442,7 +443,7 @@ export default function ShowcaseEditorPage() {
                 <p className="type-body-sm" style={{ margin: 0, fontWeight: 600 }}>Fix these before submitting</p>
                 <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {project.problems.map(pr => <li key={pr} className="type-caption" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>{pr}
-                    <button type="button" className="btn-translucent btn-sm" onClick={() => goTo(stepForServerProblem(pr))}>Go to step</button></li>)}
+                    <button type="button" className="btn-translucent btn-sm touch-target" onClick={() => goTo(stepForServerProblem(pr))}>Go to step</button></li>)}
                 </ul>
               </div>
             ) : <p role="status" className="type-caption" style={{ margin: 0 }}>Everything looks complete. Submitting sends it to the club for review; you can’t edit it while it’s under review, but you can withdraw it.</p>}

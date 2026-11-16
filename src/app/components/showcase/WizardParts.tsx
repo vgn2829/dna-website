@@ -54,7 +54,7 @@ export function ReviewSummary({ data, onEdit }: { data: ReviewData; onEdit: (ste
     <section aria-label={title} style={{ border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-md)', padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
         <h3 className="type-body-sm" style={{ margin: 0, fontWeight: 600 }}>{title}</h3>
-        <button type="button" className="btn-translucent btn-sm" onClick={() => onEdit(step)} aria-label={`Edit ${title}`}><Pencil size={12} aria-hidden="true" /> Edit</button>
+        <button type="button" className="btn-translucent btn-sm touch-target" onClick={() => onEdit(step)} aria-label={`Edit ${title}`}><Pencil size={12} aria-hidden="true" /> Edit</button>
       </div>
       {children}
     </section>

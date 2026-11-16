@@ -162,6 +162,17 @@ describe('seven-step wizard', () => {
   });
 });
 
+describe('focus management', () => {
+  it('does not grab focus when a step is restored on load, but moves it to the new step’s heading after the user navigates', async () => {
+    m.getMine.mockResolvedValue(project());
+    const w = await mount('/showcase/manage/p1?step=2');
+    expect(document.activeElement?.tagName).not.toBe('H2');
+    await w.click(w.btn(/Continue/));
+    expect(document.activeElement?.tagName).toBe('H2');
+    expect(document.activeElement?.textContent).toBe('Project story');
+  });
+});
+
 describe('review and submit', () => {
   it('summarises every section with Edit links back to the right step', async () => {
     m.getMine.mockResolvedValue(project());
