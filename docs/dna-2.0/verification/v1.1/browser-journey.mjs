@@ -263,7 +263,7 @@ try {
   await m.goto(WEB + '/'); await settle(m);
   await m.screenshot({ path: `${OUT}/09-mobile-home.png` });
   // mobile navbar menu → account block
-  await m.locator('button[aria-label*="menu" i], button:has(svg.lucide-menu)').first().click().catch(() => {});
+  await m.getByRole('button', { name: 'Menu', exact: true }).click();
   await m.waitForTimeout(500);
   const mtxt = await m.evaluate(() => document.body.innerText);
   check('mobile menu has Creator Studio + account entries', /Creator Studio/.test(mtxt) && /My Profile/.test(mtxt) && /Edit Profile/.test(mtxt) && /Sign out/.test(mtxt));

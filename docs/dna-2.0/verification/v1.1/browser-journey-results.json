@@ -88,7 +88,7 @@
     {
       "name": "cover attached",
       "ok": true,
-      "detail": "{\"id\":\"6cd6c758-fb2b-4491-b9e1-eeb9993562f1\",\"slug\":\"retro-poster-series\",\"title\":\"Retro Poster Series\",\"summary\":\"Retro"
+      "detail": "{\"id\":\"cfe46916-4ea6-4f51-acf7-f97951663f3a\",\"slug\":\"retro-poster-series\",\"title\":\"Retro Poster Series\",\"summary\":\"Retro"
     },
     {
       "name": "contributor invited",
@@ -113,7 +113,7 @@
     {
       "name": "project submitted",
       "ok": true,
-      "detail": "status 200 {\"id\":\"6cd6c758-fb2b-4491-b9e1-eeb9993562f1\",\"slug\":\"retro-poster-series\",\"title\":\"Retro Poster Series\",\"summary\":\"Retro"
+      "detail": "status 200 {\"id\":\"cfe46916-4ea6-4f51-acf7-f97951663f3a\",\"slug\":\"retro-poster-series\",\"title\":\"Retro Poster Series\",\"summary\":\"Retro"
     },
     {
       "name": "unapproved project NOT public",
@@ -372,7 +372,7 @@
     },
     {
       "name": "mobile menu has Creator Studio + account entries",
-      "ok": false,
+      "ok": true,
       "detail": ""
     },
     {
@@ -383,23 +383,26 @@
     {
       "name": "no uncaught page errors",
       "ok": true,
-      "detail": "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22)\n    at async Promise.all (index 1) || console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22) || console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22)"
+      "detail": "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0) || console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22) || console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)"
     }
   ],
   "errors": [
-    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22)\n    at async Promise.all (index 1)",
-    "console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22)",
-    "console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22)",
-    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22)\n    at async Promise.all (index 0)",
-    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22)\n    at async Promise.all (index 0)",
-    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22)\n    at async Promise.all (index 0)",
-    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22)\n    at async Promise.all (index 0)",
-    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22)\n    at async Promise.all (index 1)",
-    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22)\n    at async Promise.all (index 0)",
-    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22)\n    at async Promise.all (index 0)",
-    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22)\n    at async Promise.all (index 0)",
-    "console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22)",
-    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22)\n    at async Promise.all (index 0)",
-    "console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts:56:22)"
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)",
+    "console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 1)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load member count: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)",
+    "console: Failed to load app data: Error: Too many requests — please slow down\n    at request (http://localhost:5174/src/app/lib/api.ts?t=1794863995510:56:22)\n    at async Promise.all (index 0)"
   ]
 }
