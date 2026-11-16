@@ -7,6 +7,7 @@ import { useStudent } from '../context/StudentContext';
 import { STATUS_INFO, formatDate } from '../lib/showcase';
 import { CoverImage, StatusBadge } from '../components/showcase/ShowcaseParts';
 import { TextPromptDialog } from '../components/showcase/ShowcaseDialogs';
+import { SharedProjects } from '../components/showcase/SharedProjects';
 
 // ─────────────────────────────────────────────────────────────────────────
 // "My projects": the creator's own showcase projects in every state, plus
@@ -92,6 +93,8 @@ export default function ShowcaseManagePage() {
           ))}
         </section>
       )}
+
+      <SharedProjects roll={roll} studentName={studentSession.name ?? ''} onSessionExpired={openRollModal} />
 
       {error && <div role="alert" style={{ padding: '48px 0', textAlign: 'center' }}><p className="type-body" style={{ color: 'var(--color-ink-muted)', margin: '0 0 12px' }}>Couldn’t load your projects.</p><button className="btn-translucent" onClick={() => void load()}>Try again</button></div>}
       {!error && projects === null && <div role="status" style={{ padding: '60px 0', textAlign: 'center', color: 'var(--color-ink-muted)' }}>Loading…</div>}

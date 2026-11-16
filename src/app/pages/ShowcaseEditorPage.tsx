@@ -8,6 +8,8 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { ShowcaseAssetPicker } from '../components/showcase/ShowcaseAssetPicker';
 import { ShowcaseArticle, StatusBadge } from '../components/showcase/ShowcaseParts';
 import { ConfirmDialog } from '../components/showcase/ShowcaseDialogs';
+import { ActivityFeed, CollaboratorsPanel, DiscussionPanel } from '../components/showcase/Collaboration';
+import { ROLE_INFO, can, readOnlyReason } from '../lib/collaboration';
 import { CATEGORY_OPTIONS, STATUS_INFO, formatDate, isPublicLink, ownerActions, parseTags, previewCredits } from '../lib/showcase';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -48,6 +50,7 @@ export default function ShowcaseEditorPage() {
   const [picking, setPicking] = useState(false);
   const [confirm, setConfirm] = useState<null | 'withdraw' | 'archive' | 'delete'>(null);
   const [invite, setInvite] = useState({ roll: '', role: '', contribution: '' });
+  const [activityTick, setActivityTick] = useState(0);
 
   const apply = useCallback((p: ShowcaseProject, resetForm = false) => { setProject(p); if (resetForm) { setForm(toForm(p)); setDirty(false); } }, []);
 
@@ -84,9 +87,16 @@ export default function ShowcaseEditorPage() {
   if (state === 'missing') return <div style={{ padding: '80px 0', textAlign: 'center' }}><h1 className="type-headline">Project not found</h1><Link to="/showcase/manage" className="btn-primary">Back to my projects</Link></div>;
   if (state === 'error' || !project || !form) return <div role="alert" style={{ padding: '80px 0', textAlign: 'center' }}><p>Couldn’t load this project.</p><button className="btn-translucent" onClick={() => void load()}>Try again</button></div>;
 
-  const editable = project.editable;
+  // Every capability below comes from the server's verdict for THIS viewer (project.permissions); the server re-checks each action.
+  const editable = project.editable;                                  // the project's status allows content changes (for every role)
+  const isOwner = project.access === 'owner';
+  const canEditContent = can(project, 'edit_content') && editable;
+  const canEditWorks = can(project, 'edit_works') && editable;
+  const canManageCredits = can(project, 'manage_credits') && editable;
   const info = STATUS_INFO[project.status];
-  const actions = ownerActions(project.status);
+  const actions = can(project, 'lifecycle') ? ownerActions(project.status) : [];
+  const readOnlyNote = readOnlyReason(project);
+  const ownerName = project.collaborators.find(c => c.accessRole === 'owner')?.name ?? 'the owner';
   const linkError = form.links.some(l => l.url.trim() && !isPublicLink(l.url));
   const set = <K extends keyof Form>(k: K, v: Form[K]) => { setForm(f => (f ? { ...f, [k]: v } : f)); setDirty(true); };
 
@@ -102,7 +112,9 @@ export default function ShowcaseEditorPage() {
     const p = await run(() => api.showcase.update(roll, project.id, {
       title: form.title, summary: form.summary || null, description: form.description || null, category: form.category || null,
       tags: parseTags(form.tags), links: form.links.filter(l => l.url.trim()).map(l => ({ label: l.label || undefined, url: l.url.trim() })),
-      discipline_ids: form.disciplineIds, owner_display_name: form.ownerName || undefined, owner_role_label: form.ownerRole || null,
+      discipline_ids: form.disciplineIds,
+      // The owner's own credit is theirs alone; the server refuses it from anyone else, so we don't send it.
+      ...(isOwner ? { owner_display_name: form.ownerName || undefined, owner_role_label: form.ownerRole || null } : {}),
     }), 'Saved');
     setSaving(false);
     if (!p) return false;
@@ -152,13 +164,20 @@ export default function ShowcaseEditorPage() {
         </div>
       </div>
 
+      {!isOwner && (
+        <section aria-label="Your access" style={{ ...card, gap: 6 }}>
+          <p className="type-body-sm" style={{ margin: 0 }}><strong>You’re {project.access === 'editor' ? 'an editor' : 'a viewer'}</strong> on {ownerName}’s project. {ROLE_INFO[project.access].blurb}</p>
+          {readOnlyNote && <p role="note" className="type-caption" style={{ margin: 0 }}>{readOnlyNote}</p>}
+        </section>
+      )}
+
       {/* Review status */}
       <section aria-label="Review status" style={card}>
         <p className="type-body-sm" style={{ margin: 0 }}>{info.blurb}</p>
         {(project.status === 'changes_requested' || project.status === 'rejected') && project.reviewNote && (
           <p role="note" className="type-body-sm" style={{ margin: 0, padding: '10px 12px', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-2)' }}><strong>Reviewer’s note:</strong> {project.reviewNote}</p>
         )}
-        {editable && project.problems.length > 0 && (
+        {editable && isOwner && project.problems.length > 0 && (
           <div><p className="type-caption" style={{ margin: '0 0 6px' }}>Before you can submit:</p>
             <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 2 }}>{project.problems.map(p => <li key={p} className="type-caption">{p}</li>)}</ul></div>
         )}
@@ -184,7 +203,7 @@ export default function ShowcaseEditorPage() {
         </section>
       )}
 
-      <fieldset disabled={!editable} style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)', minWidth: 0 }}>
+      <fieldset disabled={!(canEditContent || canEditWorks)} style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)', minWidth: 0 }}>
         {/* Details */}
         <section aria-label="Details" style={card}>
           <h2 className="type-headline" style={{ margin: 0 }}>Details</h2>
@@ -216,11 +235,11 @@ export default function ShowcaseEditorPage() {
               {form.links.length < 5 && <button type="button" className="btn-translucent btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => set('links', [...form.links, { label: '', url: '' }])}><Plus size={13} aria-hidden="true" /> Add link</button>}
             </div>
           </fieldset>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+          {isOwner && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
             <div style={{ flex: '1 1 200px' }}>{field('sc-credit-name', 'Your credited name', <input id="sc-credit-name" className="input-base" maxLength={60} value={form.ownerName} onChange={e => set('ownerName', e.target.value)} style={full} />, 'The name shown publicly.')}</div>
             <div style={{ flex: '1 1 200px' }}>{field('sc-credit-role', 'Your role', <input id="sc-credit-role" className="input-base" maxLength={40} value={form.ownerRole} onChange={e => set('ownerRole', e.target.value)} style={full} placeholder="Creator" />)}</div>
-          </div>
-          {editable && <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          </div>}
+          {canEditContent && <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button type="button" className="btn-primary touch-target" disabled={!dirty || saving} onClick={() => void saveDetails()}>{saving ? 'Saving…' : 'Save details'}</button>
             {dirty && <span className="type-micro" role="status">Unsaved changes</span>}
           </div>}
@@ -230,8 +249,8 @@ export default function ShowcaseEditorPage() {
         <section aria-label="Images" style={card}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div><h2 className="type-headline" style={{ margin: 0 }}>Images</h2>
-              <p className="type-micro" style={{ margin: '2px 0 0' }}>From your Asset Library (PNG, JPG, WebP; yours only). Adding an image doesn’t publish it — a reviewer makes a separate public copy when the project is published.</p></div>
-            {editable && <button type="button" className="btn-translucent touch-target" disabled={!pickerWorkspace || works.length >= 12} onClick={() => setPicking(true)}><ImagePlus size={15} aria-hidden="true" /> Add from Assets</button>}
+              <p className="type-micro" style={{ margin: '2px 0 0' }}>From your Asset Library (PNG, JPG, WebP; yours only). Anyone with edit access can add their own images; only the owner can remove images someone else added. Adding an image doesn’t publish it — a reviewer makes a separate public copy when the project is published.</p></div>
+            {canEditWorks && <button type="button" className="btn-translucent touch-target" disabled={!pickerWorkspace || works.length >= 12} onClick={() => setPicking(true)}><ImagePlus size={15} aria-hidden="true" /> Add from Assets</button>}
           </div>
           {works.length === 0 && <p className="type-body-sm" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>No images yet. Add at least one — the first becomes the cover.</p>}
           <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -242,15 +261,15 @@ export default function ShowcaseEditorPage() {
                 </div>
                 <div style={{ flex: '1 1 200px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <p className="type-caption" style={{ margin: 0, overflowWrap: 'anywhere' }}>{w.filename ?? 'Source image removed'}{w.sourceMissing && <span style={{ color: 'var(--color-error)' }}> — remove this</span>}</p>
-                  <input className="input-base" aria-label={`Caption for image ${i + 1}`} placeholder="Caption (optional)" maxLength={300} defaultValue={w.caption ?? ''} disabled={!editable || !w.assetId}
+                  <input className="input-base" aria-label={`Caption for image ${i + 1}`} placeholder="Caption (optional)" maxLength={300} defaultValue={w.caption ?? ''} disabled={!canEditWorks || !w.assetId}
                     onBlur={e => { if (e.target.value !== (w.caption ?? '')) void putWorks(asDraft().map(x => (x.assetId === w.assetId ? { ...x, caption: e.target.value || null } : x))); }} style={full} />
                 </div>
-                {editable && (
+                {canEditWorks && (
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                     <button type="button" className={w.isCover ? 'btn-primary btn-sm' : 'btn-translucent btn-sm'} aria-pressed={w.isCover} disabled={!w.assetId} onClick={() => void putWorks(asDraft().map(x => ({ ...x, isCover: x.assetId === w.assetId })))}><Star size={12} aria-hidden="true" /> {w.isCover ? 'Cover' : 'Make cover'}</button>
                     <button type="button" className="btn-translucent btn-icon btn-sm touch-target" aria-label={`Move image ${i + 1} up`} disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp size={14} /></button>
                     <button type="button" className="btn-translucent btn-icon btn-sm touch-target" aria-label={`Move image ${i + 1} down`} disabled={i === works.length - 1} onClick={() => move(i, 1)}><ArrowDown size={14} /></button>
-                    <button type="button" className="btn-translucent btn-icon btn-sm is-danger touch-target" aria-label={`Remove image ${i + 1}`} onClick={() => { const rest = asDraft().filter(x => x.assetId !== w.assetId); void putWorks(rest); }}><Trash2 size={14} /></button>
+                    {(isOwner || w.addedByYou) && <button type="button" className="btn-translucent btn-icon btn-sm is-danger touch-target" aria-label={`Remove image ${i + 1}`} onClick={() => { const rest = asDraft().filter(x => x.assetId !== w.assetId); void putWorks(rest); }}><Trash2 size={14} /></button>}
                   </div>
                 )}
               </li>
@@ -266,17 +285,17 @@ export default function ShowcaseEditorPage() {
             {project.credits.map(c => (
               <li key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', padding: '8px 10px', border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-md)' }}>
                 <div style={{ minWidth: 0 }}>
-                  <p className="type-body-sm" style={{ margin: 0 }}>{c.isOwner ? `${form.ownerName || 'You'} (you)` : c.displayName || `Student ${c.roll}`}{c.roleLabel ? ` · ${c.roleLabel}` : ''}</p>
+                  <p className="type-body-sm" style={{ margin: 0 }}>{c.isOwner ? `${form.ownerName || 'You'} (you)` : c.displayName || (c.roll ? `Student ${c.roll}` : 'Invited student')}{c.roleLabel ? ` · ${c.roleLabel}` : ''}</p>
                   {c.contribution && <p className="type-micro" style={{ margin: '2px 0 0' }}>{c.contribution}</p>}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span className="type-micro" style={{ padding: '2px 9px', borderRadius: 'var(--radius-pill)', background: 'var(--color-surface-2)' }}>{c.status === 'accepted' ? 'Accepted' : c.status === 'pending' ? 'Waiting for reply' : 'Declined'}</span>
-                  {editable && !c.isOwner && <button type="button" className="btn-translucent btn-icon btn-sm is-danger touch-target" aria-label={`Remove ${c.roll}`} onClick={async () => { const p = await run(() => api.showcase.removeCredit(roll, project.id, c.id)); if (p) apply(p); }}><Trash2 size={14} /></button>}
+                  {canManageCredits && !c.isOwner && <button type="button" className="btn-translucent btn-icon btn-sm is-danger touch-target" aria-label={`Remove ${c.displayName || c.roll || 'contributor'}`} onClick={async () => { const p = await run(() => api.showcase.removeCredit(roll, project.id, c.id)); if (p) apply(p); }}><Trash2 size={14} /></button>}
                 </div>
               </li>
             ))}
           </ul>
-          {editable && project.credits.filter(c => !c.isOwner).length < 10 && (
+          {canManageCredits && project.credits.filter(c => !c.isOwner).length < 10 && (
             <form onSubmit={async e => { e.preventDefault(); const p = await run(() => api.showcase.invite(roll, project.id, { roll: invite.roll, role_label: invite.role || null, contribution: invite.contribution || null }), 'Invitation sent'); if (p) { apply(p); setInvite({ roll: '', role: '', contribution: '' }); } }}
               style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
               <div style={{ flex: '1 1 130px' }}><label htmlFor="sc-inv-roll" className="type-caption" style={LABEL}>Roll number</label><input id="sc-inv-roll" className="input-base" value={invite.roll} onChange={e => setInvite(v => ({ ...v, roll: e.target.value }))} style={full} /></div>
@@ -287,7 +306,8 @@ export default function ShowcaseEditorPage() {
           )}
         </section>
 
-        {/* Moodboards */}
+        {/* Moodboards — the owner's private process references */}
+        {isOwner && (
         <section aria-label="Moodboards" style={card}>
           <div><h2 className="type-headline" style={{ margin: 0 }}>Process moodboards</h2>
             <p className="type-micro" style={{ margin: '2px 0 0' }}>Private references for you and reviewers. Moodboards are never published.</p></div>
@@ -300,7 +320,13 @@ export default function ShowcaseEditorPage() {
                 style={{ padding: '6px 12px', borderRadius: 'var(--radius-pill)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--color-ink)', background: on ? 'var(--color-surface-2)' : 'transparent', border: `1px solid ${on ? 'var(--color-brand)' : 'var(--color-hairline)'}` }}>{b.name}</button>); })}
           </div>
         </section>
+        )}
       </fieldset>
+
+      {/* Collaboration sits outside the content fieldset so viewers can still discuss and leave. */}
+      <CollaboratorsPanel project={project} roll={roll} onChanged={collaborators => setProject(p => (p ? { ...p, collaborators } : p))} onLeft={() => navigate('/showcase/manage')} />
+      <DiscussionPanel projectId={project.id} roll={roll} canPost={can(project, 'comment')} onPosted={() => setActivityTick(t => t + 1)} />
+      <ActivityFeed projectId={project.id} roll={roll} refreshKey={`${activityTick}:${project.collaborators.length}:${project.updatedAt}`} />
 
       {picking && pickerWorkspace && (
         <ShowcaseAssetPicker workspaceId={pickerWorkspace.id} workspaceName={pickerWorkspace.is_personal ? 'Personal' : pickerWorkspace.name} isPersonalWorkspace={pickerWorkspace.is_personal} workspaceRole={pickerWorkspace.role}

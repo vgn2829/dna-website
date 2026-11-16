@@ -362,8 +362,8 @@ export interface ShowcaseDetail extends ShowcaseCard {
 }
 export interface ShowcaseQuery { q?: string; category?: string; discipline?: string; tags?: string[]; featured?: boolean; sort?: 'newest' | 'oldest' | 'title' | 'featured'; limit?: number; offset?: number }
 export interface ShowcaseFacets { categories: Array<{ category: ShowcaseCategory; count: number }>; disciplines: Array<{ id: string; title: string; count: number }>; tags: Array<{ tag: string; count: number }> }
-export interface ShowcaseOwnerCredit { id: string; roll: string; roleLabel: string | null; contribution: string | null; displayName: string | null; status: 'accepted' | 'pending' | 'declined'; isOwner: boolean }
-export interface ShowcaseOwnerWork { id: string; assetId: string | null; caption: string | null; isCover: boolean; position: number; filename: string | null; previewUrl: string | null; width: number | null; height: number | null; sourceMissing: boolean; published: boolean }
+export interface ShowcaseOwnerCredit { id: string; roll: string | null; roleLabel: string | null; contribution: string | null; displayName: string | null; status: 'accepted' | 'pending' | 'declined'; isOwner: boolean }
+export interface ShowcaseOwnerWork { addedByYou: boolean; id: string; assetId: string | null; caption: string | null; isCover: boolean; position: number; filename: string | null; previewUrl: string | null; width: number | null; height: number | null; sourceMissing: boolean; published: boolean }
 export interface ShowcaseProject {
   id: string; slug: string; title: string; summary: string | null; description: string | null; category: ShowcaseCategory | null;
   tags: string[]; links: Array<{ label: string; url: string }>; status: ShowcaseStatus; reviewNote: string | null; featured: boolean;
@@ -372,7 +372,17 @@ export interface ShowcaseProject {
   boards: Array<{ id: string; name: string }>; artworks: Array<{ id: string; title: string; image_url: string | null }>;
   events: Array<{ from: ShowcaseStatus | null; to: ShowcaseStatus; by: 'student' | 'admin' | 'system'; reason: string | null; at: string }>;
   problems: string[]; viewerIsOwner: boolean;
+  // Collaboration (Milestone F). `permissions` is the server's verdict for THIS viewer; the UI never re-derives it.
+  access: ProjectAccess; permissions: ProjectPermission[]; contentEditable: boolean; collaborators: ProjectCollaborator[];
 }
+export type ProjectAccess = 'owner' | 'editor' | 'viewer';
+export type ProjectPermission = 'view' | 'comment' | 'edit_content' | 'edit_works' | 'remove_any_work' | 'edit_references' | 'manage_collaborators' | 'manage_credits' | 'lifecycle' | 'delete_project' | 'moderate_comments';
+export interface ProjectCollaborator { id: string; name: string; accessRole: ProjectAccess; status: 'pending' | 'accepted'; isYou: boolean; invitedAt: string | null; roll?: string }
+export interface CollabInvitation { id: string; accessRole: 'editor' | 'viewer'; invitedAt: string; projectTitle: string; projectStatus: ShowcaseStatus; ownerName: string; creditProposed: boolean; creditRole: string | null }
+export interface SharedProject { id: string; slug: string; title: string; status: ShowcaseStatus; updatedAt: string; accessRole: 'editor' | 'viewer'; ownerName: string; coverUrl: string | null }
+export interface ProjectActivityItem { id: string; kind: string; at: string; actorName: string; you: boolean; detail: Record<string, unknown> }
+export interface ProjectComment { id: string; body: string; at: string; authorName: string; mine: boolean; canDelete: boolean }
+export interface CollabInviteBody { handle?: string; roll?: string; access_role: 'editor' | 'viewer'; role_label?: string | null; contribution?: string | null }
 export interface ShowcaseListItem { id: string; slug: string; title: string; status: ShowcaseStatus; reviewNote: string | null; updatedAt: string; coverUrl: string | null }
 export interface ShowcaseInvitation { id: string; status: 'pending' | 'accepted'; roleLabel: string | null; contribution: string | null; displayName: string | null; projectTitle: string; projectStatus: ShowcaseStatus; ownerName: string | null }
 export interface ShowcaseAdminItem { id: string; slug: string; title: string; status: ShowcaseStatus; category: ShowcaseCategory | null; featured: boolean; submittedAt: string | null; publishedAt: string | null; updatedAt: string; ownerName: string | null; ownerRoll: string }
@@ -1285,6 +1295,24 @@ export const api = {
     },
     adminGet: (id: string) => request<ShowcaseProject>('GET', `/showcase/admin/projects/${id}`, { admin: true }),
     adminTransition: (id: string, to: ShowcaseStatus, reason?: string) => request<ShowcaseProject>('POST', `/showcase/admin/projects/${id}/transition`, { admin: true, body: { to, reason } }),
+    // Collaboration (Milestone F) — mirrors backend/src/routes/showcaseCollab.ts.
+    collab: {
+      invitations: (roll: string) => request<{ invitations: CollabInvitation[] }>('GET', '/showcase/collab/invitations', { roll }),
+      shared: (roll: string) => request<{ projects: SharedProject[] }>('GET', '/showcase/collab/shared', { roll }),
+      invite: (roll: string, projectId: string, body: CollabInviteBody) => request<{ collaborators: ProjectCollaborator[] }>('POST', `/showcase/collab/projects/${projectId}/collaborators`, { roll, body }),
+      setRole: (roll: string, projectId: string, collaboratorId: string, accessRole: 'editor' | 'viewer') =>
+        request<{ collaborators: ProjectCollaborator[] }>('PATCH', `/showcase/collab/projects/${projectId}/collaborators/${collaboratorId}`, { roll, body: { access_role: accessRole } }),
+      remove: (roll: string, projectId: string, collaboratorId: string) => request<{ collaborators: ProjectCollaborator[] }>('DELETE', `/showcase/collab/projects/${projectId}/collaborators/${collaboratorId}`, { roll }),
+      accept: (roll: string, invitationId: string, displayName?: string) => request<{ success: boolean; projectId: string; credited: boolean }>('POST', `/showcase/collab/invitations/${invitationId}/accept`, { roll, body: displayName ? { display_name: displayName } : {} }),
+      decline: (roll: string, invitationId: string, block = false) => request<{ success: boolean; blocked: boolean }>('POST', `/showcase/collab/invitations/${invitationId}/decline`, { roll, body: block ? { block: true } : {} }),
+      leave: (roll: string, projectId: string) => request<{ success: boolean }>('POST', `/showcase/collab/projects/${projectId}/leave`, { roll, body: {} }),
+      activity: (roll: string, projectId: string, before?: string) => request<{ items: ProjectActivityItem[]; next: string | null }>('GET', `/showcase/collab/projects/${projectId}/activity${before ? `?before=${encodeURIComponent(before)}` : ''}`, { roll }),
+      comments: (roll: string, projectId: string) => request<{ comments: ProjectComment[] }>('GET', `/showcase/collab/projects/${projectId}/comments`, { roll }),
+      addComment: (roll: string, projectId: string, body: string) => request<{ id: string }>('POST', `/showcase/collab/projects/${projectId}/comments`, { roll, body: { body } }),
+      deleteComment: (roll: string, projectId: string, commentId: string) => request<{ success: boolean }>('DELETE', `/showcase/collab/projects/${projectId}/comments/${commentId}`, { roll }),
+      blocks: (roll: string) => request<{ blocks: Array<{ id: string; name: string }> }>('GET', '/showcase/collab/blocks', { roll }),
+      unblock: (roll: string, id: string) => request<{ success: boolean }>('DELETE', `/showcase/collab/blocks/${id}`, { roll }),
+    },
     adminFeature: (id: string, featured: boolean) => request<ShowcaseProject>('POST', `/showcase/admin/projects/${id}/feature`, { admin: true, body: { featured } }),
   },
   // Creator Discovery (Milestone E).

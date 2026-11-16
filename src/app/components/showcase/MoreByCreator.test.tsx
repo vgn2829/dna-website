@@ -13,7 +13,8 @@ import { MoreByCreator } from './MoreByCreator';
 const P = (slug: string, title = slug) => ({ slug, title, summary: null, category: 'branding', featured: false, publishedAt: '2026-01-01', roleLabel: 'Designer', isOwner: true, coverUrl: null });
 const OWNER = [{ displayName: 'Asha Rao', isOwner: true, profile: { handle: 'asha-rao' } }];
 
-async function mount(credits = OWNER) {
+type Credits = Array<{ displayName: string | null; isOwner: boolean; profile?: { handle: string } }>;
+async function mount(credits: Credits = OWNER) {
   const host = document.createElement('div'); document.body.appendChild(host);
   const root = createRoot(host);
   await act(async () => root.render(<MemoryRouter><MoreByCreator slug="current" credits={credits} /></MemoryRouter>));
