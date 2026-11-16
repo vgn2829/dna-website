@@ -690,6 +690,30 @@
     .board-card-star { opacity: 1; }
   }
 
+  /* ── Submission wizard stepper (WizardStepper) ── */
+  .wiz-steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 4px; }
+  .wiz-steps li { flex: 1 1 0; min-width: 0; }
+  .wiz-step {
+    display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; padding: 8px 4px; min-height: 44px;
+    background: none; border: none; border-radius: var(--radius-md); cursor: pointer;
+    font-family: var(--font-body); font-size: 12px; color: var(--color-ink-muted);
+  }
+  .wiz-step:disabled { cursor: not-allowed; opacity: 0.5; }
+  .wiz-step:hover:not(:disabled) { background: var(--color-surface-1); color: var(--color-ink); }
+  .wiz-step:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+  .wiz-step[aria-current="step"] { color: var(--color-ink); font-weight: 600; }
+  .wiz-dot {
+    width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--color-hairline); font-size: 12px; background: var(--color-surface-1);
+  }
+  .wiz-step[aria-current="step"] .wiz-dot { background: var(--color-brand); border-color: var(--color-brand); color: #fff; }
+  .wiz-dot[data-done="true"] { background: var(--color-surface-2); border-color: var(--color-brand); color: var(--color-ink); }
+  .wiz-compact { display: none; }
+  @media (max-width: 640px) {
+    .wiz-compact { display: block; }
+    .wiz-steps { display: none; }
+  }
+
   /* ── Account menu (AccountMenu, in the site navbar) ── */
   .acct-trigger {
     display: flex; align-items: center; gap: 8px; min-height: 36px;

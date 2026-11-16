@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
-import { ArrowDown, ArrowLeft, ArrowUp, Eye, EyeOff, ImagePlus, Plus, Star, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Eye, EyeOff, ImagePlus, Plus, Save, Star, Trash2, X } from 'lucide-react';
 import { api, type Asset, type Board, type ShowcaseCategory, type ShowcaseProject } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -10,6 +10,8 @@ import { ShowcaseArticle, StatusBadge } from '../components/showcase/ShowcasePar
 import { ConfirmDialog } from '../components/showcase/ShowcaseDialogs';
 import { ActivityFeed, CollaboratorsPanel, DiscussionPanel } from '../components/showcase/Collaboration';
 import { ROLE_INFO, can, readOnlyReason } from '../lib/collaboration';
+import { ReviewSummary, WizardStepper } from '../components/showcase/WizardParts';
+import { STEP_COUNT, WIZARD_STEPS, firstIncompleteStep, parseStepParam, stepComplete, stepForServerProblem, stepNotes, stepProblems, type StepId, type WizardContext } from '../lib/showcaseWizard';
 import { CATEGORY_OPTIONS, STATUS_INFO, formatDate, isPublicLink, ownerActions, parseTags, previewCredits } from '../lib/showcase';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -51,6 +53,16 @@ export default function ShowcaseEditorPage() {
   const [confirm, setConfirm] = useState<null | 'withdraw' | 'archive' | 'delete'>(null);
   const [invite, setInvite] = useState({ roll: '', role: '', contribution: '' });
   const [activityTick, setActivityTick] = useState(0);
+  // Wizard state. The step lives in the URL (?step=3) so refresh, back and shared links land on the same step.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [step, setStep] = useState(0);
+  const [stepReady, setStepReady] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [justSubmitted, setJustSubmitted] = useState(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const firstStep = useRef(true);
+  const submitLock = useRef(false);   // a second click/Enter while a submit is in flight is ignored
 
   const apply = useCallback((p: ShowcaseProject, resetForm = false) => { setProject(p); if (resetForm) { setForm(toForm(p)); setDirty(false); } }, []);
 
@@ -82,6 +94,37 @@ export default function ShowcaseEditorPage() {
     };
   }, [project, form, disciplines]);
 
+  const ctx = useMemo<WizardContext | null>(() => (project && form ? {
+    form,
+    works: project.works.map(w => ({ isCover: w.isCover, sourceMissing: w.sourceMissing })),
+    credits: project.credits.map(c => ({ isOwner: c.isOwner, status: c.status })),
+  } : null), [project, form]);
+  const wizard = !!project && project.editable && (can(project, 'edit_content') || can(project, 'edit_works'));
+
+  // Land on the step in the URL, else resume at the first step that still needs work.
+  useEffect(() => {
+    if (!ctx || stepReady) return;
+    setStep(parseStepParam(searchParams.get('step')) ?? firstIncompleteStep(ctx));
+    setStepReady(true);
+  }, [ctx, stepReady, searchParams]);
+  // After a step change, move focus to the new step's heading (not on first load).
+  useEffect(() => {
+    if (firstStep.current) { firstStep.current = false; return; }
+    headingRef.current?.focus();
+  }, [step]);
+  // Browser back/forward between steps.
+  useEffect(() => {
+    const fromUrl = parseStepParam(searchParams.get('step'));
+    if (stepReady && fromUrl !== null && fromUrl !== step) setStep(fromUrl);
+  }, [searchParams]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // Unsaved edits are kept while moving between steps; warn only if the tab is closed with unsaved changes.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+
   if (!studentSession) return <div style={{ padding: '80px 0', textAlign: 'center' }}><button onClick={openRollModal} className="btn-primary">Sign in</button></div>;
   if (state === 'loading') return <div role="status" style={{ padding: '80px 0', textAlign: 'center', color: 'var(--color-ink-muted)' }}>Loading…</div>;
   if (state === 'missing') return <div style={{ padding: '80px 0', textAlign: 'center' }}><h1 className="type-headline">Project not found</h1><Link to="/showcase/manage" className="btn-primary">Back to my projects</Link></div>;
@@ -93,6 +136,12 @@ export default function ShowcaseEditorPage() {
   const canEditContent = can(project, 'edit_content') && editable;
   const canEditWorks = can(project, 'edit_works') && editable;
   const canManageCredits = can(project, 'manage_credits') && editable;
+  const cur: StepId = WIZARD_STEPS[step]?.id ?? 'basics';
+  const on = (id: StepId) => !wizard || cur === id;
+  const doneFlags = ctx ? WIZARD_STEPS.map(x => x.id === 'review' ? false : stepComplete(x.id, ctx)) : WIZARD_STEPS.map(() => false);
+  const reach = ctx ? Math.max(step, firstIncompleteStep(ctx)) : step;
+  const stepErrors = ctx ? stepProblems(cur, ctx) : [];
+  const stepNote = ctx ? stepNotes(cur, ctx) : [];
   const info = STATUS_INFO[project.status];
   const actions = can(project, 'lifecycle') ? ownerActions(project.status) : [];
   const readOnlyNote = readOnlyReason(project);
@@ -149,6 +198,30 @@ export default function ShowcaseEditorPage() {
     await api.showcase.action(roll, project.id, confirm as 'withdraw' | 'archive').then(p => { apply(p, true); setConfirm(null); toast.success(confirm === 'archive' ? 'Archived' : 'Withdrawn'); });
   };
 
+  const goTo = (i: number) => {
+    const next = Math.min(Math.max(i, 0), STEP_COUNT - 1);
+    setStep(next); setShowErrors(false);
+    setSearchParams({ step: String(next + 1) }, { replace: false });
+    window.scrollTo({ top: 0 });
+  };
+  const next = async () => {
+    if (stepErrors.length > 0) { setShowErrors(true); return; }
+    if (!(await saveDetails())) return;
+    goTo(step + 1);
+  };
+  const saveDraft = async () => { if (await saveDetails()) setShowErrors(false); };
+  const submit = async () => {
+    if (submitLock.current) return;
+    submitLock.current = true; setSubmitting(true);
+    try {
+      if (!(await saveDetails())) return;
+      const p = await run(() => api.showcase.action(roll, project.id, 'submit'), 'Submitted for review');
+      if (p) { apply(p, true); setJustSubmitted(true); window.scrollTo({ top: 0 }); }
+      else { const fresh = await api.showcase.getMine(roll, project.id).catch(() => null); if (fresh) apply(fresh); }   // show the server's current problems
+    } finally { submitLock.current = false; setSubmitting(false); }
+  };
+  const addPrompt = (label: string) => set('description', `${form.description}${form.description && !form.description.endsWith('\n') ? '\n\n' : ''}${label}: `);
+
   const field = (id: string, label: string, el: React.ReactNode, hint?: string) => (
     <div><label htmlFor={id} className="type-caption" style={LABEL}>{label}</label>{el}{hint && <p className="type-micro" style={{ margin: '4px 0 0' }}>{hint}</p>}</div>
   );
@@ -177,17 +250,17 @@ export default function ShowcaseEditorPage() {
         {(project.status === 'changes_requested' || project.status === 'rejected') && project.reviewNote && (
           <p role="note" className="type-body-sm" style={{ margin: 0, padding: '10px 12px', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-2)' }}><strong>Reviewer’s note:</strong> {project.reviewNote}</p>
         )}
-        {editable && isOwner && project.problems.length > 0 && (
+        {editable && isOwner && !wizard && project.problems.length > 0 && (
           <div><p className="type-caption" style={{ margin: '0 0 6px' }}>Before you can submit:</p>
             <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 2 }}>{project.problems.map(p => <li key={p} className="type-caption">{p}</li>)}</ul></div>
         )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {actions.includes('submit') && <button type="button" className="btn-primary touch-target" disabled={project.problems.length > 0 || saving} onClick={() => void doAction('submit')}>Submit for review</button>}
+          {actions.includes('submit') && !wizard && <button type="button" className="btn-primary touch-target" disabled={project.problems.length > 0 || saving} onClick={() => void doAction('submit')}>Submit for review</button>}
           {actions.includes('withdraw') && <button type="button" className="btn-translucent touch-target" onClick={() => setConfirm('withdraw')}>Withdraw submission</button>}
           {actions.includes('archive') && <button type="button" className="btn-translucent touch-target" onClick={() => setConfirm('archive')}>{project.status === 'published' ? 'Unpublish (archive)' : 'Archive'}</button>}
           {actions.includes('reopen') && <button type="button" className="btn-primary touch-target" onClick={() => void doAction('reopen')}>Reopen as draft</button>}
           {project.status === 'published' && <Link to={`/showcase/${project.slug}`} className="btn-translucent touch-target">View public page</Link>}
-          <button type="button" className="btn-translucent touch-target" aria-pressed={showPreview} onClick={() => setShowPreview(v => !v)}>{showPreview ? <EyeOff size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />} {showPreview ? 'Hide preview' : 'Preview'}</button>
+          {!wizard && <button type="button" className="btn-translucent touch-target" aria-pressed={showPreview} onClick={() => setShowPreview(v => !v)}>{showPreview ? <EyeOff size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />} {showPreview ? 'Hide preview' : 'Preview'}</button>}
           {actions.includes('delete') && <button type="button" className="btn-translucent is-danger touch-target" onClick={() => setConfirm('delete')}><Trash2 size={14} aria-hidden="true" /> Delete</button>}
         </div>
         {project.events.length > 1 && (
@@ -196,22 +269,48 @@ export default function ShowcaseEditorPage() {
         )}
       </section>
 
-      {showPreview && preview && (
+      {showPreview && preview && !wizard && (
         <section aria-label="Preview" style={{ ...card, gap: 10 }}>
           <p className="type-micro" role="note" style={{ margin: 0 }}>Preview — this is how the page will look once published. It is private until an admin publishes it.</p>
           <div style={{ borderTop: '1px solid var(--color-hairline)', paddingTop: 16 }}><ShowcaseArticle data={preview} preview /></div>
         </section>
       )}
 
+      {justSubmitted && !wizard && (
+        <section role="status" aria-label="Submitted" style={{ ...card, flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderColor: 'var(--color-brand)' }}>
+          <CheckCircle2 size={20} aria-hidden="true" style={{ color: 'var(--color-brand)', flexShrink: 0, marginTop: 2 }} />
+          <div><p className="type-body-sm" style={{ margin: 0, fontWeight: 600 }}>Submitted for review</p>
+            <p className="type-caption" style={{ margin: '4px 0 0' }}>The club will review it. You’ll see their feedback here and get a notification. While it’s under review it can’t be edited — withdraw it above if you need to change something.</p>
+            <Link to="/showcase/manage" className="btn-translucent btn-sm" style={{ display: 'inline-flex', marginTop: 10 }}>Back to my projects</Link></div>
+        </section>
+      )}
+
+      {wizard && (
+        <section aria-label="Submission wizard" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <WizardStepper current={step} reach={reach} done={doneFlags} onGo={goTo} />
+          <div>
+            <h2 className="type-headline" ref={headingRef} tabIndex={-1} style={{ margin: 0, outline: 'none' }}>{WIZARD_STEPS[step].title}</h2>
+            <p className="type-caption" style={{ margin: '4px 0 0' }}>{WIZARD_STEPS[step].blurb}</p>
+          </div>
+        </section>
+      )}
+
       <fieldset disabled={!(canEditContent || canEditWorks)} style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)', minWidth: 0 }}>
         {/* Details */}
+        {(!wizard || ['basics', 'story', 'people', 'resources', 'discovery'].includes(cur)) && (
         <section aria-label="Details" style={card}>
-          <h2 className="type-headline" style={{ margin: 0 }}>Details</h2>
-          {field('sc-title', 'Title', <input id="sc-title" className="input-base" maxLength={120} value={form.title} onChange={e => set('title', e.target.value)} style={full} />)}
-          {field('sc-summary', 'Short summary', <input id="sc-summary" className="input-base" maxLength={200} value={form.summary} onChange={e => set('summary', e.target.value)} style={full} placeholder="One line that appears on the card" />)}
-          {field('sc-desc', 'Description', <textarea id="sc-desc" className="input-base" rows={6} maxLength={5000} value={form.description} onChange={e => set('description', e.target.value)} style={{ ...full, resize: 'vertical' }} placeholder="The story: brief, process, outcome…" />)}
-          {field('sc-cat', 'Category', <select id="sc-cat" className="input-base" value={form.category} onChange={e => set('category', e.target.value as ShowcaseCategory | '')} style={full}><option value="">Choose a category</option>{CATEGORY_OPTIONS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select>)}
-          <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
+          {!wizard && <h2 className="type-headline" style={{ margin: 0 }}>Details</h2>}
+          {on('basics') && field('sc-title', 'Title', <input id="sc-title" className="input-base" maxLength={120} value={form.title} onChange={e => set('title', e.target.value)} style={full} />)}
+          {on('basics') && field('sc-summary', 'Short summary', <input id="sc-summary" className="input-base" maxLength={200} value={form.summary} onChange={e => set('summary', e.target.value)} style={full} placeholder="One line that appears on the card" />)}
+          {on('story') && field('sc-desc', 'Description', <textarea id="sc-desc" className="input-base" rows={6} maxLength={5000} value={form.description} onChange={e => set('description', e.target.value)} style={{ ...full, resize: 'vertical' }} placeholder="The story: brief, process, outcome…" />)}
+          {wizard && cur === 'story' && canEditContent && (
+            <div role="group" aria-label="Story prompts" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+              <span className="type-micro">Add a prompt:</span>
+              {['The brief', 'My process', 'The outcome', 'Tools I used'].map(l => <button key={l} type="button" className="btn-translucent btn-sm" onClick={() => addPrompt(l)}><Plus size={12} aria-hidden="true" /> {l}</button>)}
+            </div>
+          )}
+          {on('basics') && field('sc-cat', 'Category', <select id="sc-cat" className="input-base" value={form.category} onChange={e => set('category', e.target.value as ShowcaseCategory | '')} style={full}><option value="">Choose a category</option>{CATEGORY_OPTIONS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select>)}
+          {on('basics') && <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
             <legend className="type-caption" style={LABEL}>Creative disciplines (up to 4)</legend>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {disciplines.map(d => { const on = form.disciplineIds.includes(d.id); return (
@@ -219,9 +318,9 @@ export default function ShowcaseEditorPage() {
                   onClick={() => set('disciplineIds', on ? form.disciplineIds.filter(x => x !== d.id) : [...form.disciplineIds, d.id])}
                   style={{ padding: '6px 12px', borderRadius: 'var(--radius-pill)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--color-ink)', background: on ? 'var(--color-surface-2)' : 'transparent', border: `1px solid ${on ? 'var(--color-brand)' : 'var(--color-hairline)'}` }}>{d.title}</button>); })}
             </div>
-          </fieldset>
-          {field('sc-tags', 'Tags', <input id="sc-tags" className="input-base" value={form.tags} onChange={e => set('tags', e.target.value)} style={full} placeholder="retro, poster, halftone" />, 'Separate with commas — up to 10.')}
-          <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
+          </fieldset>}
+          {on('discovery') && field('sc-tags', 'Tags', <input id="sc-tags" className="input-base" value={form.tags} onChange={e => set('tags', e.target.value)} style={full} placeholder="retro, poster, halftone" />, 'Separate with commas — up to 10.')}
+          {on('resources') && <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
             <legend className="type-caption" style={LABEL}>Links (up to 5)</legend>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {form.links.map((l, i) => (
@@ -234,19 +333,25 @@ export default function ShowcaseEditorPage() {
               {linkError && <p role="alert" className="type-micro" style={{ margin: 0, color: 'var(--color-error)' }}>Links must be public http(s) addresses — not localhost, IP addresses or private networks.</p>}
               {form.links.length < 5 && <button type="button" className="btn-translucent btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => set('links', [...form.links, { label: '', url: '' }])}><Plus size={13} aria-hidden="true" /> Add link</button>}
             </div>
-          </fieldset>
-          {isOwner && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+          </fieldset>}
+          {wizard && cur === 'discovery' && (
+            <p className="type-caption" role="note" style={{ margin: 0, padding: '10px 12px', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-2)' }}>
+              <strong>Visibility:</strong> this project stays private to you and your collaborators. It only becomes public if the club approves and publishes it.
+            </p>
+          )}
+          {on('people') && isOwner && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
             <div style={{ flex: '1 1 200px' }}>{field('sc-credit-name', 'Your credited name', <input id="sc-credit-name" className="input-base" maxLength={60} value={form.ownerName} onChange={e => set('ownerName', e.target.value)} style={full} />, 'The name shown publicly.')}</div>
             <div style={{ flex: '1 1 200px' }}>{field('sc-credit-role', 'Your role', <input id="sc-credit-role" className="input-base" maxLength={40} value={form.ownerRole} onChange={e => set('ownerRole', e.target.value)} style={full} placeholder="Creator" />)}</div>
           </div>}
-          {canEditContent && <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {canEditContent && !wizard && <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button type="button" className="btn-primary touch-target" disabled={!dirty || saving} onClick={() => void saveDetails()}>{saving ? 'Saving…' : 'Save details'}</button>
             {dirty && <span className="type-micro" role="status">Unsaved changes</span>}
           </div>}
         </section>
+        )}
 
         {/* Works */}
-        <section aria-label="Images" style={card}>
+        {on('media') && <section aria-label="Images" style={card}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div><h2 className="type-headline" style={{ margin: 0 }}>Images</h2>
               <p className="type-micro" style={{ margin: '2px 0 0' }}>From your Asset Library (PNG, JPG, WebP; yours only). Anyone with edit access can add their own images; only the owner can remove images someone else added. Adding an image doesn’t publish it — a reviewer makes a separate public copy when the project is published.</p></div>
@@ -275,10 +380,10 @@ export default function ShowcaseEditorPage() {
               </li>
             ))}
           </ol>
-        </section>
+        </section>}
 
         {/* Contributors */}
-        <section aria-label="Contributors" style={card}>
+        {on('people') && <section aria-label="Contributors" style={card}>
           <div><h2 className="type-headline" style={{ margin: 0 }}>Contributors</h2>
             <p className="type-micro" style={{ margin: '2px 0 0' }}>Everyone you credit must accept before you can submit, and chooses the name shown. Changing their role asks them again. They can withdraw their credit at any time.</p></div>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -304,10 +409,10 @@ export default function ShowcaseEditorPage() {
               <button type="submit" className="btn-translucent touch-target" disabled={!invite.roll.trim()}><Plus size={14} aria-hidden="true" /> Invite</button>
             </form>
           )}
-        </section>
+        </section>}
 
         {/* Moodboards — the owner's private process references */}
-        {isOwner && (
+        {isOwner && on('resources') && (
         <section aria-label="Moodboards" style={card}>
           <div><h2 className="type-headline" style={{ margin: 0 }}>Process moodboards</h2>
             <p className="type-micro" style={{ margin: '2px 0 0' }}>Private references for you and reviewers. Moodboards are never published.</p></div>
@@ -322,6 +427,55 @@ export default function ShowcaseEditorPage() {
         </section>
         )}
       </fieldset>
+
+      {wizard && ctx && (
+        <section aria-label="Step actions" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {cur === 'review' && (<>
+            <ReviewSummary onEdit={goTo} data={{
+              title: form.title, summary: form.summary, description: form.description, category: form.category, tags: parseTags(form.tags),
+              disciplines: disciplines.filter(d => form.disciplineIds.includes(d.id)).map(d => d.title), links: form.links.filter(l => l.url.trim()),
+              coverUrl: project.works.find(w => w.isCover)?.previewUrl ?? null, imageCount: project.works.length, boardCount: project.boards.length,
+              credits: project.credits.filter(c => c.status !== 'declined').map(c => ({ name: c.isOwner ? form.ownerName : (c.displayName || 'Invited student'), role: c.isOwner ? form.ownerRole || null : c.roleLabel, status: c.status, isOwner: c.isOwner })),
+            }} />
+            {project.problems.length > 0 ? (
+              <div role="alert" style={{ ...card, borderColor: 'var(--color-error)' }}>
+                <p className="type-body-sm" style={{ margin: 0, fontWeight: 600 }}>Fix these before submitting</p>
+                <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {project.problems.map(pr => <li key={pr} className="type-caption" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>{pr}
+                    <button type="button" className="btn-translucent btn-sm" onClick={() => goTo(stepForServerProblem(pr))}>Go to step</button></li>)}
+                </ul>
+              </div>
+            ) : <p role="status" className="type-caption" style={{ margin: 0 }}>Everything looks complete. Submitting sends it to the club for review; you can’t edit it while it’s under review, but you can withdraw it.</p>}
+            <div>
+              <button type="button" className="btn-translucent touch-target" aria-pressed={showPreview} onClick={() => setShowPreview(v => !v)}>{showPreview ? <EyeOff size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />} {showPreview ? 'Hide preview' : 'Preview public page'}</button>
+            </div>
+            {showPreview && preview && <section aria-label="Preview" style={{ ...card, gap: 10 }}>
+              <p className="type-micro" role="note" style={{ margin: 0 }}>Preview — this is how the page will look once published. It is private until an admin publishes it.</p>
+              <div style={{ borderTop: '1px solid var(--color-hairline)', paddingTop: 16 }}><ShowcaseArticle data={preview} preview /></div>
+            </section>}
+            {!can(project, 'lifecycle') && <p role="note" className="type-caption" style={{ margin: 0 }}>Only the project owner can submit it for review.</p>}
+          </>)}
+
+          {showErrors && stepErrors.length > 0 && (
+            <div role="alert" style={{ ...card, borderColor: 'var(--color-error)', padding: 14, gap: 6 }}>
+              <p className="type-body-sm" style={{ margin: 0, fontWeight: 600 }}>Before you continue:</p>
+              <ul style={{ margin: 0, paddingLeft: 18 }}>{stepErrors.map(e => <li key={e} className="type-caption">{e}</li>)}</ul>
+            </div>
+          )}
+          {stepNote.map(n => <p key={n} role="note" className="type-caption" style={{ margin: 0 }}>{n}</p>)}
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
+            <button type="button" className="btn-translucent touch-target" disabled={step === 0 || submitting} onClick={() => goTo(step - 1)}><ArrowLeft size={14} aria-hidden="true" /> Back</button>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {dirty && <span className="type-micro" role="status">Unsaved changes</span>}
+              {canEditContent && cur !== 'review' && <button type="button" className="btn-translucent touch-target" disabled={!dirty || saving} onClick={() => void saveDraft()}><Save size={14} aria-hidden="true" /> {saving ? 'Saving…' : 'Save draft'}</button>}
+              {cur !== 'review'
+                ? <button type="button" className="btn-primary touch-target" disabled={saving} onClick={() => void next()}>Continue <ArrowRight size={14} aria-hidden="true" /></button>
+                : <button type="button" className="btn-primary touch-target" disabled={submitting || saving || project.problems.length > 0 || !can(project, 'lifecycle')} onClick={() => void submit()}>{submitting ? 'Submitting…' : 'Submit for review'}</button>}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Collaboration sits outside the content fieldset so viewers can still discuss and leave. */}
       <CollaboratorsPanel project={project} roll={roll} onChanged={collaborators => setProject(p => (p ? { ...p, collaborators } : p))} onLeft={() => navigate('/showcase/manage')} />
