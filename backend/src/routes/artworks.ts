@@ -9,7 +9,7 @@ import { requireStudent, optionalStudent } from '../middleware/studentAuth';
 import { getStorage, StorageTooLargeError } from '../storage';
 import { diskUploadFields, LIMIT_MESSAGE, readFileHead } from '../lib/diskUpload';
 import { exceedsUploadLimit } from '../lib/uploadLimits';
-import { publicCredits, writeAudit, type PublicCredit } from '../lib/credits';
+import { legacyArtistWithdrawn, publicCredits, writeAudit, type PublicCredit } from '../lib/credits';
 import { CREDIT_ROLES, roleLabelSchema } from '../lib/designerValidation';
 
 export const artworksRouter = Router();
@@ -89,13 +89,14 @@ function relativeTime(iso: string): string {
   return `${Math.floor(hrs / 24)} days ago`;
 }
 
-function formatArtwork(row: ArtworkRow, likedByUser: boolean, comments: CommentRow[], credits: PublicCredit[] = []) {
+function formatArtwork(row: ArtworkRow, likedByUser: boolean, comments: CommentRow[], credits: PublicCredit[] = [], hideLegacyArtist = false) {
   const mediaUrl = row.storage_path
     ? getStorage().getPublicUrl(row.storage_path)
     : (row.image_url ?? '');
 
   return {
-    id: row.id, title: row.title, artist: row.artist, domain: row.domain,
+    // Blank (not omitted) so existing clients keep a string; see legacyArtistWithdrawn.
+    id: row.id, title: row.title, artist: hideLegacyArtist && credits.length === 0 ? '' : row.artist, domain: row.domain,
     // Accepted credits only (lib/credits.ts). The legacy `artist` text stays
     // as the fallback label for artwork that has no credits.
     credits,
@@ -128,10 +129,11 @@ artworksRouter.get('/', optionalStudent, async (req, res) => {
     likedSet = new Set(liked.map(r => r.artwork_id));
   }
   const credits = await publicCredits(rows.map(r => r.id), Boolean(roll));
+  const withdrawn = await legacyArtistWithdrawn(rows.filter(r => !(credits.get(r.id)?.length)).map(r => r.id));
 
   res.json(rows.map(r => {
     const comments = allComments.filter(c => c.artwork_id === r.id);
-    return formatArtwork(r, likedSet.has(r.id), comments, credits.get(r.id) ?? []);
+    return formatArtwork(r, likedSet.has(r.id), comments, credits.get(r.id) ?? [], withdrawn.has(r.id));
   }));
 });
 
@@ -166,7 +168,8 @@ artworksRouter.get('/:id', optionalStudent, async (req, res) => {
     liked = (await query('SELECT 1 FROM artwork_likes WHERE artwork_id=$1 AND roll_number=$2', [rows[0].id, req.studentRoll])).length > 0;
   }
   const credits = await publicCredits([rows[0].id], Boolean(req.studentRoll));
-  res.json(formatArtwork(rows[0], liked, comments, credits.get(rows[0].id) ?? []));
+  const withdrawn = credits.get(rows[0].id)?.length ? new Set<string>() : await legacyArtistWithdrawn([rows[0].id]);
+  res.json(formatArtwork(rows[0], liked, comments, credits.get(rows[0].id) ?? [], withdrawn.has(rows[0].id)));
 });
 
 artworksRouter.post(

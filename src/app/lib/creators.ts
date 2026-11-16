@@ -53,6 +53,11 @@ export function bylineParts(artwork: { artist: string; credits?: ArtworkCredit[]
   return artwork.artist?.trim() ? [{ text: artwork.artist.trim(), handle: null, role: null }] : [];
 }
 
+/** Plain-text byline ("Amy, Bo (Illustration)") for cards that are themselves links, so no nested anchors. Empty when there is nothing to show. */
+export function bylineText(artwork: { artist: string; credits?: ArtworkCredit[] }): string {
+  return bylineParts(artwork).map(p => (p.role ? `${p.text} (${p.role})` : p.text)).join(', ');
+}
+
 /** Dedupe a list of cards by handle, keeping the first (pagination can overlap after a change). */
 export function mergeCards(prev: CreatorCard[], next: CreatorCard[]): CreatorCard[] {
   const seen = new Set(prev.map(c => c.handle));

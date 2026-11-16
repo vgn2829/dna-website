@@ -81,6 +81,23 @@ export async function publicCredits(artworkIds: string[], viewerSignedIn: boolea
   return out;
 }
 
+/**
+ * Artworks whose legacy free-text `artist` must NOT be shown: an admin
+ * attributed the work to a student, and that student then declined/left.
+ * The text predates consent and may name them, so withdrawal is honoured
+ * until an admin edits it. Only meaningful when the artwork has no accepted
+ * credit (callers pass those ids), because accepted credits replace the text.
+ */
+export async function legacyArtistWithdrawn(artworkIds: string[]): Promise<Set<string>> {
+  if (artworkIds.length === 0) return new Set();
+  const { rows } = await pool.query<{ artwork_id: string }>(
+    `SELECT DISTINCT artwork_id FROM artwork_credits
+      WHERE artwork_id = ANY($1::text[]) AND status = 'declined' AND source = 'admin'`,
+    [artworkIds],
+  );
+  return new Set(rows.map(r => r.artwork_id));
+}
+
 type Db = { query: (text: string, params?: unknown[]) => Promise<unknown> };
 
 /** Appends to creator_audit_log. Pass the transaction client so it commits atomically with the change. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CreatorCard } from './api';
-import { bylineParts, categoryLabel, hasCreatorFilters, initials, mergeCards, profilePath, projectCountLabel, showsProjects } from './creators';
+import { bylineParts, bylineText, categoryLabel, hasCreatorFilters, initials, mergeCards, profilePath, projectCountLabel, showsProjects } from './creators';
 
 const card = (handle: string): CreatorCard => ({ handle, displayName: handle, headline: null, bio: null, avatarUrl: null, verified: false, featured: false, skills: [], disciplines: [], projectCount: 0, projects: [] });
 
@@ -45,6 +45,19 @@ describe('bylineParts (Gallery credits)', () => {
     expect(bylineParts({ artist: '  Old Artist ' })).toEqual([{ text: 'Old Artist', handle: null, role: null }]);
     expect(bylineParts({ artist: 'Old', credits: [] })).toEqual([{ text: 'Old', handle: null, role: null }]);
     expect(bylineParts({ artist: ' ' })).toEqual([]);
+  });
+});
+
+describe('bylineText (plain-text surfaces: homepage cards)', () => {
+  it('joins accepted credits with roles, never the legacy text', () => {
+    expect(bylineText({ artist: 'Legacy', credits: [
+      { displayName: 'Asha Rao', handle: 'asha-draws', role: 'creator', roleLabel: null, isPrimary: true, verified: true },
+      { displayName: 'Bala Iyer', handle: null, role: 'contributor', roleLabel: 'Colorist', isPrimary: false, verified: false },
+    ] })).toBe('Asha Rao, Bala Iyer (Colorist)');
+  });
+  it('shows the legacy text only when nothing structured exists, and an empty string for a blanked artwork', () => {
+    expect(bylineText({ artist: 'Old Artist', credits: [] })).toBe('Old Artist');
+    expect(bylineText({ artist: '', credits: [] })).toBe('');   // withdrawn attribution
   });
 });
 

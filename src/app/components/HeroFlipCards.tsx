@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router';
 import { useAppData } from '../context/AppDataContext';
 import type { Artwork } from '../context/AppDataContext';
 import { Hero } from './Hero';
+import { bylineText } from '../lib/creators';
 
 // Below this many featured artworks, the circle/arc formation reads as
 // sparse rather than intentional — fall back to a static grid instead.
@@ -180,7 +181,7 @@ function FlipCard({
             {artwork.title}
           </p>
           <p style={{ fontSize: 9, color: 'var(--color-ink-muted)', marginTop: 3 }}>
-            {artwork.artist}
+            {bylineText(artwork)}
           </p>
         </div>
       </motion.div>
@@ -626,7 +627,7 @@ function StaticFeaturedGrid({ artworks }: { artworks: Artwork[] }) {
             />
             <div style={{ position: 'absolute', left: 12, right: 12, bottom: 12, textAlign: 'left' }}>
               <p style={{ color: '#fff', fontSize: 13, fontWeight: 600, lineHeight: 1.25 }}>{a.title}</p>
-              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 }}>by {a.artist}</p>
+              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 }}>by {bylineText(a)}</p>
             </div>
           </div>
         ))}
