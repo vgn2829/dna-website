@@ -364,7 +364,7 @@ designersRouter.get('/me/preview', requireStudent, async (req, res) => {
 designersRouter.get('/me/credits', requireStudent, async (req, res) => {
   const r = await pool.query(
     `SELECT c.id, c.artwork_id AS "artworkId", a.title AS "artworkTitle", c.role, c.role_label AS "roleLabel",
-            c.status, c.source, c.created_at AS "createdAt"
+            c.status, c.source, c.is_primary AS "isPrimary", c.created_at AS "createdAt"
        FROM artwork_credits c
        JOIN designer_profiles p ON p.id = c.profile_id
        JOIN artworks a ON a.id = c.artwork_id

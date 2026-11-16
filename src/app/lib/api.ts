@@ -420,7 +420,7 @@ export interface OwnerProfile extends DesignerProfile {
 export interface ProfilePreview extends DesignerProfile { visibleToPublic: boolean }
 export interface MyArtworkCredit {
   id: string; artworkId: string; artworkTitle: string; role: string; roleLabel: string | null;
-  status: 'pending' | 'accepted' | 'declined'; source: string; createdAt: string;
+  status: 'pending' | 'accepted' | 'declined'; source: string; isPrimary: boolean; createdAt: string;
 }
 export interface ProfileUpdate { handle?: string; displayName?: string; headline?: string | null; bio?: string | null; department?: string | null; showBatch?: boolean }
 export interface DesignerWork { id: string; title: string; domain: string; mediaType: string; coverUrl: string | null; role: string; roleLabel: string | null; publishedAt: string }

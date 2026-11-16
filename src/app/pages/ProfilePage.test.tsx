@@ -143,4 +143,14 @@ describe('ProfilePage', () => {
     await act(async () => { (host.querySelector('button') as HTMLButtonElement).click(); });
     expect(text()).toContain('Your profile');
   });
+
+  it('offers “Remove my credit” only for credits a person is allowed to leave (a primary creator is told to ask an admin)', async () => {
+    mocks.credits.mockResolvedValue([
+      { id: 'c1', artworkId: 'a1', artworkTitle: 'Shared Poster', role: 'contributor', roleLabel: null, status: 'accepted', source: 'invite', isPrimary: false, createdAt: '' },
+      { id: 'c2', artworkId: 'a2', artworkTitle: 'My Own Poster', role: 'creator', roleLabel: null, status: 'accepted', source: 'admin', isPrimary: true, createdAt: '' },
+    ]);
+    const { host, text } = await mount();
+    expect([...host.querySelectorAll('button')].filter(b => b.textContent === 'Remove my credit').length).toBe(1);
+    expect(text()).toContain('Primary creator — ask a club admin');
+  });
 });

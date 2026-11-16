@@ -511,7 +511,9 @@ function CreditsSection({ credits, disabled, roll, onChanged, fail }: { credits:
           {accepted.map(c => (
             <div key={c.id} style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', justifyContent: 'space-between' }}>
               <span className="type-body-sm" style={{ overflowWrap: 'anywhere', flex: '1 1 200px' }}>{c.artworkTitle} <span className="type-caption">· {c.roleLabel || c.role}</span></span>
-              <button type="button" className="btn-translucent btn-sm is-danger touch-target" disabled={disabled || busyId === c.id} onClick={() => void respond(c, false)}>Remove my credit</button>
+              {c.isPrimary
+                ? <span className="type-micro" style={{ maxWidth: 260 }}>Primary creator — ask a club admin if this credit needs to change.</span>
+                : <button type="button" className="btn-translucent btn-sm is-danger touch-target" disabled={disabled || busyId === c.id} onClick={() => void respond(c, false)}>Remove my credit</button>}
             </div>
           ))}
         </div>

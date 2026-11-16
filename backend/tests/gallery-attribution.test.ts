@@ -83,4 +83,13 @@ describe('Gallery attribution', () => {
     expect((await one('ga-other')).artist).toBe('Someone Else');
     expect((await one('ga-invite')).artist).toBe('Studio Text');           // a declined *invitation* never claimed the text
   });
+
+  it('tells the profile page which credits cannot be left (primary creator) so it never offers a doomed button', async () => {
+    const a = await profile(A, 'amy-art');
+    await artwork('ga-primary', 'Amy');
+    const prim = await request(app).post('/api/artworks/ga-primary/credits').set(admin()).send({ profileId: a, role: 'creator', isPrimary: true });
+    const mine = (await request(app).get('/api/designers/me/credits').set(auth(A))).body as Array<{ id: string; isPrimary: boolean }>;
+    expect(mine.find(c => c.id === prim.body.id)!.isPrimary).toBe(true);
+    expect((await request(app).post(`/api/designers/me/credits/${prim.body.id}/respond`).set(auth(A)).send({ accept: false })).status).toBe(409);
+  });
 });
