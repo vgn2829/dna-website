@@ -6,6 +6,26 @@
 | **Spec** | [Phase 1 technical spec](DNA_2.0_PHASE_1_TECHNICAL_SPEC.md) · **Audit** [findings](DNA_2.0_ARCHITECTURE_AUDIT.md) |
 | **Granularity** | One task ≈ one PR (≤ ~600 changed lines excluding tests), independently testable and deployable behind "no UI yet" |
 
+## Progress
+
+Decisions D1 (reuse PR #84), D2 (workspace-sidebar entry point) and D3 (privacy/publication) were confirmed by the maintainer. Evidence: [verification record](verification/PHASE_1_FOUNDATION_VERIFICATION.md); owner actions: [security remediation checklist](SECURITY_REMEDIATION_CHECKLIST.md).
+
+| Task | State | Notes |
+|---|---|---|
+| T0 | **Owner action outstanding** | Credential rotation and Supabase Data API/RLS check need provider access; nothing is claimed rotated. |
+| T1 | Done (PR #84) | Verified-session guard + email-change hardening, ported onto current `main`. |
+| T2 | Done | `designer_profiles` (extended), links, disciplines, `creator_audit_log`. |
+| T3 | Done (API) | Owner + public + preview + visibility + links/skills/disciplines. Media upload is T4. |
+| T4 | Not started | Profile media. |
+| T5 | Done | `status`, explicit projection, `GET /:id`, admin list, notify guard. The `status` default flip to `'draft'` is a deliberate follow-up deploy (spec §6.4). |
+| T6 | Done | `artwork_credits`; `attribution_requests` and `content_reports` intentionally deferred (no UI to raise them yet). |
+| T7 | **Not started — student publishing is not enabled** | Unblocked by T5. |
+| T8 | Partial | Admin add/edit/remove/invite and the credited person's accept/decline. Student-initiated invites need T7. |
+| T9 | Done | Public profile + works list with the visibility matrix. |
+| T10–T12, T14, T15 | Not started | Frontend; sidebar "My Profile" entry lands with the editor (D2). SEC-04 comment-sender fix from T15 is done. |
+| T13 | Partial | Admin hide/verify (profiles), hide/restore (artworks), audit. Reports and attribution requests deferred. |
+| T16 | Not started | |
+
 ## Conventions that apply to every task
 
 - **Branch/PR:** one feature branch per task from current `origin/main`; squash-merge. Never `git add -A`; stage named files.

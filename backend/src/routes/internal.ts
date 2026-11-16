@@ -26,7 +26,9 @@ function requireTickSecret(req: import('express').Request, res: import('express'
     res.status(503).json({ error: 'INTERNAL_TICK_SECRET not configured' });
     return;
   }
-  const provided = (req.headers['x-tick-secret'] as string | undefined) ?? (req.query.secret as string | undefined);
+  // Header only. A ?secret= query parameter is deliberately NOT accepted: URLs
+  // are written to proxy/CDN/access logs, which would leak the secret.
+  const provided = req.headers['x-tick-secret'] as string | undefined;
   if (!provided || !timingSafeEqual(provided, secret)) {
     res.status(401).json({ error: 'Invalid tick secret' });
     return;

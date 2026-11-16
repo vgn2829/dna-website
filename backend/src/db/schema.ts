@@ -1,4 +1,5 @@
 import { initAssetSharingSchema } from './assetSharingSchema';
+import { initDesignerSchema } from './designerSchema';
 import { initEmailCentreSchema } from './emailCentreSchema';
 import { pool } from './client';
 import { canvasSummaryColumns } from '../lib/canvasSummary';
@@ -487,6 +488,21 @@ export async function initSchema(): Promise<void> {
     )
   `);
 
+
+  // Optional club roster (SEC-03). While EMPTY, registration behaves exactly as
+  // before. Once an admin loads it, a NEW registration must match a roster row
+  // (roll, and email when the row has one), so a stranger cannot claim someone
+  // else's roll number. Existing accounts are unaffected; GET
+  // /api/students/roster/audit lists existing accounts that disagree with it.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS student_roster (
+      roll_number TEXT PRIMARY KEY,
+      name        TEXT NOT NULL,
+      email       TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS live_sessions (
       id                TEXT PRIMARY KEY,
@@ -528,64 +544,11 @@ export async function initSchema(): Promise<void> {
       ('all_team', 'All Team', 'All DnA Club team members', $1)
     `, [now]);
 
-    const teamMembers = [
-      { roll: '250004', name: 'Aadi Kumar Jain' },
-      { roll: '250080', name: 'Ajitesh Srivastavi' },
-      { roll: '250098', name: 'Akshay Biju B N' },
-      { roll: '250106', name: 'Aman' },
-      { roll: '250135', name: 'Anindita Padhi' },
-      { roll: '250147', name: 'Ankit Kumar Beh' },
-      { roll: '250152', name: 'Anku Kumar' },
-      { roll: '250174', name: 'Anushka' },
-      { roll: '250667', name: 'Arsh Khan' },
-      { roll: '250232', name: 'Atharv Narache' },
-      { roll: '250258', name: 'Ayush Upadhyay' },
-      { roll: '250299', name: 'Charmi Jain' },
-      { roll: '250316', name: 'Deeksha Badhan' },
-      { roll: '250317', name: 'Deeksha Jalan' },
-      { roll: '250318', name: 'Deep Shekhar' },
-      { roll: '250341', name: 'Dhanavade Sayal' },
-      { roll: '250422', name: 'Harsh Singh' },
-      { roll: '250423', name: 'Harshvardhan Mi' },
-      { roll: '250440', name: 'Hemant Kumar M' },
-      { roll: '250467', name: 'J Aryan' },
-      { roll: '250472', name: 'Jahnavi Srikoti' },
-      { roll: '250517', name: 'Kashish Varshne' },
-      { roll: '250532', name: 'Keyuri Gangwar' },
-      { roll: '250618', name: 'Krishiv Mahadeva' },
-      { roll: '250580', name: 'Kumkum Sonawa' },
-      { roll: '250648', name: 'Mayur Kumar Gal' },
-      { roll: '250695', name: 'Naman Bansal' },
-      { roll: '250713', name: 'Nikhat Parveen' },
-      { roll: '250825', name: 'Pratham Sharma' },
-      { roll: '250854', name: 'Pulkit Agarwal' },
-      { roll: '250979', name: 'Sanidhya Tripath' },
-      { roll: '250391', name: 'Shwethan' },
-      { roll: '251055', name: 'Siddharth Muzalo' },
-      { roll: '251097', name: 'Sunil Prajapati' },
-      { roll: '251099', name: 'Surendar' },
-      { roll: '251151', name: 'Utkarsh Shandily' },
-      { roll: '250261', name: 'Vineel Reddy' },
-      { roll: '251202', name: 'Yash Yadav' },
-      { roll: '251222', name: 'Yuvasankar V.S' },
-      { roll: '240007', name: 'Aaditya Kini' },
-      { roll: '240039', name: 'Abhishek' },
-      { roll: '240511', name: 'Kanak' },
-      { roll: '240280', name: 'Boddupally Uthai' },
-      { roll: '231140', name: 'Venu' },
-      { roll: '230265', name: 'Ayush Rai' },
-    ];
-
-    for (const m of teamMembers) {
-      await pool.query(`
-        INSERT INTO audience_group_members
-          (group_id, roll_number, name, added_at)
-        VALUES ('all_team', $1, $2, $3)
-        ON CONFLICT DO NOTHING
-      `, [m.roll, m.name, now]);
-    }
-
-    console.log('Audience groups seeded with 45 team members');
+    // No student identities are seeded from source. The 'all_team' group starts
+    // empty; an admin adds members through the audience-group UI/API. (A
+    // previous version hard-coded real roll numbers and names here, which
+    // was a privacy leak in a public repository.)
+    console.log('Audience groups seeded (members are managed by admins)');
   }
 
   await pool.query(`
@@ -1713,6 +1676,7 @@ export async function initSchema(): Promise<void> {
   `);
 
   await initAssetSharingSchema(pool);
+  await initDesignerSchema(pool);
   await initEmailCentreSchema(pool);
   console.log('library visibility migration done');
 }

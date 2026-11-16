@@ -49,7 +49,7 @@ router.get('/test-email', requireAdmin, async (req, res) => {
 });
 
 type EventRow = { id: string; title: string; date: string; location: string; content: string; notified_at: string | null };
-type ArtworkRow = { id: string; title: string; artist: string; domain: string; notified_at: string | null };
+type ArtworkRow = { id: string; title: string; artist: string; domain: string; notified_at: string | null; status: string };
 
 import { getAvailableBatches } from '../services/activityService';
 import { getCampaignPreview, createAndExecuteCampaign, handleResendWebhook, getPastCampaigns } from '../services/campaignService';
@@ -245,6 +245,7 @@ router.get('/artwork/:id/preview', requireAdmin, async (req, res) => {
     const rows = await pool.query<ArtworkRow>('SELECT * FROM artworks WHERE id=$1', [req.params.id]);
     if (rows.rows.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
     const a = rows.rows[0];
+    if (a.status !== 'published') { res.status(409).json({ error: 'Only published artwork can be announced' }); return; }
     const { subject, html } = await buildArtworkEmail({ title: a.title, artist: a.artist, domain: a.domain });
     res.json({ subject, html, recipientCount: await getAudienceEmailCount() });
   } catch (err) {
@@ -258,6 +259,7 @@ router.post('/artwork/:id', requireAdmin, async (req, res) => {
     const rows = await pool.query<ArtworkRow>('SELECT * FROM artworks WHERE id=$1', [req.params.id]);
     if (rows.rows.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
     const a = rows.rows[0];
+    if (a.status !== 'published') { res.status(409).json({ error: 'Only published artwork can be announced' }); return; }
     const { sentNow, queued } = await sendArtworkNotification({ title: a.title, artist: a.artist, domain: a.domain });
     if (sentNow === 0 && queued === 0) {
       res.json({ success: true, notifiedAt: a.notified_at, sentNow, queued });

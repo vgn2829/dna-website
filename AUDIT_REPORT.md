@@ -25,31 +25,15 @@
 
 ### Findings
 
-**CRITICAL — Real production credentials in `backend/.env` on disk**
+**CRITICAL — Credentials were recorded in this file (redacted)**
 
-The file `/Users/venugopal/Downloads/dna_website/backend/.env` exists with the following real production values:
+An earlier revision of this report reproduced a JWT signing secret, the admin password and a database
+connection password. The values have been **removed from the working tree**, but they remain in git history
+and in any clone or fork of this public repository, so they must be treated as compromised.
 
-```
-JWT_SECRET=dev-only-secret-change-in-production
-ADMIN_PASSWORD=Dnaontop19
-DATABASE_URL=postgresql://postgres.gecnkkcrprdphbocknru:Dna2019IITkanpur@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres
-```
+The same removed block also held two lower-severity notes: a seed-script default password (since fixed — `seed.ts` now refuses to run without `ADMIN_PASSWORD`) and a note that `src/` contains no secret references.
 
-Two problems:
-1. **`JWT_SECRET` is the literal string `dev-only-secret-change-in-production`** — this is a weak, guessable secret. Anyone who knows this value can forge admin JWT tokens and bypass authentication entirely.
-2. **`ADMIN_PASSWORD=Dnaontop19` and the full Supabase `DATABASE_URL` with password `Dna2019IITkanpur` are stored in plaintext** on the developer machine. If this file is ever accidentally committed, or the machine is compromised, all three credentials are exposed simultaneously.
-
-**Git tracking status:** `backend/.env` is correctly listed in `.gitignore` (`backend/.env` appears in the root `.gitignore`) and is NOT tracked in git history. A scan of all git commit content finds no trace of `Dna2019IITkanpur`, `Dnaontop19`, or `dev-only-secret-change-in-production` in any committed file. The current state is not a git leak.
-
-**MEDIUM — Default fallback password in seed script**
-
-`/Users/venugopal/Downloads/dna_website/backend/src/db/seed.ts` line 17:
-```ts
-const pw = process.env.ADMIN_PASSWORD ?? 'admin123';
-```
-If the seed script is ever run in an environment where `ADMIN_PASSWORD` is unset, it silently falls back to `admin123` and hashes that into the database. The server startup guard at `server.ts` line 4-9 correctly requires `ADMIN_PASSWORD`, but the seed script does not.
-
-**No frontend secret leakage.** The `src/` directory contains zero references to `SUPABASE`, `JWT`, `SECRET`, `PASSWORD`, `API_KEY`, `DATABASE_URL`, or `service_role`. The frontend only exposes `VITE_API_BASE_URL` (an API endpoint, not a credential) via `src/app/lib/api.ts` line 1. All secrets stay server-side only.
+Required action (owner): rotate all three secrets — see `docs/dna-2.0/SECURITY_REMEDIATION_CHECKLIST.md`.
 
 ---
 
