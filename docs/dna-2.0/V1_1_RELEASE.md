@@ -154,6 +154,7 @@ All figures are from the final tree (`release/dna-2.0-v1.1`), run after the last
 | Backend tests (`npx vitest run`, local `dna_club_test`) | **1107 / 1108** passing, 71 files (1 baseline failure, below) |
 | Backend typecheck (`tsc --noEmit`) | clean |
 | Production build (`vite build`) | succeeds (the pre-existing >500 kB chunk warning remains; no bundle-size comparison against `main` was made) |
+| Route-collision guard (`scripts/check-route-collisions.mjs`, on the final build) | 18 routes, 9 root entries, no collisions (V1.1 adds no routes) |
 | Browser: V1.1 journey (isolated backend + brand-new scratch DB) | **77 / 77** |
 | Browser: seven-step wizard through the real UI (brand-new scratch DB) | **41 / 41** |
 | Browser: templates, starter application, lightbox, mobile (60-image stress board) | **27 / 27** |
@@ -165,7 +166,7 @@ Honest notes on the browser runs: they were developed iteratively. Earlier runs 
 
 ### Baseline failure (verified, not hidden)
 
-`creator-privacy.test.ts › ships no real student identities in the seed data` fails with `expected 45 to be +0`. It fails **identically at the V1 production merge `75fb43d`** (checked out in a separate throwaway worktree and run there). Cause: the local `dna_club_test` database holds 45 rows in the `all_team` audience group, all with `added_at = 2026-09-24T05:40:49Z`, left by an earlier version of the seed that has since been removed; no current code inserts into `all_team`. A database freshly migrated by the current code (the QA scratch databases) has **0** `all_team` rows, so the test passes on clean data. The test was not skipped or edited. Clearing those stale rows in the local test DB would make it pass; that is left to the owner.
+`creator-privacy.test.ts › ships no real student identities in the seed data` fails with `expected 45 to be +0`. It fails **identically at the V1 production merge `75fb43d`** (checked out in a separate throwaway worktree and run there). Cause: the local `dna_club_test` database holds 45 rows in the `all_team` audience group, all with `added_at = 2026-09-24T05:40:49Z`, left by an earlier version of the seed that has since been removed; no current code inserts into `all_team`. A database freshly migrated by the current code (the QA scratch databases) has **0** `all_team` rows, so the test passes on clean data — consistent with the V1 runbook, which recorded this suite passing 5/5 on a fresh PostgreSQL. The test was not skipped or edited. Clearing those stale rows in the local test DB would make it pass; that is left to the owner.
 
 **Separate observation (unchanged, pre-existing on `main`):** `backend/src/db/schema.ts` seeds six coordinators (real-looking names and roll numbers) into the `coordinators` group on startup. That is outside this release and was not changed, but it is worth a decision on whether those belong in source.
 
