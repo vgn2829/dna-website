@@ -380,6 +380,30 @@ export interface ShowcasePatch {
   title?: string; summary?: string | null; description?: string | null; category?: ShowcaseCategory | null; tags?: string[];
   links?: Array<{ label?: string; url: string }>; discipline_ids?: string[]; owner_display_name?: string; owner_role_label?: string | null;
 }
+// Creator Discovery (Milestone E). The directory/featured/projects endpoints are
+// backend/src/routes/creators.ts; the single-profile + artwork endpoints are
+// PR #84's /api/designers/:handle (+ /works) contract.
+export interface CreatorDiscipline { id: string; title: string; color: string }
+export interface CreatorProjectThumb { slug: string; title: string; category: string | null; coverUrl: string | null }
+export interface CreatorCard {
+  handle: string; displayName: string; headline: string | null; bio: string | null; avatarUrl: string | null;
+  verified: boolean; featured: boolean; skills: string[]; disciplines: CreatorDiscipline[];
+  projectCount: number; projects: CreatorProjectThumb[];
+}
+export interface CreatorFacets {
+  total: number; disciplines: Array<CreatorDiscipline & { count: number }>;
+  skills: Array<{ skill: string; count: number }>; categories: Array<{ category: string; count: number }>;
+}
+export interface CreatorQuery { q?: string; discipline?: string; skill?: string; category?: string; sort?: 'featured' | 'name' | 'newest'; limit?: number; offset?: number }
+export interface CreatorCapabilities { profiles: boolean; projects: boolean; artworkCredits: boolean }
+export interface DesignerProfile {
+  handle: string; displayName: string; headline: string | null; bio: string | null; department: string | null; batch: string | null;
+  verified: boolean; avatarUrl: string | null; coverUrl: string | null; disciplines: CreatorDiscipline[]; skills: string[];
+  links: Array<{ kind: string; url: string }>; worksCount: number;
+}
+export interface DesignerWork { id: string; title: string; domain: string; mediaType: string; coverUrl: string | null; role: string; roleLabel: string | null; publishedAt: string }
+export interface CreatorProject { slug: string; title: string; summary: string | null; category: string | null; featured: boolean; publishedAt: string; roleLabel: string | null; isOwner: boolean; coverUrl: string | null }
+export interface CreatorAdminItem { id: string; handle: string; displayName: string; ownerRoll: string; verified: boolean; featured: boolean; featuredAt: string | null }
 
 
 function libraryAdminQuery(filters: LibraryAdminFilters): string {
@@ -1250,6 +1274,41 @@ export const api = {
     adminGet: (id: string) => request<ShowcaseProject>('GET', `/showcase/admin/projects/${id}`, { admin: true }),
     adminTransition: (id: string, to: ShowcaseStatus, reason?: string) => request<ShowcaseProject>('POST', `/showcase/admin/projects/${id}/transition`, { admin: true, body: { to, reason } }),
     adminFeature: (id: string, featured: boolean) => request<ShowcaseProject>('POST', `/showcase/admin/projects/${id}/feature`, { admin: true, body: { featured } }),
+  },
+  // Creator Discovery (Milestone E).
+  creators: {
+    capabilities: () => request<CreatorCapabilities>('GET', '/creators/capabilities'),
+    list: (q: CreatorQuery = {}) => {
+      const p = new URLSearchParams();
+      if (q.q) p.set('q', q.q);
+      if (q.discipline) p.set('discipline', q.discipline);
+      if (q.skill) p.set('skill', q.skill);
+      if (q.category) p.set('category', q.category);
+      if (q.sort) p.set('sort', q.sort);
+      if (q.limit) p.set('limit', String(q.limit));
+      if (q.offset) p.set('offset', String(q.offset));
+      const qs = p.toString();
+      return request<{ creators: CreatorCard[]; total: number; hasMore: boolean }>('GET', `/creators${qs ? `?${qs}` : ''}`);
+    },
+    facets: () => request<CreatorFacets>('GET', '/creators/facets'),
+    featured: () => request<{ creators: CreatorCard[] }>('GET', '/creators/featured'),
+    projects: (handle: string, offset = 0) =>
+      request<{ projects: CreatorProject[]; total: number; hasMore: boolean }>('GET', `/creators/${encodeURIComponent(handle)}/projects?limit=12&offset=${offset}`),
+    adminList: (q?: string, featuredOnly?: boolean) => {
+      const p = new URLSearchParams();
+      if (q) p.set('q', q);
+      if (featuredOnly) p.set('featured', '1');
+      const qs = p.toString();
+      return request<{ creators: CreatorAdminItem[]; featuredCount: number; max: number; available: boolean }>('GET', `/creators/admin/list${qs ? `?${qs}` : ''}`, { admin: true });
+    },
+    adminFeature: (id: string, featured: boolean) =>
+      request<{ featured: boolean; changed: boolean }>('PUT', `/creators/admin/${id}/featured`, { admin: true, body: { featured } }),
+  },
+  // PR #84's public profile contract (backend-only there; this milestone adds the UI).
+  designers: {
+    get: (handle: string) => request<DesignerProfile>('GET', `/designers/${encodeURIComponent(handle)}`),
+    works: (handle: string, cursor?: string) =>
+      request<{ items: DesignerWork[]; next: string | null }>('GET', `/designers/${encodeURIComponent(handle)}/works?limit=12${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),
   },
   // Basic Notifications (Phase C) — mirrors backend/src/routes/notifications.ts.
   // No realtime channel: the panel refetches on open (see NotificationBell.tsx).

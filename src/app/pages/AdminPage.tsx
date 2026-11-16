@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout, Send, TriangleAlert, LayoutDashboard, FolderOpen, LayoutTemplate, Sparkles } from 'lucide-react';
+import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout, Send, TriangleAlert, LayoutDashboard, FolderOpen, LayoutTemplate, Sparkles, UserRound } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
 import { api, setAdminToken, clearAdminToken, type SessionJoins, type CoordinatorMember, type EventRegistrants, type StudentOverview, type StudentRosterEntry } from '../lib/api';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts';
@@ -12,6 +12,7 @@ import { EventAttachmentField } from '../components/events/EventAttachmentField'
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from '../lib/uploadLimits';
 import { LibraryModerationTab } from '../components/admin/LibraryModerationTab';
 import { ShowcaseModerationTab } from '../components/admin/ShowcaseModerationTab';
+import { CreatorFeaturingTab } from '../components/admin/CreatorFeaturingTab';
 import { EmailCentre } from '../components/admin/email-centre/EmailCentre';
 
 async function compressImage(file: File): Promise<File> {
@@ -686,7 +687,7 @@ function RegistrantsModal({ event, onClose }: { event: ClubEvent; onClose: () =>
   );
 }
 
-type Tab = 'overview' | 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings' | 'announcements' | 'email' | 'sessions' | 'moodboards' | 'assets' | 'templates' | 'showcase';
+type Tab = 'overview' | 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings' | 'announcements' | 'email' | 'sessions' | 'moodboards' | 'assets' | 'templates' | 'showcase' | 'creators';
 
 // ── Overview tab ─────────────────────────────────────────────────────────────
 function StatCard({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
@@ -4442,6 +4443,7 @@ export function AdminPage() {
     { id: 'assets',       label: 'Assets',       icon: FolderOpen },
     { id: 'templates',    label: 'Templates',    icon: LayoutTemplate },
     { id: 'showcase',     label: 'Showcase',     icon: Sparkles },
+    { id: 'creators',     label: 'Creators',     icon: UserRound },
   ];
 
   return (
@@ -4490,6 +4492,7 @@ export function AdminPage() {
           {tab === 'assets'       && <motion.div key="assets"       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><LibraryModerationTab kind="assets" /></motion.div>}
           {tab === 'templates'    && <motion.div key="templates"    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><LibraryModerationTab kind="templates" /></motion.div>}
           {tab === 'showcase'     && <motion.div key="showcase"     initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><ShowcaseModerationTab /></motion.div>}
+          {tab === 'creators'     && <motion.div key="creators"     initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><CreatorFeaturingTab /></motion.div>}
         </AnimatePresence>
       </div>
     </div>

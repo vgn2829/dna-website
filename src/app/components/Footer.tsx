@@ -20,6 +20,7 @@ const COLS = [
     links: [
       { label: 'Academy',        path: '/academy'        },
       { label: 'Gallery',        path: '/gallery'        },
+      { label: 'Creators',       path: '/creators'       },
       { label: 'Events',         path: '/events'         },
       { label: 'Design Studio',  path: '/design-studio'  },
       { label: 'Palette Studio', path: '/palette'        },

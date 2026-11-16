@@ -2,6 +2,7 @@ import { initAssetSharingSchema } from './assetSharingSchema';
 import { initDesignerSchema } from './designerSchema';
 import { initInspirationSchema } from './inspirationSchema';
 import { initShowcaseSchema } from './showcaseSchema';
+import { initCreatorDiscoverySchema } from './creatorDiscoverySchema';
 import { initEmailCentreSchema } from './emailCentreSchema';
 import { pool } from './client';
 import { canvasSummaryColumns } from '../lib/canvasSummary';
@@ -1681,6 +1682,7 @@ export async function initSchema(): Promise<void> {
   await initDesignerSchema(pool);
   await initInspirationSchema(pool);
   await initShowcaseSchema(pool);
+  await initCreatorDiscoverySchema(pool);
   await initEmailCentreSchema(pool);
   console.log('library visibility migration done');
 }
