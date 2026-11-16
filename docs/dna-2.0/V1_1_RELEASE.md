@@ -149,7 +149,7 @@ All figures are from the final tree (`release/dna-2.0-v1.1`), run after the last
 
 | Check | Result |
 |---|---|
-| Frontend tests (`pnpm vitest run`) | **826 / 826** passing, 69 files |
+| Frontend tests (`pnpm vitest run`) | **827 / 827** passing, 69 files |
 | Frontend typecheck (`tsc --noEmit`) | clean |
 | Backend tests (`npx vitest run`, local `dna_club_test`) | **1107 / 1108** passing, 71 files (1 baseline failure, below) |
 | Backend typecheck (`tsc --noEmit`) | clean |
