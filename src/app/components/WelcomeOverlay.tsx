@@ -9,7 +9,7 @@ interface WelcomeOverlayProps {
 const FEATURES = [
   {
     symbol: '◆',
-    title: 'Design Studio',
+    title: 'Creator Studio',
     desc: 'A set of creative tools — generate colour palettes, pair fonts, check contrast, and more.',
   },
   {

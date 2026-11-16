@@ -1,11 +1,14 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLocation, useNavigate } from 'react-router';
-import { LogOut, Menu, Moon, Sun, X, Mail } from 'lucide-react';
+import { LogOut, Menu, Moon, Sun, X, Mail, UserRound, UserPen, Inbox } from 'lucide-react';
 import { useStudent } from '../context/StudentContext';
 import { useTheme } from '../context/ThemeContext';
 import { ChangeEmailModal } from './ChangeEmailModal';
 import { NotificationBell } from './NotificationBell';
+import { AccountMenu } from './AccountMenu';
+import { CreatorAvatar } from './creators/CreatorParts';
+import { useMyProfile } from '../lib/myProfile';
 
 // PALETTE_STUDIO_FEATURE — remove the Palette entry below to disable
 const NAV_LINKS = [
@@ -14,9 +17,39 @@ const NAV_LINKS = [
   { label: 'Gallery',       path: '/gallery'       },
   { label: 'Events',        path: '/events'        },
   { label: 'Team',          path: '/team'          },
-  { label: 'Design Studio', path: '/design-studio' },
+  { label: 'Creator Studio', path: '/design-studio' },
   { label: 'Moodboards',    path: '/moodboards'    },
 ];
+
+// Signed-in block of the small-screen menu: same destinations as the desktop
+// AccountMenu (minus Notifications, whose panel lives in the desktop bar).
+function MobileAccount({ roll, sessionName, onNavigate, onChangeEmail, onLogout }: {
+  roll: string; sessionName: string | null; onNavigate: (to: string) => void; onChangeEmail: () => void; onLogout: () => void;
+}) {
+  const profile = useMyProfile(roll);
+  const name = profile.displayName ?? (sessionName?.trim() || roll);
+  const row: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 40, padding: '8px 12px',
+    borderRadius: 'var(--radius-pill)', background: 'none', border: '1px solid var(--nav-border)',
+    color: 'var(--color-ink-muted)', fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer', textAlign: 'left',
+  };
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 4px 4px' }}>
+        <CreatorAvatar name={name} src={profile.avatarUrl} size={34} />
+        <div style={{ minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</p>
+          <p style={{ margin: 0, fontSize: 11, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)' }}>{profile.handle ? `@${profile.handle}` : roll}</p>
+        </div>
+      </div>
+      <button type="button" style={row} onClick={() => onNavigate('/profile')}><UserRound size={14} aria-hidden="true" /> My Profile</button>
+      <button type="button" style={row} onClick={() => onNavigate('/profile#edit-profile')}><UserPen size={14} aria-hidden="true" /> Edit Profile</button>
+      <button type="button" style={row} onClick={() => onNavigate('/showcase/manage')}><Inbox size={14} aria-hidden="true" /> Invitations</button>
+      <button type="button" style={row} onClick={onChangeEmail}><Mail size={14} aria-hidden="true" /> Account Settings</button>
+      <button type="button" style={row} onClick={onLogout}><LogOut size={14} aria-hidden="true" /> Sign out</button>
+    </>
+  );
+}
 
 export function Navigation() {
   const location = useLocation();
@@ -232,87 +265,14 @@ export function Navigation() {
               {/* Student session pill — desktop */}
               <div className="hidden xl:flex items-center">
                 {studentSession ? (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '6px 14px',
-                      borderRadius: 'var(--radius-pill)',
-                      background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
-                      border: '1px solid var(--nav-border)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                      <span style={{
-                        fontSize: 12,
-                        fontWeight: 700,
-                        fontFamily: 'var(--font-body)',
-                        color: 'var(--color-ink)',
-                        letterSpacing: '0.02em',
-                        fontVariantNumeric: 'tabular-nums',
-                        lineHeight: 1.2,
-                      }}>
-                        {studentSession.name
-                          ? studentSession.name.split(' ')[0]
-                          : studentSession.rollNumber
-                        }
-                      </span>
-                      {studentSession.name && (
-                        <span style={{
-                          fontSize: 10,
-                          color: 'var(--color-ink-muted)',
-                          fontFamily: 'var(--font-body)',
-                          fontVariantNumeric: 'tabular-nums',
-                          lineHeight: 1,
-                        }}>
-                          {studentSession.rollNumber}
-                        </span>
-                      )}
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <NotificationBell roll={studentSession.rollNumber} isDark={isDark} />
-                    <button
-                      onClick={() => setEmailModalOpen(true)}
-                      title="Change email"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--color-ink-muted)',
-                        cursor: 'pointer',
-                        padding: 0,
-                        opacity: 0.7,
-                        transition: 'opacity 0.15s ease',
-                      }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.7'; }}
-                    >
-                      <Mail size={12} />
-                    </button>
-                    <button
-                      onClick={logout}
-                      title="Log out"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--color-ink-muted)',
-                        cursor: 'pointer',
-                        padding: 0,
-                        opacity: 0.7,
-                        transition: 'opacity 0.15s ease',
-                      }}
-                      onMouseEnter={e => {
-                        (e.currentTarget as HTMLElement).style.opacity = '1';
-                      }}
-                      onMouseLeave={e => {
-                        (e.currentTarget as HTMLElement).style.opacity = '0.7';
-                      }}
-                    >
-                      <LogOut size={12} />
-                    </button>
+                    <AccountMenu
+                      roll={studentSession.rollNumber}
+                      sessionName={studentSession.name || null}
+                      onChangeEmail={() => setEmailModalOpen(true)}
+                      onLogout={logout}
+                    />
                   </div>
                 ) : (
                   <button
@@ -476,72 +436,18 @@ export function Navigation() {
                 <div style={{
                   padding: '4px 8px',
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
+                  flexDirection: 'column',
+                  alignItems: 'stretch',
                   gap: 8,
                 }}>
                   {studentSession ? (
-                    <>
-                      <div>
-                        <p style={{
-                          margin: 0,
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: 'var(--color-ink)',
-                          fontFamily: 'var(--font-body)',
-                        }}>
-                          {studentSession.name ?? studentSession.rollNumber}
-                        </p>
-                        {studentSession.name && (
-                          <p style={{
-                            margin: 0,
-                            fontSize: 11,
-                            color: 'var(--color-ink-muted)',
-                            fontFamily: 'var(--font-body)',
-                          }}>
-                            {studentSession.rollNumber}
-                          </p>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => { setEmailModalOpen(true); setMenuOpen(false); }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          padding: '7px 14px',
-                          borderRadius: 'var(--radius-pill)',
-                          background: 'none',
-                          border: '1px solid var(--nav-border)',
-                          color: 'var(--color-ink-muted)',
-                          fontSize: 13,
-                          fontFamily: 'var(--font-body)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Mail size={12} />
-                        Change email
-                      </button>
-                      <button
-                        onClick={() => { logout(); setMenuOpen(false); }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          padding: '7px 14px',
-                          borderRadius: 'var(--radius-pill)',
-                          background: 'none',
-                          border: '1px solid var(--nav-border)',
-                          color: 'var(--color-ink-muted)',
-                          fontSize: 13,
-                          fontFamily: 'var(--font-body)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <LogOut size={12} />
-                        Log out
-                      </button>
-                    </>
+                    <MobileAccount
+                      roll={studentSession.rollNumber}
+                      sessionName={studentSession.name || null}
+                      onNavigate={to => { setMenuOpen(false); navigate(to); }}
+                      onChangeEmail={() => { setEmailModalOpen(true); setMenuOpen(false); }}
+                      onLogout={() => { logout(); setMenuOpen(false); }}
+                    />
                   ) : (
                     <button
                       onClick={() => { setMenuOpen(false); openRollModal(); }}

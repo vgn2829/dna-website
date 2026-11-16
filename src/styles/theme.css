@@ -690,6 +690,33 @@
     .board-card-star { opacity: 1; }
   }
 
+  /* ── Account menu (AccountMenu, in the site navbar) ── */
+  .acct-trigger {
+    display: flex; align-items: center; gap: 8px; min-height: 36px;
+    padding: 3px 8px 3px 4px; border-radius: var(--radius-pill);
+    background: none; border: 1px solid transparent; color: var(--color-ink);
+    font-family: var(--font-body); font-size: 12px; font-weight: 700; letter-spacing: 0.02em; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .acct-trigger:hover, .acct-trigger[aria-expanded="true"] { background: var(--color-surface-1); border-color: var(--nav-border); }
+  .acct-trigger:focus-visible, .acct-item:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+  .acct-name { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acct-menu {
+    position: absolute; top: calc(100% + 10px); right: 0; z-index: 9100; width: 244px; padding: 6px;
+    background: var(--color-canvas); border: 1px solid var(--nav-border); border-radius: var(--radius-lg);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.28);
+  }
+  .acct-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+  .acct-head-name { margin: 0; font-size: 13px; font-weight: 600; color: var(--color-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acct-head-sub { margin: 2px 0 0; font-size: 11px; color: var(--color-ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acct-sep { height: 1px; margin: 4px 6px; background: var(--color-hairline); }
+  .acct-item {
+    display: flex; align-items: center; gap: 10px; width: 100%; min-height: 38px; padding: 8px 10px;
+    border: none; border-radius: var(--radius-md); background: none; text-align: left; cursor: pointer;
+    font-family: var(--font-body); font-size: 13px; font-weight: 500; color: var(--color-ink-muted);
+  }
+  .acct-item:hover { background: var(--color-surface-1); color: var(--color-ink); }
+
   /* ── Workspace shell (WorkspaceShell / Sidebar) ──
      Same pill-link language as the public site's floating nav: 13px/500,
      pill radius, muted → ink on hover, a filled surface for the active

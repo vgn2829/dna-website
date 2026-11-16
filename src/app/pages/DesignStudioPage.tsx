@@ -9,7 +9,7 @@ const MEDIA_TOOLS = new Set(["image", "halftone", "svg", "bg"]);
 // ── Shell ─────────────────────────────────────────────────────────────────────
 export default function DesignStudio() {
   usePageMeta({
-    title: "Design Studio | DnA Club, IIT Kanpur",
+    title: "Creator Studio | DnA Club, IIT Kanpur",
     description:
       "Free browser-based design tools — background remover, SVG vectorizer, halftone generator, and more, from DnA Club.",
     path: "/design-studio",

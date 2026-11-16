@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { toast } from 'sonner';
 import { ExternalLink, Eye, Loader2, Plus, ShieldCheck, Trash2, Upload, X } from 'lucide-react';
 import { api, getStudentToken, type MyArtworkCredit, type OwnerProfile, type ProfilePreview, type ProfileVisibility } from '../lib/api';
 import { useStudent } from '../context/StudentContext';
+import { publishMyProfile } from '../lib/myProfile';
 import { CreatorAvatar, DisciplineChips, VerifiedMark } from '../components/creators/CreatorParts';
 import { profilePath } from '../lib/creators';
 import {
@@ -34,9 +35,9 @@ function Field({ id, label, hint, error, children }: { id: string; label: string
   );
 }
 
-function Section({ title, intro, children, actions }: { title: string; intro?: string; children: React.ReactNode; actions?: React.ReactNode }) {
+function Section({ title, intro, children, actions, id }: { title: string; intro?: string; children: React.ReactNode; actions?: React.ReactNode; id?: string }) {
   return (
-    <section style={{ ...card, display: 'flex', flexDirection: 'column', gap: 16 }} aria-label={title}>
+    <section id={id} style={{ ...card, display: 'flex', flexDirection: 'column', gap: 16, scrollMarginTop: 96 }} aria-label={title}>
       <div>
         <h2 className="type-headline" style={{ margin: 0 }}>{title}</h2>
         {intro && <p className="type-body-sm" style={{ margin: '6px 0 0', color: 'var(--color-ink-muted)' }}>{intro}</p>}
@@ -72,6 +73,19 @@ export default function ProfilePage() {
     }
   }, [roll, expired]);
   useEffect(() => { void load(); }, [load]);
+
+  // Keep the navbar's avatar/name in step with every save, with no reload.
+  useEffect(() => {
+    if (!roll || profile === undefined) return;
+    publishMyProfile(roll, profile ? { handle: profile.handle, displayName: profile.displayName, avatarUrl: profile.avatarUrl } : null);
+  }, [roll, profile]);
+
+  // "Edit Profile" in the account menu links to /profile#edit-profile; the section mounts after load.
+  const location = useLocation();
+  useEffect(() => {
+    if (location.hash !== '#edit-profile' || !profile) return;
+    document.getElementById('edit-profile')?.scrollIntoView({ block: 'start' });
+  }, [location.hash, profile === undefined || profile === null]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // A failed save must say why in plain words; the session-needs-OTP case gets its own banner.
   const fail = useCallback((e: unknown, fallback = 'Could not save — please try again') => {
@@ -265,7 +279,7 @@ function BasicsSection({ profile, disabled, roll, onSaved, fail }: { profile: Ow
   };
 
   return (
-    <Section title="About you" intro="Basic details shown on your public page. Your roll number and email are never shown."
+    <Section id="edit-profile" title="About you" intro="Basic details shown on your public page. Your roll number and email are never shown."
       actions={<><button type="button" className="btn-primary touch-target" disabled={disabled || busy || !dirty || !!hp} onClick={() => void save()}>{busy ? 'Saving…' : 'Save changes'}</button>{dirty && <button type="button" className="btn-translucent touch-target" onClick={() => setForm(initial)}>Discard</button>}</>}>
       <Field id="pe-name" label="Display name"><input id="pe-name" className="input-base" style={full} maxLength={PROFILE_LIMITS.displayName} value={form.displayName} onChange={e => set('displayName', e.target.value)} disabled={disabled} /></Field>
       <Field id="pe-handle" label="Public username" error={hp}
