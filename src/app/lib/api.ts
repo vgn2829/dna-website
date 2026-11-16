@@ -254,6 +254,8 @@ export interface CanvasPreviewItem {
   x: number; y: number; r: number; w: number; h: number;
   c?: string; g?: string; f?: string; src?: string; t?: string; fs?: number;
   p?: number[]; hl?: boolean; sw?: number;
+  /** Image crop as normalized [x0, y0, x1, y1] of the source image (absent = whole image). */
+  cr?: [number, number, number, number];
 }
 export interface CanvasPreview {
   v: 1;

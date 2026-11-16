@@ -87,6 +87,28 @@ describe('summarizeCanvas — formats and counting', () => {
     expect(items.find(i => i.r !== 0)!.r).toBeCloseTo(Math.PI / 2, 2);
   });
 
+  it('carries an image crop (normalized) so the card preview matches the cropped canvas image', () => {
+    const img = (id: string, crop: unknown, index: string): R => ({
+      typeName: 'shape', type: 'image', id: `shape:${id}`, x: 0, y: 0, rotation: 0, parentId: PAGE, index,
+      props: { w: 200, h: 100, assetId: 'asset:img', crop },
+    });
+    const records = [
+      doc(), page(),
+      { typeName: 'asset', id: 'asset:img', type: 'image', props: { src: 'https://cdn.example.com/a.png', w: 400, h: 400 } },
+      img('cropped', { topLeft: { x: 0.25, y: 0.1 }, bottomRight: { x: 0.75, y: 0.6 } }, 'a1'),
+      img('full', { topLeft: { x: 0, y: 0 }, bottomRight: { x: 1, y: 1 } }, 'a2'),
+      img('none', null, 'a3'),
+      img('bad-range', { topLeft: { x: -1, y: 0 }, bottomRight: { x: 2, y: 1 } }, 'a4'),
+      img('bad-shape', { topLeft: 'x' }, 'a5'),
+      img('degenerate', { topLeft: { x: 0.5, y: 0.5 }, bottomRight: { x: 0.5, y: 0.5 } }, 'a6'),
+    ];
+    const items = summarizeCanvas(room(records)).preview!.items;
+    expect(items).toHaveLength(6);
+    expect(items[0].cr).toEqual([0.25, 0.1, 0.75, 0.6]);
+    // Full / absent / malformed crops all mean "draw the whole image".
+    for (const it of items.slice(1)) expect(it.cr).toBeUndefined();
+  });
+
   it('describes images, text, notes, pen strokes and arrows for the preview', () => {
     const records = [
       doc(), page(),
