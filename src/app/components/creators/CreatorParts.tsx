@@ -69,6 +69,7 @@ export function CreatorCardView({ creator }: { creator: CreatorCard }) {
         </div>
       </div>
       {creator.headline && <p className="type-body-sm" style={{ margin: 0, color: 'var(--color-ink)' }}>{creator.headline}</p>}
+      {creator.featured && creator.editorialNote && <p className="type-caption" style={{ margin: 0, fontStyle: 'italic', color: 'var(--color-ink)' }}>“{creator.editorialNote}”</p>}
       {creator.bio && <p className="type-caption" style={{ margin: 0, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{creator.bio}</p>}
       <DisciplineChips disciplines={creator.disciplines} />
       {creator.projects.length > 0 && (

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 const mocks = vi.hoisted(() => ({
-  me: vi.fn(), update: vi.fn(), create: vi.fn(), setVisibility: vi.fn(), credits: vi.fn(), disciplines: vi.fn(), handleAvailable: vi.fn(),
+  me: vi.fn(), setTools: vi.fn(), update: vi.fn(), create: vi.fn(), setVisibility: vi.fn(), credits: vi.fn(), disciplines: vi.fn(), handleAvailable: vi.fn(),
   openRollModal: vi.fn(), logout: vi.fn(), token: { current: null as string | null },
   session: { current: { rollNumber: '230001', name: 'Asha Rao' } as { rollNumber: string; name: string } | null },
 }));
@@ -18,9 +18,9 @@ vi.mock('../lib/api', () => ({
     designers: {
       me: mocks.me, update: mocks.update, create: mocks.create, setVisibility: mocks.setVisibility, credits: mocks.credits,
       handleAvailable: mocks.handleAvailable, setLinks: vi.fn(), setSkills: vi.fn(), setDisciplines: vi.fn(), preview: vi.fn(),
-      uploadAvatar: vi.fn(), removeAvatar: vi.fn(), respondToCredit: vi.fn(),
+      uploadAvatar: vi.fn(), removeAvatar: vi.fn(), respondToCredit: vi.fn(), setTools: mocks.setTools,
     },
-    showcase: { disciplines: mocks.disciplines },
+    showcase: { disciplines: mocks.disciplines, mine: () => Promise.resolve({ projects: [] }) },
   },
 }));
 vi.mock('../context/StudentContext', () => ({
@@ -62,6 +62,52 @@ beforeEach(() => {
   mocks.credits.mockResolvedValue([]);
   mocks.disciplines.mockResolvedValue({ disciplines: [{ id: 'illus', title: 'Illustration' }] });
   mocks.handleAvailable.mockResolvedValue({ available: true });
+});
+
+describe('ProfilePage — completion and tools (V1.1)', () => {
+  it('shows a progress indicator with suggestions, and says nothing is required', async () => {
+    const { host, text } = await mount();
+    // PROFILE has a headline, bio and one skill, but no image and no work yet → 3 of 5
+    expect(text()).toContain('Profile 60% complete');
+    expect(host.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('60');
+    expect(text()).toContain('Profile image');
+    expect(text()).toContain('A project or artwork');
+    expect(text()).toContain('Nothing here is required');
+    // editors stay usable: completion never gates saving
+    expect((host.querySelector('#pe-name') as HTMLInputElement).disabled).toBe(false);
+  });
+
+  it('hides the indicator once the profile is complete', async () => {
+    mocks.me.mockResolvedValue({ ...PROFILE, avatarUrl: 'https://cdn.example/a.png', worksCount: 2 });
+    const { host, text } = await mount();
+    expect(text()).not.toContain('complete');
+    expect(host.querySelector('[role="progressbar"]')).toBeNull();
+  });
+
+  it('saves tools through the dedicated endpoint and shows the normalised result', async () => {
+    mocks.setTools.mockResolvedValue({ tools: ['figma', 'blender'] });
+    const { host, text } = await mount();
+    const input = host.querySelector('input[aria-label="Add a tool"]') as HTMLInputElement;
+    await change(input, 'Figma');
+    await act(async () => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); });
+    await change(input, 'blender');
+    await act(async () => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); });
+    const save = [...host.querySelectorAll('button')].find(b => b.textContent === 'Save tools') as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+    await act(async () => { save.click(); });
+    expect(mocks.setTools).toHaveBeenCalledWith('230001', ['figma', 'blender']);
+    expect(text()).toContain('figma');
+  });
+
+  it('rejects a malformed tool on the client without calling the server', async () => {
+    const { host, text } = await mount();
+    const input = host.querySelector('input[aria-label="Add a tool"]') as HTMLInputElement;
+    await change(input, '<script>');
+    await act(async () => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); });
+    expect(host.querySelector('[role="alert"]')).not.toBeNull();
+    expect(mocks.setTools).not.toHaveBeenCalled();
+    expect(text()).toContain('No tools added yet');
+  });
 });
 
 describe('ProfilePage', () => {

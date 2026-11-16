@@ -121,6 +121,15 @@ export async function initDesignerSchema(db: Pool): Promise<void> {
       );
       CREATE INDEX IF NOT EXISTS idx_creator_audit_entity
         ON creator_audit_log (entity_type, entity_id, created_at);
+
+      -- V1.1: tools a creator works in (Figma, Blender, …). Additive; existing
+      -- rows get '{}'. Same shape and normalisation as skills.
+      ALTER TABLE designer_profiles ADD COLUMN IF NOT EXISTS tools TEXT[] NOT NULL DEFAULT '{}';
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'designer_profiles_tools_max') THEN
+          ALTER TABLE designer_profiles ADD CONSTRAINT designer_profiles_tools_max CHECK (cardinality(tools) <= 12);
+        END IF;
+      END $$;
     `);
     await client.query('COMMIT');
   } catch (err) {

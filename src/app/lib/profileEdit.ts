@@ -2,7 +2,7 @@
 // backend/src/lib/designerValidation.ts ONLY to give instant feedback; the
 // server stays the authority and every rule is re-checked there.
 
-export const PROFILE_LIMITS = { displayName: 100, headline: 80, bio: 500, department: 60, skills: 12, links: 6, disciplines: 3 } as const;
+export const PROFILE_LIMITS = { displayName: 100, headline: 80, bio: 500, department: 60, skills: 12, tools: 12, links: 6, disciplines: 3 } as const;
 
 export const LINK_KINDS = ['website', 'behance', 'dribbble', 'instagram', 'linkedin', 'github', 'youtube', 'other'] as const;
 export type LinkKind = typeof LINK_KINDS[number];

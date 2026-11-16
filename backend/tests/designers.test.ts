@@ -19,7 +19,7 @@ const create = (roll = OWNER, handle = 'ada-design', extra: object = {}) =>
 
 // Everything a stranger may ever see on a profile, and nothing else.
 const PUBLIC_KEYS = ['avatarUrl', 'batch', 'bio', 'coverUrl', 'department', 'disciplines', 'displayName', 'handle',
-  'headline', 'links', 'skills', 'verified', 'worksCount'];
+  'headline', 'links', 'skills', 'tools', 'verified', 'worksCount'];
 const FORBIDDEN = /230001|230002|@iitk|private-|owner_roll|ownerRoll|unique_id|otp|bypass|identityVerified|moderation|visibility|"id"/;
 
 beforeEach(async () => {
