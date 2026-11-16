@@ -32,6 +32,10 @@ function onAdminErr(err: unknown): void {
 
 export interface ArtworkComment { id: string; sender: string; text: string; date: string; }
 
+// Accepted credits PR #84 adds to GET /artworks. `handle` is present only when the
+// credited person's profile is linkable for this viewer; absent on main (no credits).
+export interface ArtworkCredit { displayName: string; handle: string | null; role: string; roleLabel: string | null; isPrimary: boolean; verified: boolean }
+
 export interface Artwork {
   id: string;
   title: string;
@@ -46,6 +50,7 @@ export interface Artwork {
   coverUrl: string | null;
   notifiedAt: string | null;
   comments: ArtworkComment[];
+  credits?: ArtworkCredit[];
 }
 
 export interface ClubEvent {

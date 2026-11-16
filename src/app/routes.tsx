@@ -12,6 +12,8 @@ import BoardPage from './pages/BoardPage';
 import { WorkspaceShell } from './components/shell/WorkspaceShell';
 import HomeShellPage from './pages/HomeShellPage';
 import AssetsPage from './pages/AssetsPage';
+import CreatorsPage from './pages/CreatorsPage';
+import CreatorProfilePage from './pages/CreatorProfilePage';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 import TemplatesPage from './pages/TemplatesPage';
@@ -44,6 +46,9 @@ export const router = createBrowserRouter([
       { path: 'academy', Component: AcademyPage },
       { path: 'resources', Component: ResourcesPage },
       { path: 'gallery', Component: GalleryPage },
+      // Creator Discovery (public). /designers/:handle is the profile URL PR #100's credit chips already target.
+      { path: 'creators', Component: CreatorsPage },
+      { path: 'designers/:handle', Component: CreatorProfilePage },
       { path: 'events', Component: EventsPage },
       { path: 'team', Component: TeamPage },
       { path: 'palette', lazy: () => import('./pages/PalettePage').then(m => ({ Component: m.PalettePage })), hydrateFallbackElement: <RouteLoading />, errorElement: <RouteLoadError /> }, // PALETTE_STUDIO_FEATURE

@@ -1,3 +1,4 @@
+import { ArtworkByline } from '../components/creators/CreatorParts';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
@@ -137,7 +138,7 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
             <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-ink)', margin: 0, lineHeight: 1.3, textTransform: forceUpper ? 'uppercase' : 'none' }}>{artwork.title}</h2>
             <span className="type-micro px-2 py-0.5 rounded-full uppercase" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)', flexShrink: 0 }}>{artwork.mediaType}</span>
           </div>
-          {artwork.artist?.trim() && <p style={{ fontSize: 13, color: 'var(--color-ink-muted)', marginBottom: 12, textTransform: forceUpper ? 'uppercase' : 'none' }}>by {artwork.artist}</p>}
+          <ArtworkByline artwork={artwork} upper={forceUpper} style={{ fontSize: 13, color: 'var(--color-ink-muted)', marginBottom: 12 }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={handleLike} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 'var(--radius-pill)', background: 'var(--color-surface-2)', border: 'none', cursor: 'pointer', fontSize: 13 }}>
               <LikeBurst active={burst} />
@@ -203,7 +204,7 @@ function ArtworkModal({ artworkId, onClose }: { artworkId: string; onClose: () =
           <h2 className="type-headline leading-tight" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>{artwork.title}</h2>
           <span className="type-micro px-2 py-0.5 rounded-full uppercase" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)' }}>{artwork.mediaType}</span>
         </div>
-        {artwork.artist?.trim() && <p className="type-caption mt-1" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>by {artwork.artist}</p>}
+        <ArtworkByline artwork={artwork} upper={forceUpper} className="type-caption mt-1" />
       </>}
       headingExtra={
         <div className="flex items-center gap-2">
@@ -478,7 +479,7 @@ export function GalleryPage() {
                     {/* Text area below image — always visible, never overlapped */}
                     <div style={{ padding: '20px 20px 24px' }}>
                       <h2 className="type-display-md" style={{ marginBottom: 4, fontSize: 20, textTransform: forceUpper ? 'uppercase' : 'none' }}>{art.title}</h2>
-                      {art.artist?.trim() && <p className="type-caption" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>by {art.artist}</p>}
+                      <ArtworkByline artwork={art} upper={forceUpper} className="type-caption" />
                     </div>
                   </div>
                 </motion.div>
