@@ -209,7 +209,96 @@ const brief: StarterLayout = {
   ],
 };
 
-export const STARTER_LAYOUTS: readonly StarterLayout[] = [inspiration, palette, character, brand, storyboard, brief];
+
+const uiux: StarterLayout = {
+  id: 'ui-ux-reference',
+  name: 'UI / UX reference',
+  description: 'Six screens to study, a four-step user flow, and a column of sticky notes for observations.',
+  useCase: 'Interface research and flow mapping',
+  shapes: [
+    { kind: 'text', x: 0, y: -120, text: 'UI / UX reference', size: 'xl' },
+    { kind: 'frame', x: 0, y: 0, w: 1500, h: 760, name: 'Screens to study', children: slots(cellGrid(24, 24, 1452, 712, 3, 2), 'Screen') },
+    { kind: 'frame', x: 0, y: 800, w: 1500, h: 340, name: 'User flow', children: slots(cellGrid(24, 24, 1452, 292, 4, 1), 'Step') },
+    {
+      kind: 'frame', x: 1540, y: 0, w: 300, h: 1140, name: 'Observations',
+      children: [
+        { kind: 'note', x: 24, y: 24, text: 'What works: …', color: 'light-green' },
+        { kind: 'note', x: 24, y: 264, text: 'What confuses: …', color: 'light-red' },
+        { kind: 'note', x: 24, y: 504, text: 'Ideas to borrow: …', color: 'yellow' },
+      ],
+    },
+  ],
+};
+
+const motion: StarterLayout = {
+  id: 'motion-style-frames',
+  name: 'Motion style frames',
+  description: 'Three style-frame slots, timing and easing notes, and a colour and type reference.',
+  useCase: 'Motion design direction before animating',
+  shapes: [
+    { kind: 'text', x: 0, y: -120, text: 'Motion style frames', size: 'xl' },
+    { kind: 'frame', x: 0, y: 0, w: 1500, h: 380, name: 'Style frames', children: slots(cellGrid(24, 24, 1452, 332, 3, 1), 'Style frame') },
+    {
+      kind: 'frame', x: 0, y: 420, w: 740, h: 420, name: 'Timing & easing',
+      children: [
+        { kind: 'note', x: 24, y: 24, text: 'Duration: …', color: 'light-blue' },
+        { kind: 'note', x: 264, y: 24, text: 'Easing: …', color: 'light-violet' },
+      ],
+    },
+    {
+      kind: 'frame', x: 780, y: 420, w: 720, h: 420, name: 'Colour & type',
+      children: [
+        { kind: 'swatch', x: 24, y: 24, w: 200, h: 200, color: 'black' },
+        { kind: 'swatch', x: 248, y: 24, w: 200, h: 200, color: 'violet' },
+        { kind: 'swatch', x: 472, y: 24, w: 200, h: 200, color: 'yellow' },
+        { kind: 'text', x: 24, y: 260, text: 'Typeface: …', size: 'm' },
+      ],
+    },
+  ],
+};
+
+const photo: StarterLayout = {
+  id: 'photo-series',
+  name: 'Photo series',
+  description: 'One hero image, a six-image series grid, and notes for light, location and gear.',
+  useCase: 'Planning and sequencing a photo series',
+  shapes: [
+    { kind: 'text', x: 0, y: -120, text: 'Photo series', size: 'xl' },
+    { kind: 'frame', x: 0, y: 0, w: 960, h: 700, name: 'Hero image', children: [{ kind: 'slot', x: 24, y: 24, w: 912, h: 652, label: 'Hero' }] },
+    { kind: 'frame', x: 1000, y: 0, w: 800, h: 700, name: 'The series', children: slots(cellGrid(24, 24, 752, 652, 2, 3), 'Frame') },
+    {
+      kind: 'frame', x: 0, y: 740, w: 1800, h: 280, name: 'Shot notes',
+      children: [
+        { kind: 'note', x: 24, y: 24, text: 'Light: …', color: 'yellow' },
+        { kind: 'note', x: 264, y: 24, text: 'Location: …', color: 'light-green' },
+        { kind: 'note', x: 504, y: 24, text: 'Gear & settings: …', color: 'light-blue' },
+      ],
+    },
+  ],
+};
+
+const poster: StarterLayout = {
+  id: 'poster-exploration',
+  name: 'Poster exploration',
+  description: 'Three poster directions side by side, with a notes frame to compare and decide.',
+  useCase: 'Comparing poster and print directions',
+  shapes: [
+    { kind: 'text', x: 0, y: -120, text: 'Poster exploration', size: 'xl' },
+    ...(['A', 'B', 'C'] as const).map((d, i): StarterShape => (
+      { kind: 'frame', x: i * 560, y: 0, w: 520, h: 720, name: `Direction ${d}`, children: [{ kind: 'slot', x: 24, y: 24, w: 472, h: 560, label: `Poster ${d}` }, { kind: 'text', x: 24, y: 620, text: 'Idea: …', size: 'm' }] }
+    )),
+    {
+      kind: 'frame', x: 0, y: 760, w: 1640, h: 280, name: 'Decision notes',
+      children: [
+        { kind: 'note', x: 24, y: 24, text: 'Strongest: …', color: 'light-green' },
+        { kind: 'note', x: 264, y: 24, text: 'Needs work: …', color: 'light-red' },
+        { kind: 'note', x: 504, y: 24, text: 'Next step: …', color: 'yellow' },
+      ],
+    },
+  ],
+};
+
+export const STARTER_LAYOUTS: readonly StarterLayout[] = [inspiration, palette, character, brand, storyboard, brief, uiux, motion, photo, poster];
 
 export function getStarterLayout(id: string | null | undefined): StarterLayout | null {
   if (!id) return null;
@@ -219,4 +308,38 @@ export function getStarterLayout(id: string | null | undefined): StarterLayout |
 /** Total shape count, frame children included (what the board will report). */
 export function countStarterShapes(shapes: readonly StarterShape[]): number {
   return shapes.reduce((n, s) => n + 1 + (s.kind === 'frame' ? countStarterShapes(s.children) : 0), 0);
+}
+
+// ── Preview geometry (pure) ───────────────────────────────────────────────
+// The picker draws a small SVG of each layout FROM THE SAME DATA that creates the
+// board, so a preview can never drift from what you actually get.
+
+const PREVIEW_NOTE = 200;
+const PREVIEW_TEXT_PX = { s: 18, m: 24, l: 36, xl: 44 } as const;
+export interface PreviewItem { kind: StarterShape['kind']; x: number; y: number; w: number; h: number; color?: StarterColor }
+export interface StarterPreview { width: number; height: number; items: PreviewItem[] }
+
+export function starterPreview(layout: StarterLayout): StarterPreview {
+  const items: PreviewItem[] = [];
+  const walk = (shapes: readonly StarterShape[], ox: number, oy: number) => {
+    for (const s of shapes) {
+      const x = ox + s.x, y = oy + s.y;
+      switch (s.kind) {
+        case 'frame': items.push({ kind: 'frame', x, y, w: s.w, h: s.h }); walk(s.children, x, y); break;
+        case 'slot': items.push({ kind: 'slot', x, y, w: s.w, h: s.h }); break;
+        case 'swatch': items.push({ kind: 'swatch', x, y, w: s.w, h: s.h, color: s.color }); break;
+        case 'note': items.push({ kind: 'note', x, y, w: PREVIEW_NOTE, h: PREVIEW_NOTE, color: s.color }); break;
+        case 'text': items.push({ kind: 'text', x, y, w: s.text.length * PREVIEW_TEXT_PX[s.size ?? 'm'] * 0.6, h: PREVIEW_TEXT_PX[s.size ?? 'm'] * 1.4 }); break;
+      }
+    }
+  };
+  walk(layout.shapes, 0, 0);
+  const minX = Math.min(...items.map(i => i.x)), minY = Math.min(...items.map(i => i.y));
+  const maxX = Math.max(...items.map(i => i.x + i.w)), maxY = Math.max(...items.map(i => i.y + i.h));
+  return { width: maxX - minX, height: maxY - minY, items: items.map(i => ({ ...i, x: i.x - minX, y: i.y - minY })) };
+}
+
+/** How many image slots a layout offers (shown in the picker). */
+export function countImageSlots(shapes: readonly StarterShape[]): number {
+  return shapes.reduce((n, s) => n + (s.kind === 'slot' ? 1 : s.kind === 'frame' ? countImageSlots(s.children) : 0), 0);
 }

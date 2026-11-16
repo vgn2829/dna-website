@@ -218,7 +218,7 @@ describe('review and submit', () => {
     expect(w.current()).toMatch(/^Step 7/);
     await w.click(w.btn('Submit for review'));
     expect(m.action).toHaveBeenCalledTimes(1);
-    expect(m.update.mock.calls.at(-1)![2].description).toContain('updated description');
+    expect(m.update.mock.calls[m.update.mock.calls.length - 1][2].description).toContain('updated description');
   });
 });
 

@@ -690,6 +690,24 @@
     .board-card-star { opacity: 1; }
   }
 
+  /* ── Moodboard starter picker (StarterPicker) ── */
+  .starter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .starter-card {
+    position: relative; display: flex; flex-direction: column; gap: 4px; padding: 8px; cursor: pointer; min-width: 0;
+    border: 1px solid var(--color-hairline); border-radius: var(--radius-lg); background: transparent; color: var(--color-ink);
+    font-family: var(--font-body); transition: background 0.15s, border-color 0.15s;
+  }
+  .starter-card:hover { background: var(--color-surface-1); }
+  .starter-card[data-selected="true"] { background: var(--color-surface-2); border-color: var(--color-brand); }
+  .starter-card:focus-within { box-shadow: var(--shadow-focus); }
+  .starter-radio { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .starter-thumb {
+    display: flex; align-items: center; justify-content: center; aspect-ratio: 16 / 10; padding: 6px; box-sizing: border-box;
+    border-radius: var(--radius-md); background: var(--color-surface-1); color: var(--color-ink-muted); overflow: hidden;
+  }
+  .starter-name { font-size: 13px; font-weight: 600; }
+  .starter-use { overflow-wrap: anywhere; }
+
   /* ── Submission wizard stepper (WizardStepper) ── */
   .wiz-steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 4px; }
   .wiz-steps li { flex: 1 1 0; min-width: 0; }

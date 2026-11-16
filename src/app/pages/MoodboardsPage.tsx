@@ -11,7 +11,7 @@ import { ShareBoardDialog } from '../components/ShareBoardDialog';
 import { AssetLibrary } from '../components/AssetLibrary';
 import { BoardCard, StarIcon } from '../components/BoardCard';
 import '../../styles/academy-moodboards.css';
-import { STARTER_LAYOUTS } from '../lib/boardStarters';
+import { StarterPicker } from '../components/StarterPicker';
 import { useModalA11y } from '../components/hooks/useModalA11y';
 
 // List caches are qualified by workspace here and by student at call sites.
@@ -728,31 +728,7 @@ function MoodboardsContent() {
                 </p>
               </div>
 
-              <div role="group" aria-label="Starting layout">
-                <p className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
-                  Start from
-                </p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
-                  {[{ id: '', name: 'Blank board', useCase: 'An empty canvas' }, ...STARTER_LAYOUTS].map(layout => (
-                    <button
-                      key={layout.id || 'blank'}
-                      type="button"
-                      onClick={() => setForm(prev => ({ ...prev, starter: layout.id }))}
-                      aria-pressed={form.starter === layout.id}
-                      className="touch-target"
-                      style={{
-                        textAlign: 'left', padding: '10px 12px', borderRadius: 'var(--radius-lg)', cursor: 'pointer',
-                        background: form.starter === layout.id ? 'var(--color-surface-2)' : 'transparent',
-                        border: `1px solid ${form.starter === layout.id ? 'var(--color-brand)' : 'var(--color-hairline)'}`,
-                        color: 'var(--color-ink)', fontFamily: 'var(--font-body)',
-                      }}
-                    >
-                      <span style={{ display: 'block', fontSize: 13, fontWeight: 600 }}>{layout.name}</span>
-                      <span className="type-micro" style={{ display: 'block', marginTop: 2 }}>{layout.useCase}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <StarterPicker value={form.starter} onChange={id => setForm(prev => ({ ...prev, starter: id }))} />
 
               {projectOptions.length > 0 && (
                 <div>
