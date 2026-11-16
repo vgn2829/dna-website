@@ -346,6 +346,40 @@ export type InspirationDraft = {
   title?: string; description?: string | null; category?: InspirationCategory | null;
   tags?: string[]; collection_ids?: string[];
 };
+// Public Project Showcase (Milestone D) — mirrors backend/src/routes/showcase.ts.
+export type ShowcaseStatus = 'draft' | 'submitted' | 'changes_requested' | 'approved' | 'published' | 'rejected' | 'archived';
+export type ShowcaseCategory = 'branding' | 'illustration' | 'ui-ux' | 'motion' | 'photography' | 'typography' | '3d' | 'print' | 'product' | 'other';
+export interface ShowcaseCredit { displayName: string | null; roleLabel: string | null; isOwner: boolean; profile?: { handle: string } }
+export interface ShowcaseCard {
+  slug: string; title: string; summary: string | null; category: ShowcaseCategory | null; tags: string[];
+  featured: boolean; publishedAt: string | null; disciplines: Array<{ id: string; title: string }>;
+  cover: { url: string; width: number | null; height: number | null } | null; credits: ShowcaseCredit[];
+}
+export interface ShowcaseDetail extends ShowcaseCard {
+  description: string | null; links: Array<{ label: string; url: string }>;
+  works: Array<{ url: string; caption: string | null; width: number | null; height: number | null }>;
+  artworks: Array<{ id: string; title: string; imageUrl: string | null; mediaType: string }>;
+}
+export interface ShowcaseQuery { q?: string; category?: string; discipline?: string; tags?: string[]; featured?: boolean; sort?: 'newest' | 'oldest' | 'title' | 'featured'; limit?: number; offset?: number }
+export interface ShowcaseFacets { categories: Array<{ category: ShowcaseCategory; count: number }>; disciplines: Array<{ id: string; title: string; count: number }>; tags: Array<{ tag: string; count: number }> }
+export interface ShowcaseOwnerCredit { id: string; roll: string; roleLabel: string | null; contribution: string | null; displayName: string | null; status: 'accepted' | 'pending' | 'declined'; isOwner: boolean }
+export interface ShowcaseOwnerWork { id: string; assetId: string | null; caption: string | null; isCover: boolean; position: number; filename: string | null; previewUrl: string | null; width: number | null; height: number | null; sourceMissing: boolean; published: boolean }
+export interface ShowcaseProject {
+  id: string; slug: string; title: string; summary: string | null; description: string | null; category: ShowcaseCategory | null;
+  tags: string[]; links: Array<{ label: string; url: string }>; status: ShowcaseStatus; reviewNote: string | null; featured: boolean;
+  submittedAt: string | null; publishedAt: string | null; createdAt: string; updatedAt: string; editable: boolean;
+  disciplines: Array<{ id: string; title: string }>; works: ShowcaseOwnerWork[]; credits: ShowcaseOwnerCredit[];
+  boards: Array<{ id: string; name: string }>; artworks: Array<{ id: string; title: string; image_url: string | null }>;
+  events: Array<{ from: ShowcaseStatus | null; to: ShowcaseStatus; by: 'student' | 'admin' | 'system'; reason: string | null; at: string }>;
+  problems: string[]; viewerIsOwner: boolean;
+}
+export interface ShowcaseListItem { id: string; slug: string; title: string; status: ShowcaseStatus; reviewNote: string | null; updatedAt: string; coverUrl: string | null }
+export interface ShowcaseInvitation { id: string; status: 'pending' | 'accepted'; roleLabel: string | null; contribution: string | null; displayName: string | null; projectTitle: string; projectStatus: ShowcaseStatus; ownerName: string | null }
+export interface ShowcaseAdminItem { id: string; slug: string; title: string; status: ShowcaseStatus; category: ShowcaseCategory | null; featured: boolean; submittedAt: string | null; publishedAt: string | null; updatedAt: string; ownerName: string | null; ownerRoll: string }
+export interface ShowcasePatch {
+  title?: string; summary?: string | null; description?: string | null; category?: ShowcaseCategory | null; tags?: string[];
+  links?: Array<{ label?: string; url: string }>; discipline_ids?: string[]; owner_display_name?: string; owner_role_label?: string | null;
+}
 
 
 function libraryAdminQuery(filters: LibraryAdminFilters): string {
@@ -1166,6 +1200,56 @@ export const api = {
       request<{ success: boolean }>('POST', `/inspiration/collections/${collectionId}/items`, { roll, body: { item_id: itemId } }),
     removeFromCollection: (roll: string, collectionId: string, itemId: string) =>
       request<{ success: boolean }>('DELETE', `/inspiration/collections/${collectionId}/items/${itemId}`, { roll }),
+  },
+  // Public Project Showcase (Milestone D).
+  showcase: {
+    // Public (no auth header): published projects only.
+    list: (q: ShowcaseQuery = {}) => {
+      const p = new URLSearchParams();
+      if (q.q) p.set('q', q.q);
+      if (q.category) p.set('category', q.category);
+      if (q.discipline) p.set('discipline', q.discipline);
+      if (q.tags?.length) p.set('tag', q.tags.join(','));
+      if (q.featured) p.set('featured', '1');
+      if (q.sort) p.set('sort', q.sort);
+      if (q.limit) p.set('limit', String(q.limit));
+      if (q.offset) p.set('offset', String(q.offset));
+      const qs = p.toString();
+      return request<{ projects: ShowcaseCard[]; total: number; hasMore: boolean }>('GET', `/showcase/projects${qs ? `?${qs}` : ''}`);
+    },
+    facets: () => request<ShowcaseFacets>('GET', '/showcase/facets'),
+    capabilities: () => request<{ profiles: boolean; artworkCredits: boolean }>('GET', '/showcase/capabilities'),
+    disciplines: () => request<{ disciplines: Array<{ id: string; title: string }> }>('GET', '/showcase/disciplines'),
+    get: (slug: string) => request<ShowcaseDetail>('GET', `/showcase/projects/${encodeURIComponent(slug)}`),
+    // Student (creator / contributor).
+    mine: (roll: string) => request<{ projects: ShowcaseListItem[] }>('GET', '/showcase/mine', { roll }),
+    create: (roll: string, title: string) => request<ShowcaseProject>('POST', '/showcase/mine', { roll, body: { title } }),
+    getMine: (roll: string, id: string) => request<ShowcaseProject>('GET', `/showcase/mine/${id}`, { roll }),
+    update: (roll: string, id: string, body: ShowcasePatch) => request<ShowcaseProject>('PATCH', `/showcase/mine/${id}`, { roll, body }),
+    setWorks: (roll: string, id: string, works: Array<{ asset_id: string; caption?: string | null; is_cover?: boolean }>) =>
+      request<ShowcaseProject>('PUT', `/showcase/mine/${id}/works`, { roll, body: { works } }),
+    setBoards: (roll: string, id: string, boardIds: string[]) => request<ShowcaseProject>('PUT', `/showcase/mine/${id}/boards`, { roll, body: { board_ids: boardIds } }),
+    setArtworks: (roll: string, id: string, ids: string[]) => request<ShowcaseProject>('PUT', `/showcase/mine/${id}/artworks`, { roll, body: { artwork_ids: ids } }),
+    invite: (roll: string, id: string, body: { roll: string; role_label?: string | null; contribution?: string | null }) => request<ShowcaseProject>('POST', `/showcase/mine/${id}/credits`, { roll, body }),
+    editCredit: (roll: string, id: string, creditId: string, body: { role_label?: string | null; contribution?: string | null }) => request<ShowcaseProject>('PATCH', `/showcase/mine/${id}/credits/${creditId}`, { roll, body }),
+    removeCredit: (roll: string, id: string, creditId: string) => request<ShowcaseProject>('DELETE', `/showcase/mine/${id}/credits/${creditId}`, { roll }),
+    action: (roll: string, id: string, action: 'submit' | 'withdraw' | 'archive' | 'reopen') =>
+      request<ShowcaseProject>('POST', `/showcase/mine/${id}/${action}`, { roll, body: {} }),
+    remove: (roll: string, id: string) => request<{ success: boolean }>('DELETE', `/showcase/mine/${id}`, { roll }),
+    invitations: (roll: string) => request<{ invitations: ShowcaseInvitation[] }>('GET', '/showcase/invitations', { roll }),
+    accept: (roll: string, creditId: string, displayName: string) => request<{ success: boolean }>('POST', `/showcase/invitations/${creditId}/accept`, { roll, body: { display_name: displayName } }),
+    decline: (roll: string, creditId: string) => request<{ success: boolean }>('POST', `/showcase/invitations/${creditId}/decline`, { roll, body: {} }),
+    // Admin.
+    adminList: (status?: ShowcaseStatus | '', q?: string) => {
+      const p = new URLSearchParams();
+      if (status) p.set('status', status);
+      if (q) p.set('q', q);
+      const qs = p.toString();
+      return request<{ projects: ShowcaseAdminItem[] }>('GET', `/showcase/admin/projects${qs ? `?${qs}` : ''}`, { admin: true });
+    },
+    adminGet: (id: string) => request<ShowcaseProject>('GET', `/showcase/admin/projects/${id}`, { admin: true }),
+    adminTransition: (id: string, to: ShowcaseStatus, reason?: string) => request<ShowcaseProject>('POST', `/showcase/admin/projects/${id}/transition`, { admin: true, body: { to, reason } }),
+    adminFeature: (id: string, featured: boolean) => request<ShowcaseProject>('POST', `/showcase/admin/projects/${id}/feature`, { admin: true, body: { featured } }),
   },
   // Basic Notifications (Phase C) — mirrors backend/src/routes/notifications.ts.
   // No realtime channel: the panel refetches on open (see NotificationBell.tsx).

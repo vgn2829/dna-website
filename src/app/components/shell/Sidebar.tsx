@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router';
-import { Home, LayoutGrid, Image, Lightbulb, FolderKanban, LayoutTemplate, X } from 'lucide-react';
+import { Home, LayoutGrid, Image, Lightbulb, FolderKanban, LayoutTemplate, Sparkles, X } from 'lucide-react';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { to: '/moodboards', label: 'Moodboards', icon: LayoutGrid },
   { to: '/assets', label: 'Assets', icon: Image },
   { to: '/inspiration', label: 'Inspiration', icon: Lightbulb },
+  { to: '/showcase/manage', label: 'Showcase', icon: Sparkles },
   { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/templates', label: 'Templates', icon: LayoutTemplate },
 ];
