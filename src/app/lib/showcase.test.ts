@@ -71,3 +71,19 @@ describe('helpers', () => {
     expect(hasFilters({ q: '', category: '', discipline: '', tags: [], featured: true })).toBe(true);
   });
 });
+
+describe('featuredCreatorOf / moreByCreator', () => {
+  it('picks the owner only when their profile is publicly linkable', async () => {
+    const { featuredCreatorOf } = await import('./showcase');
+    expect(featuredCreatorOf([{ displayName: 'Asha', isOwner: true, profile: { handle: 'asha-rao' } }])).toEqual({ handle: 'asha-rao', name: 'Asha' });
+    expect(featuredCreatorOf([{ displayName: 'Asha', isOwner: true }])).toBeNull();                                         // private profile → no section
+    expect(featuredCreatorOf([{ displayName: 'Bo', isOwner: false, profile: { handle: 'bo' } }])).toBeNull();               // contributors don't headline it
+    expect(featuredCreatorOf([{ displayName: '  ', isOwner: true, profile: { handle: 'asha-rao' } }])?.name).toBe('this creator');
+  });
+  it('drops the current project and repeats, and caps the list', async () => {
+    const { moreByCreator } = await import('./showcase');
+    const list = ['a', 'b', 'a', 'c', 'd', 'e'].map(slug => ({ slug }));
+    expect(moreByCreator(list, 'c', 3).map(p => p.slug)).toEqual(['a', 'b', 'd']);
+    expect(moreByCreator([{ slug: 'x' }], 'x')).toEqual([]);
+  });
+});

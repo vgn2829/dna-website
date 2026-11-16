@@ -113,3 +113,23 @@ export function topicLine(category: string | null | undefined, disciplines: Arra
   }
   return parts.join(' · ');
 }
+
+/** The creator a project page should offer "more work" for: the owner, and only when their profile is publicly linkable. */
+export function featuredCreatorOf(credits: Array<{ displayName: string | null; isOwner: boolean; profile?: { handle: string } }>): { handle: string; name: string } | null {
+  const owner = credits.find(c => c.isOwner);
+  if (!owner?.profile?.handle) return null;
+  return { handle: owner.profile.handle, name: owner.displayName?.trim() || 'this creator' };
+}
+
+/** Other published projects by the same creator: never the one being viewed, never a repeat (pages can overlap), capped. */
+export function moreByCreator<T extends { slug: string }>(projects: T[], currentSlug: string, max = 3): T[] {
+  const seen = new Set<string>([currentSlug]);
+  const out: T[] = [];
+  for (const p of projects) {
+    if (seen.has(p.slug)) continue;
+    seen.add(p.slug);
+    out.push(p);
+    if (out.length >= max) break;
+  }
+  return out;
+}

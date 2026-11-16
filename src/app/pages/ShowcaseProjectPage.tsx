@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import { api, type ShowcaseDetail } from '../lib/api';
 import { ShowcaseArticle } from '../components/showcase/ShowcaseParts';
+import { MoreByCreator } from '../components/showcase/MoreByCreator';
 
 // Public project detail. Anything that isn't a published project — a draft, a
 // project in review, an archived or unknown slug — is the same "not found".
@@ -43,7 +44,12 @@ export default function ShowcaseProjectPage() {
             <button type="button" className="btn-translucent" onClick={load}>Try again</button>
           </div>
         )}
-        {state === 'ready' && project && <ShowcaseArticle data={project} />}
+        {state === 'ready' && project && (
+          <>
+            <ShowcaseArticle data={project} />
+            <MoreByCreator slug={project.slug} credits={project.credits} />
+          </>
+        )}
       </div>
     </div>
   );
