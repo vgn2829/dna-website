@@ -230,7 +230,7 @@ function downloadName(filename: string, extension: string | null): string {
 // unchanged and stays the canonical original. Computed from the row's own
 // storage_key (trusted, server-generated); never stored anywhere. One
 // batched lookup for the whole response, never one per asset.
-async function toPublicAssets(rows: AssetRow[]) {
+export async function toPublicAssets(rows: AssetRow[]) {
   const imageKeys = rows
     .filter(r => r.kind === 'image' && r.storage_key && isDerivableSourceKey(r.storage_key))
     .map(r => r.storage_key as string);

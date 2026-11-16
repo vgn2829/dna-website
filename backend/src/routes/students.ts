@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
 import { query } from '../db/client';
 import { requireStudent } from '../middleware/studentAuth';
 import { requireAdmin } from '../middleware/adminAuth';
@@ -26,6 +27,45 @@ const existsLimiter = rateLimit({
 export const studentsRouter = Router();
 
 const VALID_ID = /^[a-zA-Z0-9_-]{1,100}$/;
+
+// ── Club roster (admin) — see student_roster in db/schema.ts ─────────────────
+const ROLL_RE = /^[0-9]{2}[a-zA-Z0-9]{4,10}$/;
+const rosterEntry = z.object({
+  rollNumber: z.string().regex(ROLL_RE).transform(r => r.toUpperCase()),
+  name: z.string().trim().min(2).max(100),
+  email: z.string().email().max(200).refine(e => e.toLowerCase().endsWith('@iitk.ac.in')).transform(e => e.toLowerCase()).optional(),
+}).strict();
+
+studentsRouter.put('/roster', requireAdmin, async (req, res) => {
+  const parsed = z.object({ entries: z.array(rosterEntry).min(1).max(2000) }).strict().safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid roster' }); return; }
+  for (const e of parsed.data.entries) {
+    await query(
+      `INSERT INTO student_roster(roll_number, name, email) VALUES($1,$2,$3)
+       ON CONFLICT (roll_number) DO UPDATE SET name=EXCLUDED.name, email=EXCLUDED.email`,
+      [e.rollNumber, e.name, e.email ?? null]);
+  }
+  const n = await query<{ n: number }>('SELECT COUNT(*)::int AS n FROM student_roster');
+  res.json({ upserted: parsed.data.entries.length, total: n[0].n });
+});
+
+studentsRouter.delete('/roster/:roll', requireAdmin, async (req, res) => {
+  await query('DELETE FROM student_roster WHERE roll_number=$1', [param(req.params.roll).trim().toUpperCase()]);
+  res.status(204).end();
+});
+
+// Registered accounts that disagree with the roster (possible roll-number
+// claims made before the roster existed). Admin only; read-only.
+studentsRouter.get('/roster/audit', requireAdmin, async (_req, res) => {
+  const rows = await query(
+    `SELECT s.roll_number AS "rollNumber", s.name, s.email, r.name AS "rosterName", r.email AS "rosterEmail",
+            CASE WHEN r.roll_number IS NULL THEN 'not_in_roster' ELSE 'email_differs' END AS problem
+       FROM student_sessions s LEFT JOIN student_roster r ON r.roll_number = s.roll_number
+      WHERE s.email IS NOT NULL
+        AND (r.roll_number IS NULL OR (r.email IS NOT NULL AND lower(r.email) <> lower(s.email)))
+      ORDER BY s.roll_number`);
+  res.json(rows);
+});
 
 // Used by the login modal to decide whether to show the "register" fields.
 // Returns only booleans — no name/email/uniqueId is exposed without a verified token.

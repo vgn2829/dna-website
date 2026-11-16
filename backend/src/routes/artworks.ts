@@ -9,6 +9,8 @@ import { requireStudent, optionalStudent } from '../middleware/studentAuth';
 import { getStorage, StorageTooLargeError } from '../storage';
 import { diskUploadFields, LIMIT_MESSAGE, readFileHead } from '../lib/diskUpload';
 import { exceedsUploadLimit } from '../lib/uploadLimits';
+import { legacyArtistWithdrawn, publicCredits, writeAudit, type PublicCredit } from '../lib/credits';
+import { CREDIT_ROLES, roleLabelSchema } from '../lib/designerValidation';
 
 export const artworksRouter = Router();
 
@@ -57,7 +59,14 @@ type ArtworkRow = {
   original_filename: string | null; mime_type: string | null; file_size: number | null;
   likes: number; featured: boolean; cover_url: string | null;
   notified_at: string | null;
+  status: 'draft' | 'published' | 'hidden';
 };
+
+// Explicit list — NOT `SELECT *`. A column added to `artworks` later (e.g.
+// created_by_roll, source_asset_id, which must stay private) can never reach a
+// public response by accident. Keep in sync with ArtworkRow / formatArtwork.
+const ARTWORK_COLUMNS = `id, title, artist, domain, image_url, media_type, storage_path, original_filename,
+  mime_type, file_size, likes, featured, cover_url, notified_at, status, created_at`;
 type CommentRow = { id: string; sender: string; text: string; created_at: string };
 
 const ALLOWED_EXT: Record<string, { mime: string; mediaType: 'image' | 'pdf' | 'video'; check: (b: Buffer) => boolean }> = {
@@ -80,13 +89,17 @@ function relativeTime(iso: string): string {
   return `${Math.floor(hrs / 24)} days ago`;
 }
 
-function formatArtwork(row: ArtworkRow, likedByUser: boolean, comments: CommentRow[]) {
+function formatArtwork(row: ArtworkRow, likedByUser: boolean, comments: CommentRow[], credits: PublicCredit[] = [], hideLegacyArtist = false) {
   const mediaUrl = row.storage_path
     ? getStorage().getPublicUrl(row.storage_path)
     : (row.image_url ?? '');
 
   return {
-    id: row.id, title: row.title, artist: row.artist, domain: row.domain,
+    // Blank (not omitted) so existing clients keep a string; see legacyArtistWithdrawn.
+    id: row.id, title: row.title, artist: hideLegacyArtist && credits.length === 0 ? '' : row.artist, domain: row.domain,
+    // Accepted credits only (lib/credits.ts). The legacy `artist` text stays
+    // as the fallback label for artwork that has no credits.
+    credits,
     mediaUrl,
     mediaType: row.media_type as 'image' | 'pdf' | 'video',
     originalFilename: row.original_filename,
@@ -102,9 +115,11 @@ function formatArtwork(row: ArtworkRow, likedByUser: boolean, comments: CommentR
 artworksRouter.get('/', optionalStudent, async (req, res) => {
   const roll = req.studentRoll;
   const [rows, allComments] = await Promise.all([
-    query<ArtworkRow>('SELECT * FROM artworks ORDER BY created_at DESC'),
+    query<ArtworkRow>(`SELECT ${ARTWORK_COLUMNS} FROM artworks WHERE status = 'published' ORDER BY created_at DESC`),
     query<CommentRow & { artwork_id: string }>(
-      'SELECT id, artwork_id, sender, text, created_at FROM artwork_comments ORDER BY created_at ASC'
+      `SELECT c.id, c.artwork_id, c.sender, c.text, c.created_at FROM artwork_comments c
+         JOIN artworks a ON a.id = c.artwork_id AND a.status = 'published'
+        ORDER BY c.created_at ASC`
     ),
   ]);
 
@@ -113,11 +128,48 @@ artworksRouter.get('/', optionalStudent, async (req, res) => {
     const liked = await query<{ artwork_id: string }>('SELECT artwork_id FROM artwork_likes WHERE roll_number=$1', [roll]);
     likedSet = new Set(liked.map(r => r.artwork_id));
   }
+  const credits = await publicCredits(rows.map(r => r.id), Boolean(roll));
+  const withdrawn = await legacyArtistWithdrawn(rows.filter(r => !(credits.get(r.id)?.length)).map(r => r.id));
 
   res.json(rows.map(r => {
     const comments = allComments.filter(c => c.artwork_id === r.id);
-    return formatArtwork(r, likedSet.has(r.id), comments);
+    return formatArtwork(r, likedSet.has(r.id), comments, credits.get(r.id) ?? [], withdrawn.has(r.id));
   }));
+});
+
+// Admin view: every status, with credits including pending/declined.
+// Registered before '/:id' so "admin" is never read as an artwork id.
+artworksRouter.get('/admin/list', requireAdmin, async (_req, res) => {
+  const rows = await query<ArtworkRow>(`SELECT ${ARTWORK_COLUMNS} FROM artworks ORDER BY created_at DESC`);
+  const credits = await query<{ id: string; artwork_id: string; profile_id: string; handle: string; display_name: string;
+    role: string; role_label: string | null; is_primary: boolean; position: number; status: string; source: string }>(
+    `SELECT c.id, c.artwork_id, c.profile_id, p.handle, p.display_name, c.role, c.role_label, c.is_primary,
+            c.position, c.status, c.source
+       FROM artwork_credits c JOIN designer_profiles p ON p.id = c.profile_id
+      ORDER BY c.artwork_id, c.is_primary DESC, c.position, c.created_at`);
+  res.json(rows.map(r => ({
+    ...formatArtwork(r, false, []),
+    status: r.status,
+    credits: credits.filter(c => c.artwork_id === r.id).map(c => ({
+      id: c.id, profileId: c.profile_id, handle: c.handle, displayName: c.display_name, role: c.role,
+      roleLabel: c.role_label, isPrimary: c.is_primary, position: c.position, status: c.status, source: c.source,
+    })),
+  })));
+});
+
+artworksRouter.get('/:id', optionalStudent, async (req, res) => {
+  const rows = await query<ArtworkRow>(
+    `SELECT ${ARTWORK_COLUMNS} FROM artworks WHERE id=$1 AND status = 'published'`, [req.params.id]);
+  if (rows.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
+  const comments = await query<CommentRow>(
+    'SELECT id, sender, text, created_at FROM artwork_comments WHERE artwork_id=$1 ORDER BY created_at ASC', [rows[0].id]);
+  let liked = false;
+  if (req.studentRoll) {
+    liked = (await query('SELECT 1 FROM artwork_likes WHERE artwork_id=$1 AND roll_number=$2', [rows[0].id, req.studentRoll])).length > 0;
+  }
+  const credits = await publicCredits([rows[0].id], Boolean(req.studentRoll));
+  const withdrawn = credits.get(rows[0].id)?.length ? new Set<string>() : await legacyArtistWithdrawn([rows[0].id]);
+  res.json(formatArtwork(rows[0], liked, comments, credits.get(rows[0].id) ?? [], withdrawn.has(rows[0].id)));
 });
 
 artworksRouter.post(
@@ -196,8 +248,10 @@ artworksRouter.post(
     const id = `art-${uuidv4().slice(0, 8)}`;
     try {
       await query(
-        `INSERT INTO artworks(id,title,artist,domain,media_type,storage_path,original_filename,mime_type,file_size,cover_url,likes)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0)`,
+        // status is passed explicitly (never relied on from a column default):
+        // an admin Gallery upload is a published, admin-curated piece.
+        `INSERT INTO artworks(id,title,artist,domain,media_type,storage_path,original_filename,mime_type,file_size,cover_url,likes,status,source_kind,published_at)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,'published','gallery_admin',NOW())`,
         [id, title, artist, domain, spec.mediaType, storagePath, originalName, spec.mime, file.size, coverUrl]
       );
     } catch (err) {
@@ -327,10 +381,136 @@ artworksRouter.put('/:id', requireAdmin, upload, async (req, res) => {
   res.json(formatArtwork(rows[0], false, allComments));
 });
 
+// ── Moderation + attribution (admin) ─────────────────────────────────────────
+// Attribution is a set of artwork_credits rows (spec §4.5), not a column on
+// artworks. There is no self-claim and no name matching: an admin credits a
+// profile explicitly, or invites it (pending until the person accepts). Every
+// change is audited in the SAME transaction. The legacy `artist` text is never
+// modified here.
+
+artworksRouter.patch('/:id/status', requireAdmin, async (req, res) => {
+  const parsed = z.object({ status: z.enum(['published', 'hidden']) }).strict().safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid status' });
+  const id = String(req.params.id);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const cur = await client.query<{ status: string }>('SELECT status FROM artworks WHERE id = $1 FOR UPDATE', [id]);
+    if (!cur.rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Artwork not found' }); }
+    const changed = cur.rows[0].status !== parsed.data.status;
+    if (changed) {
+      await client.query(
+        `UPDATE artworks SET status = $2, published_at = CASE WHEN $2 = 'published' THEN COALESCE(published_at, NOW()) ELSE published_at END WHERE id = $1`,
+        [id, parsed.data.status]);
+      await writeAudit(client, { entityType: 'artwork', entityId: id, action: parsed.data.status === 'hidden' ? 'artwork.hide' : 'artwork.publish', actor: 'admin', detail: { from: cur.rows[0].status } });
+    }
+    await client.query('COMMIT');
+    return res.json({ id, status: parsed.data.status, changed });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+const MAX_CREDITS = 10;
+const creditInput = z.object({
+  profileId: z.string().min(1).max(100),
+  role: z.enum(CREDIT_ROLES),
+  roleLabel: roleLabelSchema.nullable().optional(),
+  position: z.number().int().min(0).max(100).optional(),
+  isPrimary: z.boolean().optional(),
+  // true = ask the person (pending until they accept); false/absent = the
+  // admin attributes it directly (accepted; the person can still remove themselves).
+  invite: z.boolean().optional(),
+}).strict();
+
+artworksRouter.post('/:id/credits', requireAdmin, async (req, res) => {
+  const parsed = creditInput.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid credit' });
+  const d = parsed.data;
+  const artworkId = String(req.params.id);
+  if (d.isPrimary && (d.role !== 'creator' || d.invite)) {
+    return res.status(400).json({ error: 'A primary credit must be an accepted creator credit' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const art = await client.query('SELECT 1 FROM artworks WHERE id = $1 FOR UPDATE', [artworkId]);
+    if (!art.rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Artwork not found' }); }
+    const prof = await client.query<{ moderation_status: string }>('SELECT moderation_status FROM designer_profiles WHERE id = $1 FOR KEY SHARE', [d.profileId]);
+    if (!prof.rows.length || prof.rows[0].moderation_status !== 'active') {
+      await client.query('ROLLBACK'); return res.status(404).json({ error: 'Designer profile not found' });
+    }
+    const count = await client.query<{ n: number }>('SELECT COUNT(*)::int AS n FROM artwork_credits WHERE artwork_id = $1', [artworkId]);
+    if (count.rows[0].n >= MAX_CREDITS) { await client.query('ROLLBACK'); return res.status(409).json({ error: `An artwork can have at most ${MAX_CREDITS} credits` }); }
+    const id = uuidv4();
+    await client.query(
+      `INSERT INTO artwork_credits(id, artwork_id, profile_id, role, role_label, is_primary, position, status, source, responded_at)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [id, artworkId, d.profileId, d.role, d.roleLabel ?? null, d.isPrimary ?? false, d.position ?? count.rows[0].n,
+        d.invite ? 'pending' : 'accepted', d.invite ? 'invite' : 'admin', d.invite ? null : new Date()]);
+    await writeAudit(client, { entityType: 'credit', entityId: id, action: 'credit.add', actor: 'admin', detail: { artworkId, profileId: d.profileId, role: d.role, invite: d.invite ?? false } });
+    await client.query('COMMIT');
+    return res.status(201).json({ id, status: d.invite ? 'pending' : 'accepted' });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    const code = (err as { code?: string }).code;
+    if (code === '23505') return res.status(409).json({ error: 'This profile is already credited, or the artwork already has a primary creator' });
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+artworksRouter.patch('/:id/credits/:creditId', requireAdmin, async (req, res) => {
+  const parsed = creditInput.pick({ role: true, roleLabel: true, position: true }).partial().strict()
+    .refine(b => Object.keys(b).length > 0).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid credit update' });
+  const d = parsed.data;
+  const cur = await query<{ id: string; role: string; role_label: string | null; position: number; is_primary: boolean }>(
+    'SELECT id, role, role_label, position, is_primary FROM artwork_credits WHERE id = $1 AND artwork_id = $2', [req.params.creditId, req.params.id]);
+  if (!cur.length) return res.status(404).json({ error: 'Credit not found' });
+  const nextRole = d.role ?? cur[0].role;
+  if (cur[0].is_primary && nextRole !== 'creator') return res.status(409).json({ error: 'The primary credit must stay a creator credit' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('UPDATE artwork_credits SET role=$2, role_label=$3, position=$4 WHERE id=$1',
+      [cur[0].id, nextRole, d.roleLabel !== undefined ? d.roleLabel : cur[0].role_label, d.position ?? cur[0].position]);
+    await writeAudit(client, { entityType: 'credit', entityId: cur[0].id, action: 'credit.update', actor: 'admin', detail: { artworkId: req.params.id } });
+    await client.query('COMMIT');
+    return res.json({ id: cur[0].id });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+artworksRouter.delete('/:id/credits/:creditId', requireAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const del = await client.query('DELETE FROM artwork_credits WHERE id = $1 AND artwork_id = $2 RETURNING id, profile_id', [req.params.creditId, req.params.id]);
+    if (!del.rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Credit not found' }); }
+    await writeAudit(client, { entityType: 'credit', entityId: del.rows[0].id, action: 'credit.remove', actor: 'admin', detail: { artworkId: req.params.id, profileId: del.rows[0].profile_id } });
+    await client.query('COMMIT');
+    return res.status(204).end();
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
 artworksRouter.post('/:id/like', likeLimiter, requireStudent, async (req, res) => {
   const roll = req.studentRoll!;
 
-  const rows = await query<{ id: string; likes: number }>('SELECT id, likes FROM artworks WHERE id=$1', [req.params.id]);
+  const rows = await query<{ id: string; likes: number }>("SELECT id, likes FROM artworks WHERE id=$1 AND status='published'", [req.params.id]);
   if (rows.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
 
   const client = await pool.connect();
@@ -358,22 +538,27 @@ artworksRouter.post('/:id/like', likeLimiter, requireStudent, async (req, res) =
   }
 });
 
+// `sender` is accepted only for backward compatibility with older clients and
+// is IGNORED: authorship is derived from the signed-in student's account, so a
+// student cannot post as someone else.
 const commentSchema = z.object({
-  sender: z.string().min(1).max(100),
+  sender: z.string().max(100).optional(),
   text:   z.string().min(1).max(1000),
 });
 
 artworksRouter.post('/:id/comments', commentLimiter, requireStudent, async (req, res) => {
-  const artwork = await query('SELECT 1 FROM artworks WHERE id=$1', [req.params.id]);
+  const artwork = await query("SELECT 1 FROM artworks WHERE id=$1 AND status='published'", [req.params.id]);
   if (artwork.length === 0) { res.status(404).json({ error: 'Artwork not found' }); return; }
 
   const parsed = commentSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
   const id = `c-${uuidv4().slice(0, 8)}`;
+  const account = await query<{ name: string | null }>('SELECT name FROM student_sessions WHERE roll_number=$1', [req.studentRoll]);
+  const sender = account[0]?.name?.trim() || req.studentRoll!;
   await query('INSERT INTO artwork_comments(id,artwork_id,sender,text) VALUES($1,$2,$3,$4)',
-    [id, req.params.id, parsed.data.sender, parsed.data.text]);
-  res.status(201).json({ id, sender: parsed.data.sender, text: parsed.data.text, date: 'Just now' });
+    [id, req.params.id, sender, parsed.data.text]);
+  res.status(201).json({ id, sender, text: parsed.data.text, date: 'Just now' });
 });
 
 artworksRouter.delete('/:id/comments/:commentId', requireAdmin, async (req, res) => {

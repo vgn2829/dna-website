@@ -16,6 +16,7 @@ import {
 } from './compositing';
 import { stampBrush, recompositeRegion, type BrushMode } from './refine';
 import { StudioRange } from '../studio/StudioRange';
+import { SaveToAssetsButton } from '../assets/SaveToAssetsButton';
 
 const CHECKER = 'repeating-conic-gradient(rgba(0,0,0,0.10) 0% 25%, rgba(255,255,255,0.10) 0% 50%) 50% / 16px 16px, var(--color-canvas)';
 function backdropCss(id: string): string {
@@ -259,17 +260,24 @@ export default function BackgroundRemover() {
     }
   }, [imageData, model, removeBackground, resetHistory]);
 
-  const handleDownload = useCallback(async () => {
+  // The exported result (cut-out, flattened on the chosen backdrop) — shared by
+  // Download and Save to Assets so both always produce the identical PNG.
+  const buildResultBlob = useCallback(async (): Promise<Blob | null> => {
     const canvas = displayRef.current;
-    if (!canvas || !source || !hasResult) return;
+    if (!canvas || !source || !hasResult) return null;
     const backdrop = backdropId === 'transparent'
       ? ({ kind: 'transparent' } as const)
       : ({ kind: 'color', color: backdropId === 'white' ? '#ffffff' : '#000000' } as const);
-    try {
-    const blob = await canvasToPngBlob(buildExportCanvas(canvas, backdrop));
-    downloadBlob(blob, `${source.name}-nobg.png`);
-    } catch { setReject("PNG export failed. Please retry."); }
+    return canvasToPngBlob(buildExportCanvas(canvas, backdrop));
   }, [source, hasResult, backdropId]);
+
+  const handleDownload = useCallback(async () => {
+    if (!source) return;
+    try {
+      const blob = await buildResultBlob();
+      if (blob) downloadBlob(blob, `${source.name}-nobg.png`);
+    } catch { setReject("PNG export failed. Please retry."); }
+  }, [source, buildResultBlob]);
 
   const handleReset = useCallback(async () => {
     const token = ++sourceGeneration.current;
@@ -498,6 +506,7 @@ export default function BackgroundRemover() {
               <button className="btn-translucent is-grow" onClick={handleDownload} disabled={!hasResult}>
                 <Download size={16} aria-hidden="true" /> PNG
               </button>
+              <SaveToAssetsButton tool="background-remover" baseName={source?.name ?? ''} getBlob={buildResultBlob} disabled={!hasResult} />
               <button className="btn-translucent btn-icon" onClick={handleReset} title="Reset" aria-label="Reset">
                 <RotateCcw size={16} aria-hidden="true" />
               </button>

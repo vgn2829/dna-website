@@ -11,6 +11,7 @@ import { ShareBoardDialog } from '../components/ShareBoardDialog';
 import { AssetLibrary } from '../components/AssetLibrary';
 import { BoardCard, StarIcon } from '../components/BoardCard';
 import '../../styles/academy-moodboards.css';
+import { STARTER_LAYOUTS } from '../lib/boardStarters';
 import { useModalA11y } from '../components/hooks/useModalA11y';
 
 // List caches are qualified by workspace here and by student at call sites.
@@ -129,7 +130,7 @@ function MoodboardsContent() {
   const [sharedLoading, setSharedLoading] = useState(true);
   const [archivedLoading, setArchivedLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ name: '', description: '', visibility: 'private' as 'private' | 'shared', projectId: '' as string });
+  const [form, setForm] = useState({ name: '', description: '', visibility: 'private' as 'private' | 'shared', projectId: '' as string, starter: '' as string });
   // Projects for the active workspace — fetched only when a concrete
   // workspace is selected (projects have no cross-workspace view, same
   // constraint ProjectsPage/AssetsPage already have) so the create-board
@@ -271,9 +272,9 @@ function MoodboardsContent() {
       if (form.visibility === 'shared') setSharedBoards(prev => [board, ...prev]);
       clearBoardsCache();
       setShowCreate(false);
-      setForm({ name: '', description: '', visibility: 'private', projectId: '' });
+      setForm({ name: '', description: '', visibility: 'private', projectId: '', starter: '' });
       toast.success('Board created');
-      navigate(`/moodboards/${board.id}`);
+      navigate(`/moodboards/${board.id}${form.starter ? `?starter=${encodeURIComponent(form.starter)}` : ''}`);
     } catch {
       setError('Failed to create board');
       toast.error('Failed to create board');
@@ -725,6 +726,32 @@ function MoodboardsContent() {
                 <p className="type-micro" style={{ margin: '6px 0 0' }}>
                   {form.visibility === 'private' ? 'Only you and collaborators can see this board.' : 'Anyone with the link can view this board.'}
                 </p>
+              </div>
+
+              <div role="group" aria-label="Starting layout">
+                <p className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
+                  Start from
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
+                  {[{ id: '', name: 'Blank board', useCase: 'An empty canvas' }, ...STARTER_LAYOUTS].map(layout => (
+                    <button
+                      key={layout.id || 'blank'}
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, starter: layout.id }))}
+                      aria-pressed={form.starter === layout.id}
+                      className="touch-target"
+                      style={{
+                        textAlign: 'left', padding: '10px 12px', borderRadius: 'var(--radius-lg)', cursor: 'pointer',
+                        background: form.starter === layout.id ? 'var(--color-surface-2)' : 'transparent',
+                        border: `1px solid ${form.starter === layout.id ? 'var(--color-brand)' : 'var(--color-hairline)'}`,
+                        color: 'var(--color-ink)', fontFamily: 'var(--font-body)',
+                      }}
+                    >
+                      <span style={{ display: 'block', fontSize: 13, fontWeight: 600 }}>{layout.name}</span>
+                      <span className="type-micro" style={{ display: 'block', marginTop: 2 }}>{layout.useCase}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {projectOptions.length > 0 && (

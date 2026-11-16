@@ -22,6 +22,7 @@ export function AssetLibrary({
   onSelect,
   isPersonalWorkspace = false,
   workspaceRole,
+  selectHint = 'add it to the board',
 }: {
   workspaceId: string;
   workspaceName: string;
@@ -30,11 +31,13 @@ export function AssetLibrary({
   workspaceRole?: 'owner' | 'admin' | 'member' | null;
   onClose: () => void;
   onSelect?: (asset: Asset) => void;
+  // What clicking an image does, shown in the subtitle (default: board insertion).
+  selectHint?: string;
 }) {
   return (
     <LibraryDialog
       title="Asset Library"
-      subtitle={onSelect ? `${workspaceName} · click an image to add it to the board` : workspaceName}
+      subtitle={onSelect ? `${workspaceName} · click an image to ${selectHint}` : workspaceName}
       onClose={onClose}
       maxWidth={920}
     >

@@ -41,6 +41,7 @@ export type PreviewItem = {
   p?: number[];        // path points, flattened [x0,y0,x1,y1,...], local to (x,y)
   hl?: boolean;        // highlighter stroke
   sw?: number;         // stroke width
+  cr?: [number, number, number, number]; // image crop, normalized [x0, y0, x1, y1] of the source image
 };
 
 export interface CanvasPreview {
@@ -103,6 +104,21 @@ function downsample(points: Array<{ x?: unknown; y?: unknown }>): number[] {
   return out;
 }
 
+// A cropped tldraw image shows only a sub-rectangle of its source, given as
+// normalized (0–1) topLeft/bottomRight corners. Without it the card preview
+// would squash the whole picture into the cropped box. Anything malformed or
+// a no-op (full image) yields undefined, i.e. "draw the whole image".
+function normalizedCrop(raw: unknown): [number, number, number, number] | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const { topLeft: tl, bottomRight: br } = raw as { topLeft?: { x?: unknown; y?: unknown }; bottomRight?: { x?: unknown; y?: unknown } };
+  if (!tl || !br) return undefined;
+  const x0 = num(tl.x, NaN), y0 = num(tl.y, NaN), x1 = num(br.x, NaN), y1 = num(br.y, NaN);
+  if ([x0, y0, x1, y1].some(Number.isNaN)) return undefined;
+  if (x0 < 0 || y0 < 0 || x1 > 1 || y1 > 1 || x1 - x0 < 0.01 || y1 - y0 < 0.01) return undefined;
+  if (x0 === 0 && y0 === 0 && x1 === 1 && y1 === 1) return undefined;
+  return [Math.round(x0 * 1000) / 1000, Math.round(y0 * 1000) / 1000, Math.round(x1 * 1000) / 1000, Math.round(y1 * 1000) / 1000];
+}
+
 // Local (shape-space) primitive for one shape, or null if it has no
 // drawable geometry (it may still count as an item).
 function localPrimitive(s: Rec, assets: Map<string, Rec>): Omit<PreviewItem, 'x' | 'y' | 'r'> | null {
@@ -119,7 +135,7 @@ function localPrimitive(s: Rec, assets: Map<string, Rec>): Omit<PreviewItem, 'x'
     case 'video': {
       const asset = typeof p.assetId === 'string' ? assets.get(p.assetId) : undefined;
       const src = asset?.props && typeof asset.props.src === 'string' ? asset.props.src : undefined;
-      return { k: 'image', w: num(p.w, 100), h: num(p.h, 100), src: src && /^https?:\/\//i.test(src) && src.length <= 2048 ? src : undefined };
+      return { k: 'image', w: num(p.w, 100), h: num(p.h, 100), src: src && /^https?:\/\//i.test(src) && src.length <= 2048 ? src : undefined, cr: normalizedCrop(p.crop) };
     }
     case 'note':
       return { k: 'note', w: 200 * scale, h: 200 * scale + num(p.growY), c: color, t: text };

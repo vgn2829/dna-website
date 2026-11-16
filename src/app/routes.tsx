@@ -12,6 +12,14 @@ import BoardPage from './pages/BoardPage';
 import { WorkspaceShell } from './components/shell/WorkspaceShell';
 import HomeShellPage from './pages/HomeShellPage';
 import AssetsPage from './pages/AssetsPage';
+import InspirationPage from './pages/InspirationPage';
+import ShowcasePage from './pages/ShowcasePage';
+import ShowcaseProjectPage from './pages/ShowcaseProjectPage';
+import ShowcaseManagePage from './pages/ShowcaseManagePage';
+import ShowcaseEditorPage from './pages/ShowcaseEditorPage';
+import CreatorsPage from './pages/CreatorsPage';
+import CreatorProfilePage from './pages/CreatorProfilePage';
+import ProfilePage from './pages/ProfilePage';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 import TemplatesPage from './pages/TemplatesPage';
@@ -44,6 +52,13 @@ export const router = createBrowserRouter([
       { path: 'academy', Component: AcademyPage },
       { path: 'resources', Component: ResourcesPage },
       { path: 'gallery', Component: GalleryPage },
+      // Public Showcase. 'showcase/manage…' (creator tools) is declared in the workspace shell below;
+      // the slug route can never shadow it because 'manage' is a reserved slug (backend slugify).
+      { path: 'showcase', Component: ShowcasePage },
+      { path: 'showcase/:slug', Component: ShowcaseProjectPage },
+      // Creator Discovery (public). /designers/:handle is the profile URL PR #100's credit chips already target.
+      { path: 'creators', Component: CreatorsPage },
+      { path: 'designers/:handle', Component: CreatorProfilePage },
       { path: 'events', Component: EventsPage },
       { path: 'team', Component: TeamPage },
       { path: 'palette', lazy: () => import('./pages/PalettePage').then(m => ({ Component: m.PalettePage })), hydrateFallbackElement: <RouteLoading />, errorElement: <RouteLoadError /> }, // PALETTE_STUDIO_FEATURE
@@ -66,6 +81,10 @@ export const router = createBrowserRouter([
           { path: 'home', Component: HomeShellPage },
           { path: 'moodboards', Component: MoodboardsPage },
           { path: 'assets', Component: AssetsPage },
+          { path: 'inspiration', Component: InspirationPage },
+          { path: 'profile', Component: ProfilePage },
+          { path: 'showcase/manage', Component: ShowcaseManagePage },
+          { path: 'showcase/manage/:id', Component: ShowcaseEditorPage },
           { path: 'projects', Component: ProjectsPage },
           { path: 'projects/:id', Component: ProjectDetailPage },
           { path: 'templates', Component: TemplatesPage },

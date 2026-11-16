@@ -27,7 +27,8 @@ function SessionGate({ isAdminPage }: { isAdminPage: boolean }) {
 // Root.tsx — every public/marketing route (/, /academy, /resources,
 // /gallery, /events, /team, /palette, /design-studio) and /admin keep
 // rendering through Root's existing chrome exactly as before.
-const WORKSPACE_SHELL_PREFIXES = ['/home', '/moodboards', '/assets', '/projects', '/templates'];
+// '/showcase/manage' = creator tools; the public /showcase and /showcase/:slug keep the public chrome.
+const WORKSPACE_SHELL_PREFIXES = ['/home', '/moodboards', '/assets', '/projects', '/templates', '/showcase/manage'];
 
 function isWorkspaceShellPath(pathname: string): boolean {
   // /moodboards/:id (the board canvas) is explicitly excluded — it keeps

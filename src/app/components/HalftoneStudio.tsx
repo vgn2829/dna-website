@@ -7,6 +7,7 @@ import { renderHalftone } from '../lib/halftone-job';
 import { downloadBlob, isAcceptableImage } from './background-removal/compositing';
 import { StudioRange } from './studio/StudioRange';
 import { Status } from './StudioUI';
+import { SaveToAssetsButton } from './assets/SaveToAssetsButton';
 
 const MAX_WORK = 700;
 
@@ -102,8 +103,10 @@ export function HalftoneStudio() {
   }, [img, settings]);
 
   useEffect(() => () => { ++sourceToken.current; releasePendingSource(); exportJob.current?.abort(); }, [releasePendingSource]);
-  const download = async (format: 'png' | 'svg' = 'png') => {
-    if (!img) return;
+  // Full-resolution render shared by Download and Save to Assets, so both
+  // always produce the identical file. Resolves null when superseded/cancelled.
+  const renderExport = async (format: 'png' | 'svg'): Promise<Blob | null> => {
+    if (!img) return null;
     exportJob.current?.abort(); const controller = new AbortController(); exportJob.current = controller;
     setExporting('Preparing full-resolution source'); setError(null);
     try {
@@ -111,9 +114,17 @@ export function HalftoneStudio() {
       const ctx = source.getContext('2d', { willReadFrequently: true })!; ctx.drawImage(img, 0, 0);
       const pixels = ctx.getImageData(0, 0, source.width, source.height);
       const blob = await renderHalftone(pixels, settings, format, controller.signal, setExporting);
-      if (!controller.signal.aborted) downloadBlob(blob, `halftone-${source.width}x${source.height}.${format}`);
-    } catch (reason) { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'Export failed'); }
-    finally { if (exportJob.current === controller) setExporting(''); }
+      return controller.signal.aborted ? null : blob;
+    } catch (reason) {
+      if (controller.signal.aborted) return null;
+      throw reason;
+    } finally { if (exportJob.current === controller) setExporting(''); }
+  };
+  const download = async (format: 'png' | 'svg' = 'png') => {
+    try {
+      const blob = await renderExport(format);
+      if (blob && img) downloadBlob(blob, `halftone-${img.naturalWidth}x${img.naturalHeight}.${format}`);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Export failed'); }
   };
 
   const onDrop = (e: React.DragEvent) => {
@@ -194,6 +205,7 @@ export function HalftoneStudio() {
             <Download size={14} aria-hidden="true" /> PNG
           </button>
           <button className="btn-translucent is-grow" disabled={!img || !!exporting} onClick={() => download('svg')}>Export vector SVG</button>
+          <SaveToAssetsButton tool="halftone" baseName={draftRef.current?.name ?? 'halftone'} getBlob={() => renderExport('png')} disabled={!img || !!exporting} />
           <button className="btn-translucent" onClick={() => setSettings(DEFAULTS)}>
             <RotateCcw size={14} aria-hidden="true" /> Reset
           </button>

@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router';
-import { Home, LayoutGrid, Image, FolderKanban, LayoutTemplate, X } from 'lucide-react';
+import { Home, LayoutGrid, Image, Lightbulb, FolderKanban, LayoutTemplate, Sparkles, UserRound, X } from 'lucide-react';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -20,8 +20,11 @@ const NAV_ITEMS = [
   { to: '/home', label: 'Overview', icon: Home },
   { to: '/moodboards', label: 'Moodboards', icon: LayoutGrid },
   { to: '/assets', label: 'Assets', icon: Image },
+  { to: '/inspiration', label: 'Inspiration', icon: Lightbulb },
+  { to: '/showcase/manage', label: 'Showcase', icon: Sparkles },
   { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/templates', label: 'Templates', icon: LayoutTemplate },
+  { to: '/profile', label: 'My profile', icon: UserRound },
 ];
 
 export function Sidebar({ onNavigate, onCloseMobile }: { onNavigate?: () => void; onCloseMobile?: () => void }) {

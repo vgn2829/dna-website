@@ -1,3 +1,7 @@
+import inspirationRouter from './routes/inspiration';
+import showcaseRouter from './routes/showcase';
+import showcaseCollabRouter from './routes/showcaseCollab';
+import creatorsRouter from './routes/creators';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -6,6 +10,7 @@ import path from 'path';
 import { authRouter }    from './routes/auth';
 import { eventsRouter }  from './routes/events';
 import { artworksRouter } from './routes/artworks';
+import { designersRouter } from './routes/designers';
 import { domainsRouter } from './routes/domains';
 import { studentsRouter } from './routes/students';
 import { teamRouter }    from './routes/team';
@@ -152,6 +157,7 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
   app.use('/api/auth',     authRouter);
   app.use('/api/events',   eventsRouter);
   app.use('/api/artworks', artworksRouter);
+  app.use('/api/designers', designersRouter);
   app.use('/api/domains',  domainsRouter);
   app.use('/api/students', studentsRouter);
   app.use('/api/team',     teamRouter);
@@ -162,6 +168,10 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
   app.use('/api/workspaces',    workspacesRouter);
   app.use('/api/assets',        assetsRouter);
   app.use('/api/asset-collections', assetCollectionsRouter);
+  app.use('/api/inspiration',   inspirationRouter);
+  app.use('/api/showcase/collab', showcaseCollabRouter);
+  app.use('/api/showcase',      showcaseRouter);
+  app.use('/api/creators',      creatorsRouter);
   app.use('/api/projects',      projectsRouter);
   app.use('/api/templates',     templatesRouter);
   app.use('/api/notifications', notificationsRouter);

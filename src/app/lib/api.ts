@@ -254,6 +254,8 @@ export interface CanvasPreviewItem {
   x: number; y: number; r: number; w: number; h: number;
   c?: string; g?: string; f?: string; src?: string; t?: string; fs?: number;
   p?: number[]; hl?: boolean; sw?: number;
+  /** Image crop as normalized [x0, y0, x1, y1] of the source image (absent = whole image). */
+  cr?: [number, number, number, number];
 }
 export interface CanvasPreview {
   v: 1;
@@ -297,6 +299,134 @@ export interface Asset {
 }
 
 export type AdminAsset = Asset & LibraryAdminExtra;
+
+// Inspiration Library (Milestone C) — mirrors backend/src/routes/inspiration.ts.
+// An item points at an Asset Library asset (`asset`, resolved against the
+// caller's CURRENT access: null + `unavailable` once it is no longer usable)
+// or at an external link (`url`, never fetched by the server).
+export type InspirationCategory =
+  | 'illustration' | 'typography' | 'branding' | 'ui-ux' | 'photography'
+  | 'color' | 'motion' | '3d' | 'layout' | 'other';
+export type InspirationSort = 'newest' | 'oldest' | 'title';
+export interface InspirationAsset {
+  id: string; kind: AssetKind; filename: string; url: string | null; thumb_url: string | null;
+  width: number | null; height: number | null; visibility: AssetVisibility;
+  extension: string | null; link_url: string | null; workspace_id: string;
+}
+export interface InspirationItem {
+  id: string;
+  kind: 'asset' | 'link';
+  title: string;
+  description: string | null;
+  category: InspirationCategory | null;
+  tags: string[];
+  url: string | null;
+  image_url: string | null;
+  asset: InspirationAsset | null;
+  unavailable: boolean;
+  collection_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+export interface InspirationCollection {
+  id: string; name: string; description: string | null; visibility: 'private';
+  item_count: number; created_at: string; updated_at: string;
+}
+export interface InspirationQuery {
+  q?: string; tags?: string[]; category?: InspirationCategory | 'none' | '';
+  kind?: 'asset' | 'link' | ''; collectionId?: string; sort?: InspirationSort;
+  limit?: number; offset?: number;
+}
+export interface InspirationFacets {
+  tags: Array<{ tag: string; count: number }>;
+  categories: Array<{ category: InspirationCategory; count: number }>;
+  total: number;
+}
+export type InspirationDraft = {
+  title?: string; description?: string | null; category?: InspirationCategory | null;
+  tags?: string[]; collection_ids?: string[];
+};
+// Public Project Showcase (Milestone D) — mirrors backend/src/routes/showcase.ts.
+export type ShowcaseStatus = 'draft' | 'submitted' | 'changes_requested' | 'approved' | 'published' | 'rejected' | 'archived';
+export type ShowcaseCategory = 'branding' | 'illustration' | 'ui-ux' | 'motion' | 'photography' | 'typography' | '3d' | 'print' | 'product' | 'other';
+export interface ShowcaseCredit { displayName: string | null; roleLabel: string | null; isOwner: boolean; profile?: { handle: string } }
+export interface ShowcaseCard {
+  slug: string; title: string; summary: string | null; category: ShowcaseCategory | null; tags: string[];
+  featured: boolean; publishedAt: string | null; disciplines: Array<{ id: string; title: string }>;
+  cover: { url: string; width: number | null; height: number | null } | null; credits: ShowcaseCredit[];
+}
+export interface ShowcaseDetail extends ShowcaseCard {
+  description: string | null; links: Array<{ label: string; url: string }>;
+  works: Array<{ url: string; caption: string | null; width: number | null; height: number | null }>;
+  artworks: Array<{ id: string; title: string; imageUrl: string | null; mediaType: string }>;
+}
+export interface ShowcaseQuery { q?: string; category?: string; discipline?: string; tags?: string[]; featured?: boolean; sort?: 'newest' | 'oldest' | 'title' | 'featured'; limit?: number; offset?: number }
+export interface ShowcaseFacets { categories: Array<{ category: ShowcaseCategory; count: number }>; disciplines: Array<{ id: string; title: string; count: number }>; tags: Array<{ tag: string; count: number }> }
+export interface ShowcaseOwnerCredit { id: string; roll: string | null; roleLabel: string | null; contribution: string | null; displayName: string | null; status: 'accepted' | 'pending' | 'declined'; isOwner: boolean }
+export interface ShowcaseOwnerWork { addedByYou: boolean; id: string; assetId: string | null; caption: string | null; isCover: boolean; position: number; filename: string | null; previewUrl: string | null; width: number | null; height: number | null; sourceMissing: boolean; published: boolean }
+export interface ShowcaseProject {
+  id: string; slug: string; title: string; summary: string | null; description: string | null; category: ShowcaseCategory | null;
+  tags: string[]; links: Array<{ label: string; url: string }>; status: ShowcaseStatus; reviewNote: string | null; featured: boolean;
+  submittedAt: string | null; publishedAt: string | null; createdAt: string; updatedAt: string; editable: boolean;
+  disciplines: Array<{ id: string; title: string }>; works: ShowcaseOwnerWork[]; credits: ShowcaseOwnerCredit[];
+  boards: Array<{ id: string; name: string }>; artworks: Array<{ id: string; title: string; image_url: string | null }>;
+  events: Array<{ from: ShowcaseStatus | null; to: ShowcaseStatus; by: 'student' | 'admin' | 'system'; reason: string | null; at: string }>;
+  problems: string[]; viewerIsOwner: boolean;
+  // Collaboration (Milestone F). `permissions` is the server's verdict for THIS viewer; the UI never re-derives it.
+  access: ProjectAccess; permissions: ProjectPermission[]; contentEditable: boolean; collaborators: ProjectCollaborator[];
+}
+export type ProjectAccess = 'owner' | 'editor' | 'viewer';
+export type ProjectPermission = 'view' | 'comment' | 'edit_content' | 'edit_works' | 'remove_any_work' | 'edit_references' | 'manage_collaborators' | 'manage_credits' | 'lifecycle' | 'delete_project' | 'moderate_comments';
+export interface ProjectCollaborator { id: string; name: string; accessRole: ProjectAccess; status: 'pending' | 'accepted'; isYou: boolean; invitedAt: string | null; roll?: string }
+export interface CollabInvitation { id: string; accessRole: 'editor' | 'viewer'; invitedAt: string; projectTitle: string; projectStatus: ShowcaseStatus; ownerName: string; creditProposed: boolean; creditRole: string | null }
+export interface SharedProject { id: string; slug: string; title: string; status: ShowcaseStatus; updatedAt: string; accessRole: 'editor' | 'viewer'; ownerName: string; coverUrl: string | null }
+export interface ProjectActivityItem { id: string; kind: string; at: string; actorName: string; you: boolean; detail: Record<string, unknown> }
+export interface ProjectComment { id: string; body: string; at: string; authorName: string; mine: boolean; canDelete: boolean }
+export interface CollabInviteBody { handle?: string; roll?: string; access_role: 'editor' | 'viewer'; role_label?: string | null; contribution?: string | null }
+export interface ShowcaseListItem { id: string; slug: string; title: string; status: ShowcaseStatus; reviewNote: string | null; updatedAt: string; coverUrl: string | null }
+export interface ShowcaseInvitation { id: string; status: 'pending' | 'accepted'; roleLabel: string | null; contribution: string | null; displayName: string | null; projectTitle: string; projectStatus: ShowcaseStatus; ownerName: string | null }
+export interface ShowcaseAdminItem { id: string; slug: string; title: string; status: ShowcaseStatus; category: ShowcaseCategory | null; featured: boolean; submittedAt: string | null; publishedAt: string | null; updatedAt: string; ownerName: string | null; ownerRoll: string }
+export interface ShowcasePatch {
+  title?: string; summary?: string | null; description?: string | null; category?: ShowcaseCategory | null; tags?: string[];
+  links?: Array<{ label?: string; url: string }>; discipline_ids?: string[]; owner_display_name?: string; owner_role_label?: string | null;
+}
+// Creator Discovery (Milestone E). The directory/featured/projects endpoints are
+// backend/src/routes/creators.ts; the single-profile + artwork endpoints are
+// PR #84's /api/designers/:handle (+ /works) contract.
+export interface CreatorDiscipline { id: string; title: string; color: string }
+export interface CreatorProjectThumb { slug: string; title: string; category: string | null; coverUrl: string | null }
+export interface CreatorCard {
+  handle: string; displayName: string; headline: string | null; bio: string | null; avatarUrl: string | null;
+  verified: boolean; featured: boolean; skills: string[]; disciplines: CreatorDiscipline[];
+  projectCount: number; projects: CreatorProjectThumb[];
+}
+export interface CreatorFacets {
+  total: number; disciplines: Array<CreatorDiscipline & { count: number }>;
+  skills: Array<{ skill: string; count: number }>; categories: Array<{ category: string; count: number }>;
+}
+export interface CreatorQuery { q?: string; discipline?: string; skill?: string; category?: string; sort?: 'featured' | 'name' | 'newest'; limit?: number; offset?: number }
+export interface CreatorCapabilities { profiles: boolean; projects: boolean; artworkCredits: boolean }
+export interface DesignerProfile {
+  handle: string; displayName: string; headline: string | null; bio: string | null; department: string | null; batch: string | null;
+  verified: boolean; avatarUrl: string | null; coverUrl: string | null; disciplines: CreatorDiscipline[]; skills: string[];
+  links: Array<{ kind: string; url: string }>; worksCount: number;
+}
+// Owner view of PR #84's /api/designers/me (never includes roll numbers or email).
+export type ProfileVisibility = 'private' | 'members' | 'public';
+export interface OwnerProfile extends DesignerProfile {
+  showBatch: boolean; visibility: ProfileVisibility; moderationStatus: 'active' | 'hidden';
+  handleChangeableAt: string | null; createdAt: string;
+}
+export interface ProfilePreview extends DesignerProfile { visibleToPublic: boolean }
+export interface MyArtworkCredit {
+  id: string; artworkId: string; artworkTitle: string; role: string; roleLabel: string | null;
+  status: 'pending' | 'accepted' | 'declined'; source: string; isPrimary: boolean; createdAt: string;
+}
+export interface ProfileUpdate { handle?: string; displayName?: string; headline?: string | null; bio?: string | null; department?: string | null; showBatch?: boolean }
+export interface DesignerWork { id: string; title: string; domain: string; mediaType: string; coverUrl: string | null; role: string; roleLabel: string | null; publishedAt: string }
+export interface CreatorProject { slug: string; title: string; summary: string | null; category: string | null; featured: boolean; publishedAt: string; roleLabel: string | null; isOwner: boolean; coverUrl: string | null }
+export interface CreatorAdminItem { id: string; handle: string; displayName: string; ownerRoll: string; verified: boolean; featured: boolean; featuredAt: string | null }
+
 
 function libraryAdminQuery(filters: LibraryAdminFilters): string {
   const params = new URLSearchParams();
@@ -1079,6 +1209,172 @@ export const api = {
       request<AssetCollection>('PATCH', `/asset-collections/${id}`, { roll, body }),
     delete: (roll: string, id: string) =>
       request<{ success: boolean; ungroupedAssets: number }>('DELETE', `/asset-collections/${id}`, { roll }),
+  },
+  // Inspiration Library (Milestone C) — see InspirationItem above.
+  inspiration: {
+    list: (roll: string, q: InspirationQuery = {}) => {
+      const p = new URLSearchParams();
+      if (q.q) p.set('q', q.q);
+      if (q.tags?.length) p.set('tag', q.tags.join(','));
+      if (q.category) p.set('category', q.category);
+      if (q.kind) p.set('kind', q.kind);
+      if (q.collectionId) p.set('collection_id', q.collectionId);
+      if (q.sort) p.set('sort', q.sort);
+      if (q.limit) p.set('limit', String(q.limit));
+      if (q.offset) p.set('offset', String(q.offset));
+      const qs = p.toString();
+      return request<{ items: InspirationItem[]; total: number; hasMore: boolean }>('GET', `/inspiration/items${qs ? `?${qs}` : ''}`, { roll });
+    },
+    facets: (roll: string) => request<InspirationFacets>('GET', '/inspiration/facets', { roll }),
+    saveAsset: (roll: string, assetId: string, draft: InspirationDraft = {}) =>
+      request<InspirationItem>('POST', '/inspiration/items', { roll, body: { kind: 'asset', asset_id: assetId, ...draft } }),
+    saveLink: (roll: string, link: { url: string; image_url?: string | null } & InspirationDraft) =>
+      request<InspirationItem>('POST', '/inspiration/items', { roll, body: { kind: 'link', ...link } }),
+    update: (roll: string, id: string, draft: InspirationDraft) =>
+      request<InspirationItem>('PATCH', `/inspiration/items/${id}`, { roll, body: draft }),
+    remove: (roll: string, id: string) =>
+      request<{ success: boolean }>('DELETE', `/inspiration/items/${id}`, { roll }),
+    collections: (roll: string) =>
+      request<{ collections: InspirationCollection[] }>('GET', '/inspiration/collections', { roll }),
+    createCollection: (roll: string, body: { name: string; description?: string | null }) =>
+      request<InspirationCollection>('POST', '/inspiration/collections', { roll, body }),
+    updateCollection: (roll: string, id: string, body: { name?: string; description?: string | null }) =>
+      request<InspirationCollection>('PATCH', `/inspiration/collections/${id}`, { roll, body }),
+    deleteCollection: (roll: string, id: string) =>
+      request<{ success: boolean }>('DELETE', `/inspiration/collections/${id}`, { roll }),
+    addToCollection: (roll: string, collectionId: string, itemId: string) =>
+      request<{ success: boolean }>('POST', `/inspiration/collections/${collectionId}/items`, { roll, body: { item_id: itemId } }),
+    removeFromCollection: (roll: string, collectionId: string, itemId: string) =>
+      request<{ success: boolean }>('DELETE', `/inspiration/collections/${collectionId}/items/${itemId}`, { roll }),
+  },
+  // Public Project Showcase (Milestone D).
+  showcase: {
+    // Public (no auth header): published projects only.
+    list: (q: ShowcaseQuery = {}) => {
+      const p = new URLSearchParams();
+      if (q.q) p.set('q', q.q);
+      if (q.category) p.set('category', q.category);
+      if (q.discipline) p.set('discipline', q.discipline);
+      if (q.tags?.length) p.set('tag', q.tags.join(','));
+      if (q.featured) p.set('featured', '1');
+      if (q.sort) p.set('sort', q.sort);
+      if (q.limit) p.set('limit', String(q.limit));
+      if (q.offset) p.set('offset', String(q.offset));
+      const qs = p.toString();
+      return request<{ projects: ShowcaseCard[]; total: number; hasMore: boolean }>('GET', `/showcase/projects${qs ? `?${qs}` : ''}`);
+    },
+    facets: () => request<ShowcaseFacets>('GET', '/showcase/facets'),
+    capabilities: () => request<{ profiles: boolean; artworkCredits: boolean }>('GET', '/showcase/capabilities'),
+    disciplines: () => request<{ disciplines: Array<{ id: string; title: string }> }>('GET', '/showcase/disciplines'),
+    get: (slug: string) => request<ShowcaseDetail>('GET', `/showcase/projects/${encodeURIComponent(slug)}`),
+    // Student (creator / contributor).
+    mine: (roll: string) => request<{ projects: ShowcaseListItem[] }>('GET', '/showcase/mine', { roll }),
+    create: (roll: string, title: string) => request<ShowcaseProject>('POST', '/showcase/mine', { roll, body: { title } }),
+    getMine: (roll: string, id: string) => request<ShowcaseProject>('GET', `/showcase/mine/${id}`, { roll }),
+    update: (roll: string, id: string, body: ShowcasePatch) => request<ShowcaseProject>('PATCH', `/showcase/mine/${id}`, { roll, body }),
+    setWorks: (roll: string, id: string, works: Array<{ asset_id: string; caption?: string | null; is_cover?: boolean }>) =>
+      request<ShowcaseProject>('PUT', `/showcase/mine/${id}/works`, { roll, body: { works } }),
+    setBoards: (roll: string, id: string, boardIds: string[]) => request<ShowcaseProject>('PUT', `/showcase/mine/${id}/boards`, { roll, body: { board_ids: boardIds } }),
+    setArtworks: (roll: string, id: string, ids: string[]) => request<ShowcaseProject>('PUT', `/showcase/mine/${id}/artworks`, { roll, body: { artwork_ids: ids } }),
+    invite: (roll: string, id: string, body: { roll: string; role_label?: string | null; contribution?: string | null }) => request<ShowcaseProject>('POST', `/showcase/mine/${id}/credits`, { roll, body }),
+    editCredit: (roll: string, id: string, creditId: string, body: { role_label?: string | null; contribution?: string | null }) => request<ShowcaseProject>('PATCH', `/showcase/mine/${id}/credits/${creditId}`, { roll, body }),
+    removeCredit: (roll: string, id: string, creditId: string) => request<ShowcaseProject>('DELETE', `/showcase/mine/${id}/credits/${creditId}`, { roll }),
+    action: (roll: string, id: string, action: 'submit' | 'withdraw' | 'archive' | 'reopen') =>
+      request<ShowcaseProject>('POST', `/showcase/mine/${id}/${action}`, { roll, body: {} }),
+    remove: (roll: string, id: string) => request<{ success: boolean }>('DELETE', `/showcase/mine/${id}`, { roll }),
+    invitations: (roll: string) => request<{ invitations: ShowcaseInvitation[] }>('GET', '/showcase/invitations', { roll }),
+    accept: (roll: string, creditId: string, displayName: string) => request<{ success: boolean }>('POST', `/showcase/invitations/${creditId}/accept`, { roll, body: { display_name: displayName } }),
+    decline: (roll: string, creditId: string) => request<{ success: boolean }>('POST', `/showcase/invitations/${creditId}/decline`, { roll, body: {} }),
+    // Admin.
+    adminList: (status?: ShowcaseStatus | '', q?: string) => {
+      const p = new URLSearchParams();
+      if (status) p.set('status', status);
+      if (q) p.set('q', q);
+      const qs = p.toString();
+      return request<{ projects: ShowcaseAdminItem[] }>('GET', `/showcase/admin/projects${qs ? `?${qs}` : ''}`, { admin: true });
+    },
+    adminGet: (id: string) => request<ShowcaseProject>('GET', `/showcase/admin/projects/${id}`, { admin: true }),
+    adminTransition: (id: string, to: ShowcaseStatus, reason?: string) => request<ShowcaseProject>('POST', `/showcase/admin/projects/${id}/transition`, { admin: true, body: { to, reason } }),
+    // Collaboration (Milestone F) — mirrors backend/src/routes/showcaseCollab.ts.
+    collab: {
+      invitations: (roll: string) => request<{ invitations: CollabInvitation[] }>('GET', '/showcase/collab/invitations', { roll }),
+      shared: (roll: string) => request<{ projects: SharedProject[] }>('GET', '/showcase/collab/shared', { roll }),
+      invite: (roll: string, projectId: string, body: CollabInviteBody) => request<{ collaborators: ProjectCollaborator[] }>('POST', `/showcase/collab/projects/${projectId}/collaborators`, { roll, body }),
+      setRole: (roll: string, projectId: string, collaboratorId: string, accessRole: 'editor' | 'viewer') =>
+        request<{ collaborators: ProjectCollaborator[] }>('PATCH', `/showcase/collab/projects/${projectId}/collaborators/${collaboratorId}`, { roll, body: { access_role: accessRole } }),
+      remove: (roll: string, projectId: string, collaboratorId: string) => request<{ collaborators: ProjectCollaborator[] }>('DELETE', `/showcase/collab/projects/${projectId}/collaborators/${collaboratorId}`, { roll }),
+      accept: (roll: string, invitationId: string, displayName?: string) => request<{ success: boolean; projectId: string; credited: boolean }>('POST', `/showcase/collab/invitations/${invitationId}/accept`, { roll, body: displayName ? { display_name: displayName } : {} }),
+      decline: (roll: string, invitationId: string, block = false) => request<{ success: boolean; blocked: boolean }>('POST', `/showcase/collab/invitations/${invitationId}/decline`, { roll, body: block ? { block: true } : {} }),
+      leave: (roll: string, projectId: string) => request<{ success: boolean }>('POST', `/showcase/collab/projects/${projectId}/leave`, { roll, body: {} }),
+      activity: (roll: string, projectId: string, before?: string) => request<{ items: ProjectActivityItem[]; next: string | null }>('GET', `/showcase/collab/projects/${projectId}/activity${before ? `?before=${encodeURIComponent(before)}` : ''}`, { roll }),
+      comments: (roll: string, projectId: string) => request<{ comments: ProjectComment[] }>('GET', `/showcase/collab/projects/${projectId}/comments`, { roll }),
+      addComment: (roll: string, projectId: string, body: string) => request<{ id: string }>('POST', `/showcase/collab/projects/${projectId}/comments`, { roll, body: { body } }),
+      deleteComment: (roll: string, projectId: string, commentId: string) => request<{ success: boolean }>('DELETE', `/showcase/collab/projects/${projectId}/comments/${commentId}`, { roll }),
+      blocks: (roll: string) => request<{ blocks: Array<{ id: string; name: string }> }>('GET', '/showcase/collab/blocks', { roll }),
+      unblock: (roll: string, id: string) => request<{ success: boolean }>('DELETE', `/showcase/collab/blocks/${id}`, { roll }),
+    },
+    adminFeature: (id: string, featured: boolean) => request<ShowcaseProject>('POST', `/showcase/admin/projects/${id}/feature`, { admin: true, body: { featured } }),
+  },
+  // Creator Discovery (Milestone E).
+  creators: {
+    capabilities: () => request<CreatorCapabilities>('GET', '/creators/capabilities'),
+    list: (q: CreatorQuery = {}) => {
+      const p = new URLSearchParams();
+      if (q.q) p.set('q', q.q);
+      if (q.discipline) p.set('discipline', q.discipline);
+      if (q.skill) p.set('skill', q.skill);
+      if (q.category) p.set('category', q.category);
+      if (q.sort) p.set('sort', q.sort);
+      if (q.limit) p.set('limit', String(q.limit));
+      if (q.offset) p.set('offset', String(q.offset));
+      const qs = p.toString();
+      return request<{ creators: CreatorCard[]; total: number; hasMore: boolean }>('GET', `/creators${qs ? `?${qs}` : ''}`);
+    },
+    facets: () => request<CreatorFacets>('GET', '/creators/facets'),
+    featured: () => request<{ creators: CreatorCard[] }>('GET', '/creators/featured'),
+    projects: (handle: string, offset = 0) =>
+      request<{ projects: CreatorProject[]; total: number; hasMore: boolean }>('GET', `/creators/${encodeURIComponent(handle)}/projects?limit=12&offset=${offset}`),
+    adminList: (q?: string, featuredOnly?: boolean) => {
+      const p = new URLSearchParams();
+      if (q) p.set('q', q);
+      if (featuredOnly) p.set('featured', '1');
+      const qs = p.toString();
+      return request<{ creators: CreatorAdminItem[]; featuredCount: number; max: number; available: boolean }>('GET', `/creators/admin/list${qs ? `?${qs}` : ''}`, { admin: true });
+    },
+    adminFeature: (id: string, featured: boolean) =>
+      request<{ featured: boolean; changed: boolean }>('PUT', `/creators/admin/${id}/featured`, { admin: true, body: { featured } }),
+  },
+  // PR #84's public profile contract (backend-only there; this milestone adds the UI).
+  designers: {
+    get: (handle: string) => request<DesignerProfile>('GET', `/designers/${encodeURIComponent(handle)}`),
+    works: (handle: string, cursor?: string) =>
+      request<{ items: DesignerWork[]; next: string | null }>('GET', `/designers/${encodeURIComponent(handle)}/works?limit=12${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),
+    // ── Owner (the signed-in student's own profile). Ownership comes from the token; no id is ever sent. ──
+    me: (roll: string) => request<OwnerProfile | null>('GET', '/designers/me', { roll }),
+    create: (roll: string, body: { handle: string; displayName: string; headline?: string; bio?: string; department?: string; showBatch?: boolean }) =>
+      request<OwnerProfile>('POST', '/designers/me', { roll, body }),
+    update: (roll: string, body: ProfileUpdate) => request<OwnerProfile>('PATCH', '/designers/me', { roll, body }),
+    setLinks: (roll: string, links: Array<{ kind: string; url: string }>) => request<{ links: Array<{ kind: string; url: string }> }>('PUT', '/designers/me/links', { roll, body: { links } }),
+    setDisciplines: (roll: string, domainIds: string[]) => request<{ domainIds: string[] }>('PUT', '/designers/me/disciplines', { roll, body: { domainIds } }),
+    setSkills: (roll: string, skills: string[]) => request<{ skills: string[] }>('PUT', '/designers/me/skills', { roll, body: { skills } }),
+    setVisibility: (roll: string, visibility: ProfileVisibility) => request<{ visibility: ProfileVisibility }>('PATCH', '/designers/me/visibility', { roll, body: { visibility } }),
+    preview: (roll: string) => request<ProfilePreview>('GET', '/designers/me/preview', { roll }),
+    handleAvailable: (roll: string, handle: string) =>
+      request<{ available: boolean; reason?: string }>('GET', `/designers/handle-available?handle=${encodeURIComponent(handle)}`, { roll }),
+    credits: (roll: string) => request<MyArtworkCredit[]>('GET', '/designers/me/credits', { roll }),
+    respondToCredit: (roll: string, creditId: string, accept: boolean) =>
+      request<{ id: string; status: string; changed: boolean }>('POST', `/designers/me/credits/${creditId}/respond`, { roll, body: { accept } }),
+    uploadAvatar: async (file: File): Promise<{ avatarUrl: string | null }> => {
+      const fd = new FormData();
+      fd.append('avatar', file);
+      const tok = getStudentToken();
+      const res = await sendUpload('/designers/me/avatar', { method: 'POST', headers: tok ? { Authorization: `Bearer ${tok}` } : {}, body: fd });
+      const data = await res.json().catch(() => ({})) as { avatarUrl?: string | null; error?: string };
+      if (res.status === 401) { clearStudentToken(); throw new Error('SESSION_EXPIRED'); }
+      if (!res.ok) throw new Error(data.error ?? 'Upload failed — please try again');
+      return { avatarUrl: data.avatarUrl ?? null };
+    },
+    removeAvatar: (roll: string) => request<{ avatarUrl: null }>('DELETE', '/designers/me/avatar', { roll }),
   },
   // Basic Notifications (Phase C) — mirrors backend/src/routes/notifications.ts.
   // No realtime channel: the panel refetches on open (see NotificationBell.tsx).

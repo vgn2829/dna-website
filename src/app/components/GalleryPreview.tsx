@@ -4,6 +4,7 @@ import { ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAppData, type Artwork } from '../context/AppDataContext';
 import { thumbUrl } from '../lib/utils';
+import { bylineText } from '../lib/creators';
 
 function ArtworkCard({ a, i }: { a: Artwork; i: number }) {
   const navigate = useNavigate();
@@ -36,7 +37,7 @@ function ArtworkCard({ a, i }: { a: Artwork; i: number }) {
       </div>
       <div style={{ padding: '20px 20px 24px' }}>
         <h3 className="type-display-md" style={{ marginBottom: 4, fontSize: 20, textTransform: forceUpper ? 'uppercase' : 'none' }}>{a.title}</h3>
-        {a.artist?.trim() && <p className="type-caption" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>by {a.artist}</p>}
+        {bylineText(a) && <p className="type-caption" style={{ textTransform: forceUpper ? 'uppercase' : 'none' }}>by {bylineText(a)}</p>}
       </div>
     </motion.div>
   );
