@@ -53,7 +53,7 @@ export function StarterPicker({ value, onChange }: { value: string; onChange: (i
                 {full ? <StarterThumbnail layout={full} /> : <span className="type-micro">Empty</span>}
               </span>
               <span className="starter-name">{layout.name}</span>
-              <span className="type-micro starter-use">{layout.useCase}{full ? ` · ${slots} image slot${slots === 1 ? '' : 's'}` : ''}</span>
+              <span className="type-micro starter-use">{layout.useCase}{full && slots > 0 ? ` · ${slots} image slot${slots === 1 ? '' : 's'}` : ''}</span>
             </label>
           );
         })}

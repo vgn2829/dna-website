@@ -30,6 +30,7 @@ describe('StarterPicker', () => {
     expect(host.querySelectorAll('svg[role="img"]')).toHaveLength(STARTER_LAYOUTS.length);
     expect(host.querySelector('svg[aria-label="Storyboard layout preview"]')).not.toBeNull();
     expect(host.textContent).toMatch(/Animation, comics and video planning · 6 image slots/);
+    expect(host.textContent).not.toMatch(/\b0 image slots/);                   // a layout with no slots doesn't advertise "0"
   });
   it('selecting a starter reports its id and describes it; selecting Blank reports the empty id', async () => {
     const { host, radios, seen } = await mount();

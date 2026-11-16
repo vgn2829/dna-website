@@ -518,6 +518,17 @@ export default function BoardPage() {
   // Organization tools (Milestone B). Tidy acts on a selection of 2+ items or
   // else the whole page; wrap needs a selection. Both are one undo step and
   // go through the normal editor store, so saving/sync behave as for any edit.
+  // Opens the full-size image viewer on every image on the board (desktop button and the
+  // compact-header menu share this). tldraw helpers load on demand, like the other board tools.
+  const openImageViewer = async () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const { collectBoardImages } = await import('../lib/tldrawBoardTools');
+    const items = collectBoardImages(editor);
+    if (items.length === 0) { toast('No images on this board yet'); return; }
+    setLightbox({ items, index: startIndexFor(items, editor.getSelectedShapeIds()) });
+  };
+
   const runArrange = async (which: 'tidy' | 'frame') => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -843,14 +854,7 @@ export default function BoardPage() {
                 )}
 
                 <button
-                  onClick={async () => {
-                    const editor = editorRef.current;
-                    if (!editor) return;
-                    const { collectBoardImages } = await import('../lib/tldrawBoardTools');
-                    const items = collectBoardImages(editor);
-                    if (items.length === 0) { toast('No images on this board yet'); return; }
-                    setLightbox({ items, index: startIndexFor(items, editor.getSelectedShapeIds()) });
-                  }}
+                  onClick={openImageViewer}
                   title="View the images on this board full size"
                   aria-label="View board images"
                   className="btn-translucent btn-sm touch-target"
@@ -931,6 +935,9 @@ export default function BoardPage() {
                         </DropdownMenu.Item>
                       </>
                     )}
+                    <DropdownMenu.Item className="dna-menu-item" onSelect={() => void openImageViewer()}>
+                      <ImageIcon size={15} /> View board images
+                    </DropdownMenu.Item>
                     <DropdownMenu.Item className="dna-menu-item" onSelect={() => setShowExport(true)}>
                       <Download size={15} /> Export as image
                     </DropdownMenu.Item>
