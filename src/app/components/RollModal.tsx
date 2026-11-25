@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -33,6 +34,13 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
   const [shake, setShake] = useState(false);
   const [bypassEnabled, setBypassEnabled] = useState(false);
   const [bypassing, setBypassing] = useState(false);
+  // True when the OTP step was reached via the profile step (new-student
+  // registration). False for returning students whose email is server-controlled.
+  const [isNewStudentFlow, setIsNewStudentFlow] = useState(false);
+  // Tracks when the student returned from OTP to fix their email, so we can
+  // make clear that the previous OTP is invalidated once a new code is sent.
+  const [emailCorrectionNotice, setEmailCorrectionNotice] = useState(false);
+  const [otpReplacedNotice, setOtpReplacedNotice] = useState(false);
 
   // Temporary email-delivery-incident bypass — only shown if an admin has
   // turned it on server-side (see AdminPage's SettingsTab). Checked whenever
@@ -48,7 +56,8 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
     setStep('roll');
     setRoll(''); setName(''); setEmail(''); setCode('');
     setMaskedEmail(''); setCheckError(''); setRollError(''); setOtpError('');
-    setChecking(false);
+    setChecking(false); setIsNewStudentFlow(false);
+    setEmailCorrectionNotice(false); setOtpReplacedNotice(false);
   };
 
   useEffect(() => {
@@ -75,8 +84,14 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
         const r = await api.students.requestOtp(check.value);
         setMaskedEmail(r.email);
         setCode('');
+        setIsNewStudentFlow(false);
+        setEmailCorrectionNotice(false);
+        setOtpReplacedNotice(false);
         setStep('otp');
       } else {
+        setIsNewStudentFlow(true);
+        setEmailCorrectionNotice(false);
+        setOtpReplacedNotice(false);
         setStep('profile');
       }
     } catch (err) {
@@ -88,13 +103,15 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
 
   // Step 2 (new users) → send the code to the email they entered.
   const handleSendCode = async () => {
-    if (!roll || !name.trim() || !email.endsWith('@iitk.ac.in')) return;
+    if (submitting || !roll || !name.trim() || !email.endsWith('@iitk.ac.in')) return;
     setSubmitting(true);
     setCheckError('');
     try {
       const r = await api.students.requestOtp(roll.trim(), { name: name.trim(), email: email.trim() });
       setMaskedEmail(r.email);
       setCode('');
+      setOtpReplacedNotice(emailCorrectionNotice);
+      setEmailCorrectionNotice(false);
       setStep('otp');
     } catch (err) {
       setCheckError(errMsg(err, 'Could not send the code. Try again.'));
@@ -107,7 +124,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
 
   // Step 3 → verify the code; on success we receive a signed token.
   const handleVerify = async () => {
-    if (!/^[0-9]{6}$/.test(code)) return;
+    if (verifying || !/^[0-9]{6}$/.test(code)) return;
     setVerifying(true);
     setOtpError('');
     try {
@@ -131,6 +148,23 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
     } finally {
       setVerifying(false);
     }
+  };
+
+  // Return to the profile step to correct the email address. The roll number
+  // is retained and cannot be edited from there. The backend will supersede
+  // the previous OTP when a fresh request-otp is submitted with the corrected
+  // address (ON CONFLICT DO UPDATE). Only available for the new-student flow
+  // because returning students' email is server-controlled.
+  const handleChangeEmail = () => {
+    refocusEmailRef.current = true;
+    setEmailCorrectionNotice(true);
+    setOtpReplacedNotice(false);
+    setStep('profile');
+    setCode('');
+    setOtpError('');
+    setCheckError('');
+    // Keep name and email pre-filled so the student only needs to correct
+    // the email, not retype everything.
   };
 
   // Temporary bypass: skip OTP entirely for an already-registered roll number.
@@ -175,6 +209,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
   // Not autoFocus: that would run before useModalA11y records the opener,
   // so focus could not return to it on close.
   const refocusRollRef = useRef(false);
+  const refocusEmailRef = useRef(false);
 
   // While the dialog is open the page behind it (everything under #root —
   // the dialog itself is portalled to <body>) is inert: not focusable,
@@ -394,12 +429,16 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                         <div>
                           <label htmlFor={emailInputId} style={label}>IITK Email</label>
                           <input
+                            ref={el => {
+                              if (el && refocusEmailRef.current) { refocusEmailRef.current = false; el.focus(); }
+                            }}
                             id={emailInputId}
                             className="input-base"
                             type="email"
                             placeholder="e.g. yourname23@iitk.ac.in"
                             value={email}
-                            onChange={e => setEmail(e.target.value.toLowerCase())}
+                            onChange={e => { setEmail(e.target.value.toLowerCase()); setCheckError(''); }}
+                            onKeyDown={e => { if (e.key === 'Enter') handleSendCode(); }}
                             style={{ width: '100%', boxSizing: 'border-box' }}
                           />
                           {email && !email.endsWith('@iitk.ac.in') && (
@@ -410,7 +449,9 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                         </div>
 
                         <p className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>
-                          We'll email a 6-digit code to verify it's you. No password needed.
+                          {emailCorrectionNotice
+                            ? 'Sending a new code will invalidate your previous verification code.'
+                            : "We'll email a 6-digit code to verify it's you. No password needed."}
                         </p>
 
                         {checkError && (
@@ -439,7 +480,9 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                         style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
                       >
                         <p className="type-micro" style={{ color: 'var(--color-ink-muted)', margin: 0 }}>
-                          Enter the 6-digit code sent to <strong>{maskedEmail}</strong>.
+                          {otpReplacedNotice
+                            ? <>A new 6-digit code was sent to <strong>{maskedEmail}</strong>. Your previous code is no longer valid.</>
+                            : <>Enter the 6-digit code sent to <strong>{maskedEmail}</strong>.</>}
                         </p>
                         <div>
                           <label htmlFor={codeInputId} style={label}>Verification Code</label>
@@ -469,17 +512,40 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                         >
                           {verifying ? 'Verifying...' : 'Verify & Continue'}
                         </button>
-                        <button
-                          onClick={() => { refocusRollRef.current = true; setStep('roll'); setCode(''); setOtpError(''); }}
-                          style={{
-                            fontSize: 12, color: 'var(--color-ink-muted)',
-                            background: 'none', border: 'none',
-                            fontFamily: 'var(--font-body)', cursor: 'pointer',
-                          }}
-                          className="touch-target"
-                        >
-                          Use a different roll number
-                        </button>
+                        {/* Secondary actions — visually below the primary button */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {/* Change email: only shown for the new-student registration flow.
+                              Returning students' email is server-controlled and can be
+                              changed after sign-in via the profile settings. */}
+                          {isNewStudentFlow && (
+                            <div style={{ fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', textAlign: 'center' }}>
+                              Entered the wrong email?{' '}
+                              <button
+                                onClick={handleChangeEmail}
+                                style={{
+                                  fontSize: 12, color: 'var(--color-ink-muted)',
+                                  background: 'none', border: 'none',
+                                  fontFamily: 'var(--font-body)', cursor: 'pointer',
+                                  textDecoration: 'underline', padding: 0,
+                                }}
+                                className="touch-target"
+                              >
+                                Change email address
+                              </button>
+                            </div>
+                          )}
+                          <button
+                            onClick={() => { refocusRollRef.current = true; setStep('roll'); setCode(''); setOtpError(''); }}
+                            style={{
+                              fontSize: 12, color: 'var(--color-ink-muted)',
+                              background: 'none', border: 'none',
+                              fontFamily: 'var(--font-body)', cursor: 'pointer',
+                            }}
+                            className="touch-target"
+                          >
+                            Use a different roll number
+                          </button>
+                        </div>
 
                         {bypassEnabled && (
                           <div style={{
