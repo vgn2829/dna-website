@@ -27,6 +27,9 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
   const [shake, setShake] = useState(false);
   const [bypassEnabled, setBypassEnabled] = useState(false);
   const [bypassing, setBypassing] = useState(false);
+  // True when the OTP step was reached via the profile step (new-student
+  // registration). False for returning students whose email is server-controlled.
+  const [isNewStudentFlow, setIsNewStudentFlow] = useState(false);
 
   // Temporary email-delivery-incident bypass — only shown if an admin has
   // turned it on server-side (see AdminPage's SettingsTab). Checked whenever
@@ -42,7 +45,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
     setStep('roll');
     setRoll(''); setName(''); setEmail(''); setCode('');
     setMaskedEmail(''); setCheckError(''); setOtpError('');
-    setChecking(false);
+    setChecking(false); setIsNewStudentFlow(false);
   };
 
   useEffect(() => {
@@ -63,8 +66,10 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
         const r = await api.students.requestOtp(roll.trim());
         setMaskedEmail(r.email);
         setCode('');
+        setIsNewStudentFlow(false);
         setStep('otp');
       } else {
+        setIsNewStudentFlow(true);
         setStep('profile');
       }
     } catch (err) {
@@ -119,6 +124,19 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
     } finally {
       setVerifying(false);
     }
+  };
+
+  // Return to the profile step to correct the email address. The roll number
+  // is retained and cannot be edited from there. The backend will supersede
+  // the previous OTP when a fresh request-otp is submitted with the corrected
+  // address (ON CONFLICT DO UPDATE). Only available for the new-student flow
+  // because returning students' email is server-controlled.
+  const handleChangeEmail = () => {
+    setStep('profile');
+    setCode('');
+    setOtpError('');
+    // Keep name and email pre-filled so the student only needs to correct
+    // the email, not retype everything.
   };
 
   // Temporary bypass: skip OTP entirely for an already-registered roll number.
@@ -403,16 +421,39 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                         >
                           {verifying ? 'Verifying...' : 'Verify & Continue'}
                         </button>
-                        <button
-                          onClick={() => { setStep('roll'); setCode(''); setOtpError(''); }}
-                          style={{
-                            fontSize: 12, color: 'var(--color-ink-muted)',
-                            background: 'none', border: 'none',
-                            fontFamily: 'var(--font-body)', cursor: 'pointer',
-                          }}
-                        >
-                          Use a different roll number
-                        </button>
+
+                        {/* Secondary actions — visually below the primary button */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {/* Change email: only shown for the new-student registration flow.
+                              Returning students' email is server-controlled and can be
+                              changed after sign-in via the profile settings. */}
+                          {isNewStudentFlow && (
+                            <div style={{ fontSize: 12, color: 'var(--color-ink-muted)', fontFamily: 'var(--font-body)', textAlign: 'center' }}>
+                              Entered the wrong email?{' '}
+                              <button
+                                onClick={handleChangeEmail}
+                                style={{
+                                  fontSize: 12, color: 'var(--color-ink-muted)',
+                                  background: 'none', border: 'none',
+                                  fontFamily: 'var(--font-body)', cursor: 'pointer',
+                                  textDecoration: 'underline', padding: 0,
+                                }}
+                              >
+                                Change email address
+                              </button>
+                            </div>
+                          )}
+                          <button
+                            onClick={() => { setStep('roll'); setCode(''); setOtpError(''); }}
+                            style={{
+                              fontSize: 12, color: 'var(--color-ink-muted)',
+                              background: 'none', border: 'none',
+                              fontFamily: 'var(--font-body)', cursor: 'pointer',
+                            }}
+                          >
+                            Use a different roll number
+                          </button>
+                        </div>
 
                         {bypassEnabled && (
                           <div style={{

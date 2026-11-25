@@ -172,4 +172,82 @@ describe('Student OTP auth flow', () => {
       .send({ rollNumber: '23xyz09', name: 'X', email: 'x@gmail.com' });
     expect(res.status).toBe(400);
   });
+
+  // ── Email correction in the new-student registration flow ──────────────────
+  // When a student at the OTP screen realises they entered the wrong email,
+  // the frontend returns them to the profile step and they re-submit
+  // request-otp with the corrected address. The backend must:
+  //   1. Accept the corrected request and supersede the previous OTP.
+  //   2. Reject the old code (the previous OTP row is fully replaced).
+  //   3. Accept the new (seeded) code at the corrected email.
+  //   4. Reject non-IITK addresses in the corrected request.
+  //   5. Not allow an existing student's email to be re-submitted as a new address.
+  it('email correction: re-submitting request-otp with a corrected address supersedes the previous OTP for a new student', async () => {
+    const roll = '23xyz10';
+
+    // First request — wrong email
+    const first = await request(app)
+      .post('/api/auth/student/request-otp')
+      .send({ rollNumber: roll, name: 'Correction Test', email: 'wrong@iitk.ac.in' });
+    expect(first.status).toBe(200);
+    expect(first.body.email).toMatch(/^w\*+@iitk\.ac\.in$/);
+
+    // Seed the first OTP so we can reference its known code later
+    await seedOtp(roll.toUpperCase(), '111111', { email: 'wrong@iitk.ac.in', name: 'Correction Test' });
+
+    // Second request — corrected email (simulates "Change email address" action)
+    const second = await request(app)
+      .post('/api/auth/student/request-otp')
+      .send({ rollNumber: roll, name: 'Correction Test', email: 'correct@iitk.ac.in' });
+    expect(second.status).toBe(200);
+    expect(second.body.email).toMatch(/^c\*+@iitk\.ac\.in$/);
+
+    // Seed the second OTP with a known code at the corrected email
+    await seedOtp(roll.toUpperCase(), '222222', { email: 'correct@iitk.ac.in', name: 'Correction Test' });
+
+    // The old code (111111) must no longer work because the OTP row is replaced
+    const oldCode = await request(app)
+      .post('/api/auth/student/verify-otp')
+      .send({ rollNumber: roll, code: '111111' });
+    expect(oldCode.status).toBe(400); // wrong code for the replaced row
+
+    // The new code (222222) must succeed and register the corrected email
+    const newCode = await request(app)
+      .post('/api/auth/student/verify-otp')
+      .send({ rollNumber: roll, code: '222222' });
+    expect(newCode.status).toBe(200);
+    expect(newCode.body.session.email).toBe('correct@iitk.ac.in');
+  });
+
+  it('email correction: a non-IITK address in the corrected request is rejected', async () => {
+    const res = await request(app)
+      .post('/api/auth/student/request-otp')
+      .send({ rollNumber: '23xyz11', name: 'X', email: 'corrected@gmail.com' });
+    expect(res.status).toBe(400);
+  });
+
+  it('email correction: an existing registered student cannot be redirected through a new-student request', async () => {
+    // Insert a registered student
+    const roll = '23XYZ12';
+    await query(
+      `INSERT INTO student_sessions(roll_number, unique_id, registered_at, name, email)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [roll, `IITK-DnA-${roll}-BBBB`, '01 Jan 2026', 'Existing Student', 'existing@iitk.ac.in']
+    );
+
+    // Attempt to re-register the existing roll number via the new-student path
+    // (supplying a different email) — the server must ignore the supplied email
+    // and send to the address already on file.
+    const res = await request(app)
+      .post('/api/auth/student/request-otp')
+      .send({ rollNumber: roll, name: 'Existing Student', email: 'attacker2@iitk.ac.in' });
+    expect(res.status).toBe(200);
+    // Masked email must start with the first character of 'existing', not 'attacker2'
+    expect(res.body.email).toMatch(/^e\*+@iitk\.ac\.in$/);
+
+    const rows = await query<{ email: string }>(
+      'SELECT email FROM student_otps WHERE roll_number = $1', [roll]
+    );
+    expect(rows[0].email).toBe('existing@iitk.ac.in');
+  });
 });
