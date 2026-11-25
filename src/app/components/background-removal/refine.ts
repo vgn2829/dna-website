@@ -83,7 +83,7 @@ export function recompositeRegion(
       out[di] = src[si];
       out[di + 1] = src[si + 1];
       out[di + 2] = src[si + 2];
-      out[di + 3] = mask[sy * w + sx];
+      out[di + 3] = Math.round(src[si + 3] * mask[sy * w + sx] / 255);
     }
   }
   canvas.getContext('2d')!.putImageData(new ImageData(out, rw, rh), r.x0, r.y0);

@@ -1,0 +1,47 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+$ vite build
+vite v6.4.3 building for production...
+transforming...
+
+new URL('vtracer_bg.wasm', import.meta.url) doesn't exist at build time, it will remain unchanged to be resolved at runtime. If this is intended, you can use the /* @vite-ignore */ comment to suppress this warning.
+✓ 3711 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                        4.10 kB │ gzip:     1.37 kB
+dist/static/vectorize.worker-lLqv4S3T.js               7.25 kB
+dist/static/bg-removal.worker-D81s6KRu.js             75.86 kB
+dist/static/vtracer-CMOpYs3R.wasm                    136.86 kB │ gzip:    59.63 kB
+dist/static/pdf.worker.min-DEtVeC4l.mjs            1,255.07 kB
+dist/static/ort-wasm-simd-threaded-Cpm-ox6i.wasm  13,479.98 kB │ gzip: 3,461.77 kB
+dist/static/AdminPage-DDbXBANV.css                     5.02 kB │ gzip:     1.19 kB
+dist/static/CommentsOverlay-DjABIUTS.css              67.68 kB │ gzip:    12.94 kB
+dist/static/index-CDvFHsw8.css                       109.06 kB │ gzip:    18.31 kB
+dist/static/pdf.worker.min-CWLy4k9d.js                 0.07 kB │ gzip:     0.09 kB
+dist/static/info-B3HsvnGz.js                           0.37 kB │ gzip:     0.28 kB
+dist/static/upload-B8ysZcpg.js                         0.43 kB │ gzip:     0.32 kB
+dist/static/triangle-alert-BlrAd5Ad.js                 0.44 kB │ gzip:     0.32 kB
+dist/static/PalettePage-CtTIPDCu.js                    0.68 kB │ gzip:     0.47 kB
+dist/static/TldrawCanvas-C5FDIv3J.js                   2.81 kB │ gzip:     1.26 kB
+dist/static/index-B1fwqPMz.js                          2.89 kB │ gzip:     1.12 kB
+dist/static/VersionHistoryPanel-whw0S7Oe.js            7.09 kB │ gzip:     2.51 kB
+dist/static/BackgroundRemover-C6sblSgo.js             19.42 kB │ gzip:     6.85 kB
+dist/static/SvgConverter-fTkRUc5o.js                  22.67 kB │ gzip:     5.85 kB
+dist/static/is-regexp-D5aEBwaj.js                     24.03 kB │ gzip:     9.95 kB
+dist/static/purify.es-Jn2rvFN8.js                     28.91 kB │ gzip:    10.90 kB
+dist/static/TldrawCanvasSync-DEy_tkUG.js              36.41 kB │ gzip:    11.17 kB
+dist/static/PaletteStudio-BrLq8Jgc.js                 40.28 kB │ gzip:    12.23 kB
+dist/static/DesignStudioPage-D9zphOnp.js              86.69 kB │ gzip:    24.61 kB
+dist/static/CommentsOverlay-DwRAionh.js              124.88 kB │ gzip:    29.35 kB
+dist/static/index.es-CmdxMCdr.js                     136.50 kB │ gzip:    44.71 kB
+dist/static/html2canvas.esm-QH1iLAAe.js              202.38 kB │ gzip:    48.04 kB
+dist/static/jspdf.es.min-Rqpf_LaV.js                 390.80 kB │ gzip:   128.84 kB
+dist/static/pdf-Y4YPUwDk.js                          476.81 kB │ gzip:   142.04 kB
+dist/static/AdminPage-D-Ct0kql.js                    599.97 kB │ gzip:   162.46 kB
+dist/static/tldrawCanvasShared-DgsSA7Fh.js           794.26 kB │ gzip:   243.69 kB
+dist/static/index-DMIHWea4.js                        911.62 kB │ gzip:   260.44 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 6.72s

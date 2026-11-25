@@ -1,0 +1,154 @@
+{
+  "sameHarmonyOutputUnderSameChosenStrategy": true,
+  "invalidSeed": {
+    "bg": "#FCFAF7",
+    "surface": "#F3EFED",
+    "surfaceElevated": "#E7E4E0",
+    "text": "#050404",
+    "textMuted": "#55524F",
+    "border": "#CAC7C4",
+    "primary": "#NANNANNAN",
+    "primaryFg": "#NANNANNAN",
+    "secondary": "#NANNANNAN",
+    "accent": "#NANNANNAN",
+    "success": "#00480E",
+    "successBg": "#DBF3DB",
+    "warning": "#865900",
+    "warningBg": "#FFEBD2",
+    "error": "#8B0012",
+    "errorBg": "#FFE8E6",
+    "info": "#004D74",
+    "infoBg": "#DFF1FF"
+  },
+  "wcag": {
+    "blackWhite": 21,
+    "same": 1,
+    "grayWhite": 4.478089453577214
+  },
+  "primaryForeground": {
+    "light": {
+      "primary": "#302D8B",
+      "fg": "#000000",
+      "contrast": 1.8738461376322804
+    },
+    "dark": {
+      "primary": "#6264F7",
+      "fg": "#F4F5F7",
+      "contrast": 4.1087515223411195
+    }
+  },
+  "apca": {
+    "blackWhite": 0,
+    "whiteBlack": 0,
+    "grayWhite": 100.00965692565018
+  },
+  "roundedGrade": {
+    "raw": 4.499,
+    "stored": "4.50",
+    "grade": "AA"
+  },
+  "oklch": {
+    "red": {
+      "L": 0.6279553606145516,
+      "C": 0.2576833077361567,
+      "H": 29.233885192342633
+    },
+    "roundtrips": [
+      {
+        "hex": "#000000",
+        "out": "#000000"
+      },
+      {
+        "hex": "#FFFFFF",
+        "out": "#FFFFFF"
+      },
+      {
+        "hex": "#FF0000",
+        "out": "#FF0000"
+      },
+      {
+        "hex": "#00FF00",
+        "out": "#00FF00"
+      },
+      {
+        "hex": "#0000FF",
+        "out": "#0000FF"
+      },
+      {
+        "hex": "#777777",
+        "out": "#777777"
+      }
+    ],
+    "neutral": "#636363"
+  },
+  "contrastSearch": {
+    "target": 0.8,
+    "returned": 0.050000000174622986
+  },
+  "lightScore": {
+    "score": 85,
+    "pairs": {
+      "Text / BG": {
+        "cr": "19.65",
+        "apca": "0.0",
+        "score": 1
+      },
+      "TextMuted / BG": {
+        "cr": "7.45",
+        "apca": "101.0",
+        "score": 1
+      },
+      "TextMuted / Surface": {
+        "cr": "6.79",
+        "apca": "87.8",
+        "score": 0.86
+      },
+      "Primary / BG": {
+        "cr": "10.76",
+        "apca": "100.8",
+        "score": 1
+      },
+      "Primary / Surface": {
+        "cr": "9.81",
+        "apca": "87.6",
+        "score": 1
+      },
+      "PrimaryFg / Primary": {
+        "cr": "1.87",
+        "apca": "0.0",
+        "score": 0.12
+      },
+      "Secondary / BG": {
+        "cr": "9.10",
+        "apca": "101.2",
+        "score": 1
+      },
+      "Accent / BG": {
+        "cr": "15.04",
+        "apca": "0.0",
+        "score": 1
+      },
+      "Text / Surface": {
+        "cr": "17.92",
+        "apca": "0.0",
+        "score": 1
+      },
+      "Success / SuccessBg": {
+        "cr": "9.24",
+        "apca": "86.5",
+        "score": 1
+      },
+      "Error / ErrorBg": {
+        "cr": "8.52",
+        "apca": "81.8",
+        "score": 1
+      },
+      "Warning / WarningBg": {
+        "cr": "5.25",
+        "apca": "82.3",
+        "score": 0.86
+      }
+    },
+    "dScore": 62
+  }
+}

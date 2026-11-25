@@ -6,13 +6,34 @@
 // toasts actually render correctly instead of falling back to
 // next-themes' unset "system" default and CSS variables that don't exist
 // here.
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Toaster as Sonner, ToasterProps } from "sonner";
 import { useTheme } from "../../context/ThemeContext";
 
+// While an element is in browser fullscreen (e.g. the board canvas),
+// ONLY that element's subtree is displayed — a Toaster rendered anywhere
+// else is invisible, along with every success/error toast. sonner has no
+// container option, so the Toaster is portalled into the fullscreen
+// element for as long as it's fullscreen, and rendered in place
+// otherwise. Switching location remounts the Toaster: a toast already on
+// screen at the exact moment fullscreen is entered/exited is dropped
+// (toasts fired afterwards show normally).
+function useFullscreenElement(): Element | null {
+  const [element, setElement] = useState<Element | null>(() => document.fullscreenElement);
+  useEffect(() => {
+    const onChange = () => setElement(document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+  return element;
+}
+
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme } = useTheme();
+  const fullscreenElement = useFullscreenElement();
 
-  return (
+  const toaster = (
     <Sonner
       theme={theme}
       className="toaster group"
@@ -26,6 +47,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
       {...props}
     />
   );
+
+  return fullscreenElement ? createPortal(toaster, fullscreenElement) : toaster;
 };
 
 export { Toaster };

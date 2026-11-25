@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Bell } from 'lucide-react';
 import { api, type Notification } from '../lib/api';
 import { useModalA11y } from './hooks/useModalA11y';
+import { OPEN_NOTIFICATIONS_EVENT } from './AccountMenu';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Basic Notifications (Phase C) — a bell in the global nav (Navigation.tsx),
@@ -21,6 +22,7 @@ const TYPE_LABEL: Record<Notification['type'], (n: Notification) => string> = {
   workspace_role_changed: n => `Your role in "${n.workspaceName ?? 'a workspace'}" was changed`,
   comment_created: n => `${n.actorName ?? n.actorRoll ?? 'Someone'} commented on "${n.boardName ?? 'your board'}"`,
   comment_replied: n => `${n.actorName ?? n.actorRoll ?? 'Someone'} replied to your comment on "${n.boardName ?? 'a board'}"`,
+  comment_mentioned: n => `${n.actorName ?? n.actorRoll ?? 'Someone'} mentioned you in a comment on "${n.boardName ?? 'a board'}"`,
 };
 
 function timeAgo(iso: string): string {
@@ -59,6 +61,13 @@ export function NotificationBell({ roll, isDark }: { roll: string; isDark: boole
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
   const dialogRef = useModalA11y(open, () => setOpen(false));
+
+  // The account menu's "Notifications" entry opens this same panel.
+  useEffect(() => {
+    const openPanel = () => setOpen(true);
+    window.addEventListener(OPEN_NOTIFICATIONS_EVENT, openPanel);
+    return () => window.removeEventListener(OPEN_NOTIFICATIONS_EVENT, openPanel);
+  }, []);
 
   // Lightweight background refresh of just the unread count, independent
   // of opening the panel — so the badge can reflect new activity without
@@ -186,7 +195,7 @@ export function NotificationBell({ roll, isDark }: { roll: string; isDark: boole
                     onClick={handleMarkAllRead}
                     style={{
                       padding: 0, background: 'none', border: 'none',
-                      color: 'var(--color-brand)', fontSize: 11, fontWeight: 600,
+                      color: 'var(--color-brand-text)', fontSize: 11, fontWeight: 600,
                       fontFamily: 'var(--font-body)', cursor: 'pointer',
                     }}
                   >

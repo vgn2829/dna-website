@@ -1,0 +1,45 @@
+
+> @figma/my-make-file@0.0.1 typecheck
+> tsc --noEmit
+
+src/app/components/background-removal/bg-removal.worker.ts(65,62): error TS2322: Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+  Type 'SharedArrayBuffer' is not assignable to type 'ArrayBuffer'.
+    Types of property '[Symbol.toStringTag]' are incompatible.
+      Type '"SharedArrayBuffer"' is not assignable to type '"ArrayBuffer"'.
+src/app/components/HeroFlipCards.tsx(381,25): error TS2769: No overload matches this call.
+  Overload 1 of 5, '(input: MotionValue<[number, number, number]>, transformer: SingleTransformer<[number, number, number], CardTarget[]>): MotionValue<...>', gave the following error.
+    Argument of type 'MotionValue<number>[]' is not assignable to parameter of type 'MotionValue<[number, number, number]>'.
+      Type 'MotionValue<number>[]' is missing the following properties from type 'MotionValue<[number, number, number]>': current, prev, prevFrameValue, updatedAt, and 25 more.
+  Overload 2 of 5, '(input: MotionValue<number>[] | MotionValue<string>[] | MotionValue<AnyResolvedKeyframe>[], transformer: MultiTransformer<number, CardTarget[]>): MotionValue<...>', gave the following error.
+    Argument of type '([morphValue, rotateValue, parallaxValue]: [number, number, number]) => CardTarget[]' is not assignable to parameter of type 'MultiTransformer<number, CardTarget[]>'.
+      Types of parameters '__0' and 'input' are incompatible.
+        Type 'number[]' is not assignable to type '[number, number, number]'.
+          Target requires 3 element(s) but source may have fewer.
+src/app/components/HeroFlipCards.tsx(529,19): error TS2322: Type 'CardTarget | { [x: string]: MotionValue<any>; }' is not assignable to type 'CardTarget | MotionValue<CardTarget[]>'.
+  Type '{ [x: string]: MotionValue<any>; }' is not assignable to type 'CardTarget | MotionValue<CardTarget[]>'.
+    Type '{ [x: string]: MotionValue<any>; }' is missing the following properties from type 'MotionValue<CardTarget[]>': current, prev, prevFrameValue, updatedAt, and 25 more.
+src/app/context/AppDataContext.tsx(429,89): error TS2322: Type '(id: string, options?: { audienceType?: "all" | "registered" | "active"; batch?: string | null; limit?: number; excludeEventIds?: string[]; excludeCampaignIds?: string[]; }) => Promise<NotifyResult>' is not assignable to type '(id: string, audience?: "all" | "registered" | undefined) => Promise<NotifyResult>'.
+  Types of parameters 'options' and 'audience' are incompatible.
+    Type '"all" | "registered" | undefined' is not assignable to type '{ audienceType?: "all" | "active" | "registered" | undefined; batch?: string | null | undefined; limit?: number | undefined; excludeEventIds?: string[] | undefined; excludeCampaignIds?: string[] | undefined; } | undefined'.
+      Type '"all"' has no properties in common with type '{ audienceType?: "all" | "active" | "registered" | undefined; batch?: string | null | undefined; limit?: number | undefined; excludeEventIds?: string[] | undefined; excludeCampaignIds?: string[] | undefined; }'.
+src/app/pages/AdminPage.tsx(27,57): error TS2339: Property 'type' does not exist on type 'never'.
+src/app/pages/AdminPage.tsx(2459,11): error TS2322: Type '(id: string, audience?: "all" | "registered" | undefined) => Promise<NotifyResult>' is not assignable to type '(id: string, options?: { audienceType?: "all" | "active" | "registered" | undefined; batch?: string | null | undefined; limit?: number | undefined; excludeEventIds?: string[] | undefined; excludeCampaignIds?: string[] | undefined; } | undefined) => Promise<...>'.
+  Types of parameters 'audience' and 'options' are incompatible.
+    Type '{ audienceType?: "all" | "active" | "registered" | undefined; batch?: string | null | undefined; limit?: number | undefined; excludeEventIds?: string[] | undefined; excludeCampaignIds?: string[] | undefined; } | undefined' is not assignable to type '"all" | "registered" | undefined'.
+      Type '{ audienceType?: "all" | "active" | "registered" | undefined; batch?: string | null | undefined; limit?: number | undefined; excludeEventIds?: string[] | undefined; excludeCampaignIds?: string[] | undefined; }' is not assignable to type '"all" | "registered" | undefined'.
+src/app/pages/DesignStudioPage.tsx(960,31): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/app/pages/DesignStudioPage.tsx(961,81): error TS2554: Expected 4-5 arguments, but got 6.
+src/app/pages/DesignStudioPage.tsx(975,54): error TS2554: Expected 4-5 arguments, but got 6.
+src/app/pages/DesignStudioPage.tsx(1026,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/app/pages/DesignStudioPage.tsx(1074,71): error TS2345: Argument of type '([a, b2]: [any, any]) => void' is not assignable to parameter of type '(value: any[], index: number, array: any[][]) => void'.
+  Types of parameters '__0' and 'value' are incompatible.
+    Type 'any[]' is not assignable to type '[any, any]'.
+      Target requires 2 element(s) but source may have fewer.
+src/app/pages/DesignStudioPage.tsx(1121,69): error TS2554: Expected 4-5 arguments, but got 6.
+src/app/pages/DesignStudioPage.tsx(1122,69): error TS2554: Expected 4-5 arguments, but got 6.
+src/app/pages/PalettePage.tsx(13,13): error TS2345: Argument of type '() => () => HTMLLinkElement' is not assignable to parameter of type 'EffectCallback'.
+  Type '() => HTMLLinkElement' is not assignable to type 'void | Destructor'.
+    Type '() => HTMLLinkElement' is not assignable to type 'Destructor'.
+      Type 'HTMLLinkElement' is not assignable to type 'void | { [UNDEFINED_VOID_ONLY]: never; }'.
+src/imports/pasted_text/displacement-map.tsx(3,20): error TS2307: Cannot find module '@/app/components/ui/utils' or its corresponding type declarations.
+vite.config.ts(10,15): error TS7006: Parameter 'id' implicitly has an 'any' type.

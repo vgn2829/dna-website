@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { api, type Workspace } from '../lib/api';
 import { rollToColor } from '../lib/utils';
 import { useModalA11y } from './hooks/useModalA11y';
+import { filterWorkspaces, showAllWorkspacesOption, workspaceLabel } from '../lib/workspaceSearch';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Entry point for workspace management (Sharing & Invite Flow phase).
@@ -50,6 +51,8 @@ export function WorkspacesPanel({
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [query, setQuery] = useState('');
+  const visibleWorkspaces = filterWorkspaces(workspaces, query);
 
   const dialogRef = useModalA11y(open, onClose);
 
@@ -78,7 +81,7 @@ export function WorkspacesPanel({
           style={{
             position: 'fixed', inset: 0, zIndex: 9999,
             background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
           }}
           onClick={onClose}
         >
@@ -97,28 +100,24 @@ export function WorkspacesPanel({
               width: '100%', maxWidth: 640,
               background: 'var(--color-surface-1)',
               border: '1px solid var(--color-hairline)',
-              borderRadius: 'var(--radius-xl)', padding: '28px 24px',
-              display: 'flex', flexDirection: 'column', gap: 20,
-              maxHeight: '85vh', overflowY: 'auto',
+              borderRadius: 'var(--radius-xl)', padding: '24px 20px 20px',
+              display: 'flex', flexDirection: 'column', gap: 16,
+              // Strict containment: the card never grows past the viewport
+              // and never lets children paint outside it; only the list
+              // below scrolls (header, create and search stay put).
+              maxHeight: 'min(85vh, 760px)', overflow: 'hidden',
               outline: 'none',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{
-                margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-ink)',
-                fontFamily: 'var(--font-display)', letterSpacing: '-0.3px',
-              }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 Workspaces
               </h3>
               <button
                 onClick={onClose}
                 aria-label="Close workspaces panel"
-                style={{
-                  width: 32, height: 32, borderRadius: 'var(--radius-full)',
-                  border: '1px solid var(--color-hairline)', background: 'none',
-                  color: 'var(--color-ink-muted)', fontSize: 18, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
+                className="btn-translucent btn-icon btn-sm touch-target"
+                style={{ fontSize: 18 }}
               >
                 ×
               </button>
@@ -126,21 +125,18 @@ export function WorkspacesPanel({
 
             {showCreate ? (
               <div style={{
-                display: 'flex', flexDirection: 'column', gap: 10,
+                display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0,
                 padding: 16, borderRadius: 'var(--radius-lg)',
                 border: '1px solid var(--color-hairline)', background: 'var(--color-surface-2)',
               }}>
-                <label style={{
-                  fontSize: 11, fontWeight: 600, color: 'var(--color-ink-muted)',
-                  letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-                }}>
+                <label htmlFor="new-workspace-new-workspace-name" className="type-caption">
                   New Workspace Name
                 </label>
                 <input
+                  id="new-workspace-new-workspace-name"
                   className="input-base"
                   type="text"
                   placeholder="e.g. Design Team"
-                  aria-label="New workspace name"
                   value={name}
                   onChange={e => setName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setShowCreate(false); }}
@@ -152,23 +148,14 @@ export function WorkspacesPanel({
                   <button
                     onClick={handleCreate}
                     disabled={creating || !name.trim()}
-                    style={{
-                      flex: 1, padding: '10px 16px', background: 'var(--color-brand)', color: '#fff',
-                      border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 13, fontWeight: 600,
-                      fontFamily: 'var(--font-body)',
-                      cursor: creating || !name.trim() ? 'not-allowed' : 'pointer',
-                      opacity: creating || !name.trim() ? 0.6 : 1,
-                    }}
+                    className="btn-primary"
+                    style={{ flex: 1 }}
                   >
                     {creating ? 'Creating...' : 'Create'}
                   </button>
                   <button
                     onClick={() => { setShowCreate(false); setName(''); }}
-                    style={{
-                      padding: '10px 16px', background: 'none', color: 'var(--color-ink-muted)',
-                      border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-sm)',
-                      fontSize: 13, fontFamily: 'var(--font-body)', cursor: 'pointer',
-                    }}
+                    className="btn-translucent"
                   >
                     Cancel
                   </button>
@@ -177,85 +164,156 @@ export function WorkspacesPanel({
             ) : (
               <button
                 onClick={() => setShowCreate(true)}
-                style={{
-                  padding: '10px 16px', background: 'none', color: 'var(--color-brand)',
-                  border: '1px dashed var(--color-brand)', borderRadius: 'var(--radius-lg)',
-                  fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
-                  textAlign: 'left',
-                }}
+                className="btn-translucent"
+                style={{ flexShrink: 0, alignSelf: 'flex-start' }}
               >
                 + New Workspace
               </button>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {workspaces.map(ws => {
+            <input
+              className="input-base"
+              type="search"
+              placeholder="Search workspaces…"
+              aria-label="Search workspaces"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              style={{ width: '100%', flexShrink: 0 }}
+            />
+
+            <div
+              role="list"
+              aria-label="Your workspaces"
+              style={{
+                display: 'flex', flexDirection: 'column', gap: 8,
+                flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain',
+                margin: '0 -4px', padding: '0 4px 2px',
+              }}
+            >
+              {/* "All Workspaces" = activeWorkspaceId null (see
+                  WorkspaceContext). Rendered from the FULL list, outside
+                  the name search, so it can always be re-selected. */}
+              {showAllWorkspacesOption(workspaces) && (
+                <div
+                  role="listitem"
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                    flexWrap: 'wrap',
+                    padding: 14, borderRadius: 'var(--radius-lg)', flexShrink: 0, overflow: 'hidden',
+                    border: `1px solid ${activeWorkspaceId === null ? 'var(--color-brand)' : 'var(--color-hairline)'}`,
+                    background: activeWorkspaceId === null ? 'color-mix(in srgb, var(--color-brand) 6%, transparent)' : 'none',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: '1 1 240px' }}>
+                    <div aria-hidden="true" style={{
+                      width: 40, height: 40, borderRadius: 'var(--radius-md)', flexShrink: 0,
+                      background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+                        <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+                      </svg>
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <p className="type-body-sm" style={{ margin: 0, color: 'var(--color-ink)' }}>
+                          All Workspaces
+                        </p>
+                        {activeWorkspaceId === null && (
+                          <span className="type-micro" style={{
+                          padding: '2px 7px', borderRadius: 'var(--radius-pill)',
+                            background: 'var(--color-brand)', color: '#fff',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            Current
+                          </span>
+                        )}
+                      </div>
+                      <p className="type-caption" style={{ margin: '4px 0 0' }}>
+                        Boards from every workspace you belong to
+                      </p>
+                    </div>
+                  </div>
+                  {activeWorkspaceId !== null && (
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 'auto' }}>
+                      <button
+                        onClick={() => onSwitch(null)}
+                        aria-label="Switch to All Workspaces"
+                          className="btn-translucent btn-sm touch-target"
+                      >
+                        Switch
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {visibleWorkspaces.length === 0 && (
+                <p className="type-body" style={{ margin: 0, padding: '24px 0', textAlign: 'center', color: 'var(--color-ink-muted)' }}>
+                  No workspaces match “{query.trim()}”.
+                </p>
+              )}
+              {visibleWorkspaces.map(ws => {
                 const isActive = activeWorkspaceId === ws.id;
                 return (
                   <div
                     key={ws.id}
+                    role="listitem"
                     style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-                      padding: 16, borderRadius: 'var(--radius-lg)',
+                      // Actions wrap under the name on narrow screens instead
+                      // of squeezing the name down to a couple of letters.
+                      flexWrap: 'wrap',
+                      padding: 14, borderRadius: 'var(--radius-lg)', flexShrink: 0, overflow: 'hidden',
                       border: `1px solid ${isActive ? 'var(--color-brand)' : 'var(--color-hairline)'}`,
                       background: isActive ? 'color-mix(in srgb, var(--color-brand) 6%, transparent)' : 'none',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: '1 1 240px' }}>
                       <div style={{
                         width: 40, height: 40, borderRadius: 'var(--radius-md)', flexShrink: 0,
                         background: rollToColor(ws.id),
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: 15, fontWeight: 700, color: '#fff', fontFamily: 'var(--font-body)',
                       }}>
-                        {(ws.is_personal ? 'P' : ws.name)[0].toUpperCase()}
+                        {workspaceLabel(ws)[0].toUpperCase()}
                       </div>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <p style={{
-                            margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--color-ink)',
-                            fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          <p className="type-body-sm" style={{
+                            margin: 0, color: 'var(--color-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                           }}>
-                            {ws.is_personal ? 'Personal' : ws.name}
+                            {workspaceLabel(ws)}
                           </p>
-                          <span style={{
-                            fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
-                            padding: '2px 7px', borderRadius: 'var(--radius-pill)',
+                          <span className="type-micro" style={{
+                          padding: '2px 7px', borderRadius: 'var(--radius-pill)',
                             background: 'var(--color-surface-2)', color: 'var(--color-ink-muted)',
-                            fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
+                            whiteSpace: 'nowrap',
                           }}>
                             {ROLE_LABEL[ws.role]}
                           </span>
                           {isActive && (
-                            <span style={{
-                              fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
-                              padding: '2px 7px', borderRadius: 'var(--radius-pill)',
+                            <span className="type-micro" style={{
+                          padding: '2px 7px', borderRadius: 'var(--radius-pill)',
                               background: 'var(--color-brand)', color: '#fff',
-                              fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
+                              whiteSpace: 'nowrap',
                             }}>
                               Current
                             </span>
                           )}
                         </div>
-                        <p style={{
-                          margin: '4px 0 0', fontSize: 12, color: 'var(--color-ink-muted)',
-                          fontFamily: 'var(--font-body)',
-                        }}>
+                        <p className="type-caption" style={{ margin: '4px 0 0' }}>
                           {ws.member_count} {ws.member_count === 1 ? 'member' : 'members'} · {ws.board_count} {ws.board_count === 1 ? 'board' : 'boards'} · Created {formatDate(ws.created_at)}
                         </p>
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 'auto' }}>
                       {!isActive && (
                         <button
                           onClick={() => onSwitch(ws.id)}
                           aria-label={`Switch to ${ws.is_personal ? 'Personal' : ws.name}`}
-                          style={{
-                            padding: '7px 12px', background: 'none', color: 'var(--color-ink)',
-                            border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-sm)',
-                            fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
-                          }}
+                          className="btn-translucent btn-sm touch-target"
                         >
                           Switch
                         </button>
@@ -264,11 +322,7 @@ export function WorkspacesPanel({
                         <button
                           onClick={() => onOpenSettings(ws.id)}
                           aria-label={`Settings for ${ws.name}`}
-                          style={{
-                            padding: '7px 12px', background: 'none', color: 'var(--color-ink-muted)',
-                            border: '1px solid var(--color-hairline)', borderRadius: 'var(--radius-sm)',
-                            fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
-                          }}
+                          className="btn-translucent btn-sm touch-target"
                         >
                           Settings
                         </button>

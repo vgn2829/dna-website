@@ -202,7 +202,7 @@ export default function LiveSessionBanner() {
                 padding: '2px 8px',
                 borderRadius: 'var(--radius-pill)',
                 background: isLive ? 'rgba(255,255,255,0.2)' : 'rgba(233,30,140,0.1)',
-                color: isLive ? '#fff' : 'var(--color-brand)',
+                color: isLive ? '#fff' : 'var(--color-brand-text)',
                 fontFamily: 'var(--font-body)',
               }}>
                 {primary.audience_name}

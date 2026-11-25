@@ -193,6 +193,23 @@ export interface RoomSocketGateOptions {
   // effect on the very next message, without needing to reconstruct the
   // gate or the underlying TLSocketRoom session.
   canWriteCanvas: () => boolean;
+  // OPTIONAL live re-authorization (V2.5 Phase 3). When supplied, it is
+  // awaited before a push is forwarded IF the cached decision behind
+  // canWriteCanvas() is older than the caller's freshness threshold —
+  // the caller owns that policy (see RoomManager.join), this module just
+  // asks. Resolving true/false updates nothing here; the caller is
+  // expected to have refreshed whatever canWriteCanvas() reads.
+  //
+  // WHY THIS EXISTS: canWriteCanvas() alone reads a cached boolean that
+  // was only refreshed by a 15s background interval, so a user whose
+  // access had just been revoked could still write for up to 15s on an
+  // already-open socket — reproduced directly over the wire against a
+  // real board (the push was accepted AND persisted). Trusting a cached
+  // connection-time decision for writes is exactly what this closes.
+  //
+  // Returning a promise is what forces the ordering machinery below: see
+  // the `pendingChain` comment in createRoomSocketGate.
+  revalidateWrite?: () => Promise<boolean>;
   // Called once, the first time a push is actually dropped for this
   // socket — not on every dropped message — so a client that keeps
   // trying (or one with a stuck retry loop) doesn't get spammed. The
@@ -235,6 +252,49 @@ export function createRoomSocketGate(realSocket: WebSocket, opts: RoomSocketGate
     }
   };
 
+  // ORDERING ACROSS THE ASYNC RE-CHECK (V2.5 Phase 3). Once a push CAN
+  // require an awaited authorization check, messages must not be
+  // forwarded straight from the 'message' handler while one is in
+  // flight: a `ping` or `connect` arriving mid-check would overtake that
+  // push and reach TLSocketRoom out of order, which the sync protocol's
+  // clock-ordered push stream does not tolerate.
+  //
+  // But the gate must ALSO stay synchronous when nothing needs awaiting —
+  // both because forwarding is on the hot path of every shape drag, and
+  // because deferring every message to a microtask would change
+  // observable behaviour for existing callers and tests.
+  //
+  // So: `pendingChain` is null whenever nothing is in flight, and every
+  // message is delivered synchronously. The moment a push actually has to
+  // await a re-check, the chain is created and subsequent messages queue
+  // behind it, preserving exact arrival order, until it drains back to
+  // empty.
+  let pendingChain: Promise<void> | null = null;
+
+  const enqueue = (work: () => void | Promise<void>): void => {
+    // Nothing in flight — run inline, synchronously. Only if `work`
+    // actually returns a promise (a push that had to await a re-check)
+    // does a chain come into existence.
+    const started: void | Promise<void> = pendingChain === null
+      ? work()
+      : pendingChain.then(work);
+
+    if (!(started instanceof Promise)) return;
+
+    const chained: Promise<void> = started.catch(onLinkError).finally(() => {
+      // Only clear if no later message has since extended the chain.
+      if (pendingChain === chained) pendingChain = null;
+    });
+    pendingChain = chained;
+  };
+
+  // A failed link must never break the chain for every later message on
+  // this socket, and must never fail OPEN — the push path below already
+  // treats a thrown re-check as "deny" before it can reach here.
+  const onLinkError = (err: unknown): void => {
+    console.error('Realtime: room socket gate failed to process a message:', err);
+  };
+
   realSocket.addEventListener('message', (event) => {
     const raw = event.data;
     const asString = typeof raw === 'string' ? raw : null;
@@ -245,7 +305,8 @@ export function createRoomSocketGate(realSocket: WebSocket, opts: RoomSocketGate
       // always TextDecoder.decode()s non-string input before treating it
       // as JSON/chunk text) — forward unchanged and let TLSocketRoom's
       // own handling apply exactly as it would with no gate present.
-      flush([event]);
+      // Still enqueued, so it cannot overtake an earlier in-flight push.
+      enqueue(() => flush([event]));
       return;
     }
 
@@ -262,7 +323,14 @@ export function createRoomSocketGate(realSocket: WebSocket, opts: RoomSocketGate
     const fragments = pendingFragments;
     pendingFragments = [];
 
-    if (classification === 'push' && !opts.canWriteCanvas()) {
+    if (classification !== 'push') {
+      // connect/ping never touch the document — forward regardless of
+      // role, but still in order behind any in-flight push check.
+      enqueue(() => flush(fragments));
+      return;
+    }
+
+    const reject = (): void => {
       if (!hasNotifiedRejection) {
         hasNotifiedRejection = true;
         opts.onWriteRejected?.();
@@ -275,10 +343,37 @@ export function createRoomSocketGate(realSocket: WebSocket, opts: RoomSocketGate
       // either). Deliberately silent on the wire — see this file's own
       // header comment on why nothing is sent back over this particular
       // socket in response.
-      return;
-    }
+    };
 
-    flush(fragments);
+    enqueue(() => {
+      // Fast path: the cached decision already says no. There is nothing
+      // a re-check could do to make a denied write allowed that the next
+      // message wouldn't pick up anyway, so don't pay for a query.
+      if (!opts.canWriteCanvas()) {
+        reject();
+        return;
+      }
+
+      // No live checker configured — preserve the original synchronous
+      // behaviour exactly (this is the path every existing caller and
+      // test that constructs a gate without revalidateWrite takes).
+      if (!opts.revalidateWrite) {
+        flush(fragments);
+        return;
+      }
+
+      // The cached decision says yes — but it may be stale (see
+      // revalidateWrite's own comment). Confirm against CURRENT board
+      // access before letting a mutation through. When the underlying
+      // decision is still fresh this resolves without touching the
+      // database, so an active drag does not pay per push.
+      return opts.revalidateWrite().then(
+        (stillAllowed) => { stillAllowed ? flush(fragments) : reject(); },
+        // FAIL CLOSED. A transient DB error must never be an implicit
+        // grant of write access on a socket we could not authorize.
+        () => { reject(); }
+      );
+    });
   });
 
   const proxy: WebSocketMinimal = {

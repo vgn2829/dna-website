@@ -2,6 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { pool } from '../db/client';
 import { drainMailQueue, sendEventReminders, type DueReminder } from '../services/mailer';
+import { processQueue as processEmailCentreQueue } from '../services/emailCentre/service';
 
 const router = Router();
 
@@ -25,7 +26,9 @@ function requireTickSecret(req: import('express').Request, res: import('express'
     res.status(503).json({ error: 'INTERNAL_TICK_SECRET not configured' });
     return;
   }
-  const provided = (req.headers['x-tick-secret'] as string | undefined) ?? (req.query.secret as string | undefined);
+  // Header only. A ?secret= query parameter is deliberately NOT accepted: URLs
+  // are written to proxy/CDN/access logs, which would leak the secret.
+  const provided = req.headers['x-tick-secret'] as string | undefined;
   if (!provided || !timingSafeEqual(provided, secret)) {
     res.status(401).json({ error: 'Invalid tick secret' });
     return;
@@ -47,6 +50,13 @@ router.post('/tick', requireTickSecret, async (_req, res) => {
   } catch (err) {
     console.error('Tick: mail queue drain failed:', err);
     report.queueDrained = false;
+  }
+
+  // Email Centre jobs the daily quota deferred (or that were interrupted): resume them.
+  try {
+    await processEmailCentreQueue({ deadlineMs: 20_000 });
+  } catch (err) {
+    console.error('Tick: Email Centre queue failed:', err);
   }
 
   try {

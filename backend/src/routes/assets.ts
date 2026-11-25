@@ -1,13 +1,22 @@
+import { createHash } from 'crypto';
+import { createReadStream } from 'fs';
+import { assetSharingRouter } from './assetSharing';
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import sharp from 'sharp';
+import { claimTempFile, diskUploadSingle, LIMIT_MESSAGE, removeTempFile } from '../lib/diskUpload';
+import { exceedsUploadLimit } from '../lib/uploadLimits';
 import { pool } from '../db/client';
 import { requireStudent } from '../middleware/studentAuth';
+import { requireAdmin } from '../middleware/adminAuth';
+import { adminAssetListQuery, adminAssetUpdateSchema, adminListWhere } from '../lib/libraryAdmin';
 import { param } from '../routeParams';
-import { getStorage } from '../storage';
+import { getStorage, ASSET_ORIGINAL_CACHE_SECONDS, StorageTooLargeError } from '../storage';
+import { findStorageReferences } from '../storage/references';
+import { deleteDerivatives, derivativeKey, isDerivableSourceKey, resolveDerivativeUrls, scheduleDerivative } from '../storage/derivatives';
+import { ASSET_VISIBILITIES, assetScopeSql, canSeeAsset, isAssetVisibility, parseLibraryScope, rollBinder, type AssetVisibility, type LibraryStatus } from '../lib/libraryVisibility';
 
 const router = Router();
 
@@ -25,8 +34,12 @@ const router = Router();
 //   UPLOAD/LIST — caller must be a member of the target workspace
 //     (workspace_members lookup, same inline check POST /api/boards already
 //     uses for its own optional workspace_id — see that route's comment).
-//   DELETE — asset owner, or a workspace owner/admin (workspace-management
-//     tier, same as routes/workspaces.ts's canManage for removing a member).
+//     Lists include Workspace assets explicitly granted to that workspace
+//     and every Community asset, whichever workspace it lives in.
+//   VIEW/USE — Community: any signed-in student. Workspace: source-workspace
+//     membership or an explicit target grant. Personal: the owner.
+//   EDIT/DELETE — the asset's owner only; site admins moderate and remove
+//     through the /admin routes (requireAdmin).
 //   INSERT-ONTO-BOARD is not a route here at all — the frontend fetches the
 //     target board's own canEdit-gated data (board.workspace_id) and calls
 //     the EXISTING getBoardRole/roleCanWriteCanvas check via whichever route
@@ -40,10 +53,36 @@ const uploadAssetLimiter = rateLimit({
   message: { error: 'Too many uploads — please slow down' },
 });
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024 },
-});
+// One size limit for every uploaded library file, image or not:
+// MAX_UPLOAD_BYTES (300 MB, lib/uploadLimits.ts — shared with the frontend).
+// diskUploadSingle streams the upload to a temp file under that hard ceiling
+// (a JSON 413 beyond it) instead of buffering it in memory; the temp file is
+// removed when the response closes (lib/diskUpload.ts).
+
+export const ASSET_KINDS = ['image', 'file', 'link'] as const;
+export type AssetKind = typeof ASSET_KINDS[number];
+
+// Extension for a general (non-image) library file, taken from the
+// client filename's last dot-segment. Deliberately NOT a finite allowlist
+// of formats (PSD, AI, EPS, XD, FIG, PDF, PPTX, ZIP, ... all work) — the
+// server never parses these files. Safety instead comes from (a) the
+// strict [a-z0-9]{1,12} shape, so nothing path-like reaches the storage
+// key, and (b) storing/serving every such file as an
+// application/octet-stream download (see the upload route below), so no
+// extension — .html/.svg/.js included — can ever render as a page.
+export function fileExtension(filename: string): string | null {
+  const dot = filename.lastIndexOf('.');
+  if (dot <= 0 || dot === filename.length - 1) return null;
+  const ext = filename.slice(dot + 1).toLowerCase();
+  return /^[a-z0-9]{1,12}$/.test(ext) ? ext : null;
+}
+
+// Client-reported MIME is display metadata only for general files (never
+// used as the stored Content-Type) — keep it only if it's a plausible
+// type/subtype token.
+function displayMime(mime: string): string {
+  return /^[\w.+-]{1,64}\/[\w.+-]{1,128}$/.test(mime) ? mime : 'application/octet-stream';
+}
 
 // Extensions are derived from a validated content-type allowlist, never
 // from the raw client MIME string or original filename — same convention
@@ -57,18 +96,98 @@ const ASSET_MIME_EXT: Record<string, string> = {
   'image/svg+xml': 'svg',
 };
 
-interface AssetRow {
+// Normalizes a user-supplied external link. Only absolute http(s) URLs,
+// no embedded credentials (user:pass@ — a classic phishing disguise), at
+// most 2048 chars. Returns the canonical href, or null if unacceptable.
+// The URL is stored and displayed only — never fetched server-side.
+export function normalizeLinkUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > 2048) return null;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  if (url.username || url.password) return null;
+  if (!url.hostname) return null;
+  return url.href.length > 2048 ? null : url.href;
+}
+
+// True if collectionId names a collection in workspaceId. Every write that
+// sets assets.collection_id goes through this, so an asset can never be
+// grouped into another workspace's collection (and a foreign collection
+// id is indistinguishable from a nonexistent one).
+async function collectionInWorkspace(collectionId: string, workspaceId: string): Promise<boolean> {
+  const result = await pool.query(
+    'SELECT 1 FROM asset_collections WHERE id = $1 AND workspace_id = $2',
+    [collectionId, workspaceId]
+  );
+  return result.rows.length > 0;
+}
+
+// Optional collection_id on create: absent/empty -> null (ungrouped).
+async function resolveCreateCollection(raw: unknown, workspaceId: string): Promise<{ ok: true; id: string | null } | { ok: false }> {
+  if (raw === undefined || raw === null || raw === '') return { ok: true, id: null };
+  if (typeof raw !== 'string' || !(await collectionInWorkspace(raw, workspaceId))) return { ok: false };
+  return { ok: true, id: raw };
+}
+
+export interface AssetRow {
   id: string;
   workspace_id: string;
   owner_roll: string;
   owner_name: string | null;
+  kind: AssetKind;
+  collection_id: string | null;
   filename: string;
-  storage_key: string;
-  mime_type: string;
-  size_bytes: number;
+  link_url: string | null;
+  // null only for kind='link' (no stored object).
+  storage_key: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
   width: number | null;
   height: number | null;
   created_at: string;
+  visibility: AssetVisibility;
+  status: LibraryStatus;
+  // Idempotency key from the upload queue (never returned to clients).
+  client_upload_id?: string | null;
+  upload_fingerprint?: string | null;
+}
+
+// Shared Creative Library (lib/libraryVisibility.ts): a personal asset is
+// its owner's alone; a workspace asset is visible to and usable by its
+// source workspace's members and any workspace it is granted into; a
+// community asset by every signed-in student, from any workspace (see
+// assetScopeSql / canSeeAsset). Publishing changes only this row's visibility — the
+// stored object, its storage_key and its URL never change and are never
+// copied. Only the owner renames, publishes or deletes; site admins
+// moderate. Another member's personal asset answers 404, as if it did not
+// exist.
+
+// Optional per-file idempotency key from the upload queue: absent → null,
+// malformed → false (400). Opaque to the server; never part of a path.
+function parseClientUploadId(raw: unknown): string | null | false {
+  if (raw === undefined || raw === '') return null;
+  return typeof raw === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(raw) ? raw : false;
+}
+
+async function findUploadByClientId(roll: string, clientUploadId: string): Promise<AssetRow | null> {
+  const result = await pool.query(
+    'SELECT * FROM assets WHERE owner_roll = $1 AND client_upload_id = $2',
+    [roll, clientUploadId]
+  );
+  return (result.rows[0] as AssetRow | undefined) ?? null;
+}
+
+// Reads the optional visibility field of a create request (multipart form
+// or JSON). Absent → personal; anything else invalid → null (400).
+function createVisibility(raw: unknown): AssetVisibility | null {
+  if (raw === undefined || raw === '') return 'personal';
+  return isAssetVisibility(raw) ? raw : null;
 }
 
 function toPublicAsset(row: AssetRow) {
@@ -76,8 +195,83 @@ function toPublicAsset(row: AssetRow) {
   // guaranteed public/stable) or any filesystem/service-role detail —
   // only the derived public URL, same boundary boards.ts's canvas-files
   // route already draws (returns `url`, never the raw storagePath).
-  const { storage_key: _storage_key, ...rest } = row;
-  return { ...rest, url: getStorage().getPublicUrl(row.storage_key) };
+  //
+  // Non-image files get a download (Content-Disposition: attachment) URL
+  // under their display filename; images keep their plain inline URL,
+  // exactly as before, since the board picker and <img> previews use it.
+  // Links have no stored object: url is null and link_url carries the
+  // external address.
+  const { storage_key: storageKey, client_upload_id: _clientUploadId, upload_fingerprint: _fingerprint, ...rest } = row;
+  if (!storageKey) return { ...rest, extension: null, url: null, download_url: null };
+  const extension = storageKey.slice(storageKey.lastIndexOf('.') + 1) || null;
+  const url = getStorage().getPublicUrl(
+    storageKey,
+    row.kind === 'file' ? { download: row.filename } : undefined,
+  );
+  // An explicit "Download" for an image needs its own attachment URL (the
+  // inline `url` would just open in the browser). Same object, same
+  // storage URL scheme files already use; files download from `url` itself.
+  const downloadUrl = row.kind === 'file'
+    ? url
+    : getStorage().getPublicUrl(storageKey, { download: downloadName(row.filename, extension) });
+  return { ...rest, extension, url, download_url: downloadUrl };
+}
+
+// A renamed image ("Hero shot") still downloads with its real extension.
+function downloadName(filename: string, extension: string | null): string {
+  return extension && !filename.toLowerCase().endsWith(`.${extension}`) ? `${filename}.${extension}` : filename;
+}
+
+// Every asset response goes through here (list AND single-asset routes),
+// adding the read-time `thumb_url`: the public URL of the image's t512
+// derivative when — and only when — its storage_derivatives row is
+// 'ready' (storage/derivatives.ts). Missing, failed, skipped, SVG, file
+// and link assets get null, and consumers fall back to `url`, which is
+// unchanged and stays the canonical original. Computed from the row's own
+// storage_key (trusted, server-generated); never stored anywhere. One
+// batched lookup for the whole response, never one per asset.
+export async function toPublicAssets(rows: AssetRow[]) {
+  const imageKeys = rows
+    .filter(r => r.kind === 'image' && r.storage_key && isDerivableSourceKey(r.storage_key))
+    .map(r => r.storage_key as string);
+  const resolved = imageKeys.length > 0 ? await resolveDerivativeUrls(imageKeys) : new Map<string, string>();
+  return rows.map(row => {
+    const key = row.kind === 'image' ? row.storage_key : null;
+    const mapped = key ? resolved.get(key) : undefined;
+    const thumbUrl = key && mapped && isDerivableSourceKey(key) && mapped === getStorage().getPublicUrl(derivativeKey(key))
+      ? mapped
+      : null;
+    return { ...toPublicAsset(row), thumb_url: thumbUrl };
+  });
+}
+
+async function toPublicAssetOne(row: AssetRow) {
+  return (await toPublicAssets([row]))[0];
+}
+
+// The VIEW/USE rule (canSeeAsset) for one asset, optionally constrained to
+// a target workspace — the workspace of the board it is about to be placed
+// on. With a target, the caller must belong to it, and a Workspace asset
+// must live in or be granted into it (a Personal asset only ever into its
+// own workspace). GET /:id (the board picker's re-check) and the board's
+// "add asset" route (boards.ts POST /:id/items) both decide through this.
+export async function canUseAssetIn(row: AssetRow, roll: string, target?: string): Promise<boolean> {
+  if (row.visibility === 'community' && row.status === 'active') {
+    return !target || Boolean(await getWorkspaceMembership(target, roll));
+  }
+  const access = await pool.query(`SELECT 1 FROM workspace_members m
+    WHERE m.roll_number = $1 AND ($3::text IS NULL OR m.workspace_id = $3)
+    AND (m.workspace_id = $2 OR EXISTS (
+      SELECT 1 FROM asset_workspace_grants g WHERE g.asset_id = $4 AND g.workspace_id = m.workspace_id
+    )) LIMIT 1`, [roll, row.workspace_id, target ?? null, row.id]);
+  const sourceMember = (!target || target === row.workspace_id) && Boolean(await getWorkspaceMembership(row.workspace_id, roll));
+  return canSeeAsset(row, roll, sourceMember, access.rows.length > 0);
+}
+
+// The canonical original URL of an image asset — the same `url` the asset
+// API returns and the board picker places onto a canvas.
+export function assetImageUrl(row: Pick<AssetRow, 'kind' | 'storage_key'>): string | null {
+  return row.kind === 'image' && row.storage_key ? getStorage().getPublicUrl(row.storage_key) : null;
 }
 
 async function getWorkspaceMembership(workspaceId: string, roll: string): Promise<'owner' | 'admin' | 'member' | null> {
@@ -94,11 +288,13 @@ async function getWorkspaceMembership(workspaceId: string, roll: string): Promis
 // deleted so a failed request never leaves an orphaned storage object with
 // no corresponding row (see this file's own note on the reverse case,
 // under DELETE, for the other half of this consistency story).
-router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), async (req: Request, res: Response) => {
+router.post('/', requireStudent, uploadAssetLimiter, diskUploadSingle('file'), async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
+    // A request that isn't multipart (no parser ran) has no body at all.
+    const body: Record<string, unknown> = req.body ?? {};
 
-    const workspaceId = typeof req.body.workspace_id === 'string' ? req.body.workspace_id : '';
+    const workspaceId = typeof body.workspace_id === 'string' ? body.workspace_id : '';
     if (!workspaceId) {
       return res.status(400).json({ error: 'workspace_id is required' });
     }
@@ -113,10 +309,90 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
     if (!req.file) {
       return res.status(400).json({ error: 'No file provided' });
     }
+    // A 0-byte file can never be a usable asset (an undownloaded cloud-drive
+    // placeholder, an interrupted export) — refuse it rather than store an
+    // image that can never render.
+    if (req.file.size === 0) {
+      return res.status(400).json({ error: 'The file is empty (0 bytes)' });
+    }
 
-    const ext = ASSET_MIME_EXT[req.file.mimetype];
-    if (!ext) {
+    const visibility = createVisibility(body.visibility);
+    if (!visibility) {
+      return res.status(400).json({ error: 'Invalid visibility' });
+    }
+
+    const collection = await resolveCreateCollection(body.collection_id, workspaceId);
+    if (!collection.ok) {
+      return res.status(400).json({ error: 'Collection not found in this workspace' });
+    }
+
+    // Idempotency: a retry of an upload whose response was lost (network
+    // drop, proxy error) carries the same client_upload_id — hand back the
+    // asset the first attempt created instead of storing the file again.
+    const clientUploadId = parseClientUploadId(body.client_upload_id);
+    if (clientUploadId === false) {
+      return res.status(400).json({ error: 'Invalid client_upload_id' });
+    }
+    const originalUploadName = typeof body.filename === 'string' ? body.filename : req.file.originalname;
+    // Identifies the exact upload a retry key was first used for. Only a
+    // keyed upload can ever be retried, so an unkeyed one skips the extra
+    // full read of the temp file (up to MAX_UPLOAD_BYTES).
+    let fingerprint: string | null = null;
+    if (clientUploadId) {
+      const hash = createHash('sha256');
+      hash.update(JSON.stringify([workspaceId, originalUploadName, req.file.mimetype, req.file.size]));
+      for await (const chunk of createReadStream(req.file.path)) hash.update(chunk);
+      fingerprint = hash.digest('hex');
+    }
+    const retryResponse = async (existing: AssetRow) => {
+      if (existing.workspace_id !== workspaceId) return res.status(409).json({ error: 'Upload key belongs to another workspace' });
+      if (existing.status !== 'active' || !(await getWorkspaceMembership(workspaceId, roll))) {
+        return res.status(404).json({ error: 'Asset not found' });
+      }
+      const sameUpload = existing.upload_fingerprint
+        ? existing.upload_fingerprint === fingerprint
+        : existing.filename === originalUploadName.slice(0, 255) && existing.size_bytes === req.file!.size && existing.mime_type === displayMime(req.file!.mimetype);
+      if (!sameUpload) return res.status(409).json({ error: 'Upload key belongs to a different file' });
+      return res.status(200).json(await toPublicAssetOne(existing));
+    };
+    if (clientUploadId) {
+      const existing = await findUploadByClientId(roll, clientUploadId);
+      if (existing) return retryResponse(existing);
+    }
+
+    // Classification. An allowlisted image MIME is ALWAYS an image
+    // (inline, previewable, board-insertable) — exactly the original
+    // behavior. Anything else is accepted only when the client explicitly
+    // opts in with kind=file, so a request shaped like the original
+    // image-only upload still gets the original "Unsupported file type".
+    const imageExt = ASSET_MIME_EXT[req.file.mimetype];
+    const originalName = typeof body.filename === 'string' ? body.filename : req.file.originalname;
+    let kind: AssetKind;
+    let ext: string;
+    let storedMime: string;
+    if (imageExt) {
+      kind = 'image';
+      ext = imageExt;
+      storedMime = req.file.mimetype;
+    } else if (body.kind === 'file') {
+      const fileExt = fileExtension(originalName);
+      if (!fileExt) {
+        return res.status(400).json({ error: 'File name needs a valid extension (e.g. .psd, .pdf, .zip)' });
+      }
+      kind = 'file';
+      ext = fileExt;
+      // Never the client MIME: an octet-stream object is downloaded, not
+      // rendered, by every browser — the other half of the
+      // Content-Disposition download URL toPublicAsset builds for files.
+      storedMime = 'application/octet-stream';
+    } else {
       return res.status(400).json({ error: 'Unsupported file type' });
+    }
+
+    // multer already refused anything larger mid-stream; this re-check keeps
+    // the rule explicit (and correct for any future upload path).
+    if (exceedsUploadLimit(req.file.size)) {
+      return res.status(413).json({ error: LIMIT_MESSAGE });
     }
 
     let width: number | null = null;
@@ -124,20 +400,21 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
     // Best-effort only — dimension extraction failing (e.g. a malformed or
     // unusually-encoded SVG) must never block an otherwise-valid upload;
     // same graceful-degradation convention as artworks.ts's generateThumb.
-    try {
-      const metadata = await sharp(req.file.buffer).metadata();
-      if (metadata.width && metadata.height) {
-        width = metadata.width;
-        height = metadata.height;
+    // General files are never handed to sharp (never parsed server-side).
+    if (kind === 'image') {
+      try {
+        const metadata = await sharp(req.file.path).metadata();
+        if (metadata.width && metadata.height) {
+          width = metadata.width;
+          height = metadata.height;
+        }
+      } catch {
+        // Dimensions stay null — not fatal.
       }
-    } catch {
-      // Dimensions stay null — not fatal.
     }
 
     const id = uuidv4();
     const storageKey = `assets/${workspaceId}/${id}.${ext}`;
-
-    await getStorage().upload(storageKey, req.file.buffer, req.file.mimetype);
 
     const studentResult = await pool.query(
       'SELECT name FROM student_sessions WHERE roll_number = $1',
@@ -145,25 +422,50 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
     );
     const ownerName = (studentResult.rows[0] as { name: string } | undefined)?.name ?? null;
 
+    try {
+      // The key is a fresh uuid that is never overwritten (rename and
+      // publish touch only the row); cached for a day — see
+      // ASSET_ORIGINAL_CACHE_SECONDS for why not longer.
+      await getStorage().uploadFile(storageKey, req.file.path, storedMime, { cacheControl: ASSET_ORIGINAL_CACHE_SECONDS });
+    } catch (storageErr) {
+      if (storageErr instanceof StorageTooLargeError) {
+        return res.status(413).json({ error: 'This file is larger than the storage service currently accepts' });
+      }
+      throw storageErr;
+    }
+
+
+
     // Client-provided filename is stored as display metadata ONLY — it
     // never touches the storage path (storageKey above is built entirely
     // from server-generated id + a validated extension), so a crafted
     // filename (e.g. containing "../" or null bytes) can't affect where
     // the object is actually stored.
-    const rawFilename = typeof req.body.filename === 'string' ? req.body.filename : req.file.originalname;
-    const filename = rawFilename.slice(0, 255) || `asset.${ext}`;
+    const filename = originalName.slice(0, 255) || `asset.${ext}`;
     const now = new Date().toISOString();
 
     let row: AssetRow;
     try {
       const result = await pool.query(`
         INSERT INTO assets
-          (id, workspace_id, owner_roll, owner_name, filename, storage_key, mime_type, size_bytes, width, height, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          (id, workspace_id, owner_roll, owner_name, kind, collection_id, filename, storage_key, mime_type, size_bytes, width, height, created_at, visibility, client_upload_id, upload_fingerprint)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         RETURNING *
-      `, [id, workspaceId, roll, ownerName, filename, storageKey, req.file.mimetype, req.file.size, width, height, now]);
+      `, [id, workspaceId, roll, ownerName, kind, collection.id, filename, storageKey,
+          kind === 'image' ? req.file.mimetype : displayMime(req.file.mimetype),
+          req.file.size, width, height, now, visibility, clientUploadId, fingerprint]);
       row = result.rows[0] as AssetRow;
     } catch (dbErr) {
+      // Two attempts with the same client_upload_id raced past the lookup
+      // above: this one lost. Drop the object it just stored and return the
+      // winner's asset, so the file exists exactly once.
+      if (clientUploadId && (dbErr as { code?: string; constraint?: string }).code === '23505'
+          && (dbErr as { constraint?: string }).constraint === 'idx_assets_owner_client_upload') {
+        await getStorage().delete(storageKey).catch(cleanupErr =>
+          console.error('Failed to remove duplicate upload object:', storageKey, cleanupErr));
+        const winner = await findUploadByClientId(roll, clientUploadId);
+        if (winner) return retryResponse(winner);
+      }
       // Storage upload succeeded but the DB insert failed — delete the
       // now-orphaned object rather than leaving a file with no metadata
       // row anyone can ever discover or clean up. Best-effort: if the
@@ -178,17 +480,41 @@ router.post('/', requireStudent, uploadAssetLimiter, upload.single('file'), asyn
       throw dbErr;
     }
 
-    res.status(201).json(toPublicAsset(row));
+    // Original stored and its row persisted — now (best-effort, off the
+    // response path) make its thumbnail derivative. Its outcome never
+    // affects this upload; see storage/derivatives.ts.
+    // The job reads the temp file from disk and removes it when it settles.
+    if (kind === 'image') {
+      const tempPath = req.file.path;
+      claimTempFile(req, tempPath);
+      scheduleDerivative(storageKey, tempPath, undefined, () => removeTempFile(tempPath));
+    }
+
+    res.status(201).json(await toPublicAssetOne(row));
   } catch (err) {
     console.error('Asset upload error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// GET /api/assets?workspace_id=...&limit=&cursor=
-// Workspace-scoped, newest-first, cursor-paginated on created_at+id (both
-// strictly monotonic-enough for this table's insert pattern — created_at
-// alone could tie within the same millisecond under concurrent uploads).
+// GET /api/assets?workspace_id=...&limit=&cursor=&kind=&q=&collection_id=&scope=
+// Listed from the caller's current workspace (membership required): their
+// own assets there, Workspace assets of (or granted into) this workspace,
+// and every Community asset — Community never depends on which workspace
+// the caller has selected. Newest-first,
+// cursor-paginated on created_at+id (both strictly monotonic-enough for
+// this table's insert pattern — created_at alone could tie within the same
+// millisecond under concurrent uploads). Optional filters narrow the same
+// keyset scan:
+//   kind — image | file | link
+//   q    — case-insensitive substring of the display name (plain ILIKE;
+//          library sizes here don't justify full-text infrastructure)
+//   collection_id — a collection id, or 'none' for ungrouped assets, both
+//          limited to this workspace. A collection from another workspace
+//          simply matches nothing.
+//   scope — all (default) | mine | community (lib/libraryVisibility.ts
+//          assetScopeSql), applied in SQL: another member's personal asset
+//          is never listed.
 router.get('/', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
@@ -206,32 +532,211 @@ router.get('/', requireStudent, async (req: Request, res: Response) => {
     const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : 50;
     const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : undefined;
 
-    const result = cursor
-      ? await pool.query(
-          `SELECT * FROM assets
-           WHERE workspace_id = $1 AND (created_at, id) < (
-             SELECT created_at, id FROM assets WHERE id = $2
-           )
-           ORDER BY created_at DESC, id DESC
-           LIMIT $3`,
-          [workspaceId, cursor, limit]
-        )
-      : await pool.query(
-          `SELECT * FROM assets WHERE workspace_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2`,
-          [workspaceId, limit]
-        );
+    const kindFilter = typeof req.query.kind === 'string' && req.query.kind ? req.query.kind : undefined;
+    if (kindFilter && !(ASSET_KINDS as readonly string[]).includes(kindFilter)) {
+      return res.status(400).json({ error: 'Invalid kind filter' });
+    }
+    const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
+    const scope = parseLibraryScope(req.query.scope);
+    if (!scope) {
+      return res.status(400).json({ error: 'Invalid scope' });
+    }
+
+    // The caller's own assets come from their current workspace; workspace
+    // assets from this workspace or explicit grants; Community assets from
+    // anywhere (assetScopeSql). Values are bound
+    // lazily — Postgres rejects a parameter the statement never references
+    // only when referenced by the predicate.
+    const params: unknown[] = [];
+    const bindRoll = rollBinder(params, roll);
+    const bindWorkspace = rollBinder(params, workspaceId);
+    const where = [assetScopeSql(scope, bindRoll, bindWorkspace)];
+    if (kindFilter) {
+      params.push(kindFilter);
+      where.push(`kind = $${params.length}`);
+    }
+    const collectionFilter = typeof req.query.collection_id === 'string' && req.query.collection_id ? req.query.collection_id : undefined;
+    // Collections belong to this workspace, so a collection view (and
+    // "ungrouped") shows only this workspace's assets — never community
+    // assets from other workspaces.
+    if (collectionFilter === 'none') {
+      where.push(`workspace_id = ${bindWorkspace()}`, 'collection_id IS NULL');
+    } else if (collectionFilter) {
+      const workspaceParam = bindWorkspace();
+      params.push(collectionFilter);
+      const collectionParam = `$${params.length}`;
+      where.push(`workspace_id = ${workspaceParam}`, `collection_id = ${collectionParam}`);
+    }
+    if (q) {
+      // Escape LIKE metacharacters so a search for "50%" or "a_b" is literal.
+      params.push(`%${q.replace(/[\\%_]/g, c => `\\${c}`)}%`);
+      where.push(`filename ILIKE $${params.length}`);
+    }
+    if (cursor) {
+      // The cursor row is looked up among rows the caller may see, so
+      // another member's personal asset (in any workspace) can't be used to
+      // probe timestamps.
+      const visible = assetScopeSql('all', bindRoll, bindWorkspace);
+      params.push(cursor);
+      where.push(`(created_at, id) < (
+        SELECT created_at, id FROM assets WHERE id = $${params.length} AND ${visible}
+      )`);
+    }
+    params.push(limit);
+
+    const result = await pool.query(
+      `SELECT * FROM assets
+       WHERE ${where.join(' AND ')}
+       ORDER BY created_at DESC, id DESC
+       LIMIT $${params.length}`,
+      params
+    );
 
     const rows = result.rows as AssetRow[];
     const nextCursor = rows.length === limit ? rows[rows.length - 1].id : null;
 
-    res.json({ assets: rows.map(toPublicAsset), nextCursor });
+    res.json({ assets: await toPublicAssets(rows), nextCursor });
   } catch (err) {
     console.error('List assets error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
+const createLinkLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: 'Too many requests — please slow down' },
+});
+
+const createLinkSchema = z.object({
+  workspace_id: z.string().min(1),
+  name: z.string().trim().min(1).max(255),
+  url: z.string().max(2048),
+  collection_id: z.string().min(1).nullable().optional(),
+  visibility: z.enum(ASSET_VISIBILITIES).optional(),
+});
+
+// POST /api/assets/links
+// An external link as a first-class library asset (Envato, Figma, Behance,
+// Dribbble, Pinterest, Google Drive, any http(s) URL). Stores name + URL
+// only: the server never fetches the URL (no previews, no scraping), so
+// this route can't be used to make the backend request arbitrary hosts.
+router.post('/links', requireStudent, createLinkLimiter, async (req: Request, res: Response) => {
+  try {
+    const roll = req.studentRoll!;
+    const parsed = createLinkSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid link: name, url and workspace_id are required' });
+    }
+    const { workspace_id: workspaceId, name } = parsed.data;
+
+    const membership = await getWorkspaceMembership(workspaceId, roll);
+    if (!membership) {
+      return res.status(403).json({ error: 'Not a member of that workspace' });
+    }
+
+    const linkUrl = normalizeLinkUrl(parsed.data.url);
+    if (!linkUrl) {
+      return res.status(400).json({ error: 'Enter a full http:// or https:// URL' });
+    }
+
+    const collection = await resolveCreateCollection(parsed.data.collection_id, workspaceId);
+    if (!collection.ok) {
+      return res.status(400).json({ error: 'Collection not found in this workspace' });
+    }
+
+    const studentResult = await pool.query('SELECT name FROM student_sessions WHERE roll_number = $1', [roll]);
+    const ownerName = (studentResult.rows[0] as { name: string } | undefined)?.name ?? null;
+
+    const result = await pool.query(`
+      INSERT INTO assets
+        (id, workspace_id, owner_roll, owner_name, kind, collection_id, filename, link_url, created_at, visibility)
+      VALUES ($1, $2, $3, $4, 'link', $5, $6, $7, $8, $9)
+      RETURNING *
+    `, [uuidv4(), workspaceId, roll, ownerName, collection.id, name, linkUrl, new Date().toISOString(),
+        parsed.data.visibility ?? 'personal']);
+
+    res.status(201).json(await toPublicAssetOne(result.rows[0] as AssetRow));
+  } catch (err) {
+    console.error('Create link asset error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+const updateAssetSchema = z.object({
+  filename: z.string().trim().min(1).max(255).optional(),
+  collection_id: z.string().min(1).nullable().optional(),
+  visibility: z.enum(ASSET_VISIBILITIES).optional(),
+}).refine(v => v.filename !== undefined || v.collection_id !== undefined || v.visibility !== undefined, { message: 'Nothing to update' });
+
+// PATCH /api/assets/:id
+// Only assets the caller can see (their own, or community) — another
+// member's personal asset answers 404. Every change is the owner's alone,
+// from the asset's own workspace — a member of that workspace, or of a
+// workspace it is shared with, can use it but not edit it (403):
+//   collection_id — within the source workspace.
+//   filename (rename) and visibility (publish/unpublish).
+//     Neither touches the stored object: storage_key and url never change.
+// The target collection must belong to the asset's own workspace.
+router.patch('/:id', requireStudent, async (req: Request, res: Response) => {
+  try {
+    const roll = req.studentRoll!;
+    const id = param(req.params.id);
+    const parsed = updateAssetSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid update' });
+    }
+
+    const found = await pool.query('SELECT * FROM assets WHERE id = $1', [id]);
+    const row = found.rows[0] as AssetRow | undefined;
+    if (!row) {
+      return res.status(404).json({ error: 'Asset not found' });
+    }
+
+    const isMember = Boolean(await getWorkspaceMembership(row.workspace_id, roll));
+    if (!canSeeAsset(row, roll, isMember)) {
+      return res.status(isMember ? 404 : 403).json({ error: isMember ? 'Asset not found' : 'Access denied' });
+    }
+    if (!isMember) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { filename, collection_id: collectionId, visibility } = parsed.data;
+    const isOwner = row.owner_roll === roll;
+    if (!isOwner) return res.status(403).json({ error: 'Only the asset owner can change it' });
+    if (filename !== undefined && filename !== row.filename && !isOwner) {
+      return res.status(403).json({ error: 'Only the asset owner can rename it' });
+    }
+    if (visibility !== undefined && visibility !== row.visibility && !isOwner) {
+      return res.status(403).json({ error: 'Only the asset owner can change its visibility' });
+    }
+    if (collectionId && !(await collectionInWorkspace(collectionId, row.workspace_id))) {
+      return res.status(400).json({ error: 'Collection not found in this workspace' });
+    }
+
+    const result = await pool.query(`
+      UPDATE assets SET
+        filename = COALESCE($2, filename),
+        collection_id = CASE WHEN $3::boolean THEN $4 ELSE collection_id END,
+        visibility = COALESCE($5, visibility)
+      WHERE id = $1
+      RETURNING *
+    `, [id, filename ?? null, collectionId !== undefined, collectionId ?? null, visibility ?? null]);
+
+    res.json(await toPublicAssetOne(result.rows[0] as AssetRow));
+  } catch (err) {
+    console.error('Update asset error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/assets/:id
+// Detail/action revalidation (canSeeAsset): Community — any signed-in
+// student; Workspace — source membership or an explicit target grant;
+// Personal — the owner. Unauthorized and hidden assets answer 404.
+// Optional workspace_id constrains a picker action to the target board's
+// workspace: the caller must belong to it, and a Workspace asset must live
+// in or be granted into it.
 router.get('/:id', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
@@ -241,29 +746,80 @@ router.get('/:id', requireStudent, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Asset not found' });
     }
 
-    const membership = await getWorkspaceMembership(row.workspace_id, roll);
-    if (!membership) {
-      return res.status(403).json({ error: 'Access denied' });
+    const target = typeof req.query.workspace_id === 'string' ? req.query.workspace_id : undefined;
+    if (!(await canUseAssetIn(row, roll, target))) {
+      return res.status(404).json({ error: 'Asset not found' });
     }
 
-    res.json(toPublicAsset(row));
+    res.json(await toPublicAssetOne(row));
   } catch (err) {
     console.error('Get asset error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
+// Deletes an asset's row, then its stored object only if nothing persisted
+// still references it (storage/references.ts), then the object's
+// derivatives. Shared by the owner's DELETE and the admin DELETE so both
+// follow exactly the same storage-safety rules (see the notes below).
+async function deleteAssetRow(row: AssetRow): Promise<{ success: true; fileRetained?: true; storageWarning?: string }> {
+  await pool.query('DELETE FROM assets WHERE id = $1', [row.id]);
+
+  // Links have no stored object to remove.
+  if (!row.storage_key) return { success: true };
+
+  const references = await findStorageReferences(row.storage_key);
+  if (references.length > 0) {
+    console.log(`Asset ${row.id} deleted; storage object ${row.storage_key} retained — still referenced by ${references.map(r => `${r.surface} ${r.id}`).join(', ')}`);
+    return { success: true, fileRetained: true };
+  }
+
+  try {
+    await getStorage().delete(row.storage_key);
+  } catch (storageErr) {
+    console.error('Asset DB row deleted but storage object delete failed:', row.storage_key, storageErr);
+    return { success: true, storageWarning: 'Asset removed, but the underlying file could not be deleted from storage.' };
+  }
+
+  // The original is gone, so its derivatives go too. (A RETAINED original —
+  // returned above — keeps them: previews may still render it.) Best-effort:
+  // a leftover derivative object is classified as an ORPHAN by the storage
+  // inventory, and never affects this response.
+  try {
+    await deleteDerivatives(row.storage_key);
+  } catch (derivErr) {
+    console.error('Asset deleted but its derivatives could not be cleaned up:', row.storage_key, derivErr);
+  }
+  return { success: true };
+}
+
 // DELETE /api/assets/:id
-// Only the uploader, or a workspace owner/admin, may delete — same
-// workspace-management tier routes/workspaces.ts's member-removal already
-// uses. DB row is deleted first, then the storage object — if the storage
-// delete fails, the API does NOT claim success: it still reports the
-// failure rather than silently leaving an orphaned object while telling
-// the client everything is clean. The DB row is gone either way (deleting
-// it again is not retryable in a meaningful way once it succeeded), so a
-// storage-delete failure here is reported as a 500 with a distinct message
-// rather than rolled back — re-deleting is not attempted automatically,
-// matching this codebase's "no background job system for V1" scope limit.
+// The asset's owner only (Shared Creative Library) — other members may use
+// a community asset, never remove it. Non-members get 403; a member who
+// can't see the asset (someone else's personal asset) gets 404.
+//
+// SHARED-FILE MODEL: inserting an image asset onto a board stores the
+// asset's own public URL in the canvas (no copy), and that URL travels into
+// version snapshots, templates, template-created boards and duplicates
+// (which may live in another workspace). So deleting the library asset
+// deletes its ROW, but its storage OBJECT is deleted only when no persisted
+// content references it (storage/references.ts) — otherwise it is kept, so
+// "copies already placed on boards are unaffected" actually holds.
+//
+// Ordering: row first, then the reference check, then (if unreferenced)
+// the object. Server-side copies (duplicate, template create/use, version
+// creation) only ever copy already-persisted canvas text, so any reference
+// they could produce is already visible to the check. What the check can't
+// see is state not yet persisted: an insertion still inside a realtime
+// room's save debounce or a manual board's unsaved/offline edits, or an
+// asset picker opened before the asset was deleted. Those windows existed
+// before this check (the object was always deleted) and are only closable
+// with server-mediated insertion or deferred deletion.
+//
+// If the object delete fails, the row is already gone; the API still
+// reports success with a storageWarning rather than claiming a clean
+// delete. The object is then row-less and unreferenced — exactly what the
+// historical orphan sweep identifies — so it remains cleanable later.
 router.delete('/:id', requireStudent, async (req: Request, res: Response) => {
   try {
     const roll = req.studentRoll!;
@@ -275,32 +831,97 @@ router.delete('/:id', requireStudent, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Asset not found' });
     }
 
-    const isOwner = row.owner_roll === roll;
-    if (!isOwner) {
-      const membership = await getWorkspaceMembership(row.workspace_id, roll);
-      if (membership !== 'owner' && membership !== 'admin') {
-        return res.status(403).json({ error: 'Access denied' });
+    // Hidden by an admin: out of every normal flow, the owner's included.
+    if (row.status !== 'active') {
+      return res.status(404).json({ error: 'Asset not found' });
+    }
+    if (row.owner_roll !== roll) {
+      const isMember = Boolean(await getWorkspaceMembership(row.workspace_id, roll));
+      if (!canSeeAsset(row, roll, isMember)) {
+        return res.status(isMember ? 404 : 403).json({ error: isMember ? 'Asset not found' : 'Access denied' });
       }
+      return res.status(403).json({ error: 'Only the asset owner can delete it' });
     }
 
-    await pool.query('DELETE FROM assets WHERE id = $1', [id]);
-
-    try {
-      await getStorage().delete(row.storage_key);
-    } catch (storageErr) {
-      console.error('Asset DB row deleted but storage object delete failed:', row.storage_key, storageErr);
-      return res.status(200).json({
-        success: true,
-        storageWarning: 'Asset removed, but the underlying file could not be deleted from storage.',
-      });
-    }
-
-    res.json({ success: true });
+    res.json(await deleteAssetRow(row));
   } catch (err) {
     console.error('Delete asset error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
+
+interface AdminAssetRow extends AssetRow { workspace_name: string; workspace_is_personal: boolean }
+
+async function toAdminAssets(rows: AdminAssetRow[]) {
+  const pub = await toPublicAssets(rows);
+  return pub.map((a, i) => ({ ...a, workspace_name: rows[i].workspace_name, workspace_is_personal: rows[i].workspace_is_personal }));
+}
+
+// GET /api/assets/admin/all?q=&status=active|hidden|all&visibility=…&limit=
+router.get('/admin/all', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const parsed = adminAssetListQuery.safeParse(req.query);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid filters' });
+    const params: unknown[] = [];
+    const where = adminListWhere(parsed.data, 'filename', params);
+    params.push(parsed.data.limit ?? 200);
+    const result = await pool.query(
+      `SELECT a.*, w.name AS workspace_name, w.is_personal AS workspace_is_personal
+       FROM assets a JOIN workspaces w ON w.id = a.workspace_id
+       ${where}
+       ORDER BY a.created_at DESC, a.id DESC
+       LIMIT $${params.length}`,
+      params
+    );
+    res.json({ assets: await toAdminAssets(result.rows as AdminAssetRow[]) });
+  } catch (err) {
+    console.error('Admin list assets error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PATCH /api/assets/admin/:id { visibility?, status? } — metadata only: the
+// stored object, storage_key, owner and workspace never change.
+router.patch('/admin/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const parsed = adminAssetUpdateSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid update' });
+    const result = await pool.query(
+      `UPDATE assets SET visibility = COALESCE($2, visibility), status = COALESCE($3, status)
+       WHERE id = $1 RETURNING id`,
+      [param(req.params.id), parsed.data.visibility ?? null, parsed.data.status ?? null]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Asset not found' });
+    const row = await pool.query(
+      `SELECT a.*, w.name AS workspace_name, w.is_personal AS workspace_is_personal
+       FROM assets a JOIN workspaces w ON w.id = a.workspace_id WHERE a.id = $1`,
+      [param(req.params.id)]
+    );
+    res.json((await toAdminAssets(row.rows as AdminAssetRow[]))[0]);
+  } catch (err) {
+    console.error('Admin update asset error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/assets/admin/:id — admin removal (active or hidden). Same
+// storage-safety path as the owner's delete (deleteAssetRow): the row goes;
+// the stored object goes only when no persisted content references it.
+router.delete('/admin/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query('SELECT * FROM assets WHERE id = $1', [param(req.params.id)]);
+    const row = result.rows[0] as AssetRow | undefined;
+    if (!row) return res.status(404).json({ error: 'Asset not found' });
+    res.json(await deleteAssetRow(row));
+  } catch (err) {
+    console.error('Admin delete asset error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.use(assetSharingRouter);
 
 export default router;
 export { getWorkspaceMembership };

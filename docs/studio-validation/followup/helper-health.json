@@ -1,0 +1,1 @@
+{"protocol": 1, "ready": true, "checkpoint": "studioludens/birefnet-lite-512@962e67969ec6acec9c19fab76acee4f5e22e990c", "sha256": "1cb0fb360dadd15af77c639085d77a9df67db0c64315560c3de005f676345ac2", "maxPixels": 6553600, "maxBytes": 26214400, "runtime": "1.24.2", "initMs": 1913.5609589866363, "error": null}

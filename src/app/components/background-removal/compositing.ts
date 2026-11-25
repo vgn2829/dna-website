@@ -26,17 +26,20 @@ export function isAcceptableImage(file: File | Blob): boolean {
 
 /** Decode a Blob into a SourceImage, downscaling to the working-resolution cap. */
 export async function loadSourceImage(file: File | Blob, name = 'image'): Promise<SourceImage> {
+  if (!isAcceptableImage(file)) throw new Error("Use a supported image under 25 MB");
   const decoded = await createImageBitmap(file);
+  if (decoded.width * decoded.height > 64_000_000) { decoded.close(); throw new Error("Image exceeds 64 megapixel decode limit"); }
   const long = Math.max(decoded.width, decoded.height);
   if (long <= MAX_WORKING_EDGE) {
     return { bitmap: decoded, width: decoded.width, height: decoded.height, name, downscaled: false };
   }
   const scale = MAX_WORKING_EDGE / long;
-  const w = Math.round(decoded.width * scale);
-  const h = Math.round(decoded.height * scale);
-  const bitmap = await createImageBitmap(decoded, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' });
-  decoded.close();
-  return { bitmap, width: w, height: h, name, downscaled: true };
+  const w = Math.max(1, Math.round(decoded.width * scale));
+  const h = Math.max(1, Math.round(decoded.height * scale));
+  try {
+    const bitmap = await createImageBitmap(decoded, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' });
+    return { bitmap, width: w, height: h, name, downscaled: true };
+  } finally { decoded.close(); }
 }
 
 /** Draw a source bitmap to a canvas and return its RGBA ImageData. */
@@ -51,13 +54,14 @@ export function bitmapToImageData(src: SourceImage): ImageData {
 
 /**
  * Apply a single-channel alpha mask to RGBA pixels, returning NEW ImageData
- * whose alpha channel is the mask. The input is left untouched.
+ * whose alpha multiplies the source alpha by the mask. The input is left untouched.
  */
 export function applyMask(image: ImageData, mask: Uint8ClampedArray): ImageData {
   const out = new Uint8ClampedArray(image.data); // copy RGB(A)
-  const px = Math.min(mask.length, out.length / 4);
+  if (mask.length !== image.width * image.height) throw new Error("Mask dimensions do not match image");
+  const px = mask.length;
   for (let i = 0; i < px; i++) {
-    out[i * 4 + 3] = mask[i];
+    out[i * 4 + 3] = Math.round(out[i * 4 + 3] * mask[i] / 255);
   }
   return new ImageData(out, image.width, image.height);
 }
@@ -123,5 +127,5 @@ export function downloadBlob(blob: Blob, filename: string): void {
   a.href = url;
   a.download = filename;
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

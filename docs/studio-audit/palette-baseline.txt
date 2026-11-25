@@ -1,0 +1,166 @@
+
+── HARMONY CORRECTNESS ───────────────────────────────────
+  ✗  [complementary] secondary hue ±5° of +180°
+       → actual=40.00°  expected≈97.12°  diff=57.12°
+  ✗  [complementary] accent hue ±5° of +150°
+       → actual=153.71°  expected≈67.12°  diff=86.60°
+  ✗  [analogous] secondary hue ±5° of +30°
+       → actual=75.39°  expected≈307.12°  diff=128.27°
+  ✗  [analogous] accent hue ±5° of +330°
+       → actual=116.47°  expected≈247.12°  diff=130.64°
+  ✗  [triadic] secondary hue ±5° of +120°
+       → actual=69.66°  expected≈37.12°  diff=32.54°
+  ✗  [triadic] accent hue ±5° of +240°
+       → actual=128.51°  expected≈157.12°  diff=28.60°
+  ✗  [splitComplementary] secondary hue ±5° of +150°
+       → actual=40.51°  expected≈67.12°  diff=26.61°
+  ✗  [splitComplementary] accent hue ±5° of +210°
+       → actual=159.29°  expected≈127.12°  diff=32.17°
+  ✗  [tetradic] secondary hue ±5° of +90°
+       → actual=71.65°  expected≈7.12°  diff=64.53°
+  ✗  [tetradic] accent hue ±5° of +270°
+       → actual=130.14°  expected≈187.12°  diff=56.98°
+
+── CONTRAST CORRECTNESS ──────────────────────────────────
+  ✓  [complementary/light] text/bg ≥4.5 (WCAG AA)
+  ✓  [complementary/light] primary/bg ≥4.5 (WCAG AA)
+  ✗  [complementary/light] primaryFg/primary ≥4.5 (WCAG AA)
+       → got 1.79
+  ✓  [complementary/light] textMuted/bg ≥3.0 (AA Large)
+  ✓  [complementary/dark] text/bg ≥4.5 (WCAG AA)
+  ✓  [complementary/dark] primary/bg ≥4.5 (WCAG AA)
+  ✗  [complementary/dark] primaryFg/primary ≥4.5 (WCAG AA)
+       → got 4.11
+  ✓  [complementary/dark] textMuted/bg ≥3.0 (AA Large)
+  ✓  [analogous/light] text/bg ≥4.5 (WCAG AA)
+  ✓  [analogous/light] primary/bg ≥4.5 (WCAG AA)
+  ✗  [analogous/light] primaryFg/primary ≥4.5 (WCAG AA)
+       → got 1.79
+  ✓  [analogous/light] textMuted/bg ≥3.0 (AA Large)
+  ✓  [analogous/dark] text/bg ≥4.5 (WCAG AA)
+  ✓  [analogous/dark] primary/bg ≥4.5 (WCAG AA)
+  ✗  [analogous/dark] primaryFg/primary ≥4.5 (WCAG AA)
+       → got 4.11
+  ✓  [analogous/dark] textMuted/bg ≥3.0 (AA Large)
+  ✓  [triadic/light] text/bg ≥4.5 (WCAG AA)
+  ✓  [triadic/light] primary/bg ≥4.5 (WCAG AA)
+  ✗  [triadic/light] primaryFg/primary ≥4.5 (WCAG AA)
+       → got 1.79
+  ✓  [triadic/light] textMuted/bg ≥3.0 (AA Large)
+  ✓  [triadic/dark] text/bg ≥4.5 (WCAG AA)
+  ✓  [triadic/dark] primary/bg ≥4.5 (WCAG AA)
+  ✗  [triadic/dark] primaryFg/primary ≥4.5 (WCAG AA)
+       → got 4.11
+  ✓  [triadic/dark] textMuted/bg ≥3.0 (AA Large)
+  ✓  [splitComplementary/light] text/bg ≥4.5 (WCAG AA)
+  ✓  [splitComplementary/light] primary/bg ≥4.5 (WCAG AA)
+  ✗  [splitComplementary/light] primaryFg/primary ≥4.5 (WCAG AA)
+       → got 1.79
+  ✓  [splitComplementary/light] textMuted/bg ≥3.0 (AA Large)
+  ✓  [splitComplementary/dark] text/bg ≥4.5 (WCAG AA)
+  ✓  [splitComplementary/dark] primary/bg ≥4.5 (WCAG AA)
+  ✗  [splitComplementary/dark] primaryFg/primary ≥4.5 (WCAG AA)
+       → got 4.11
+  ✓  [splitComplementary/dark] textMuted/bg ≥3.0 (AA Large)
+  ✓  [tetradic/light] text/bg ≥4.5 (WCAG AA)
+  ✓  [tetradic/light] primary/bg ≥4.5 (WCAG AA)
+  ✗  [tetradic/light] primaryFg/primary ≥4.5 (WCAG AA)
+       → got 1.79
+  ✓  [tetradic/light] textMuted/bg ≥3.0 (AA Large)
+  ✓  [tetradic/dark] text/bg ≥4.5 (WCAG AA)
+  ✓  [tetradic/dark] primary/bg ≥4.5 (WCAG AA)
+  ✗  [tetradic/dark] primaryFg/primary ≥4.5 (WCAG AA)
+       → got 4.11
+  ✓  [tetradic/dark] textMuted/bg ≥3.0 (AA Large)
+
+── GAMUT CORRECTNESS  (5 seeds × 5 modes × light+dark) ───
+  ✓  [#6366F1/complementary/light] all 18 slots valid + in-gamut
+  ✓  [#6366F1/complementary/dark] all 18 slots valid + in-gamut
+  ✓  [#6366F1/analogous/light] all 18 slots valid + in-gamut
+  ✓  [#6366F1/analogous/dark] all 18 slots valid + in-gamut
+  ✓  [#6366F1/triadic/light] all 18 slots valid + in-gamut
+  ✓  [#6366F1/triadic/dark] all 18 slots valid + in-gamut
+  ✓  [#6366F1/splitComplementary/light] all 18 slots valid + in-gamut
+  ✓  [#6366F1/splitComplementary/dark] all 18 slots valid + in-gamut
+  ✓  [#6366F1/tetradic/light] all 18 slots valid + in-gamut
+  ✓  [#6366F1/tetradic/dark] all 18 slots valid + in-gamut
+  ✓  [#FF006E/complementary/light] all 18 slots valid + in-gamut
+  ✓  [#FF006E/complementary/dark] all 18 slots valid + in-gamut
+  ✓  [#FF006E/analogous/light] all 18 slots valid + in-gamut
+  ✓  [#FF006E/analogous/dark] all 18 slots valid + in-gamut
+  ✓  [#FF006E/triadic/light] all 18 slots valid + in-gamut
+  ✓  [#FF006E/triadic/dark] all 18 slots valid + in-gamut
+  ✓  [#FF006E/splitComplementary/light] all 18 slots valid + in-gamut
+  ✓  [#FF006E/splitComplementary/dark] all 18 slots valid + in-gamut
+  ✓  [#FF006E/tetradic/light] all 18 slots valid + in-gamut
+  ✓  [#FF006E/tetradic/dark] all 18 slots valid + in-gamut
+  ✓  [#00C853/complementary/light] all 18 slots valid + in-gamut
+  ✓  [#00C853/complementary/dark] all 18 slots valid + in-gamut
+  ✓  [#00C853/analogous/light] all 18 slots valid + in-gamut
+  ✓  [#00C853/analogous/dark] all 18 slots valid + in-gamut
+  ✓  [#00C853/triadic/light] all 18 slots valid + in-gamut
+  ✓  [#00C853/triadic/dark] all 18 slots valid + in-gamut
+  ✓  [#00C853/splitComplementary/light] all 18 slots valid + in-gamut
+  ✓  [#00C853/splitComplementary/dark] all 18 slots valid + in-gamut
+  ✓  [#00C853/tetradic/light] all 18 slots valid + in-gamut
+  ✓  [#00C853/tetradic/dark] all 18 slots valid + in-gamut
+  ✓  [#FF6B00/complementary/light] all 18 slots valid + in-gamut
+  ✓  [#FF6B00/complementary/dark] all 18 slots valid + in-gamut
+  ✓  [#FF6B00/analogous/light] all 18 slots valid + in-gamut
+  ✓  [#FF6B00/analogous/dark] all 18 slots valid + in-gamut
+  ✓  [#FF6B00/triadic/light] all 18 slots valid + in-gamut
+  ✓  [#FF6B00/triadic/dark] all 18 slots valid + in-gamut
+  ✓  [#FF6B00/splitComplementary/light] all 18 slots valid + in-gamut
+  ✓  [#FF6B00/splitComplementary/dark] all 18 slots valid + in-gamut
+  ✓  [#FF6B00/tetradic/light] all 18 slots valid + in-gamut
+  ✓  [#FF6B00/tetradic/dark] all 18 slots valid + in-gamut
+  ✓  [#0EA5E9/complementary/light] all 18 slots valid + in-gamut
+  ✓  [#0EA5E9/complementary/dark] all 18 slots valid + in-gamut
+  ✓  [#0EA5E9/analogous/light] all 18 slots valid + in-gamut
+  ✓  [#0EA5E9/analogous/dark] all 18 slots valid + in-gamut
+  ✓  [#0EA5E9/triadic/light] all 18 slots valid + in-gamut
+  ✓  [#0EA5E9/triadic/dark] all 18 slots valid + in-gamut
+  ✓  [#0EA5E9/splitComplementary/light] all 18 slots valid + in-gamut
+  ✓  [#0EA5E9/splitComplementary/dark] all 18 slots valid + in-gamut
+  ✓  [#0EA5E9/tetradic/light] all 18 slots valid + in-gamut
+  ✓  [#0EA5E9/tetradic/dark] all 18 slots valid + in-gamut
+
+── LOCK CORRECTNESS ──────────────────────────────────────
+  ✓  locked primary byte-identical after seed+mode change
+  ✓  locked accent byte-identical after seed+mode change
+  ✓  all non-locked slots changed after seed+darkMode+mode change
+
+── SCORE SANITY ──────────────────────────────────────────
+  ✓  [complementary] score in [0,100]
+  ✓  [complementary] dScore in [0,100]
+  ✓  [analogous] score in [0,100]
+  ✓  [analogous] dScore in [0,100]
+  ✓  [triadic] score in [0,100]
+  ✓  [triadic] dScore in [0,100]
+  ✓  [splitComplementary] score in [0,100]
+  ✓  [splitComplementary] dScore in [0,100]
+  ✓  [tetradic] score in [0,100]
+  ✓  [tetradic] dScore in [0,100]
+  ✓  AA-compliant palette scores ≥70
+  ✓  scorePalette returns pairs object with ≥6 entries
+
+── COLOR BLIND ANALYSIS ──────────────────────────────────
+  ✓  analyzeCB returns protanopia
+  ✓  analyzeCB returns deuteranopia
+  ✓  analyzeCB returns tritanopia
+  ✓  [protanopia] has textBgCR field
+  ✓  [protanopia] has primaryBgCR field
+  ✓  [protanopia] textBgCR numeric ≥1.0
+  ✓  [protanopia] primaryBgCR numeric ≥1.0
+  ✓  [deuteranopia] has textBgCR field
+  ✓  [deuteranopia] has primaryBgCR field
+  ✓  [deuteranopia] textBgCR numeric ≥1.0
+  ✓  [deuteranopia] primaryBgCR numeric ≥1.0
+  ✓  [tritanopia] has textBgCR field
+  ✓  [tritanopia] has primaryBgCR field
+  ✓  [tritanopia] textBgCR numeric ≥1.0
+  ✓  [tritanopia] primaryBgCR numeric ≥1.0
+
+══════════════════════════════════════════════════════════
+  110/130 tests passed  (20 FAILED)
+══════════════════════════════════════════════════════════

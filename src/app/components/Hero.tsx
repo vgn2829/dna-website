@@ -5,9 +5,11 @@ import { useNavigate } from 'react-router';
 import { useStudent } from '../context/StudentContext';
 import { PixelTrail } from './ui/pixel-trail';
 import { useScreenSize } from './hooks/use-screen-size';
+import { useMemberCount } from './Stats';
 
 export function Hero() {
   const navigate = useNavigate();
+  const memberCount = useMemberCount();
   const { openRollModal, studentSession } = useStudent();
   const screenSize = useScreenSize();
 
@@ -172,7 +174,7 @@ export function Hero() {
 
         <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', position: 'relative', zIndex: 1 }}>
           {[
-            { value: '250+', label: 'Members' },
+            { value: `${memberCount}+`, label: 'Members' },
             { value: '50+',  label: 'Workshops' },
             { value: '500+', label: 'Artworks' },
           ].map(s => (

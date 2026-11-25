@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { describeDbTarget } from './dbTarget';
 
 // Verify the server certificate by default. Set DB_SSL_REJECT_UNAUTHORIZED=false
 // only for local/dev databases with self-signed certs. If a custom CA is needed,
@@ -15,6 +16,11 @@ export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: sslConfig(),
 });
+
+// What this Pool was actually built for — captured at creation, so tests
+// (tests/setup.ts) can verify it was created AFTER the test environment
+// chose its database, and startup logs can say which database is in use.
+export const poolTarget = describeDbTarget(process.env.DATABASE_URL);
 
 export type Row = Record<string, unknown>;
 

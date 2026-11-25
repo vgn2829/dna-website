@@ -1,9 +1,13 @@
-import { useState, useEffect } from 'react';
+
+import { useState, useEffect, useId, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
 import { api } from '../lib/api';
 import { useStudent, hasSeenWelcome, markWelcomeSeen } from '../context/StudentContext';
 import WelcomeOverlay from './WelcomeOverlay';
+import { useModalA11y } from './hooks/useModalA11y';
+import { checkRollNumber, ROLL_NUMBER_MAX_LENGTH } from '../lib/rollNumber';
 
 export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => void }) {
   const { isRollModalOpen, closeRollModal, login, needsReverify, clearReverifyNotice } = useStudent();
@@ -12,6 +16,9 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
   const [step, setStep] = useState<ModalStep>('roll');
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState('');
+  // Client-side format check (lib/rollNumber.ts mirrors the backend's
+  // ROLL_SCHEMA). Separate from checkError, which is the server's answer.
+  const [rollError, setRollError] = useState('');
 
   const [roll, setRoll] = useState('');
   const [name, setName] = useState('');
@@ -30,6 +37,10 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
   // True when the OTP step was reached via the profile step (new-student
   // registration). False for returning students whose email is server-controlled.
   const [isNewStudentFlow, setIsNewStudentFlow] = useState(false);
+  // Tracks when the student returned from OTP to fix their email, so we can
+  // make clear that the previous OTP is invalidated once a new code is sent.
+  const [emailCorrectionNotice, setEmailCorrectionNotice] = useState(false);
+  const [otpReplacedNotice, setOtpReplacedNotice] = useState(false);
 
   // Temporary email-delivery-incident bypass — only shown if an admin has
   // turned it on server-side (see AdminPage's SettingsTab). Checked whenever
@@ -44,8 +55,9 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
   const resetAll = () => {
     setStep('roll');
     setRoll(''); setName(''); setEmail(''); setCode('');
-    setMaskedEmail(''); setCheckError(''); setOtpError('');
+    setMaskedEmail(''); setCheckError(''); setRollError(''); setOtpError('');
     setChecking(false); setIsNewStudentFlow(false);
+    setEmailCorrectionNotice(false); setOtpReplacedNotice(false);
   };
 
   useEffect(() => {
@@ -56,20 +68,30 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
     (err instanceof Error && err.message && err.message !== 'SESSION_EXPIRED') ? err.message : fallback;
 
   // Step 1 → decide new vs existing, and for existing users send the code immediately.
+  // A roll the backend's ROLL_SCHEMA would reject is stopped here with an
+  // inline error instead of advancing to the profile step (where it used
+  // to be shown with a success tick, then fail at "Send code").
   const handleRollContinue = async () => {
-    if (!roll.trim()) return;
+    if (checking) return;
+    const check = checkRollNumber(roll);
+    if (check.status === 'empty') return;
+    if (check.status === 'invalid') { setRollError(check.message); return; }
     setChecking(true);
     setCheckError('');
     try {
-      const { exists, hasProfile } = await api.students.checkExists(roll.trim());
+      const { exists, hasProfile } = await api.students.checkExists(check.value);
       if (exists && hasProfile) {
-        const r = await api.students.requestOtp(roll.trim());
+        const r = await api.students.requestOtp(check.value);
         setMaskedEmail(r.email);
         setCode('');
         setIsNewStudentFlow(false);
+        setEmailCorrectionNotice(false);
+        setOtpReplacedNotice(false);
         setStep('otp');
       } else {
         setIsNewStudentFlow(true);
+        setEmailCorrectionNotice(false);
+        setOtpReplacedNotice(false);
         setStep('profile');
       }
     } catch (err) {
@@ -81,13 +103,15 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
 
   // Step 2 (new users) → send the code to the email they entered.
   const handleSendCode = async () => {
-    if (!roll || !name.trim() || !email.endsWith('@iitk.ac.in')) return;
+    if (submitting || !roll || !name.trim() || !email.endsWith('@iitk.ac.in')) return;
     setSubmitting(true);
     setCheckError('');
     try {
       const r = await api.students.requestOtp(roll.trim(), { name: name.trim(), email: email.trim() });
       setMaskedEmail(r.email);
       setCode('');
+      setOtpReplacedNotice(emailCorrectionNotice);
+      setEmailCorrectionNotice(false);
       setStep('otp');
     } catch (err) {
       setCheckError(errMsg(err, 'Could not send the code. Try again.'));
@@ -100,7 +124,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
 
   // Step 3 → verify the code; on success we receive a signed token.
   const handleVerify = async () => {
-    if (!/^[0-9]{6}$/.test(code)) return;
+    if (verifying || !/^[0-9]{6}$/.test(code)) return;
     setVerifying(true);
     setOtpError('');
     try {
@@ -132,9 +156,13 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
   // address (ON CONFLICT DO UPDATE). Only available for the new-student flow
   // because returning students' email is server-controlled.
   const handleChangeEmail = () => {
+    refocusEmailRef.current = true;
+    setEmailCorrectionNotice(true);
+    setOtpReplacedNotice(false);
     setStep('profile');
     setCode('');
     setOtpError('');
+    setCheckError('');
     // Keep name and email pre-filled so the student only needs to correct
     // the email, not retype everything.
   };
@@ -168,6 +196,40 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
     closeRollModal();
   };
 
+  const dialogOpen = isRollModalOpen && !showWelcome;
+  const titleId = useId();
+  const rollInputId = useId();
+  const rollErrorId = useId();
+  const nameInputId = useId();
+  const emailInputId = useId();
+  const codeInputId = useId();
+  const rollInputRef = useRef<HTMLInputElement | null>(null);
+  // Set when going back to the roll step ("Change" / "Use a different roll
+  // number"); the field's callback ref then focuses it once it mounts.
+  // Not autoFocus: that would run before useModalA11y records the opener,
+  // so focus could not return to it on close.
+  const refocusRollRef = useRef(false);
+  const refocusEmailRef = useRef(false);
+
+  // While the dialog is open the page behind it (everything under #root —
+  // the dialog itself is portalled to <body>) is inert: not focusable,
+  // clickable or exposed to assistive tech. Declared before useModalA11y
+  // so this cleanup runs first on close — the hook's cleanup then returns
+  // focus to the opener, which would silently fail while #root is inert.
+  useEffect(() => {
+    if (!dialogOpen) return;
+    const root = document.getElementById('root');
+    if (!root || root.hasAttribute('inert')) return;
+    root.setAttribute('inert', '');
+    return () => root.removeAttribute('inert');
+  }, [dialogOpen]);
+
+  // Escape closes, Tab/Shift+Tab stay inside, focus returns to the opener
+  // on close; focus starts on the roll number field.
+  const dialogRef = useModalA11y(dialogOpen, handleClose, { initialFocus: () => rollInputRef.current });
+
+  const rollMessage = rollError || checkError;
+
   const handleWelcomeDone = () => {
     markWelcomeSeen(newUserRoll);
     setShowWelcome(false);
@@ -192,22 +254,27 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
 
   return (
     <>
-      <AnimatePresence>
-        {isRollModalOpen && !showWelcome && (
+      {createPortal(<AnimatePresence>
+        {dialogOpen && (
           <>
             {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50"
-              style={{ background: 'rgba(0,0,0,0.75)' }}
+              className="fixed inset-0"
+              style={{ background: 'rgba(0,0,0,0.75)', zIndex: 10000 }}
               onClick={handleClose}
             />
 
             {/* Modal */}
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+            <div className="fixed inset-0 flex items-center justify-center p-4 pointer-events-none" style={{ zIndex: 10000 }}>
               <motion.div
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={titleId}
+                tabIndex={-1}
                 initial={{ opacity: 0, scale: 0.93, y: 16 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.93, y: 16 }}
@@ -218,6 +285,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                   borderRadius: 'var(--radius-xxl)',
                   boxShadow: 'var(--shadow-level-2)',
                   padding: '2rem',
+                  outline: 'none',
                 }}
                 onClick={e => e.stopPropagation()}
               >
@@ -228,10 +296,10 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                   {/* Header */}
                   <div className="flex items-start justify-between mb-6">
                     <div>
-                      <h2 className="type-headline mb-1">Link Your Profile</h2>
+                      <h2 id={titleId} className="type-headline mb-1">Link Your Profile</h2>
                       <p className="type-caption">Connect your IITK roll number</p>
                     </div>
-                    <button onClick={handleClose} className="btn-icon" style={{ width: 32, height: 32 }}>
+                    <button onClick={handleClose} className="btn-icon touch-target" aria-label="Close sign-in" style={{ width: 32, height: 32 }}>
                       <X size={15} />
                     </button>
                   </div>
@@ -261,34 +329,45 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                         style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
                       >
                         <div>
-                          <p style={{ ...label }}>Roll Number</p>
+                          <label htmlFor={rollInputId} style={label}>Roll Number</label>
                           <input
+                            ref={el => {
+                              rollInputRef.current = el;
+                              if (el && refocusRollRef.current) { refocusRollRef.current = false; el.focus(); }
+                            }}
+                            id={rollInputId}
                             className="input-base"
                             type="text"
                             placeholder="e.g. 230182"
                             value={roll}
-                            onChange={e => { setRoll(e.target.value); setCheckError(''); }}
+                            onChange={e => { setRoll(e.target.value); setCheckError(''); setRollError(''); }}
                             onKeyDown={e => { if (e.key === 'Enter') handleRollContinue(); }}
+                            // Reject a non-empty malformed roll as soon as the
+                            // user leaves the field, not only on submit.
+                            onBlur={() => { const c = checkRollNumber(roll); if (c.status === 'invalid') setRollError(c.message); }}
+                            aria-invalid={rollMessage ? true : undefined}
+                            aria-describedby={rollMessage ? rollErrorId : undefined}
+                            autoComplete="off"
                             // Matches ROLL_SCHEMA's widened upper bound in
                             // backend/src/routes/auth.ts (2 digits + up to
                             // 10 more alphanumeric chars = 12 total) — keep
                             // these in sync so this field never silently
                             // truncates a roll number the backend would
                             // otherwise accept.
-                            maxLength={12}
+                            maxLength={ROLL_NUMBER_MAX_LENGTH}
                             style={{ width: '100%', boxSizing: 'border-box' }}
-                            autoFocus
                           />
-                          {checkError && (
-                            <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>
-                              {checkError}
+                          {rollMessage && (
+                            <p id={rollErrorId} role="alert" style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--color-error)', fontFamily: 'var(--font-body)' }}>
+                              {rollMessage}
                             </p>
                           )}
                         </div>
                         <button
                           onClick={handleRollContinue}
-                          disabled={checking || !roll.trim()}
-                          style={primaryBtn(checking || !roll.trim())}
+                          disabled={checking || !roll.trim() || !!rollError}
+                          aria-busy={checking || undefined}
+                          style={primaryBtn(checking || !roll.trim() || !!rollError)}
                         >
                           {checking ? 'Checking...' : 'Continue'}
                         </button>
@@ -317,13 +396,14 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                             {roll}
                           </span>
                           <button
-                            onClick={() => { setStep('roll'); setName(''); setEmail(''); }}
+                            onClick={() => { refocusRollRef.current = true; setStep('roll'); setName(''); setEmail(''); }}
                             style={{
                               marginLeft: 'auto', fontSize: 11,
                               color: 'var(--color-ink-muted)',
                               background: 'none', border: 'none',
                               fontFamily: 'var(--font-body)', cursor: 'pointer',
                             }}
+                            className="touch-target"
                           >
                             Change
                           </button>
@@ -331,8 +411,9 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
 
                         {/* Full Name */}
                         <div>
-                          <label style={label}>Full Name</label>
+                          <label htmlFor={nameInputId} style={label}>Full Name</label>
                           <input
+                            id={nameInputId}
                             className="input-base"
                             type="text"
                             placeholder="e.g. Rahul Kumar"
@@ -346,13 +427,18 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
 
                         {/* IITK Email */}
                         <div>
-                          <label style={label}>IITK Email</label>
+                          <label htmlFor={emailInputId} style={label}>IITK Email</label>
                           <input
+                            ref={el => {
+                              if (el && refocusEmailRef.current) { refocusEmailRef.current = false; el.focus(); }
+                            }}
+                            id={emailInputId}
                             className="input-base"
                             type="email"
                             placeholder="e.g. yourname23@iitk.ac.in"
                             value={email}
-                            onChange={e => setEmail(e.target.value.toLowerCase())}
+                            onChange={e => { setEmail(e.target.value.toLowerCase()); setCheckError(''); }}
+                            onKeyDown={e => { if (e.key === 'Enter') handleSendCode(); }}
                             style={{ width: '100%', boxSizing: 'border-box' }}
                           />
                           {email && !email.endsWith('@iitk.ac.in') && (
@@ -363,7 +449,9 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                         </div>
 
                         <p className="type-micro" style={{ color: 'var(--color-ink-muted)' }}>
-                          We'll email a 6-digit code to verify it's you. No password needed.
+                          {emailCorrectionNotice
+                            ? 'Sending a new code will invalidate your previous verification code.'
+                            : "We'll email a 6-digit code to verify it's you. No password needed."}
                         </p>
 
                         {checkError && (
@@ -392,11 +480,14 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                         style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
                       >
                         <p className="type-micro" style={{ color: 'var(--color-ink-muted)', margin: 0 }}>
-                          Enter the 6-digit code sent to <strong>{maskedEmail}</strong>.
+                          {otpReplacedNotice
+                            ? <>A new 6-digit code was sent to <strong>{maskedEmail}</strong>. Your previous code is no longer valid.</>
+                            : <>Enter the 6-digit code sent to <strong>{maskedEmail}</strong>.</>}
                         </p>
                         <div>
-                          <label style={label}>Verification Code</label>
+                          <label htmlFor={codeInputId} style={label}>Verification Code</label>
                           <input
+                            id={codeInputId}
                             className="input-base"
                             type="text"
                             inputMode="numeric"
@@ -421,7 +512,6 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                         >
                           {verifying ? 'Verifying...' : 'Verify & Continue'}
                         </button>
-
                         {/* Secondary actions — visually below the primary button */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                           {/* Change email: only shown for the new-student registration flow.
@@ -438,18 +528,20 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
                                   fontFamily: 'var(--font-body)', cursor: 'pointer',
                                   textDecoration: 'underline', padding: 0,
                                 }}
+                                className="touch-target"
                               >
                                 Change email address
                               </button>
                             </div>
                           )}
                           <button
-                            onClick={() => { setStep('roll'); setCode(''); setOtpError(''); }}
+                            onClick={() => { refocusRollRef.current = true; setStep('roll'); setCode(''); setOtpError(''); }}
                             style={{
                               fontSize: 12, color: 'var(--color-ink-muted)',
                               background: 'none', border: 'none',
                               fontFamily: 'var(--font-body)', cursor: 'pointer',
                             }}
+                            className="touch-target"
                           >
                             Use a different roll number
                           </button>
@@ -487,7 +579,7 @@ export function RollModal({ onSuccess }: { onSuccess?: (uniqueId: string) => voi
             </div>
           </>
         )}
-      </AnimatePresence>
+      </AnimatePresence>, document.body)}
       {showWelcome && (
         <WelcomeOverlay name={newUserName} onDone={handleWelcomeDone} />
       )}

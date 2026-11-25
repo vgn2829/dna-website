@@ -1,0 +1,3149 @@
+[
+  {
+    "fixture": "chelsea.png",
+    "model": "general",
+    "dimensions": [
+      451,
+      300
+    ],
+    "elapsedMs": 2242.300000011921,
+    "phases": [
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "elapsedMs": 31.099999994039536
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 20,
+        "elapsedMs": 67.5
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 26,
+        "elapsedMs": 67.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 27,
+        "elapsedMs": 67.80000001192093
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 29,
+        "elapsedMs": 67.80000001192093
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 30,
+        "elapsedMs": 67.90000000596046
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 32,
+        "elapsedMs": 68
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 33,
+        "elapsedMs": 68.40000000596046
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 34,
+        "elapsedMs": 68.40000000596046
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 36,
+        "elapsedMs": 68.40000000596046
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 37,
+        "elapsedMs": 68.5
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 39,
+        "elapsedMs": 68.5
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 40,
+        "elapsedMs": 68.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 42,
+        "elapsedMs": 76.90000000596046
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 43,
+        "elapsedMs": 77
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 44,
+        "elapsedMs": 77
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 46,
+        "elapsedMs": 86.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 49,
+        "elapsedMs": 86.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 52,
+        "elapsedMs": 86.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 53,
+        "elapsedMs": 86.80000001192093
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 56,
+        "elapsedMs": 86.80000001192093
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 57,
+        "elapsedMs": 86.80000001192093
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 59,
+        "elapsedMs": 87.40000000596046
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 60,
+        "elapsedMs": 88
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 62,
+        "elapsedMs": 88.5
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 63,
+        "elapsedMs": 88.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 64,
+        "elapsedMs": 89
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 66,
+        "elapsedMs": 89
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 67,
+        "elapsedMs": 89.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 69,
+        "elapsedMs": 90.80000001192093
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 70,
+        "elapsedMs": 91
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 72,
+        "elapsedMs": 91.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 73,
+        "elapsedMs": 91.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 74,
+        "elapsedMs": 91.80000001192093
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 76,
+        "elapsedMs": 92.80000001192093
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 77,
+        "elapsedMs": 92.90000000596046
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 79,
+        "elapsedMs": 93.30000001192093
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 80,
+        "elapsedMs": 93.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 82,
+        "elapsedMs": 95.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 83,
+        "elapsedMs": 95.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 85,
+        "elapsedMs": 95.30000001192093
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 87,
+        "elapsedMs": 100.30000001192093
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 89,
+        "elapsedMs": 100.30000001192093
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 90,
+        "elapsedMs": 100.30000001192093
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 92,
+        "elapsedMs": 100.40000000596046
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 93,
+        "elapsedMs": 101.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 95,
+        "elapsedMs": 101.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 96,
+        "elapsedMs": 101.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 97,
+        "elapsedMs": 102.40000000596046
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 99,
+        "elapsedMs": 103.30000001192093
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "download",
+        "pct": 100,
+        "elapsedMs": 104.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "init",
+        "elapsedMs": 145.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 1,
+        "phase": "infer",
+        "backend": "webgpu",
+        "elapsedMs": 1168.0999999940395
+      }
+    ]
+  },
+  {
+    "fixture": "illustrated-fine-edges.png",
+    "model": "general",
+    "dimensions": [
+      960,
+      720
+    ],
+    "elapsedMs": 124.09999999403954,
+    "phases": [
+      {
+        "type": "progress",
+        "id": 2,
+        "phase": "infer",
+        "backend": "webgpu",
+        "elapsedMs": 6
+      }
+    ]
+  },
+  {
+    "fixture": "motion-soft.png",
+    "model": "portrait",
+    "dimensions": [
+      512,
+      512
+    ],
+    "elapsedMs": 4585.5999999940395,
+    "phases": [
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "elapsedMs": 6.799999982118607
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 0,
+        "elapsedMs": 26.599999994039536
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 1,
+        "elapsedMs": 34.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 1,
+        "elapsedMs": 35.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 1,
+        "elapsedMs": 43.29999998211861
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 1,
+        "elapsedMs": 43.599999994039536
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 2,
+        "elapsedMs": 49.599999994039536
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 2,
+        "elapsedMs": 49.79999998211861
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 2,
+        "elapsedMs": 54.29999998211861
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 2,
+        "elapsedMs": 54.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 3,
+        "elapsedMs": 58.099999994039536
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 3,
+        "elapsedMs": 58.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 3,
+        "elapsedMs": 58.599999994039536
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 3,
+        "elapsedMs": 58.79999998211861
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 4,
+        "elapsedMs": 58.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 4,
+        "elapsedMs": 74.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 4,
+        "elapsedMs": 75
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 4,
+        "elapsedMs": 75.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 5,
+        "elapsedMs": 75.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 5,
+        "elapsedMs": 75.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 5,
+        "elapsedMs": 75.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 5,
+        "elapsedMs": 75.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 6,
+        "elapsedMs": 75.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 6,
+        "elapsedMs": 75.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 6,
+        "elapsedMs": 75.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 6,
+        "elapsedMs": 77.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 7,
+        "elapsedMs": 88.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 7,
+        "elapsedMs": 88.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 7,
+        "elapsedMs": 88.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 7,
+        "elapsedMs": 91.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 8,
+        "elapsedMs": 91.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 8,
+        "elapsedMs": 92.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 8,
+        "elapsedMs": 92.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 8,
+        "elapsedMs": 92.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 9,
+        "elapsedMs": 92.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 9,
+        "elapsedMs": 93
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 9,
+        "elapsedMs": 93.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 9,
+        "elapsedMs": 93.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 10,
+        "elapsedMs": 93.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 10,
+        "elapsedMs": 94
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 10,
+        "elapsedMs": 94.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 10,
+        "elapsedMs": 94.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 11,
+        "elapsedMs": 95
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 11,
+        "elapsedMs": 95.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 11,
+        "elapsedMs": 95.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 11,
+        "elapsedMs": 96.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 12,
+        "elapsedMs": 96.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 12,
+        "elapsedMs": 97.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 12,
+        "elapsedMs": 98.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 12,
+        "elapsedMs": 98.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 13,
+        "elapsedMs": 99.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 13,
+        "elapsedMs": 99.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 13,
+        "elapsedMs": 99.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 13,
+        "elapsedMs": 112.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 14,
+        "elapsedMs": 112.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 14,
+        "elapsedMs": 112.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 14,
+        "elapsedMs": 126.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 14,
+        "elapsedMs": 143.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 15,
+        "elapsedMs": 157
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 15,
+        "elapsedMs": 157.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 15,
+        "elapsedMs": 157.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 15,
+        "elapsedMs": 172.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 16,
+        "elapsedMs": 172.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 16,
+        "elapsedMs": 173
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 16,
+        "elapsedMs": 192.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 17,
+        "elapsedMs": 206.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 17,
+        "elapsedMs": 207
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 18,
+        "elapsedMs": 244.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 18,
+        "elapsedMs": 251.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 18,
+        "elapsedMs": 253.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 18,
+        "elapsedMs": 253.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 19,
+        "elapsedMs": 253.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 19,
+        "elapsedMs": 253.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 19,
+        "elapsedMs": 254.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 19,
+        "elapsedMs": 254.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 20,
+        "elapsedMs": 254.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 20,
+        "elapsedMs": 255.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 20,
+        "elapsedMs": 257.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 21,
+        "elapsedMs": 257.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 21,
+        "elapsedMs": 268.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 21,
+        "elapsedMs": 268.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 21,
+        "elapsedMs": 268.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 22,
+        "elapsedMs": 283.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 22,
+        "elapsedMs": 298.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 22,
+        "elapsedMs": 298.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 22,
+        "elapsedMs": 310.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 23,
+        "elapsedMs": 311.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 23,
+        "elapsedMs": 311.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 23,
+        "elapsedMs": 312.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 23,
+        "elapsedMs": 313.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 24,
+        "elapsedMs": 313.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 24,
+        "elapsedMs": 314
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 24,
+        "elapsedMs": 314.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 24,
+        "elapsedMs": 314.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 25,
+        "elapsedMs": 314.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 25,
+        "elapsedMs": 314.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 25,
+        "elapsedMs": 315.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 25,
+        "elapsedMs": 316.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 26,
+        "elapsedMs": 316.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 26,
+        "elapsedMs": 317.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 26,
+        "elapsedMs": 317.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 26,
+        "elapsedMs": 317.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 27,
+        "elapsedMs": 318.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 27,
+        "elapsedMs": 318.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 27,
+        "elapsedMs": 325.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 27,
+        "elapsedMs": 325.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 28,
+        "elapsedMs": 326.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 28,
+        "elapsedMs": 326.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 28,
+        "elapsedMs": 326.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 29,
+        "elapsedMs": 347.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 29,
+        "elapsedMs": 347.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 29,
+        "elapsedMs": 347.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 29,
+        "elapsedMs": 347.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 30,
+        "elapsedMs": 347.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 30,
+        "elapsedMs": 347.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 30,
+        "elapsedMs": 348.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 30,
+        "elapsedMs": 348.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 31,
+        "elapsedMs": 348.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 31,
+        "elapsedMs": 348.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 31,
+        "elapsedMs": 348.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 31,
+        "elapsedMs": 348.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 32,
+        "elapsedMs": 348.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 32,
+        "elapsedMs": 349
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 32,
+        "elapsedMs": 349.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 32,
+        "elapsedMs": 349.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 33,
+        "elapsedMs": 349.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 33,
+        "elapsedMs": 349.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 33,
+        "elapsedMs": 349.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 33,
+        "elapsedMs": 349.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 34,
+        "elapsedMs": 349.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 34,
+        "elapsedMs": 350
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 34,
+        "elapsedMs": 350.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 34,
+        "elapsedMs": 350.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 35,
+        "elapsedMs": 350.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 35,
+        "elapsedMs": 350.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 35,
+        "elapsedMs": 350.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 35,
+        "elapsedMs": 350.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 36,
+        "elapsedMs": 350.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 36,
+        "elapsedMs": 350.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 36,
+        "elapsedMs": 350.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 36,
+        "elapsedMs": 351.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 37,
+        "elapsedMs": 351.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 37,
+        "elapsedMs": 351.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 37,
+        "elapsedMs": 351.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 37,
+        "elapsedMs": 351.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 38,
+        "elapsedMs": 351.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 38,
+        "elapsedMs": 351.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 38,
+        "elapsedMs": 351.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 38,
+        "elapsedMs": 351.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 39,
+        "elapsedMs": 352.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 39,
+        "elapsedMs": 352.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 39,
+        "elapsedMs": 352.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 39,
+        "elapsedMs": 352.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 40,
+        "elapsedMs": 352.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 40,
+        "elapsedMs": 352.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 40,
+        "elapsedMs": 352.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 41,
+        "elapsedMs": 352.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 41,
+        "elapsedMs": 352.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 41,
+        "elapsedMs": 352.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 41,
+        "elapsedMs": 352.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 42,
+        "elapsedMs": 353
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 42,
+        "elapsedMs": 353.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 42,
+        "elapsedMs": 353.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 42,
+        "elapsedMs": 353.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 43,
+        "elapsedMs": 353.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 43,
+        "elapsedMs": 353.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 43,
+        "elapsedMs": 353.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 43,
+        "elapsedMs": 353.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 44,
+        "elapsedMs": 353.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 44,
+        "elapsedMs": 353.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 44,
+        "elapsedMs": 354.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 44,
+        "elapsedMs": 354.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 45,
+        "elapsedMs": 354.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 45,
+        "elapsedMs": 386.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 45,
+        "elapsedMs": 387
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 46,
+        "elapsedMs": 387.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 46,
+        "elapsedMs": 387.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 46,
+        "elapsedMs": 387.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 46,
+        "elapsedMs": 387.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 47,
+        "elapsedMs": 387.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 47,
+        "elapsedMs": 388.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 47,
+        "elapsedMs": 388.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 48,
+        "elapsedMs": 388.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 48,
+        "elapsedMs": 388.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 48,
+        "elapsedMs": 389
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 48,
+        "elapsedMs": 389.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 49,
+        "elapsedMs": 389.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 49,
+        "elapsedMs": 389.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 49,
+        "elapsedMs": 389.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 49,
+        "elapsedMs": 389.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 50,
+        "elapsedMs": 389.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 50,
+        "elapsedMs": 389.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 50,
+        "elapsedMs": 390.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 50,
+        "elapsedMs": 390.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 51,
+        "elapsedMs": 390.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 51,
+        "elapsedMs": 390.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 51,
+        "elapsedMs": 390.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 51,
+        "elapsedMs": 390.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 52,
+        "elapsedMs": 390.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 52,
+        "elapsedMs": 390.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 52,
+        "elapsedMs": 390.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 52,
+        "elapsedMs": 391.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 53,
+        "elapsedMs": 391.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 53,
+        "elapsedMs": 391.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 53,
+        "elapsedMs": 391.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 53,
+        "elapsedMs": 391.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 54,
+        "elapsedMs": 391.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 54,
+        "elapsedMs": 391.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 54,
+        "elapsedMs": 392
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 54,
+        "elapsedMs": 392
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 55,
+        "elapsedMs": 392.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 55,
+        "elapsedMs": 392.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 55,
+        "elapsedMs": 392.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 55,
+        "elapsedMs": 392.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 56,
+        "elapsedMs": 392.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 56,
+        "elapsedMs": 392.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 56,
+        "elapsedMs": 393
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 56,
+        "elapsedMs": 393.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 57,
+        "elapsedMs": 393.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 57,
+        "elapsedMs": 393.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 57,
+        "elapsedMs": 393.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 57,
+        "elapsedMs": 393.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 58,
+        "elapsedMs": 394
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 58,
+        "elapsedMs": 394.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 58,
+        "elapsedMs": 394.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 58,
+        "elapsedMs": 394.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 59,
+        "elapsedMs": 394.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 59,
+        "elapsedMs": 394.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 59,
+        "elapsedMs": 394.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 59,
+        "elapsedMs": 395
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 60,
+        "elapsedMs": 395.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 60,
+        "elapsedMs": 395.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 60,
+        "elapsedMs": 395.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 61,
+        "elapsedMs": 395.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 61,
+        "elapsedMs": 396.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 61,
+        "elapsedMs": 411.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 61,
+        "elapsedMs": 411.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 62,
+        "elapsedMs": 411.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 62,
+        "elapsedMs": 411.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 62,
+        "elapsedMs": 412.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 62,
+        "elapsedMs": 412.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 63,
+        "elapsedMs": 412.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 63,
+        "elapsedMs": 412.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 63,
+        "elapsedMs": 412.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 63,
+        "elapsedMs": 412.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 64,
+        "elapsedMs": 412.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 64,
+        "elapsedMs": 413.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 64,
+        "elapsedMs": 413.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 64,
+        "elapsedMs": 414
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 65,
+        "elapsedMs": 414.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 65,
+        "elapsedMs": 414.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 65,
+        "elapsedMs": 414.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 65,
+        "elapsedMs": 414.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 66,
+        "elapsedMs": 414.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 66,
+        "elapsedMs": 415
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 66,
+        "elapsedMs": 415.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 66,
+        "elapsedMs": 415.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 67,
+        "elapsedMs": 415.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 67,
+        "elapsedMs": 419.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 67,
+        "elapsedMs": 423.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 67,
+        "elapsedMs": 425.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 68,
+        "elapsedMs": 426.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 68,
+        "elapsedMs": 426.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 68,
+        "elapsedMs": 426.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 68,
+        "elapsedMs": 426.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 69,
+        "elapsedMs": 426.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 69,
+        "elapsedMs": 427
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 69,
+        "elapsedMs": 427.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 69,
+        "elapsedMs": 427.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 70,
+        "elapsedMs": 427.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 70,
+        "elapsedMs": 427.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 70,
+        "elapsedMs": 427.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 70,
+        "elapsedMs": 427.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 71,
+        "elapsedMs": 427.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 71,
+        "elapsedMs": 427.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 71,
+        "elapsedMs": 427.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 71,
+        "elapsedMs": 427.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 72,
+        "elapsedMs": 428
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 72,
+        "elapsedMs": 428.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 72,
+        "elapsedMs": 428.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 73,
+        "elapsedMs": 428.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 73,
+        "elapsedMs": 428.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 73,
+        "elapsedMs": 428.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 74,
+        "elapsedMs": 428.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 74,
+        "elapsedMs": 428.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 74,
+        "elapsedMs": 428.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 74,
+        "elapsedMs": 429
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 75,
+        "elapsedMs": 429
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 75,
+        "elapsedMs": 429.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 75,
+        "elapsedMs": 429.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 76,
+        "elapsedMs": 429.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 76,
+        "elapsedMs": 429.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 76,
+        "elapsedMs": 429.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 76,
+        "elapsedMs": 430
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 77,
+        "elapsedMs": 430.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 77,
+        "elapsedMs": 430.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 77,
+        "elapsedMs": 443.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 78,
+        "elapsedMs": 445.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 81,
+        "elapsedMs": 445.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 82,
+        "elapsedMs": 445.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 82,
+        "elapsedMs": 446.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 82,
+        "elapsedMs": 446.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 82,
+        "elapsedMs": 446.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 83,
+        "elapsedMs": 446.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 83,
+        "elapsedMs": 446.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 83,
+        "elapsedMs": 446.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 83,
+        "elapsedMs": 447.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 84,
+        "elapsedMs": 449.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 84,
+        "elapsedMs": 450.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 84,
+        "elapsedMs": 450.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 84,
+        "elapsedMs": 450.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 85,
+        "elapsedMs": 450.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 85,
+        "elapsedMs": 450.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 85,
+        "elapsedMs": 451.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 85,
+        "elapsedMs": 451.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 86,
+        "elapsedMs": 451.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 86,
+        "elapsedMs": 451.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 86,
+        "elapsedMs": 451.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 86,
+        "elapsedMs": 452.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 87,
+        "elapsedMs": 452.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 87,
+        "elapsedMs": 452.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 87,
+        "elapsedMs": 452.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 87,
+        "elapsedMs": 452.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 88,
+        "elapsedMs": 452.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 88,
+        "elapsedMs": 453.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 88,
+        "elapsedMs": 453.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 88,
+        "elapsedMs": 453.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 89,
+        "elapsedMs": 453.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 89,
+        "elapsedMs": 454
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 89,
+        "elapsedMs": 454.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 89,
+        "elapsedMs": 454.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 90,
+        "elapsedMs": 454.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 90,
+        "elapsedMs": 454.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 90,
+        "elapsedMs": 455.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 90,
+        "elapsedMs": 455.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 91,
+        "elapsedMs": 455.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 91,
+        "elapsedMs": 456.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 91,
+        "elapsedMs": 456.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 91,
+        "elapsedMs": 456.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 92,
+        "elapsedMs": 457
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 92,
+        "elapsedMs": 457.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 92,
+        "elapsedMs": 457.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 92,
+        "elapsedMs": 457.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 93,
+        "elapsedMs": 458.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 93,
+        "elapsedMs": 458.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 93,
+        "elapsedMs": 458.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 93,
+        "elapsedMs": 459.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 94,
+        "elapsedMs": 459.2999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 94,
+        "elapsedMs": 459.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 94,
+        "elapsedMs": 460.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 94,
+        "elapsedMs": 460.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 95,
+        "elapsedMs": 466.7999999821186
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 95,
+        "elapsedMs": 467.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 95,
+        "elapsedMs": 467.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 95,
+        "elapsedMs": 467.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 96,
+        "elapsedMs": 467.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 96,
+        "elapsedMs": 467.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 96,
+        "elapsedMs": 467.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 96,
+        "elapsedMs": 468.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 97,
+        "elapsedMs": 468.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 97,
+        "elapsedMs": 468.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 97,
+        "elapsedMs": 468.59999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 97,
+        "elapsedMs": 469.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 98,
+        "elapsedMs": 469.39999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 98,
+        "elapsedMs": 470.19999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 98,
+        "elapsedMs": 471.69999998807907
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 98,
+        "elapsedMs": 471.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 99,
+        "elapsedMs": 472.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 99,
+        "elapsedMs": 472.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 99,
+        "elapsedMs": 473
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 99,
+        "elapsedMs": 473.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 100,
+        "elapsedMs": 474.09999999403954
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 100,
+        "elapsedMs": 475.5
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "download",
+        "pct": 100,
+        "elapsedMs": 478.89999997615814
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "init",
+        "elapsedMs": 792.3999999761581
+      },
+      {
+        "type": "progress",
+        "id": 3,
+        "phase": "infer",
+        "backend": "webgpu",
+        "elapsedMs": 1521.5999999940395
+      }
+    ]
+  },
+  {
+    "fixture": "portrait.png",
+    "model": "portrait",
+    "dimensions": [
+      512,
+      512
+    ],
+    "elapsedMs": 196.40000000596046,
+    "phases": [
+      {
+        "type": "progress",
+        "id": 4,
+        "phase": "infer",
+        "backend": "webgpu",
+        "elapsedMs": 39.400000005960464
+      }
+    ]
+  },
+  {
+    "fixture": "product-holes.png",
+    "model": "general",
+    "dimensions": [
+      1400,
+      900
+    ],
+    "elapsedMs": 984.2000000178814,
+    "phases": [
+      {
+        "type": "progress",
+        "id": 5,
+        "phase": "download",
+        "elapsedMs": 37
+      },
+      {
+        "type": "progress",
+        "id": 5,
+        "phase": "init",
+        "elapsedMs": 228.40000000596046
+      },
+      {
+        "type": "progress",
+        "id": 5,
+        "phase": "infer",
+        "backend": "webgpu",
+        "elapsedMs": 460.80000001192093
+      }
+    ]
+  },
+  {
+    "fixture": "similar-colours.png",
+    "model": "portrait",
+    "dimensions": [
+      512,
+      512
+    ],
+    "elapsedMs": 1222.300000011921,
+    "phases": [
+      {
+        "type": "progress",
+        "id": 6,
+        "phase": "download",
+        "elapsedMs": 5.300000011920929
+      },
+      {
+        "type": "progress",
+        "id": 6,
+        "phase": "init",
+        "elapsedMs": 184.80000001192093
+      },
+      {
+        "type": "progress",
+        "id": 6,
+        "phase": "infer",
+        "backend": "webgpu",
+        "elapsedMs": 1044.2000000178814
+      }
+    ]
+  },
+  {
+    "fixture": "soft-transparent.png",
+    "model": "general",
+    "dimensions": [
+      960,
+      720
+    ],
+    "elapsedMs": 520.6999999880791,
+    "phases": [
+      {
+        "type": "progress",
+        "id": 7,
+        "phase": "download",
+        "elapsedMs": 37
+      },
+      {
+        "type": "progress",
+        "id": 7,
+        "phase": "init",
+        "elapsedMs": 54.29999998211861
+      },
+      {
+        "type": "progress",
+        "id": 7,
+        "phase": "infer",
+        "backend": "webgpu",
+        "elapsedMs": 202.40000000596046
+      }
+    ]
+  }
+]

@@ -1,0 +1,52 @@
+first unfinished lesson selected true
+continue reveals player true
+selection never marks watched true
+previous lesson true
+lesson empty results true
+watched toggle true
+domain switching true
+difficulty filter true
+quiz error keeps selection true
+academy 320 light no horizontal overflow true
+moodboards 320 light no horizontal overflow true
+academy 320 dark no horizontal overflow true
+moodboards 320 dark no horizontal overflow true
+academy 375 light no horizontal overflow true
+moodboards 375 light no horizontal overflow true
+academy 375 dark no horizontal overflow true
+moodboards 375 dark no horizontal overflow true
+academy 768 light no horizontal overflow true
+moodboards 768 light no horizontal overflow true
+academy 768 dark no horizontal overflow true
+moodboards 768 dark no horizontal overflow true
+academy 1440 light no horizontal overflow true
+moodboards 1440 light no horizontal overflow true
+academy 1440 dark no horizontal overflow true
+moodboards 1440 dark no horizontal overflow true
+favorite deduplicated true
+rename dialog receives focus true
+dialog traps backward Tab true
+dialog traps forward Tab true
+rename restores menu trigger focus true
+board search empty results true
+shared scope true
+keyboard favorite stays in library true
+menu keyboard focus true
+create dialog Escape true
+creation preserves workspace and project true
+save error text unobscured true
+canvas save retry true
+canvas 320 light Share fits viewport true
+canvas 320 dark Share fits viewport true
+canvas 375 light Share fits viewport true
+canvas 375 dark Share fits viewport true
+canvas 768 light Share fits viewport true
+canvas 768 dark Share fits viewport true
+canvas 1440 light Share fits viewport true
+canvas 1440 dark Share fits viewport true
+canvas action discovery true
+load failure not empty state true
+board sort true
+reduced motion lesson transition true
+signed-out learning accessible true
+no uncaught page errors true

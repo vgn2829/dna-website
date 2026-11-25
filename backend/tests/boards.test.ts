@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import request from 'supertest';
+import { localRequest } from './localServer';
 import { createApp } from '../src/app';
 import { query } from '../src/db/client';
 import { signStudentToken } from '../src/middleware/studentAuth';
@@ -17,6 +17,8 @@ import { signStudentToken } from '../src/middleware/studentAuth';
 // ─────────────────────────────────────────────────────────────────────────
 
 const app = createApp();
+// One loopback (127.0.0.1) server for this file — see tests/localServer.ts.
+const request = localRequest(app);
 
 async function registerStudent(roll: string): Promise<void> {
   await query(
@@ -233,26 +235,62 @@ describe('GET /api/boards, /api/boards/archived — workspace scoping (Commit 5/
   });
 });
 
-describe('GET /api/boards/shared — workspace scoping (Commit 7/9)', () => {
-  it('without workspace_id, still returns the old GLOBAL result (deprecated fallback, unchanged for now)', async () => {
+describe('GET /api/boards/shared — workspace scoping (V2.0 Phase 0 — no unscoped global fallback)', () => {
+  it('SECURITY: signed-in caller with no workspace_id never sees a shared board from a workspace they are not a member of', async () => {
     await registerStudent('SHAREDB1');
     await registerStudent('SHAREDB1-OTHER');
-    await createBoardDirect({ ownerRoll: 'SHAREDB1', visibility: 'shared' });
-    await createBoardDirect({ ownerRoll: 'SHAREDB1-OTHER', visibility: 'shared' });
+    const mine = await createBoardDirect({ ownerRoll: 'SHAREDB1', visibility: 'shared' });
+    const notMine = await createBoardDirect({ ownerRoll: 'SHAREDB1-OTHER', visibility: 'shared' });
 
     const res = await request(app)
       .get('/api/boards/shared')
       .set('Authorization', `Bearer ${tokenFor('SHAREDB1')}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.length).toBeGreaterThanOrEqual(2);
+    expect(res.body.some((b: { id: string }) => b.id === mine.id)).toBe(true);
+    expect(res.body.some((b: { id: string }) => b.id === notMine.id)).toBe(false);
+  });
+
+  it('SECURITY: anonymous caller with no workspace_id gets an empty list, never the global feed', async () => {
+    await registerStudent('SHAREDB1B');
+    await createBoardDirect({ ownerRoll: 'SHAREDB1B', visibility: 'shared' });
+
+    const res = await request(app).get('/api/boards/shared');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it('SECURITY: signed-in caller passing a workspace_id for a workspace they are NOT a member of gets 403, not a silently-ignored/empty result', async () => {
+    await registerStudent('SHAREDB1C');
+    await registerStudent('SHAREDB1C-OTHER');
+    const { workspaceId: notMyWorkspace } = await createBoardDirect({ ownerRoll: 'SHAREDB1C-OTHER', visibility: 'shared' });
+
+    const res = await request(app)
+      .get('/api/boards/shared')
+      .query({ workspace_id: notMyWorkspace })
+      .set('Authorization', `Bearer ${tokenFor('SHAREDB1C')}`);
+
+    expect(res.status).toBe(403);
+  });
+
+  it('signed-in caller with no workspace_id sees shared boards across every workspace they ARE a member of (not just owned ones)', async () => {
+    await registerStudent('SHAREDB1D');
+    await registerStudent('SHAREDB1D-OWNER');
+    const { id: boardId, workspaceId } = await createBoardDirect({ ownerRoll: 'SHAREDB1D-OWNER', visibility: 'shared' });
+    await addWorkspaceMemberDirect(workspaceId, 'SHAREDB1D');
+
+    const res = await request(app)
+      .get('/api/boards/shared')
+      .set('Authorization', `Bearer ${tokenFor('SHAREDB1D')}`);
+
+    expect(res.body.some((b: { id: string }) => b.id === boardId)).toBe(true);
   });
 
   it('with ?workspace_id=, narrows to ONLY that workspace\'s shared boards — a shared board in workspace A is absent from workspace B\'s scoped results', async () => {
     await registerStudent('SHAREDB2');
-    await registerStudent('SHAREDB2-OTHER');
     const { id: boardA, workspaceId: wsA } = await createBoardDirect({ ownerRoll: 'SHAREDB2', visibility: 'shared' });
-    const { workspaceId: wsB } = await createBoardDirect({ ownerRoll: 'SHAREDB2-OTHER', visibility: 'shared' });
+    const { workspaceId: wsB } = await createBoardDirect({ ownerRoll: 'SHAREDB2', visibility: 'shared' });
 
     const scopedToA = await request(app)
       .get('/api/boards/shared')
@@ -268,7 +306,7 @@ describe('GET /api/boards/shared — workspace scoping (Commit 7/9)', () => {
     expect(scopedToB.body.some((b: { id: string }) => b.id === boardA)).toBe(false);
   });
 
-  it('scoping excludes private boards in that workspace, same as the unscoped result always did', async () => {
+  it('scoping excludes private boards in that workspace, same as before', async () => {
     await registerStudent('SHAREDB3');
     const { workspaceId } = await createBoardDirect({ ownerRoll: 'SHAREDB3', visibility: 'shared' });
     await createBoardDirect({ ownerRoll: 'SHAREDB3', visibility: 'private', workspaceId });
@@ -280,6 +318,18 @@ describe('GET /api/boards/shared — workspace scoping (Commit 7/9)', () => {
 
     expect(res.body).toHaveLength(1);
     expect(res.body[0].visibility).toBe('shared');
+  });
+
+  it('anonymous caller CAN still browse one workspace\'s shared boards via an explicit workspace_id (pre-existing "shared board is publicly viewable" behavior preserved)', async () => {
+    await registerStudent('SHAREDB4');
+    const { id: boardId, workspaceId } = await createBoardDirect({ ownerRoll: 'SHAREDB4', visibility: 'shared' });
+
+    const res = await request(app)
+      .get('/api/boards/shared')
+      .query({ workspace_id: workspaceId });
+
+    expect(res.status).toBe(200);
+    expect(res.body.some((b: { id: string }) => b.id === boardId)).toBe(true);
   });
 });
 

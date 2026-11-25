@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import request from 'supertest';
+import { localRequest } from './localServer';
 import { createApp } from '../src/app';
 import { pool, query } from '../src/db/client';
 import { signStudentToken } from '../src/middleware/studentAuth';
@@ -18,6 +18,8 @@ import * as storageModule from '../src/storage';
 // ─────────────────────────────────────────────────────────────────────────
 
 const app = createApp();
+// One loopback (127.0.0.1) server for this file — see tests/localServer.ts.
+const request = localRequest(app);
 
 const PNG_1PX = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -45,12 +47,13 @@ async function createWorkspace(roll: string, name: string): Promise<string> {
   return res.body.id as string;
 }
 
-async function uploadPng(roll: string, workspaceId: string, filename = 'test.png') {
-  return request(app)
+async function uploadPng(roll: string, workspaceId: string, filename = 'test.png', visibility?: 'personal' | 'community') {
+  const req = request(app)
     .post('/api/assets')
     .set('Authorization', `Bearer ${tokenFor(roll)}`)
-    .field('workspace_id', workspaceId)
-    .attach('file', PNG_1PX, { filename, contentType: 'image/png' });
+    .field('workspace_id', workspaceId);
+  if (visibility) req.field('visibility', visibility);
+  return req.attach('file', PNG_1PX, { filename, contentType: 'image/png' });
 }
 
 beforeEach(async () => {
@@ -112,18 +115,22 @@ describe('POST /api/assets — upload', () => {
     expect(res.status).toBe(400);
   });
 
-  it('rejects a file over the size limit', async () => {
+  // The old 15 MB image cap is gone: every library upload shares the 300 MB
+  // limit (lib/uploadLimits.ts). The over-limit rejection itself is covered
+  // at the boundary in upload-limits.test.ts without allocating 300 MB.
+  it('accepts an image above the old 15 MB cap', async () => {
     await registerStudent('UP6');
     const workspaceId = await createWorkspace('UP6', 'Design');
 
-    const oversized = Buffer.alloc(16 * 1024 * 1024, 1);
+    const large = Buffer.alloc(16 * 1024 * 1024, 1);
     const res = await request(app)
       .post('/api/assets')
       .set('Authorization', `Bearer ${tokenFor('UP6')}`)
       .field('workspace_id', workspaceId)
-      .attach('file', oversized, { filename: 'huge.png', contentType: 'image/png' });
+      .attach('file', large, { filename: 'large.png', contentType: 'image/png' });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(201);
+    expect(res.body.size_bytes).toBe(large.length);
   });
 
   it('requires workspace_id', async () => {
@@ -135,6 +142,13 @@ describe('POST /api/assets — upload', () => {
       .attach('file', PNG_1PX, { filename: 'x.png', contentType: 'image/png' });
 
     expect(res.status).toBe(400);
+  });
+
+  it('answers a request with no multipart body with a 400, not a 500', async () => {
+    await registerStudent('UP8');
+    const res = await request(app).post('/api/assets').set('Authorization', `Bearer ${tokenFor('UP8')}`);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('workspace_id is required');
   });
 });
 
@@ -217,7 +231,10 @@ describe('DELETE /api/assets/:id', () => {
     expect(after.status).toBe(404);
   });
 
-  it('lets a workspace owner delete a member-uploaded asset', async () => {
+  // Shared Creative Library: deletion is the asset OWNER's only — not even
+  // a workspace owner/admin may remove a member's asset. A community asset
+  // they can see answers 403; a personal one they can't see answers 404.
+  it('does not let a workspace owner delete a member-uploaded asset', async () => {
     await registerStudent('DEL2');
     await registerStudent('DEL3');
     const workspaceId = await createWorkspace('DEL2', 'Design');
@@ -226,13 +243,23 @@ describe('DELETE /api/assets/:id', () => {
       .set('Authorization', `Bearer ${tokenFor('DEL2')}`)
       .send({ roll_number: 'DEL3' });
 
-    const uploadRes = await uploadPng('DEL3', workspaceId);
+    const uploadRes = await uploadPng('DEL3', workspaceId, 'shared.png', 'community');
+    const personalRes = await uploadPng('DEL3', workspaceId, 'mine.png');
 
     const res = await request(app)
       .delete(`/api/assets/${uploadRes.body.id}`)
       .set('Authorization', `Bearer ${tokenFor('DEL2')}`);
+    expect(res.status).toBe(403);
 
-    expect(res.status).toBe(200);
+    const hidden = await request(app)
+      .delete(`/api/assets/${personalRes.body.id}`)
+      .set('Authorization', `Bearer ${tokenFor('DEL2')}`);
+    expect(hidden.status).toBe(404);
+
+    const own = await request(app)
+      .delete(`/api/assets/${uploadRes.body.id}`)
+      .set('Authorization', `Bearer ${tokenFor('DEL3')}`);
+    expect(own.status).toBe(200);
   });
 
   it('rejects delete by a plain member who does not own the asset', async () => {
@@ -244,7 +271,7 @@ describe('DELETE /api/assets/:id', () => {
       .set('Authorization', `Bearer ${tokenFor('DEL4')}`)
       .send({ roll_number: 'DEL5' });
 
-    const uploadRes = await uploadPng('DEL4', workspaceId);
+    const uploadRes = await uploadPng('DEL4', workspaceId, 'test.png', 'community');
 
     const res = await request(app)
       .delete(`/api/assets/${uploadRes.body.id}`)
@@ -303,6 +330,7 @@ describe('storage failure consistency', () => {
     const deleteSpy = vi.fn().mockResolvedValue(undefined);
     vi.spyOn(storageModule, 'getStorage').mockReturnValue({
       upload: vi.fn().mockResolvedValue(undefined),
+      uploadFile: vi.fn().mockResolvedValue(undefined),
       getPublicUrl: (p: string) => `http://test/${p}`,
       delete: deleteSpy,
     });

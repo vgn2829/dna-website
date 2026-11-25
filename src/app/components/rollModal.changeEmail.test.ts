@@ -52,7 +52,7 @@ describe('RollModal: change-email action on OTP screen', () => {
     const diffRollIdx = otpBlock.indexOf('Use a different roll number');
     expect(diffRollIdx).toBeGreaterThan(0);
     // The onClick just before it must set step to roll
-    const surroundingClick = otpBlock.slice(Math.max(0, diffRollIdx - 400), diffRollIdx + 50);
+    const surroundingClick = otpBlock.slice(Math.max(0, diffRollIdx - 600), diffRollIdx + 50);
     expect(surroundingClick).toMatch(/setStep\('roll'\)/);
     expect(surroundingClick).toMatch(/setCode\(''\)/);
   });
@@ -83,5 +83,14 @@ describe('RollModal: change-email action on OTP screen', () => {
       src.indexOf('Use a different roll number')
     );
     expect(changeEmailSection).not.toMatch(/primaryBtn/);
+  });
+
+  it('makes clear that the previous OTP is no longer valid after email correction', () => {
+    expect(src).toMatch(/invalidate your previous verification code/);
+    expect(src).toMatch(/previous code is no longer valid/);
+  });
+
+  it('focuses the email input when returning via Change email address', () => {
+    expect(src).toMatch(/refocusEmailRef\.current = true/);
   });
 });

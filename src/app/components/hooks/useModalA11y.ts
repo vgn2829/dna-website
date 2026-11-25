@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Lightweight accessibility primitive for this app's existing custom
@@ -27,9 +27,23 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
-export function useModalA11y(open: boolean, onClose: () => void) {
+// Open dialogs, oldest first. When focus is inside none of them (e.g. it
+// fell to <body> because the focused button became disabled or unmounted),
+// only the topmost one answers Escape — not every layer at once.
+const openDialogs: Array<RefObject<HTMLDivElement | null>> = [];
+
+export interface ModalA11yOptions {
+  // Element to focus on open instead of the dialog container — for a
+  // dialog whose whole purpose is one field (the sign-in modal's roll
+  // number input). Returning null falls back to the container.
+  initialFocus?: () => HTMLElement | null;
+}
+
+export function useModalA11y(open: boolean, onClose: () => void, options: ModalA11yOptions = {}) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
+  const initialFocusRef = useRef(options.initialFocus);
+  useEffect(() => { initialFocusRef.current = options.initialFocus; });
 
   // Every call site passes an inline `() => setX(false)` arrow, which is a
   // new function identity on every render of the CALLER (not just when the
@@ -55,15 +69,31 @@ export function useModalA11y(open: boolean, onClose: () => void) {
     if (!open) return;
 
     previouslyFocused.current = document.activeElement as HTMLElement | null;
+    openDialogs.push(dialogRef);
 
     // Focus the dialog itself first (not the first field) — matches how a
     // screen reader announces a newly-opened dialog before reading into
     // its contents, and avoids accidentally triggering an input's own
     // focus side effects (e.g. a search field's dropdown) the instant the
     // dialog appears.
-    const raf = requestAnimationFrame(() => dialogRef.current?.focus());
+    const raf = requestAnimationFrame(() => (initialFocusRef.current?.() ?? dialogRef.current)?.focus());
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Nested modals (e.g. the workspace switcher panel opened from the
+      // mobile nav drawer, portalled to document.body so it is no longer
+      // a DOM descendant of the drawer) each register a document-level
+      // listener. Only the dialog that actually contains focus should
+      // react — otherwise one Escape closes both layers at once.
+      const active = document.activeElement;
+      if (
+        dialogRef.current && active && !dialogRef.current.contains(active)
+        && active.closest('[aria-modal="true"]')
+      ) return;
+      if (
+        dialogRef.current && !(active && dialogRef.current.contains(active))
+        && openDialogs[openDialogs.length - 1] !== dialogRef
+      ) return;
+
       if (e.key === 'Escape') {
         e.stopPropagation();
         onCloseRef.current();
@@ -77,7 +107,6 @@ export function useModalA11y(open: boolean, onClose: () => void) {
 
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      const active = document.activeElement;
 
       if (e.shiftKey && active === first) {
         e.preventDefault();
@@ -92,6 +121,7 @@ export function useModalA11y(open: boolean, onClose: () => void) {
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener('keydown', handleKeyDown);
+      openDialogs.splice(openDialogs.indexOf(dialogRef), 1);
       previouslyFocused.current?.focus?.();
     };
   }, [open]);

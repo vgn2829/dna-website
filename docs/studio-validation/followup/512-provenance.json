@@ -1,0 +1,30 @@
+{
+  "repo": "studioludens/birefnet-lite-512",
+  "revision": "962e67969ec6acec9c19fab76acee4f5e22e990c",
+  "artifacts": [
+    {
+      "type": "file",
+      "oid": "a684bdbd46563c627de7ccaff59258a6245fa333",
+      "size": 191877254,
+      "lfs": {
+        "oid": "1cb0fb360dadd15af77c639085d77a9df67db0c64315560c3de005f676345ac2",
+        "size": 191877254,
+        "pointerSize": 134
+      },
+      "xetHash": "9e3e6171080ad8f2b2c8f501fe86889975e1cdf995d8492adaac71925b43bd4d",
+      "path": "onnx/model.onnx"
+    },
+    {
+      "type": "file",
+      "oid": "e5406301ba49860a8f78fa8fbc35271a8327cf2a",
+      "size": 98484532,
+      "lfs": {
+        "oid": "eff9216bb2f9d3f023d9c2b7196845a7485739ab1f231593633e4d2344ffc516",
+        "size": 98484532,
+        "pointerSize": 133
+      },
+      "xetHash": "4a06496d23340be158e1e1d8d1bc3dc7a6c8c2322fa00e4adc1ae0d37c8a069b",
+      "path": "onnx/model_fp16.onnx"
+    }
+  ]
+}

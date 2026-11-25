@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { motion, useTransform, useSpring, useMotionValue, type MotionValue } from 'motion/react';
+import { motion, animate, useTransform, useSpring, useMotionValue, type MotionValue } from 'motion/react';
 import { useNavigate } from 'react-router';
 import { useAppData } from '../context/AppDataContext';
 import type { Artwork } from '../context/AppDataContext';
 import { Hero } from './Hero';
+import { bylineText } from '../lib/creators';
 
 // Below this many featured artworks, the circle/arc formation reads as
 // sparse rather than intentional — fall back to a static grid instead.
@@ -35,14 +36,12 @@ function artworkImage(a: Artwork): string | null {
 // FlipCard — front shows the artwork image, back shows title/artist.
 // ─────────────────────────────────────────────────────────────────────────
 // target is either a fixed CardTarget (scatter/line phases — a real phase
-// transition, so it's fine to let Motion's `animate` spring engine own it
-// and re-render on phase change) or a single shared
+// transition, sprung to once per phase change) or a single shared
 // MotionValue<CardTarget[]> continuously derived from the scroll/mouse
-// springs (circle phase), indexed per-card by `index`. In the MotionValue
-// case we read this card's x/y/rotation/scale via useTransform and feed
-// them into `style`, which Motion writes straight to the DOM on every
-// spring tick — no React re-render, unlike the old
-// `.on('change', setState)` path.
+// springs (circle phase), indexed per-card by `index`. Either way the card's
+// own MotionValues are written straight to the DOM through `style` on every
+// spring tick — no React re-render, unlike the old `.on('change', setState)`
+// path.
 function FlipCard({
   artwork,
   target,
@@ -54,58 +53,67 @@ function FlipCard({
   index: number;
   onClick: () => void;
 }) {
-  const isLive = typeof target === 'object' && 'get' in target;
-
-  // Hooks must run unconditionally — when `target` is a plain CardTarget
-  // these derived values are simply unused.
-  const liveTargets = isLive ? (target as MotionValue<CardTarget[]>) : undefined;
-  const liveX = useTransform(() => liveTargets?.get()[index]?.x ?? 0);
-  const liveY = useTransform(() => liveTargets?.get()[index]?.y ?? 0);
-  const liveRotate = useTransform(() => liveTargets?.get()[index]?.rotation ?? 0);
-  const liveScale = useTransform(() => liveTargets?.get()[index]?.scale ?? 1);
-  const liveOpacity = useTransform(() => liveTargets?.get()[index]?.opacity ?? 1);
-
-  const staticTarget = isLive ? undefined : (target as CardTarget);
-
   // FlipCard always first mounts during the 'scatter' phase (phase starts
   // at 'scatter', and this card's `key` never changes across phases, so
   // it's the same instance throughout) — at that moment `target` already
-  // *is* this card's scatter position (see the ternary in AnimatedFlipHero
-  // below). Capture whatever `target` is on first render as `initial`, so
-  // Motion has a correct pre-scatter resting state to paint immediately.
-  // Without this, Motion has no `initial` at all and paints the first
-  // frame at its untransformed rest state (transform: none, opacity: 1) —
-  // every card fully visible and stacked at dead-center — before
-  // springing/fading out to the real scatter position on the next tick.
-  // That's the collapse-to-center flash: not a data race with the
-  // artworks fetch, just a missing `initial`.
-  const initialTargetRef = useRef<CardTarget | null>(null);
-  if (initialTargetRef.current === null) {
-    initialTargetRef.current = staticTarget ?? { x: 0, y: 0, rotation: 0, scale: 0.6, opacity: 0 };
+  // *is* this card's scatter position. Seed the values from it so the first
+  // paint is the correct pre-scatter resting state, not transform: none /
+  // opacity: 1 stacked at dead-center (the collapse-to-center flash).
+  const seed = useRef<CardTarget | null>(null);
+  if (seed.current === null) {
+    seed.current = 'get' in target ? { x: 0, y: 0, rotation: 0, scale: 0.6, opacity: 0 } : target;
   }
-  const initialTarget = initialTargetRef.current;
+  const x = useMotionValue(seed.current.x);
+  const y = useMotionValue(seed.current.y);
+  const rotate = useMotionValue(seed.current.rotation);
+  const scale = useMotionValue(seed.current.scale);
+  const opacity = useMotionValue(seed.current.opacity);
+
+  // This card owns its MotionValues and drives them imperatively, instead of
+  // switching between an `animate` prop (scatter/line) and live `style`
+  // values (circle). That switch removed `animate`, which makes Motion
+  // animate the removed keys back to `initial` — every card faded to the
+  // scatter state (opacity 0) at circle formation and stayed invisible until
+  // the first wheel/mouse input changed the live values, then teleported
+  // into the circle in one frame.
+  // The line-phase target is a fresh object every render — depend on its
+  // values, not its identity, so an unrelated re-render (e.g. a resize)
+  // doesn't restart the spring and drop its velocity.
+  const live = 'get' in target ? target : null;
+  const fixed = live ? null : (target as CardTarget);
+  const [tX, tY, tRotate, tScale, tOpacity] = fixed ? [fixed.x, fixed.y, fixed.rotation, fixed.scale, fixed.opacity] : [];
+
+  useEffect(() => {
+    const values = [x, y, rotate, scale, opacity] as const;
+    const pick = (t: CardTarget) => [t.x, t.y, t.rotation, t.scale, t.opacity];
+    const spring = { type: 'spring', stiffness: 40, damping: 15 } as const;
+
+    if (!live) {
+      // Scatter/line: a real phase transition — spring to the fixed target.
+      const dest = [tX, tY, tRotate, tScale, tOpacity] as number[];
+      const controls = values.map((v, k) => animate(v, dest[k], spring));
+      return () => controls.forEach(c => c.stop());
+    }
+
+    // Circle: spring-blend from wherever the card is now into the live,
+    // scroll/mouse-driven circle target, then keep following it. Updates come
+    // straight from the MotionValues — no React re-render per spring tick.
+    const from = values.map(v => v.get());
+    const blend = { value: 0 };
+    const apply = () => {
+      const t = live.get()[index];
+      if (!t) return;
+      const to = pick(t);
+      values.forEach((v, k) => v.set(lerp(from[k], to[k], blend.value)));
+    };
+    const blendControl = animate(0, 1, { ...spring, onUpdate: b => { blend.value = b; apply(); } });
+    const unsubscribe = live.on('change', apply);
+    apply();
+    return () => { blendControl.stop(); unsubscribe(); };
+  }, [live, tX, tY, tRotate, tScale, tOpacity, index, x, y, rotate, scale, opacity]);
 
   return (
     <motion.div
-      initial={{
-        x: initialTarget.x,
-        y: initialTarget.y,
-        rotate: initialTarget.rotation,
-        scale: initialTarget.scale,
-        opacity: initialTarget.opacity,
-      }}
-      {...(staticTarget
-        ? {
-            animate: {
-              x: staticTarget.x,
-              y: staticTarget.y,
-              rotate: staticTarget.rotation,
-              scale: staticTarget.scale,
-              opacity: staticTarget.opacity,
-            },
-            transition: { type: 'spring', stiffness: 40, damping: 15 },
-          }
-        : {})}
       style={{
         position: 'absolute',
         width: IMG_WIDTH,
@@ -113,9 +121,11 @@ function FlipCard({
         transformStyle: 'preserve-3d',
         perspective: 1000,
         cursor: 'pointer',
-        ...(isLive
-          ? { x: liveX, y: liveY, rotate: liveRotate, scale: liveScale, opacity: liveOpacity }
-          : {}),
+        x,
+        y,
+        rotate,
+        scale,
+        opacity,
       }}
       className="group"
       onClick={onClick}
@@ -171,7 +181,7 @@ function FlipCard({
             {artwork.title}
           </p>
           <p style={{ fontSize: 9, color: 'var(--color-ink-muted)', marginTop: 3 }}>
-            {artwork.artist}
+            {bylineText(artwork)}
           </p>
         </div>
       </motion.div>
@@ -369,9 +379,9 @@ function AnimatedFlipHero({ artworks }: { artworks: Artwork[] }) {
   // result to the DOM through each FlipCard's `style` (see below). Real
   // state transitions (phase, containerSize, artworks) still legitimately
   // re-render, since this callback re-closes over them.
-  const circleTargets = useTransform(
+  const circleTargets = useTransform<number, CardTarget[]>(
     [smoothMorph, smoothScrollRotate, smoothMouseX],
-    ([morphValue, rotateValue, parallaxValue]: [number, number, number]): CardTarget[] => {
+    ([morphValue, rotateValue, parallaxValue]): CardTarget[] => {
       const isMobile = containerSize.width < 768;
       const minDimension = Math.min(containerSize.width, containerSize.height);
 
@@ -617,7 +627,7 @@ function StaticFeaturedGrid({ artworks }: { artworks: Artwork[] }) {
             />
             <div style={{ position: 'absolute', left: 12, right: 12, bottom: 12, textAlign: 'left' }}>
               <p style={{ color: '#fff', fontSize: 13, fontWeight: 600, lineHeight: 1.25 }}>{a.title}</p>
-              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 }}>by {a.artist}</p>
+              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 }}>by {bylineText(a)}</p>
             </div>
           </div>
         ))}

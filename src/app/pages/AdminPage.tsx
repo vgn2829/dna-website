@@ -1,17 +1,24 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout, Send, TriangleAlert, LayoutDashboard } from 'lucide-react';
+import { Shield, Lock, Plus, Trash2, Video, Image, CalendarDays, X, Eye, EyeOff, Users, Upload, Loader2, Pencil, Star, MessageSquare, Settings, GripVertical, Mail, Radio, Layout, Send, TriangleAlert, LayoutDashboard, FolderOpen, LayoutTemplate, Sparkles, UserRound } from 'lucide-react';
 import { useAppData, type Artwork, type TeamMember, type ClubEvent, type Domain, type VideoResource } from '../context/AppDataContext';
 import { api, setAdminToken, clearAdminToken, type SessionJoins, type CoordinatorMember, type EventRegistrants, type StudentOverview, type StudentRosterEntry } from '../lib/api';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts';
 import { openCropModal, ImageCropperPortal } from '../components/ImageCropper';
 import imageCompression from 'browser-image-compression';
 import { formatEventDate, validateEventTime } from '../lib/eventDate';
+import { checkGoogleFormUrl, eventSavingLabel } from '../lib/eventForm';
+import { EventAttachmentField } from '../components/events/EventAttachmentField';
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from '../lib/uploadLimits';
+import { LibraryModerationTab } from '../components/admin/LibraryModerationTab';
+import { ShowcaseModerationTab } from '../components/admin/ShowcaseModerationTab';
+import { CreatorFeaturingTab } from '../components/admin/CreatorFeaturingTab';
+import { EmailCentre } from '../components/admin/email-centre/EmailCentre';
 
 async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith('image/')) return file;
   try {
-    const result = await imageCompression(file, {
+    const result: Blob = await imageCompression(file, {
       maxSizeMB: 0.5,
       maxWidthOrHeight: 1920,
       useWebWorker: true,
@@ -99,12 +106,12 @@ function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
         </div>
         <form onSubmit={handle} className="space-y-3">
           <div className="relative">
-            <input type={show ? 'text' : 'password'} value={pw} onChange={e => { setPw(e.target.value); setError(''); }} placeholder="Admin password" className="input-base pr-11" autoFocus />
-            <button type="button" onClick={() => setShow(s => !s)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-ink-muted)' }}>
+            <input type={show ? 'text' : 'password'} value={pw} onChange={e => { setPw(e.target.value); setError(''); }} placeholder="Admin password" aria-label="Admin password" aria-invalid={error ? true : undefined} aria-describedby={error ? 'admin-login-error' : undefined} className="input-base pr-11" autoFocus />
+            <button type="button" onClick={() => setShow(s => !s)} aria-label={show ? 'Hide password' : 'Show password'} aria-pressed={show} className="absolute right-3 top-1/2 -translate-y-1/2 touch-target" style={{ color: 'var(--color-ink-muted)' }}>
               {show ? <EyeOff size={15} /> : <Eye size={15} />}
             </button>
           </div>
-          {error && <p className="type-micro" style={{ color: '#e5484d' }}>{error}</p>}
+          {error && <p id="admin-login-error" role="alert" className="type-micro" style={{ color: '#e5484d' }}>{error}</p>}
           <button type="submit" disabled={loading} className="btn-primary w-full justify-center" style={{ opacity: loading ? 0.6 : 1 }}>
             {loading ? 'Verifying…' : 'Unlock Dashboard'}
           </button>
@@ -680,7 +687,7 @@ function RegistrantsModal({ event, onClose }: { event: ClubEvent; onClose: () =>
   );
 }
 
-type Tab = 'overview' | 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings' | 'announcements' | 'sessions' | 'moodboards';
+type Tab = 'overview' | 'academy' | 'gallery' | 'team' | 'events' | 'comments' | 'settings' | 'announcements' | 'email' | 'sessions' | 'moodboards' | 'assets' | 'templates' | 'showcase' | 'creators';
 
 // ── Overview tab ─────────────────────────────────────────────────────────────
 function StatCard({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
@@ -1254,14 +1261,13 @@ function GalleryTab() {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  const MAX_MB = 50;
   const ALLOWED_EXT = ['jpg','jpeg','png','webp','gif','pdf','mp4'];
 
   const handleFile = (f: File | null, setFileFn: (f: File | null) => void, setErr: (s: string) => void) => {
     if (!f) { setFileFn(null); return; }
     const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
     if (!ALLOWED_EXT.includes(ext)) { setErr(`Unsupported type. Allowed: ${ALLOWED_EXT.join(', ')}`); return; }
-    if (f.size > MAX_MB * 1024 * 1024) { setErr(`File exceeds ${MAX_MB} MB`); return; }
+    if (f.size > MAX_UPLOAD_BYTES) { setErr(`${f.name} exceeds the maximum file size of ${MAX_UPLOAD_LABEL}`); return; }
     setErr('');
     setFileFn(f);
   };
@@ -1337,10 +1343,15 @@ function GalleryTab() {
 
     setBulkMode(true);
 
+    // Oversized files are left out of the batch — and said so, not dropped silently.
+    const oversized = files.filter(f => f.size > MAX_UPLOAD_BYTES);
+    setUploadError(oversized.length
+      ? `Skipped ${oversized.map(f => f.name).join(', ')} — maximum file size is ${MAX_UPLOAD_LABEL}.`
+      : '');
     const items: BulkItem[] = files
       .filter(f => {
         const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-        return ALLOWED_EXT.includes(ext) && f.size <= MAX_MB * 1024 * 1024;
+        return ALLOWED_EXT.includes(ext) && f.size <= MAX_UPLOAD_BYTES;
       })
       .map(file => {
         const { title, artist } = parseFilename(file.name);
@@ -1475,7 +1486,7 @@ function GalleryTab() {
         <p className="type-headline flex items-center gap-2"><Upload size={14} /> Upload Media</p>
         <form onSubmit={handleUpload} className="space-y-3">
           <div>
-            <label className="type-micro block mb-1">File * <span style={{ color: 'var(--color-ink-muted)' }}>(jpg/png/webp/gif/pdf/mp4, max 50 MB)</span></label>
+            <label className="type-micro block mb-1">File * <span style={{ color: 'var(--color-ink-muted)' }}>(jpg/png/webp/gif/pdf/mp4 · Maximum file size: {MAX_UPLOAD_LABEL})</span></label>
             <div
               className="relative border-2 border-dashed rounded-xl p-4 text-center transition-colors"
               style={{ borderColor: file ? 'var(--color-accent-blue)' : 'var(--color-hairline)', cursor: 'pointer' }}
@@ -1538,6 +1549,10 @@ function GalleryTab() {
               </div>
             </div>
           </div>
+
+          {bulkMode && uploadError && (
+            <p role="alert" className="type-micro" style={{ margin: 0, color: 'var(--color-error)' }}>{uploadError}</p>
+          )}
 
           {/* Bulk queue UI — shown when multiple files selected */}
           {bulkMode && bulkQueue.length > 0 && (
@@ -2244,8 +2259,12 @@ function EventsTab() {
   const [eContent, setEContent] = useState('');
   const [eCapacity, setECapacity] = useState('100');
   const [eStartsAt, setEStartsAt] = useState(''); // datetime-local value, e.g. "2026-12-31T18:00"
+  // Optional extras: a Google Forms link and a problem-statement file.
+  const [eFormUrl, setEFormUrl] = useState('');
+  const [eFile, setEFile] = useState<File | null>(null);
   const [addingEvent, setAddingEvent] = useState(false);
   const [eSuccess, setESuccess] = useState('');
+  const [eError, setEError] = useState('');
 
   // Edit event modal
   const [editEvent, setEditEvent] = useState<ClubEvent | null>(null);
@@ -2256,6 +2275,9 @@ function EventsTab() {
   const [eeContent, setEeContent] = useState('');
   const [eeCapacity, setEeCapacity] = useState('100');
   const [eeStartsAt, setEeStartsAt] = useState('');
+  const [eeFormUrl, setEeFormUrl] = useState('');
+  const [eeFile, setEeFile] = useState<File | null>(null);
+  const [eeRemoveAttachment, setEeRemoveAttachment] = useState(false);
   const [eeLoading, setEeLoading] = useState(false);
   const [eeError, setEeError] = useState('');
 
@@ -2276,17 +2298,53 @@ function EventsTab() {
     return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
   };
 
-  const handleAdd = (e: React.SyntheticEvent) => {
+  const errorText = (err: unknown) => err instanceof Error ? err.message : String(err);
+
+  // Optional form link: '' = none; otherwise it must be a Google Forms link
+  // (the server checks again and is the authority). Returns an error or null.
+  const formUrlError = (raw: string): string | null => {
+    if (!raw.trim()) return null;
+    const checked = checkGoogleFormUrl(raw);
+    return checked.ok ? null : checked.error;
+  };
+
+  // Every field travels in one multipart request with the optional file, so
+  // the event and its attachment are saved together or not at all.
+  const eventFormData = (fields: Record<string, string>, file: File | null, removeAttachment = false): FormData => {
+    const fd = new FormData();
+    for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+    if (file) fd.append('attachment', file);
+    else if (removeAttachment) fd.append('removeAttachment', 'true');
+    return fd;
+  };
+
+  const handleAdd = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (addingEvent) return;
+    setESuccess('');
     const date = eDate || null;
-    if (!date) { setESuccess('Select a date'); return; }
-    if (!validateEventTime(eTime)) { setESuccess('Enter a valid event time or time range'); return; }
+    if (!date) { setEError('Select a date'); return; }
+    if (!validateEventTime(eTime)) { setEError('Enter a valid event time or time range'); return; }
+    const urlProblem = formUrlError(eFormUrl);
+    if (urlProblem) { setEError(urlProblem); return; }
+    setEError('');
     setAddingEvent(true);
-    addEvent({ title: eTitle, date, time: eTime, location: eLocation, content: eContent, capacity: Number(eCapacity) || 100, startsAt: localToIso(eStartsAt) ?? null });
-    setETitle(''); setEDate(''); setETime(''); setELocation(''); setEContent(''); setEStartsAt('');
-    setESuccess('Event created · use Notify Students to email members');
-    setTimeout(() => { setAddingEvent(false); setESuccess(''); }, 4000);
+    try {
+      await addEvent(eventFormData({
+        title: eTitle, date, time: eTime, location: eLocation, content: eContent,
+        capacity: String(Number(eCapacity) || 100), startsAt: localToIso(eStartsAt) ?? '',
+        registrationFormUrl: eFormUrl.trim(),
+      }, eFile));
+      // Cleared only once the server has saved the event.
+      setETitle(''); setEDate(''); setETime(''); setELocation(''); setEContent(''); setEStartsAt('');
+      setEFormUrl(''); setEFile(null);
+      setESuccess('Event created · use Notify Students to email members');
+      setTimeout(() => setESuccess(''), 4000);
+    } catch (err) {
+      setEError(`Event not saved — ${errorText(err)}`);
+    } finally {
+      setAddingEvent(false);
+    }
   };
 
   const openEditEvent = (ev: ClubEvent) => {
@@ -2294,6 +2352,9 @@ function EventsTab() {
     setEeTitle(ev.title); setEeDate(ev.date); setEeTime(ev.time);
     setEeLocation(ev.location); setEeContent(ev.content); setEeCapacity(String(ev.capacity));
     setEeStartsAt(isoToLocal(ev.startsAt));
+    setEeFormUrl(ev.registrationFormUrl ?? '');
+    setEeFile(null);
+    setEeRemoveAttachment(false);
     setEeError('');
   };
 
@@ -2303,11 +2364,19 @@ function EventsTab() {
     const date = eeDate || null;
     if (!date) { setEeError('Select a date'); return; }
     if (!validateEventTime(eeTime)) { setEeError('Enter a valid event time or time range'); return; }
+    const urlProblem = formUrlError(eeFormUrl);
+    if (urlProblem) { setEeError(urlProblem); return; }
     setEeLoading(true); setEeError('');
     try {
-      await updateEvent(editEvent.id, { title: eeTitle, date, time: eeTime, location: eeLocation, content: eeContent, capacity: Number(eeCapacity) || editEvent.capacity, startsAt: localToIso(eeStartsAt) ?? null });
+      // The form link field starts out holding the saved link, so sending it
+      // back keeps it; emptying the field clears it.
+      await updateEvent(editEvent.id, eventFormData({
+        title: eeTitle, date, time: eeTime, location: eeLocation, content: eeContent,
+        capacity: String(Number(eeCapacity) || editEvent.capacity), startsAt: localToIso(eeStartsAt) ?? '',
+        registrationFormUrl: eeFormUrl.trim(),
+      }, eeFile, eeRemoveAttachment));
       setEditEvent(null);
-    } catch (err) { setEeError(String(err)); } finally { setEeLoading(false); }
+    } catch (err) { setEeError(`Changes not saved — ${errorText(err)}`); } finally { setEeLoading(false); }
   };
 
   return (
@@ -2328,10 +2397,17 @@ function EventsTab() {
             <input type="datetime-local" value={eStartsAt} onChange={e => setEStartsAt(e.target.value)} className="input-base" />
             <p className="type-micro" style={{ marginTop: 4, color: 'var(--color-ink-muted)' }}>Powers the ~1-hour-before reminder email. The Time field above stays the display label.</p>
           </div>
+          <div>
+            <label htmlFor="event-form-url" className="type-micro block mb-1">Registration form link (optional)</label>
+            <input id="event-form-url" type="url" inputMode="url" value={eFormUrl} onChange={e => setEFormUrl(e.target.value)} placeholder="https://forms.gle/…" className="input-base" maxLength={2048} aria-describedby="event-form-url-hint" />
+            <p id="event-form-url-hint" className="type-micro" style={{ marginTop: 4, color: 'var(--color-ink-muted)' }}>A Google Forms link. Students are taken there after their registration is recorded — separate from the attachment below.</p>
+          </div>
+          <EventAttachmentField saved={null} file={eFile} onFileChange={setEFile} saving={addingEvent} />
           <button type="submit" disabled={addingEvent} className="btn-primary w-full justify-center" style={{ opacity: addingEvent ? 0.5 : 1 }}>
-            {addingEvent ? <><Loader2 size={13} className="animate-spin mr-2" />Scheduling…</> : 'Schedule Event'}
+            {addingEvent ? <><Loader2 size={13} className="animate-spin mr-2" />{eventSavingLabel(true, eFile !== null)}</> : 'Schedule Event'}
           </button>
-          {eSuccess && <p className="type-micro" style={{ color: '#4ade80' }}>{eSuccess}</p>}
+          {eError && <p role="alert" className="type-micro" style={{ color: '#e5484d' }}>{eError}</p>}
+          {eSuccess && <p role="status" className="type-micro" style={{ color: '#4ade80' }}>{eSuccess}</p>}
         </form>
       </div>
       <div className="lg:col-span-3 space-y-2">
@@ -2342,7 +2418,11 @@ function EventsTab() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="type-body-sm truncate">{ev.title}</p>
-              <p className="type-micro">{formatEventDate(ev.date)} · {ev.registeredCount}/{ev.capacity}</p>
+              <p className="type-micro">
+                {formatEventDate(ev.date)} · {ev.registeredCount}/{ev.capacity}
+                {ev.registrationFormUrl && ' · Form'}
+                {ev.attachment && ' · Problem statement'}
+              </p>
             </div>
             <NotifiedBadge notifiedAt={ev.notifiedAt} />
             <AdminActionButton
@@ -2404,10 +2484,23 @@ function EventsTab() {
                 <input type="datetime-local" value={eeStartsAt} onChange={e => setEeStartsAt(e.target.value)} className="input-base" />
                 <p className="type-micro" style={{ marginTop: 4, color: 'var(--color-ink-muted)' }}>Powers the ~1-hour-before reminder email. The Time field above stays the display label.</p>
               </div>
-              {eeError && <p className="type-micro" style={{ color: '#e5484d' }}>{eeError}</p>}
+              <div>
+                <label htmlFor="edit-event-form-url" className="type-micro block mb-1">Registration form link (optional)</label>
+                <input id="edit-event-form-url" type="url" inputMode="url" value={eeFormUrl} onChange={e => setEeFormUrl(e.target.value)} placeholder="https://forms.gle/…" className="input-base" maxLength={2048} aria-describedby="edit-event-form-url-hint" />
+                <p id="edit-event-form-url-hint" className="type-micro" style={{ marginTop: 4, color: 'var(--color-ink-muted)' }}>A Google Forms link — separate from the attachment below. Clear the field to remove the form.</p>
+              </div>
+              <EventAttachmentField
+                saved={editEvent.attachment}
+                file={eeFile}
+                onFileChange={setEeFile}
+                removeSaved={eeRemoveAttachment}
+                onRemoveSavedChange={setEeRemoveAttachment}
+                saving={eeLoading}
+              />
+              {eeError && <p role="alert" className="type-micro" style={{ color: '#e5484d' }}>{eeError}</p>}
               <div className="flex gap-2">
                 <button type="submit" disabled={eeLoading} className="btn-primary flex items-center gap-2" style={{ opacity: eeLoading ? 0.6 : 1 }}>
-                  {eeLoading ? <Loader2 size={13} className="animate-spin" /> : null} Save Changes
+                  {eeLoading ? <><Loader2 size={13} className="animate-spin" /> {eventSavingLabel(false, eeFile !== null)}</> : 'Save Changes'}
                 </button>
                 <button type="button" onClick={() => setEditEvent(null)} className="btn-secondary">Cancel</button>
               </div>
@@ -2731,7 +2824,7 @@ function SettingsTab() {
             <code style={{
               padding: '8px 16px', background: 'var(--color-canvas)',
               border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
-              fontSize: 16, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-brand)',
+              fontSize: 16, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-brand-text)',
               fontFamily: 'var(--font-mono, monospace)',
             }}>
               {showPasscode ? (settings.public_meet_passcode ?? 'DNA2025') : '••••••••'}
@@ -2798,7 +2891,7 @@ function SettingsTab() {
             disabled={saving}
             style={{
               width: 48, height: 26, borderRadius: 'var(--radius-pill)',
-              background: isOtpBypassEnabled ? 'var(--color-error)' : 'var(--color-border)',
+              background: isOtpBypassEnabled ? 'var(--color-error-fill)' : 'var(--color-border)',
               border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
               position: 'relative', transition: 'background 0.2s ease', flexShrink: 0,
             }}
@@ -2853,7 +2946,7 @@ function SettingsTab() {
               Approved coordinators see
               &quot;Schedule a Meet&quot; in the footer.
               {' '}
-              <span style={{ color: 'var(--color-brand)' }}>
+              <span style={{ color: 'var(--color-brand-text)' }}>
                 {coordinators.filter(c => c.approved).length}
               </span>
               {' of '}
@@ -3153,7 +3246,7 @@ function SettingsTab() {
             }}>
               Automatically capitalise artwork titles and artist names when uploading.
               Currently{' '}
-              <strong style={{ color: forceUppercase ? 'var(--color-brand)' : 'var(--color-ink-muted)' }}>
+              <strong style={{ color: forceUppercase ? 'var(--color-brand-text)' : 'var(--color-ink-muted)' }}>
                 {forceUppercase ? 'ON' : 'OFF'}
               </strong>.
             </p>
@@ -3279,7 +3372,7 @@ function TemplateEditor({ templateId }: TemplateEditorProps) {
             <code
               key={v}
               onClick={() => setBody(prev => prev + v)}
-              style={{ padding: '3px 10px', borderRadius: 'var(--radius-pill)', background: 'rgba(233,30,140,0.12)', color: 'var(--color-brand)', fontSize: 12, fontFamily: 'var(--font-mono, monospace)', border: '1px solid rgba(233,30,140,0.2)', cursor: 'pointer' }}
+              style={{ padding: '3px 10px', borderRadius: 'var(--radius-pill)', background: 'rgba(233,30,140,0.12)', color: 'var(--color-brand-text)', fontSize: 12, fontFamily: 'var(--font-mono, monospace)', border: '1px solid rgba(233,30,140,0.2)', cursor: 'pointer' }}
             >
               {v}
             </code>
@@ -3528,7 +3621,7 @@ function AnnouncementsTab() {
             style={{
               padding: '8px 16px', background: 'none', border: 'none',
               borderBottom: subTab === t.id ? '2px solid var(--color-brand)' : '2px solid transparent',
-              color: subTab === t.id ? 'var(--color-brand)' : 'var(--color-ink-muted)',
+              color: subTab === t.id ? 'var(--color-brand-text)' : 'var(--color-ink-muted)',
               fontSize: 13, fontWeight: subTab === t.id ? 600 : 400,
               fontFamily: 'var(--font-body)', cursor: 'pointer',
               marginBottom: -1, transition: 'all 0.15s ease',
@@ -3661,7 +3754,7 @@ function SessionsTab() {
 
   const statusColor = (status: string) => {
     if (status === 'live') return 'var(--color-success)';
-    if (status === 'upcoming') return 'var(--color-brand)';
+    if (status === 'upcoming') return 'var(--color-brand-text)';
     return 'var(--color-ink-muted)';
   };
 
@@ -3721,7 +3814,7 @@ function SessionsTab() {
               background: 'none',
               border: 'none',
               borderBottom: subTab === t ? '2px solid var(--color-brand)' : '2px solid transparent',
-              color: subTab === t ? 'var(--color-brand)' : 'var(--color-ink-muted)',
+              color: subTab === t ? 'var(--color-brand-text)' : 'var(--color-ink-muted)',
               fontSize: 13,
               fontWeight: subTab === t ? 600 : 400,
               fontFamily: 'var(--font-body)',
@@ -3883,7 +3976,7 @@ function SessionsTab() {
                         <span style={{
                           fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
                           textTransform: 'uppercase', padding: '2px 8px', borderRadius: 'var(--radius-pill)',
-                          background: 'rgba(233,30,140,0.1)', color: 'var(--color-brand)',
+                          background: 'rgba(233,30,140,0.1)', color: 'var(--color-brand-text)',
                           fontFamily: 'var(--font-body)',
                         }}>
                           {s.audience_name}
@@ -3904,7 +3997,7 @@ function SessionsTab() {
                       href={s.meet_link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={{ fontSize: 12, color: 'var(--color-brand)', fontFamily: 'var(--font-body)', textDecoration: 'none', wordBreak: 'break-all' }}
+                      style={{ fontSize: 12, color: 'var(--color-brand-text)', fontFamily: 'var(--font-body)', textDecoration: 'none', wordBreak: 'break-all' }}
                     >
                       {s.meet_link}
                     </a>
@@ -3988,7 +4081,7 @@ function SessionsTab() {
                 </span>
                 <span style={{
                   fontSize: 11,
-                  color: s.join_count > 0 ? 'var(--color-brand)' : 'var(--color-ink-muted)',
+                  color: s.join_count > 0 ? 'var(--color-brand-text)' : 'var(--color-ink-muted)',
                   fontFamily: 'var(--font-body)',
                   fontWeight: s.join_count > 0 ? 600 : 400,
                 }}>
@@ -4213,7 +4306,7 @@ function MoodboardsAdminTab() {
                     fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
                     padding: '2px 8px', borderRadius: 'var(--radius-pill)',
                     background: board.visibility === 'shared' ? 'rgba(233,30,140,0.1)' : 'var(--color-surface-2)',
-                    color: board.visibility === 'shared' ? 'var(--color-brand)' : 'var(--color-ink-muted)',
+                    color: board.visibility === 'shared' ? 'var(--color-brand-text)' : 'var(--color-ink-muted)',
                     fontFamily: 'var(--font-body)',
                   }}>
                     {board.visibility}
@@ -4344,8 +4437,13 @@ export function AdminPage() {
     { id: 'comments',      label: 'Comments',      icon: MessageSquare },
     { id: 'settings',      label: 'Settings',      icon: Settings },
     { id: 'announcements', label: 'Announcements', icon: Mail },
+    { id: 'email',         label: 'Email Centre',  icon: Send },
     { id: 'sessions',      label: 'Sessions',      icon: Radio },
     { id: 'moodboards',   label: 'Moodboards',   icon: Layout },
+    { id: 'assets',       label: 'Assets',       icon: FolderOpen },
+    { id: 'templates',    label: 'Templates',    icon: LayoutTemplate },
+    { id: 'showcase',     label: 'Showcase',     icon: Sparkles },
+    { id: 'creators',     label: 'Creators',     icon: UserRound },
   ];
 
   return (
@@ -4388,8 +4486,13 @@ export function AdminPage() {
           {tab === 'comments' && <motion.div key="comments"  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><CommentsTab /></motion.div>}
           {tab === 'settings'      && <motion.div key="settings"      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><SettingsTab /></motion.div>}
           {tab === 'announcements' && <motion.div key="announcements" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><AnnouncementsTab /></motion.div>}
+          {tab === 'email'         && <motion.div key="email"         initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><EmailCentre /></motion.div>}
           {tab === 'sessions'      && <motion.div key="sessions"      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><SessionsTab /></motion.div>}
           {tab === 'moodboards'   && <motion.div key="moodboards"   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><MoodboardsAdminTab /></motion.div>}
+          {tab === 'assets'       && <motion.div key="assets"       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><LibraryModerationTab kind="assets" /></motion.div>}
+          {tab === 'templates'    && <motion.div key="templates"    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><LibraryModerationTab kind="templates" /></motion.div>}
+          {tab === 'showcase'     && <motion.div key="showcase"     initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><ShowcaseModerationTab /></motion.div>}
+          {tab === 'creators'     && <motion.div key="creators"     initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><CreatorFeaturingTab /></motion.div>}
         </AnimatePresence>
       </div>
     </div>

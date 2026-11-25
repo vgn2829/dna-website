@@ -20,8 +20,9 @@ const COLS = [
     links: [
       { label: 'Academy',        path: '/academy'        },
       { label: 'Gallery',        path: '/gallery'        },
+      { label: 'Creators',       path: '/creators'       },
       { label: 'Events',         path: '/events'         },
-      { label: 'Design Studio',  path: '/design-studio'  },
+      { label: 'Creator Studio', path: '/design-studio'  },
       { label: 'Palette Studio', path: '/palette'        },
       { label: 'Moodboards',     path: '/moodboards'     },
       { label: 'Team',           path: '/team'           },
@@ -266,7 +267,7 @@ export function Footer() {
                           fontWeight: 500,
                           letterSpacing: '-0.13px',
                           lineHeight: 1.20,
-                          color: 'var(--color-brand)',
+                          color: 'var(--color-brand-text)',
                           transition: 'opacity 0.15s',
                           fontFamily: 'var(--font-body)',
                         }}
@@ -508,7 +509,7 @@ export function Footer() {
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                               {s.status === 'live' && (
-                                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-brand)', fontFamily: 'var(--font-body)', letterSpacing: '0.06em' }}>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-brand-text)', fontFamily: 'var(--font-body)', letterSpacing: '0.06em' }}>
                                   ● LIVE
                                 </span>
                               )}

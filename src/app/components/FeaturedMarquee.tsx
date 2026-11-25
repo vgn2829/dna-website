@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
 import { useAppData } from '../context/AppDataContext';
+import { bylineText } from '../lib/creators';
 
 export function FeaturedMarquee() {
   const navigate = useNavigate();
@@ -105,7 +106,7 @@ export function FeaturedMarquee() {
                         letterSpacing: '-0.5px',
                       }}
                     >{a.title}</h3>
-                    <p className="type-caption" style={{ color: 'rgba(255,255,255,0.65)' }}>by {a.artist}</p>
+                    <p className="type-caption" style={{ color: 'rgba(255,255,255,0.65)' }}>by {bylineText(a)}</p>
                   </div>
                 </motion.div>
               ))}

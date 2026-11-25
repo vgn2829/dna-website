@@ -1,3 +1,6 @@
+import { describeUploadFailure, type UploadFailure } from './assetLibrary';
+import type { RsvpResult } from './eventForm';
+
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '') + '/api';
 export const API_BASE = BASE;
 
@@ -107,6 +110,9 @@ export interface BoardItem {
   added_by_roll: string;
   added_by_name: string | null;
   created_at: string;
+  // Set once the item has been placed on the saved canvas; the board
+  // endpoints only return rows where this is still null (pending).
+  placed_at?: string | null;
 }
 
 export interface Board {
@@ -118,7 +124,16 @@ export interface Board {
   visibility: 'private' | 'shared';
   room_id: string | null;
   edit_mode: 'members_only' | 'anyone';
+  // Visible canvas items (+ not-yet-placed gallery items) — see
+  // backend lib/boardRows.ts BOARD_ITEM_COUNT_SQL.
   item_count: number;
+  // Card preview primitives derived server-side from the persisted canvas
+  // (backend lib/canvasSummary.ts); null for an empty board. Optional:
+  // not every endpoint returning a Board includes it.
+  canvas_preview?: CanvasPreview | null;
+  // Board LIST responses only (read-time, never stored): original preview
+  // image src → its ready t512 thumbnail URL. Absent src = use the original.
+  preview_thumbnails?: Record<string, string>;
   member_count: number;
   created_at: string;
   updated_at: string;
@@ -127,6 +142,17 @@ export interface Board {
   thumbnail_url: string | null;
   realtime_enabled: boolean;
   workspace_id: string;
+  // V2.2 Projects layer — null means "ungrouped, workspace-level board",
+  // a permanent valid state, not a migration placeholder. Every V1/V2.0
+  // board stays null unless explicitly moved into a project.
+  project_id: string | null;
+  // Display-only, joined server-side (GET /api/boards only, for the
+  // MoodboardsPage card grid) — not present on every board response
+  // (e.g. GET /api/boards/:id detail doesn't join it, since BoardPage's
+  // canvas UI has no project-association display today); optional so
+  // TypeScript reflects that honestly rather than claiming it's always
+  // populated.
+  project_name?: string | null;
 }
 
 export interface BoardDetail extends Board {
@@ -160,22 +186,268 @@ export interface WorkspaceDetail extends Workspace {
   members: WorkspaceMember[];
 }
 
+// Projects (V2.2) — mirrors backend/src/routes/projects.ts. A pure
+// organizational grouping between a workspace and its boards; no
+// project-level role — access is entirely derived from the caller's
+// workspace_members row (see api.workspaces above), never stored here.
+export interface Project {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  owner_roll: string;
+  owner_name: string | null;
+  created_at: string;
+  is_archived: boolean;
+  board_count: number;
+}
+
+// Templates (V2.3) — mirrors backend/src/routes/templates.ts's
+// toPublicTemplate(). No canvas_data here (never sent to the list/detail
+// response — only POST /:id/use reads it, server-side); no template-level
+// role — access is entirely derived from workspace_members, same as
+// Project above. source_board_id is provenance only (the board a
+// template was originally saved from), never a live dependency — it may
+// be null if that board was later deleted.
+// Shared Creative Library — mirrors backend/src/lib/libraryVisibility.ts.
+// Templates (LibraryVisibility): personal — only the owner; community —
+// every member of the template's workspace.
+// Assets (AssetVisibility): personal — only the owner; workspace — every
+// member of the asset's workspace and of each workspace its owner has
+// explicitly shared it with (assets.shares/grant/revoke); community —
+// published to the whole club: every signed-in student, from any workspace.
+// Never public. Only the owner manages it either way.
+export type LibraryVisibility = 'personal' | 'community';
+export type AssetVisibility = 'personal' | 'workspace' | 'community';
+// List scope: all = everything the caller may use here; mine; community.
+export type LibraryScope = 'all' | 'mine' | 'community';
+// Admin moderation: a hidden item is out of every normal flow until an admin
+// restores it (normal list/detail responses only ever contain 'active').
+export type LibraryStatus = 'active' | 'hidden';
+// Admin list filters (GET /…/admin/all) and the workspace label rows carry.
+export interface LibraryAdminFilters { q?: string; status?: LibraryStatus | 'all'; visibility?: AssetVisibility | 'all' }
+interface LibraryAdminExtra { workspace_name: string; workspace_is_personal: boolean }
+
+export interface Template {
+  id: string;
+  workspace_id: string;
+  source_board_id: string | null;
+  name: string;
+  description: string | null;
+  thumbnail_url: string | null;
+  owner_roll: string;
+  owner_name: string | null;
+  created_at: string;
+  is_archived: boolean;
+  visibility: LibraryVisibility;
+  status: LibraryStatus;
+}
+export type AdminTemplate = Template & LibraryAdminExtra;
+
 // Mirrors backend/src/routes/assets.ts's toPublicAsset() — note there is
 // no storage_key here (an internal StorageProvider path, never sent to
 // the frontend); `url` is the derived public URL the backend already
 // resolved via getStorage().getPublicUrl().
+// Mirrors backend/src/lib/canvasSummary.ts's CanvasPreview.
+export interface CanvasPreviewItem {
+  k: 'geo' | 'frame' | 'image' | 'note' | 'text' | 'path' | 'box';
+  x: number; y: number; r: number; w: number; h: number;
+  c?: string; g?: string; f?: string; src?: string; t?: string; fs?: number;
+  p?: number[]; hl?: boolean; sw?: number;
+  /** Image crop as normalized [x0, y0, x1, y1] of the source image (absent = whole image). */
+  cr?: [number, number, number, number];
+}
+export interface CanvasPreview {
+  v: 1;
+  x: number; y: number; w: number; h: number;
+  items: CanvasPreviewItem[];
+}
+
+// Mirrors backend/src/routes/assets.ts's toPublicAsset(). kind 'image' is
+// the only kind that can be inserted onto a board; 'file' is any other
+// library resource (PSD/AI/PDF/ZIP/...), whose url is a download URL;
+// 'link' is an external http(s) URL (link_url) with no stored object
+// (url is null).
+export type AssetKind = 'image' | 'file' | 'link';
+
 export interface Asset {
   id: string;
   workspace_id: string;
   owner_roll: string;
   owner_name: string | null;
+  kind: AssetKind;
+  collection_id: string | null;
+  extension: string | null;
   filename: string;
-  mime_type: string;
-  size_bytes: number;
+  link_url: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
   width: number | null;
   height: number | null;
   created_at: string;
-  url: string;
+  visibility: AssetVisibility;
+  status: LibraryStatus;
+  url: string | null;
+  // Read-time t512 WebP derivative of an image asset, set only when one is
+  // ready (null otherwise). For card/preview rendering ONLY — `url` stays
+  // the original for opening, downloading and placing on a board.
+  thumb_url?: string | null;
+  // Attachment (Content-Disposition) URL of the same stored object, for an
+  // explicit Download: equals `url` for files, null for links. Optional:
+  // fall back to `url` when absent.
+  download_url?: string | null;
+}
+
+export type AdminAsset = Asset & LibraryAdminExtra;
+
+// Inspiration Library (Milestone C) — mirrors backend/src/routes/inspiration.ts.
+// An item points at an Asset Library asset (`asset`, resolved against the
+// caller's CURRENT access: null + `unavailable` once it is no longer usable)
+// or at an external link (`url`, never fetched by the server).
+export type InspirationCategory =
+  | 'illustration' | 'typography' | 'branding' | 'ui-ux' | 'photography'
+  | 'color' | 'motion' | '3d' | 'layout' | 'other';
+export type InspirationSort = 'newest' | 'oldest' | 'title';
+export interface InspirationAsset {
+  id: string; kind: AssetKind; filename: string; url: string | null; thumb_url: string | null;
+  width: number | null; height: number | null; visibility: AssetVisibility;
+  extension: string | null; link_url: string | null; workspace_id: string;
+}
+export interface InspirationItem {
+  id: string;
+  kind: 'asset' | 'link';
+  title: string;
+  description: string | null;
+  category: InspirationCategory | null;
+  tags: string[];
+  url: string | null;
+  image_url: string | null;
+  asset: InspirationAsset | null;
+  unavailable: boolean;
+  collection_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+export interface InspirationCollection {
+  id: string; name: string; description: string | null; visibility: 'private';
+  item_count: number; created_at: string; updated_at: string;
+}
+export interface InspirationQuery {
+  q?: string; tags?: string[]; category?: InspirationCategory | 'none' | '';
+  kind?: 'asset' | 'link' | ''; collectionId?: string; sort?: InspirationSort;
+  limit?: number; offset?: number;
+}
+export interface InspirationFacets {
+  tags: Array<{ tag: string; count: number }>;
+  categories: Array<{ category: InspirationCategory; count: number }>;
+  total: number;
+}
+export type InspirationDraft = {
+  title?: string; description?: string | null; category?: InspirationCategory | null;
+  tags?: string[]; collection_ids?: string[];
+};
+// Public Project Showcase (Milestone D) — mirrors backend/src/routes/showcase.ts.
+export type ShowcaseStatus = 'draft' | 'submitted' | 'changes_requested' | 'approved' | 'published' | 'rejected' | 'archived';
+export type ShowcaseCategory = 'branding' | 'illustration' | 'ui-ux' | 'motion' | 'photography' | 'typography' | '3d' | 'print' | 'product' | 'other';
+export interface ShowcaseCredit { displayName: string | null; roleLabel: string | null; isOwner: boolean; profile?: { handle: string } }
+export interface ShowcaseCard {
+  slug: string; title: string; summary: string | null; category: ShowcaseCategory | null; tags: string[];
+  featured: boolean; publishedAt: string | null; disciplines: Array<{ id: string; title: string }>;
+  cover: { url: string; width: number | null; height: number | null } | null; credits: ShowcaseCredit[];
+}
+export interface ShowcaseDetail extends ShowcaseCard {
+  description: string | null; links: Array<{ label: string; url: string }>;
+  works: Array<{ url: string; caption: string | null; width: number | null; height: number | null }>;
+  artworks: Array<{ id: string; title: string; imageUrl: string | null; mediaType: string }>;
+}
+export interface ShowcaseQuery { q?: string; category?: string; discipline?: string; tags?: string[]; featured?: boolean; sort?: 'newest' | 'oldest' | 'title' | 'featured'; limit?: number; offset?: number }
+export interface ShowcaseFacets { categories: Array<{ category: ShowcaseCategory; count: number }>; disciplines: Array<{ id: string; title: string; count: number }>; tags: Array<{ tag: string; count: number }> }
+export interface ShowcaseOwnerCredit { id: string; roll: string | null; roleLabel: string | null; contribution: string | null; displayName: string | null; status: 'accepted' | 'pending' | 'declined'; isOwner: boolean }
+export interface ShowcaseOwnerWork { addedByYou: boolean; id: string; assetId: string | null; caption: string | null; isCover: boolean; position: number; filename: string | null; previewUrl: string | null; width: number | null; height: number | null; sourceMissing: boolean; published: boolean }
+export interface ShowcaseProject {
+  id: string; slug: string; title: string; summary: string | null; description: string | null; category: ShowcaseCategory | null;
+  tags: string[]; links: Array<{ label: string; url: string }>; status: ShowcaseStatus; reviewNote: string | null; featured: boolean;
+  submittedAt: string | null; publishedAt: string | null; createdAt: string; updatedAt: string; editable: boolean;
+  disciplines: Array<{ id: string; title: string }>; works: ShowcaseOwnerWork[]; credits: ShowcaseOwnerCredit[];
+  boards: Array<{ id: string; name: string }>; artworks: Array<{ id: string; title: string; image_url: string | null }>;
+  events: Array<{ from: ShowcaseStatus | null; to: ShowcaseStatus; by: 'student' | 'admin' | 'system'; reason: string | null; at: string }>;
+  problems: string[]; viewerIsOwner: boolean;
+  // Collaboration (Milestone F). `permissions` is the server's verdict for THIS viewer; the UI never re-derives it.
+  access: ProjectAccess; permissions: ProjectPermission[]; contentEditable: boolean; collaborators: ProjectCollaborator[];
+}
+export type ProjectAccess = 'owner' | 'editor' | 'viewer';
+export type ProjectPermission = 'view' | 'comment' | 'edit_content' | 'edit_works' | 'remove_any_work' | 'edit_references' | 'manage_collaborators' | 'manage_credits' | 'lifecycle' | 'delete_project' | 'moderate_comments';
+export interface ProjectCollaborator { id: string; name: string; accessRole: ProjectAccess; status: 'pending' | 'accepted'; isYou: boolean; invitedAt: string | null; roll?: string }
+export interface CollabInvitation { id: string; accessRole: 'editor' | 'viewer'; invitedAt: string; projectTitle: string; projectStatus: ShowcaseStatus; ownerName: string; creditProposed: boolean; creditRole: string | null }
+export interface SharedProject { id: string; slug: string; title: string; status: ShowcaseStatus; updatedAt: string; accessRole: 'editor' | 'viewer'; ownerName: string; coverUrl: string | null }
+export interface ProjectActivityItem { id: string; kind: string; at: string; actorName: string; you: boolean; detail: Record<string, unknown> }
+export interface ProjectComment { id: string; body: string; at: string; authorName: string; mine: boolean; canDelete: boolean }
+export interface CollabInviteBody { handle?: string; roll?: string; access_role: 'editor' | 'viewer'; role_label?: string | null; contribution?: string | null }
+export interface ShowcaseListItem { id: string; slug: string; title: string; status: ShowcaseStatus; reviewNote: string | null; updatedAt: string; coverUrl: string | null }
+export interface ShowcaseInvitation { id: string; status: 'pending' | 'accepted'; roleLabel: string | null; contribution: string | null; displayName: string | null; projectTitle: string; projectStatus: ShowcaseStatus; ownerName: string | null }
+export interface ShowcaseAdminItem { id: string; slug: string; title: string; status: ShowcaseStatus; category: ShowcaseCategory | null; featured: boolean; submittedAt: string | null; publishedAt: string | null; updatedAt: string; ownerName: string | null; ownerRoll: string }
+export interface ShowcasePatch {
+  title?: string; summary?: string | null; description?: string | null; category?: ShowcaseCategory | null; tags?: string[];
+  links?: Array<{ label?: string; url: string }>; discipline_ids?: string[]; owner_display_name?: string; owner_role_label?: string | null;
+}
+// Creator Discovery (Milestone E). The directory/featured/projects endpoints are
+// backend/src/routes/creators.ts; the single-profile + artwork endpoints are
+// PR #84's /api/designers/:handle (+ /works) contract.
+export interface CreatorDiscipline { id: string; title: string; color: string }
+export interface CreatorProjectThumb { slug: string; title: string; category: string | null; coverUrl: string | null }
+export interface CreatorCard {
+  handle: string; displayName: string; headline: string | null; bio: string | null; avatarUrl: string | null;
+  verified: boolean; featured: boolean; editorialNote?: string | null; skills: string[]; disciplines: CreatorDiscipline[];
+  projectCount: number; projects: CreatorProjectThumb[];
+}
+export interface CreatorFacets {
+  total: number; disciplines: Array<CreatorDiscipline & { count: number }>;
+  skills: Array<{ skill: string; count: number }>; categories: Array<{ category: string; count: number }>;
+  tools?: Array<{ tool: string; count: number }>; departments?: Array<{ department: string; count: number }>;
+}
+export interface CreatorQuery { q?: string; discipline?: string; skill?: string; tool?: string; department?: string; featured?: boolean; category?: string; sort?: 'featured' | 'name' | 'newest'; limit?: number; offset?: number }
+export interface CreatorCapabilities { profiles: boolean; projects: boolean; artworkCredits: boolean }
+export interface DesignerProfile {
+  handle: string; displayName: string; headline: string | null; bio: string | null; department: string | null; batch: string | null;
+  verified: boolean; avatarUrl: string | null; coverUrl: string | null; disciplines: CreatorDiscipline[]; skills: string[]; tools?: string[];
+  links: Array<{ kind: string; url: string }>; worksCount: number;
+}
+// Owner view of PR #84's /api/designers/me (never includes roll numbers or email).
+export type ProfileVisibility = 'private' | 'members' | 'public';
+export interface OwnerProfile extends DesignerProfile {
+  showBatch: boolean; visibility: ProfileVisibility; moderationStatus: 'active' | 'hidden';
+  handleChangeableAt: string | null; createdAt: string;
+}
+export interface ProfilePreview extends DesignerProfile { visibleToPublic: boolean }
+export interface MyArtworkCredit {
+  id: string; artworkId: string; artworkTitle: string; role: string; roleLabel: string | null;
+  status: 'pending' | 'accepted' | 'declined'; source: string; isPrimary: boolean; createdAt: string;
+}
+export interface ProfileUpdate { handle?: string; displayName?: string; headline?: string | null; bio?: string | null; department?: string | null; showBatch?: boolean }
+export interface DesignerWork { id: string; title: string; domain: string; mediaType: string; coverUrl: string | null; role: string; roleLabel: string | null; publishedAt: string }
+export interface CreatorProject { slug: string; title: string; summary: string | null; category: string | null; featured: boolean; publishedAt: string; roleLabel: string | null; isOwner: boolean; coverUrl: string | null }
+export interface CreatorAdminItem { id: string; handle: string; displayName: string; ownerRoll: string; verified: boolean; featured: boolean; featuredAt: string | null; displayOrder?: number | null; editorialNote?: string | null }
+
+
+function libraryAdminQuery(filters: LibraryAdminFilters): string {
+  const params = new URLSearchParams();
+  if (filters.q?.trim()) params.set('q', filters.q.trim());
+  if (filters.status && filters.status !== 'all') params.set('status', filters.status);
+  if (filters.visibility && filters.visibility !== 'all') params.set('visibility', filters.visibility);
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
+// Mirrors backend/src/routes/assetCollections.ts.
+export interface AssetCollection {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  created_by_roll: string;
+  created_at: string;
+  updated_at: string;
+  asset_count: number;
 }
 
 // Mirrors backend/src/routes/notifications.ts's toPublicNotification().
@@ -185,7 +457,7 @@ export interface Asset {
 // whichever of these is present, never assumes all three.
 export type NotificationType =
   | 'board_shared' | 'workspace_added' | 'workspace_role_changed'
-  | 'comment_created' | 'comment_replied';
+  | 'comment_created' | 'comment_replied' | 'comment_mentioned';
 
 export interface Notification {
   id: string;
@@ -244,6 +516,10 @@ export interface BoardComment {
   anchorShapeId: string | null;
   anchorX: number;
   anchorY: number;
+  // Which tldraw page this anchor lives on (V2.6 Phase B). null for
+  // comments created before pages were tracked — those render on every
+  // page, preserving their pre-Phase-B behaviour. See CommentsOverlay.
+  anchorPageId: string | null;
   content: string;
 }
 
@@ -331,51 +607,93 @@ async function request<T>(
   return data as T;
 }
 
+// Upload responses. A dropped connection (fetch rejects: "Load failed" in
+// Safari, "Failed to fetch" in Chrome) or a non-JSON error page (e.g. a
+// proxy's 502 while the API restarts) becomes a clear message instead of
+// the browser's raw error or a JSON parse failure.
+async function sendUpload(path: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(`${BASE}${path}`, init);
+  } catch {
+    throw new Error(describeUploadFailure({ type: 'network' }).message);
+  }
+}
+
+async function readUploadResponse<T>(res: Response): Promise<T> {
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  if (!res.ok) throw new Error(describeUploadFailure({ type: 'http', status: res.status, body: text }).message);
+  return JSON.parse(text) as T;
+}
+
 async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
   const headers: Record<string, string> = {};
   const tok = getAdminToken();
   if (tok) headers['Authorization'] = `Bearer ${tok}`;
-  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: formData });
-  if (res.status === 204) return undefined as T;
-  const data = await res.json() as T | { message?: unknown; error?: unknown };
-  if (!res.ok) {
-    console.log('Upload error response:', data);
-    const d = data as { message?: unknown; error?: unknown };
-    const msg = d.message ?? d.error ?? res.statusText;
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
-  }
-  return data as T;
+  return readUploadResponse<T>(await sendUpload(path, { method: 'POST', headers, body: formData }));
 }
 
 async function uploadPutRequest<T>(path: string, formData: FormData): Promise<T> {
   const headers: Record<string, string> = {};
   const tok = getAdminToken();
   if (tok) headers['Authorization'] = `Bearer ${tok}`;
-  const res = await fetch(`${BASE}${path}`, { method: 'PUT', headers, body: formData });
-  if (res.status === 204) return undefined as T;
-  const data = await res.json() as T | { message?: unknown; error?: unknown };
-  if (!res.ok) {
-    console.log('Upload error response:', data);
-    const d = data as { message?: unknown; error?: unknown };
-    const msg = d.message ?? d.error ?? res.statusText;
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
-  }
-  return data as T;
+  return readUploadResponse<T>(await sendUpload(path, { method: 'PUT', headers, body: formData }));
 }
 
 async function studentUploadRequest<T>(path: string, formData: FormData): Promise<T> {
   const headers: Record<string, string> = {};
   const tok = getStudentToken();
   if (tok) headers['Authorization'] = `Bearer ${tok}`;
-  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: formData });
-  const data = await res.json() as T | { message?: unknown; error?: unknown };
+  const res = await sendUpload(path, { method: 'POST', headers, body: formData });
   if (res.status === 401) { clearStudentToken(); throw new Error('SESSION_EXPIRED'); }
-  if (!res.ok) {
-    const d = data as { message?: unknown; error?: unknown };
-    const msg = d.message ?? d.error ?? res.statusText;
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  return readUploadResponse<T>(res);
+}
+
+// A failed library upload, with whether retrying can help (see
+// describeUploadFailure).
+export class UploadError extends Error {
+  readonly failure: UploadFailure;
+  constructor(failure: UploadFailure) {
+    super(failure.message);
+    this.name = 'UploadError';
+    this.failure = failure;
   }
-  return data as T;
+}
+
+// Library uploads go through XMLHttpRequest rather than fetch: it is the
+// only browser API that reports upload progress. No timeout — a 300 MB file
+// on a slow link legitimately takes minutes; a dead connection still fails
+// through onerror.
+function studentUploadWithProgress<T>(path: string, formData: FormData, onProgress?: (fraction: number) => void): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${BASE}${path}`);
+    const tok = getStudentToken();
+    if (tok) xhr.setRequestHeader('Authorization', `Bearer ${tok}`);
+    xhr.upload.onprogress = e => { if (e.lengthComputable && e.total > 0) onProgress?.(e.loaded / e.total); };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText) as T);
+        } catch {
+          reject(new UploadError(describeUploadFailure({ type: 'http', status: 502, body: '' })));
+        }
+        return;
+      }
+      // Only a 429 carries one (and reading an unexposed header on other
+      // responses would just log a browser warning).
+      const retryAfter = xhr.status === 429 ? Number(xhr.getResponseHeader('Retry-After')) : NaN;
+      const failure = describeUploadFailure({
+        type: 'http', status: xhr.status, body: xhr.responseText,
+        retryAfterSeconds: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined,
+      });
+      if (failure.sessionExpired) clearStudentToken();
+      reject(new UploadError(failure));
+    };
+    xhr.onerror = () => reject(new UploadError(describeUploadFailure({ type: 'network' })));
+    xhr.ontimeout = () => reject(new UploadError(describeUploadFailure({ type: 'timeout' })));
+    xhr.send(formData);
+  });
 }
 
 export const api = {
@@ -417,12 +735,22 @@ export const api = {
   },
   events: {
     list: (roll?: string) => request<unknown[]>('GET', '/events', { roll }),
-    add:  (event: { title: string; date: string; time: string; location: string; content: string; capacity: number; startsAt?: string | null }) =>
-      request<unknown>('POST', '/events', { body: event, admin: true }),
-    update: (id: string, data: object) => request<unknown>('PUT', `/events/${id}`, { body: data, admin: true }),
+    // JSON, or FormData when the admin attaches a file (field "attachment";
+    // the other fields as strings — see backend routes/events.ts).
+    add:  (event: { title: string; date: string; time: string; location: string; content: string; capacity: number; startsAt?: string | null; registrationFormUrl?: string | null } | FormData) =>
+      event instanceof FormData
+        ? uploadRequest<unknown>('/events', event)
+        : request<unknown>('POST', '/events', { body: event, admin: true }),
+    update: (id: string, data: object | FormData) =>
+      data instanceof FormData
+        ? uploadPutRequest<unknown>(`/events/${id}`, data)
+        : request<unknown>('PUT', `/events/${id}`, { body: data, admin: true }),
     delete: (id: string)  => request<void>('DELETE', `/events/${id}`, { admin: true }),
-    rsvp:  (id: string, roll: string) =>
-      request<{ registeredCount: number; isRegistered: boolean }>('POST', `/events/${id}/rsvp`, { roll }),
+    // No action → the original toggle. 'register' / 'cancel' are idempotent;
+    // form-enabled events use them so a retry can never cancel a reservation.
+    // registrationFormUrl comes back only for an event that has a form.
+    rsvp:  (id: string, roll: string, action?: 'register' | 'cancel') =>
+      request<RsvpResult>('POST', `/events/${id}/rsvp`, { roll, ...(action ? { body: { action } } : {}) }),
     registrants: (id: string) =>
       request<EventRegistrants>('GET', `/events/${id}/registrants`, { admin: true }),
   },
@@ -571,23 +899,26 @@ export const api = {
   },
   boards: {
     // workspaceId is optional and purely additive (workspace/organization
-    // layer): omitted, these three list calls keep their exact pre-
+    // layer). Omitted, getMyBoards/getArchived keep their exact pre-
     // existing unscoped meaning ("every board I own or am a member of /
-    // my own archived boards / every shared board app-wide, across ALL
-    // workspaces"). Passed, they narrow to that one workspace — see
-    // backend/src/routes/boards.ts's own comment on why GET / and
-    // GET /archived stay unscoped-by-default while GET /shared's
-    // unscoped path is a deprecated fallback (Commit 9 removes it once
-    // every caller here always sends workspace_id for /shared).
+    // my own archived boards, across ALL of MY workspaces") — always
+    // bounded by the caller's own ownership/membership, never global.
+    // getShared, omitted, is scoped the same way (every shared board
+    // across every workspace the caller is a MEMBER of) — see
+    // backend/src/routes/boards.ts's own comment: as of V2.0 Phase 0
+    // there is no unscoped-across-the-whole-app fallback for /shared
+    // anymore (that was a cross-tenant leak once multiple workspaces
+    // exist); passing workspaceId narrows to exactly that one workspace
+    // and 403s a signed-in caller who isn't a member of it.
     getMyBoards: (roll: string, workspaceId?: string) =>
       request<Board[]>('GET', `/boards${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, { roll }),
     getArchived: (roll: string, workspaceId?: string) =>
       request<Board[]>('GET', `/boards/archived${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, { roll }),
     getShared: (roll?: string, workspaceId?: string) =>
       request<Board[]>('GET', `/boards/shared${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, roll ? { roll } : {}),
-    create: (roll: string, data: { name: string; description?: string; visibility?: 'private' | 'shared'; workspace_id?: string }) =>
+    create: (roll: string, data: { name: string; description?: string; visibility?: 'private' | 'shared'; workspace_id?: string; project_id?: string }) =>
       request<Board>('POST', '/boards', { body: data, roll }),
-    update: (id: string, roll: string, data: { name?: string; description?: string; visibility?: 'private' | 'shared'; edit_mode?: 'members_only' | 'anyone'; is_archived?: boolean }) =>
+    update: (id: string, roll: string, data: { name?: string; description?: string; visibility?: 'private' | 'shared'; edit_mode?: 'members_only' | 'anyone'; is_archived?: boolean; project_id?: string | null }) =>
       request<Board>('PUT', `/boards/${id}`, { body: data, roll }),
     getBoard: (id: string, roll?: string) =>
       request<BoardDetail>('GET', `/boards/${id}`, { roll }),
@@ -605,6 +936,12 @@ export const api = {
       request<BoardItem[]>('GET', `/boards/${id}/items`, { roll }),
     addItem: (boardId: string, roll: string, data: { image_url: string; note?: string; source_url?: string }) =>
       request<BoardItem>('POST', `/boards/${boardId}/items`, { body: data, roll }),
+    // Assets "Add to Moodboard": the server resolves the library asset and
+    // re-checks it may be used on this board's workspace (404 otherwise).
+    // duplicate: the same image was already pending on the board; the
+    // existing item is returned instead of a second one.
+    addAssetItem: (boardId: string, roll: string, assetId: string, sourceUrl?: string) =>
+      request<BoardItem & { duplicate?: boolean }>('POST', `/boards/${boardId}/items`, { body: { asset_id: assetId, source_url: sourceUrl }, roll }),
     deleteItem: (boardId: string, itemId: string, roll: string) =>
       request<{ success: boolean }>('DELETE', `/boards/${boardId}/items/${itemId}`, { roll }),
     addMember: (boardId: string, roll: string, memberRoll: string) =>
@@ -623,7 +960,7 @@ export const api = {
         { body: { canvas_data: canvasData }, roll }
       ),
     loadCanvas: (boardId: string, roll?: string) =>
-      request<{ canvas_data: string | null }>(
+      request<{ canvas_data: string | null; image_thumbnails?: Record<string, string> }>(
         'GET', `/boards/${boardId}/canvas`,
         roll ? { roll } : {}
       ),
@@ -695,8 +1032,18 @@ export const api = {
       anchorShapeId?: string;
       anchorX?: number;
       anchorY?: number;
+      anchorPageId?: string;
     }) =>
       request<BoardComment>('POST', `/boards/${boardId}/comments`, { body: data, roll }),
+    // Persistent per-(board, user) unread watermark (V2.6 Phase E).
+    // lastSeenAt is null when this user has never opened the board's
+    // comments, which the UI renders as "everything unread".
+    getCommentReadState: (boardId: string, roll: string) =>
+      request<{ lastSeenAt: string | null }>('GET', `/boards/${boardId}/comments/read-state`, { roll }),
+    // The server stamps the time, so a client cannot mark itself read into
+    // the future and permanently suppress real activity.
+    markCommentsSeen: (boardId: string, roll: string) =>
+      request<{ lastSeenAt: string }>('POST', `/boards/${boardId}/comments/read-state`, { roll }),
     editComment: (boardId: string, roll: string, commentId: string, content: string) =>
       request<BoardComment>('PUT', `/boards/${boardId}/comments/${commentId}`, { body: { content }, roll }),
     deleteComment: (boardId: string, roll: string, commentId: string) =>
@@ -749,27 +1096,292 @@ export const api = {
     setMemberRole: (id: string, roll: string, memberRoll: string, role: 'admin' | 'member') =>
       request<{ success: boolean; role: string }>('PUT', `/workspaces/${id}/members/${memberRoll}/role`, { body: { role }, roll }),
   },
+  // Projects (V2.2) — mirrors backend/src/routes/projects.ts. workspace_id
+  // is required on list (unlike boards.getMyBoards/getArchived, which
+  // default to "across all my workspaces" when omitted) — a project has
+  // no meaningful cross-workspace view, so this namespace never offers an
+  // unscoped call shape to begin with.
+  projects: {
+    list: (roll: string, workspaceId: string) =>
+      request<Project[]>('GET', `/projects?workspace_id=${encodeURIComponent(workspaceId)}`, { roll }),
+    create: (roll: string, data: { workspace_id: string; name: string; description?: string }) =>
+      request<Project>('POST', '/projects', { body: data, roll }),
+    get: (id: string, roll: string) =>
+      request<Project>('GET', `/projects/${id}`, { roll }),
+    getBoards: (id: string, roll: string) =>
+      request<Board[]>('GET', `/projects/${id}/boards`, { roll }),
+    update: (id: string, roll: string, data: { name?: string; description?: string | null; is_archived?: boolean }) =>
+      request<Project>('PATCH', `/projects/${id}`, { body: data, roll }),
+    delete: (id: string, roll: string) =>
+      request<{ success: boolean }>('DELETE', `/projects/${id}`, { roll }),
+  },
+  // Templates (V2.3) — mirrors backend/src/routes/templates.ts.
+  // workspace_id is required on list, same reasoning as api.projects.list
+  // above. create() takes source_board_id (never workspace_id — the
+  // backend always derives it from the board, ignoring anything else
+  // sent). use() creates a new, fully independent board from the
+  // template's snapshot; project_id is optional and must belong to the
+  // template's own workspace (enforced server-side).
+  templates: {
+    list: (roll: string, workspaceId: string, scope: LibraryScope = 'all') =>
+      request<Template[]>('GET', `/templates?workspace_id=${encodeURIComponent(workspaceId)}&scope=${scope}`, { roll }),
+    create: (roll: string, data: { name: string; description?: string; source_board_id: string; visibility?: LibraryVisibility }) =>
+      request<Template>('POST', '/templates', { body: data, roll }),
+    get: (id: string, roll: string) =>
+      request<Template>('GET', `/templates/${id}`, { roll }),
+    update: (id: string, roll: string, data: { name?: string; description?: string | null; is_archived?: boolean; visibility?: LibraryVisibility }) =>
+      request<Template>('PATCH', `/templates/${id}`, { body: data, roll }),
+    delete: (id: string, roll: string) =>
+      request<{ success: boolean }>('DELETE', `/templates/${id}`, { roll }),
+    use: (id: string, roll: string, data: { name?: string; project_id?: string }) =>
+      request<Board>('POST', `/templates/${id}/use`, { body: data, roll }),
+    // Admin moderation (admin token; requireAdmin server-side).
+    adminList: (filters: LibraryAdminFilters = {}) =>
+      request<{ templates: AdminTemplate[] }>('GET', `/templates/admin/all${libraryAdminQuery(filters)}`, { admin: true }),
+    adminUpdate: (id: string, body: { visibility?: LibraryVisibility; status?: LibraryStatus }) =>
+      request<AdminTemplate>('PATCH', `/templates/admin/${id}`, { body, admin: true }),
+  },
   // Asset Manager (Phase B) — mirrors backend/src/routes/assets.ts. A
   // persistent, workspace-scoped file library, distinct from
   // boards.uploadCanvasFile (which stores objects the same way but keeps
   // no reusable/listable record — see that route's own comment).
   assets: {
-    upload: (workspaceId: string, file: File) => {
+    // opts.kind 'file' opts in to general (non-image) library files; an
+    // allowlisted image is always stored as an image regardless.
+    // clientUploadId makes a retry idempotent (the server returns the asset
+    // an earlier attempt created). Rejects with UploadError.
+    upload: (workspaceId: string, file: File, opts?: {
+      kind?: 'file'; collectionId?: string | null; visibility?: AssetVisibility;
+      clientUploadId?: string; onProgress?: (fraction: number) => void;
+    }) => {
       const formData = new FormData();
-      formData.append('file', file);
+      // Text fields before the file — multer's recommended field order.
       formData.append('workspace_id', workspaceId);
       formData.append('filename', file.name);
-      return studentUploadRequest<Asset>('/assets', formData);
+      if (opts?.kind) formData.append('kind', opts.kind);
+      if (opts?.collectionId) formData.append('collection_id', opts.collectionId);
+      if (opts?.visibility) formData.append('visibility', opts.visibility);
+      if (opts?.clientUploadId) formData.append('client_upload_id', opts.clientUploadId);
+      formData.append('file', file);
+      return studentUploadWithProgress<Asset>('/assets', formData, opts?.onProgress);
     },
-    list: (roll: string, workspaceId: string, cursor?: string) =>
-      request<{ assets: Asset[]; nextCursor: string | null }>(
-        'GET', `/assets?workspace_id=${encodeURIComponent(workspaceId)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
-        { roll }
-      ),
-    get: (roll: string, id: string) =>
-      request<Asset>('GET', `/assets/${id}`, { roll }),
+    createLink: (roll: string, body: { workspace_id: string; name: string; url: string; collection_id?: string | null; visibility?: AssetVisibility }) =>
+      request<Asset>('POST', '/assets/links', { roll, body }),
+    // collection_id: an id, or null to ungroup. filename: rename (owner only).
+    // visibility: publish/unpublish (owner only).
+    update: (roll: string, id: string, body: { filename?: string; collection_id?: string | null; visibility?: AssetVisibility }) =>
+      request<Asset>('PATCH', `/assets/${id}`, { roll, body }),
+    // filters.collectionId: an id, or 'none' for ungrouped assets.
+    list: (roll: string, workspaceId: string, cursor?: string, filters?: { kind?: AssetKind; q?: string; collectionId?: string; limit?: number; scope?: LibraryScope }) => {
+      const params = new URLSearchParams({ workspace_id: workspaceId });
+      if (filters?.scope && filters.scope !== 'all') params.set('scope', filters.scope);
+      if (cursor) params.set('cursor', cursor);
+      if (filters?.kind) params.set('kind', filters.kind);
+      if (filters?.collectionId) params.set('collection_id', filters.collectionId);
+      if (filters?.q?.trim()) params.set('q', filters.q.trim());
+      if (filters?.limit) params.set('limit', String(filters.limit));
+      return request<{ assets: Asset[]; nextCursor: string | null }>('GET', `/assets?${params}`, { roll });
+    },
+    get: (roll: string, id: string, workspaceId?: string) =>
+      request<Asset>('GET', `/assets/${id}${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`, { roll }),
+    // canShare is false once the owner has left the asset's own workspace:
+    // they can still stop existing shares, but not add new ones.
+    shares: (roll: string, id: string) => request<{grants: Array<{workspace_id: string; name: string}>; targets: Array<{id: string; name: string}>; canShare: boolean}>('GET', `/assets/${id}/shares`, { roll }),
+    grant: (roll: string, id: string, workspaceId: string) => request<void>('PUT', `/assets/${id}/shares/${encodeURIComponent(workspaceId)}`, { roll }),
+    revoke: (roll: string, id: string, workspaceId: string) => request<void>('DELETE', `/assets/${id}/shares/${encodeURIComponent(workspaceId)}`, { roll }),
     delete: (roll: string, id: string) =>
       request<{ success: boolean; storageWarning?: string }>('DELETE', `/assets/${id}`, { roll }),
+    // Admin moderation (admin token; requireAdmin server-side).
+    adminList: (filters: LibraryAdminFilters = {}) =>
+      request<{ assets: AdminAsset[] }>('GET', `/assets/admin/all${libraryAdminQuery(filters)}`, { admin: true }),
+    adminUpdate: (id: string, body: { visibility?: AssetVisibility; status?: LibraryStatus }) =>
+      request<AdminAsset>('PATCH', `/assets/admin/${id}`, { body, admin: true }),
+    // Admin removal: row always; stored file only when nothing references it.
+    adminDelete: (id: string) =>
+      request<{ success: true; fileRetained?: true; storageWarning?: string }>('DELETE', `/assets/admin/${id}`, { admin: true }),
+  },
+  // Asset collections ("asset packs") — mirrors backend/src/routes/assetCollections.ts.
+  assetCollections: {
+    list: (roll: string, workspaceId: string) =>
+      request<{ collections: AssetCollection[] }>('GET', `/asset-collections?workspace_id=${encodeURIComponent(workspaceId)}`, { roll }),
+    create: (roll: string, body: { workspace_id: string; name: string; description?: string | null }) =>
+      request<AssetCollection>('POST', '/asset-collections', { roll, body }),
+    update: (roll: string, id: string, body: { name?: string; description?: string | null }) =>
+      request<AssetCollection>('PATCH', `/asset-collections/${id}`, { roll, body }),
+    delete: (roll: string, id: string) =>
+      request<{ success: boolean; ungroupedAssets: number }>('DELETE', `/asset-collections/${id}`, { roll }),
+  },
+  // Inspiration Library (Milestone C) — see InspirationItem above.
+  inspiration: {
+    list: (roll: string, q: InspirationQuery = {}) => {
+      const p = new URLSearchParams();
+      if (q.q) p.set('q', q.q);
+      if (q.tags?.length) p.set('tag', q.tags.join(','));
+      if (q.category) p.set('category', q.category);
+      if (q.kind) p.set('kind', q.kind);
+      if (q.collectionId) p.set('collection_id', q.collectionId);
+      if (q.sort) p.set('sort', q.sort);
+      if (q.limit) p.set('limit', String(q.limit));
+      if (q.offset) p.set('offset', String(q.offset));
+      const qs = p.toString();
+      return request<{ items: InspirationItem[]; total: number; hasMore: boolean }>('GET', `/inspiration/items${qs ? `?${qs}` : ''}`, { roll });
+    },
+    facets: (roll: string) => request<InspirationFacets>('GET', '/inspiration/facets', { roll }),
+    saveAsset: (roll: string, assetId: string, draft: InspirationDraft = {}) =>
+      request<InspirationItem>('POST', '/inspiration/items', { roll, body: { kind: 'asset', asset_id: assetId, ...draft } }),
+    saveLink: (roll: string, link: { url: string; image_url?: string | null } & InspirationDraft) =>
+      request<InspirationItem>('POST', '/inspiration/items', { roll, body: { kind: 'link', ...link } }),
+    update: (roll: string, id: string, draft: InspirationDraft) =>
+      request<InspirationItem>('PATCH', `/inspiration/items/${id}`, { roll, body: draft }),
+    remove: (roll: string, id: string) =>
+      request<{ success: boolean }>('DELETE', `/inspiration/items/${id}`, { roll }),
+    collections: (roll: string) =>
+      request<{ collections: InspirationCollection[] }>('GET', '/inspiration/collections', { roll }),
+    createCollection: (roll: string, body: { name: string; description?: string | null }) =>
+      request<InspirationCollection>('POST', '/inspiration/collections', { roll, body }),
+    updateCollection: (roll: string, id: string, body: { name?: string; description?: string | null }) =>
+      request<InspirationCollection>('PATCH', `/inspiration/collections/${id}`, { roll, body }),
+    deleteCollection: (roll: string, id: string) =>
+      request<{ success: boolean }>('DELETE', `/inspiration/collections/${id}`, { roll }),
+    addToCollection: (roll: string, collectionId: string, itemId: string) =>
+      request<{ success: boolean }>('POST', `/inspiration/collections/${collectionId}/items`, { roll, body: { item_id: itemId } }),
+    removeFromCollection: (roll: string, collectionId: string, itemId: string) =>
+      request<{ success: boolean }>('DELETE', `/inspiration/collections/${collectionId}/items/${itemId}`, { roll }),
+  },
+  // Public Project Showcase (Milestone D).
+  showcase: {
+    // Public (no auth header): published projects only.
+    list: (q: ShowcaseQuery = {}) => {
+      const p = new URLSearchParams();
+      if (q.q) p.set('q', q.q);
+      if (q.category) p.set('category', q.category);
+      if (q.discipline) p.set('discipline', q.discipline);
+      if (q.tags?.length) p.set('tag', q.tags.join(','));
+      if (q.featured) p.set('featured', '1');
+      if (q.sort) p.set('sort', q.sort);
+      if (q.limit) p.set('limit', String(q.limit));
+      if (q.offset) p.set('offset', String(q.offset));
+      const qs = p.toString();
+      return request<{ projects: ShowcaseCard[]; total: number; hasMore: boolean }>('GET', `/showcase/projects${qs ? `?${qs}` : ''}`);
+    },
+    facets: () => request<ShowcaseFacets>('GET', '/showcase/facets'),
+    capabilities: () => request<{ profiles: boolean; artworkCredits: boolean }>('GET', '/showcase/capabilities'),
+    disciplines: () => request<{ disciplines: Array<{ id: string; title: string }> }>('GET', '/showcase/disciplines'),
+    get: (slug: string) => request<ShowcaseDetail>('GET', `/showcase/projects/${encodeURIComponent(slug)}`),
+    // Student (creator / contributor).
+    mine: (roll: string) => request<{ projects: ShowcaseListItem[] }>('GET', '/showcase/mine', { roll }),
+    create: (roll: string, title: string) => request<ShowcaseProject>('POST', '/showcase/mine', { roll, body: { title } }),
+    getMine: (roll: string, id: string) => request<ShowcaseProject>('GET', `/showcase/mine/${id}`, { roll }),
+    update: (roll: string, id: string, body: ShowcasePatch) => request<ShowcaseProject>('PATCH', `/showcase/mine/${id}`, { roll, body }),
+    setWorks: (roll: string, id: string, works: Array<{ asset_id: string; caption?: string | null; is_cover?: boolean }>) =>
+      request<ShowcaseProject>('PUT', `/showcase/mine/${id}/works`, { roll, body: { works } }),
+    setBoards: (roll: string, id: string, boardIds: string[]) => request<ShowcaseProject>('PUT', `/showcase/mine/${id}/boards`, { roll, body: { board_ids: boardIds } }),
+    setArtworks: (roll: string, id: string, ids: string[]) => request<ShowcaseProject>('PUT', `/showcase/mine/${id}/artworks`, { roll, body: { artwork_ids: ids } }),
+    invite: (roll: string, id: string, body: { roll: string; role_label?: string | null; contribution?: string | null }) => request<ShowcaseProject>('POST', `/showcase/mine/${id}/credits`, { roll, body }),
+    editCredit: (roll: string, id: string, creditId: string, body: { role_label?: string | null; contribution?: string | null }) => request<ShowcaseProject>('PATCH', `/showcase/mine/${id}/credits/${creditId}`, { roll, body }),
+    removeCredit: (roll: string, id: string, creditId: string) => request<ShowcaseProject>('DELETE', `/showcase/mine/${id}/credits/${creditId}`, { roll }),
+    action: (roll: string, id: string, action: 'submit' | 'withdraw' | 'archive' | 'reopen') =>
+      request<ShowcaseProject>('POST', `/showcase/mine/${id}/${action}`, { roll, body: {} }),
+    remove: (roll: string, id: string) => request<{ success: boolean }>('DELETE', `/showcase/mine/${id}`, { roll }),
+    invitations: (roll: string) => request<{ invitations: ShowcaseInvitation[] }>('GET', '/showcase/invitations', { roll }),
+    accept: (roll: string, creditId: string, displayName: string) => request<{ success: boolean }>('POST', `/showcase/invitations/${creditId}/accept`, { roll, body: { display_name: displayName } }),
+    decline: (roll: string, creditId: string) => request<{ success: boolean }>('POST', `/showcase/invitations/${creditId}/decline`, { roll, body: {} }),
+    // Admin.
+    adminList: (status?: ShowcaseStatus | '', q?: string) => {
+      const p = new URLSearchParams();
+      if (status) p.set('status', status);
+      if (q) p.set('q', q);
+      const qs = p.toString();
+      return request<{ projects: ShowcaseAdminItem[] }>('GET', `/showcase/admin/projects${qs ? `?${qs}` : ''}`, { admin: true });
+    },
+    adminGet: (id: string) => request<ShowcaseProject>('GET', `/showcase/admin/projects/${id}`, { admin: true }),
+    adminTransition: (id: string, to: ShowcaseStatus, reason?: string) => request<ShowcaseProject>('POST', `/showcase/admin/projects/${id}/transition`, { admin: true, body: { to, reason } }),
+    // Collaboration (Milestone F) — mirrors backend/src/routes/showcaseCollab.ts.
+    collab: {
+      invitations: (roll: string) => request<{ invitations: CollabInvitation[] }>('GET', '/showcase/collab/invitations', { roll }),
+      shared: (roll: string) => request<{ projects: SharedProject[] }>('GET', '/showcase/collab/shared', { roll }),
+      invite: (roll: string, projectId: string, body: CollabInviteBody) => request<{ collaborators: ProjectCollaborator[] }>('POST', `/showcase/collab/projects/${projectId}/collaborators`, { roll, body }),
+      setRole: (roll: string, projectId: string, collaboratorId: string, accessRole: 'editor' | 'viewer') =>
+        request<{ collaborators: ProjectCollaborator[] }>('PATCH', `/showcase/collab/projects/${projectId}/collaborators/${collaboratorId}`, { roll, body: { access_role: accessRole } }),
+      remove: (roll: string, projectId: string, collaboratorId: string) => request<{ collaborators: ProjectCollaborator[] }>('DELETE', `/showcase/collab/projects/${projectId}/collaborators/${collaboratorId}`, { roll }),
+      accept: (roll: string, invitationId: string, displayName?: string) => request<{ success: boolean; projectId: string; credited: boolean }>('POST', `/showcase/collab/invitations/${invitationId}/accept`, { roll, body: displayName ? { display_name: displayName } : {} }),
+      decline: (roll: string, invitationId: string, block = false) => request<{ success: boolean; blocked: boolean }>('POST', `/showcase/collab/invitations/${invitationId}/decline`, { roll, body: block ? { block: true } : {} }),
+      leave: (roll: string, projectId: string) => request<{ success: boolean }>('POST', `/showcase/collab/projects/${projectId}/leave`, { roll, body: {} }),
+      activity: (roll: string, projectId: string, before?: string) => request<{ items: ProjectActivityItem[]; next: string | null }>('GET', `/showcase/collab/projects/${projectId}/activity${before ? `?before=${encodeURIComponent(before)}` : ''}`, { roll }),
+      comments: (roll: string, projectId: string) => request<{ comments: ProjectComment[] }>('GET', `/showcase/collab/projects/${projectId}/comments`, { roll }),
+      addComment: (roll: string, projectId: string, body: string) => request<{ id: string }>('POST', `/showcase/collab/projects/${projectId}/comments`, { roll, body: { body } }),
+      deleteComment: (roll: string, projectId: string, commentId: string) => request<{ success: boolean }>('DELETE', `/showcase/collab/projects/${projectId}/comments/${commentId}`, { roll }),
+      blocks: (roll: string) => request<{ blocks: Array<{ id: string; name: string }> }>('GET', '/showcase/collab/blocks', { roll }),
+      unblock: (roll: string, id: string) => request<{ success: boolean }>('DELETE', `/showcase/collab/blocks/${id}`, { roll }),
+    },
+    adminFeature: (id: string, featured: boolean) => request<ShowcaseProject>('POST', `/showcase/admin/projects/${id}/feature`, { admin: true, body: { featured } }),
+  },
+  // Creator Discovery (Milestone E).
+  creators: {
+    capabilities: () => request<CreatorCapabilities>('GET', '/creators/capabilities'),
+    list: (q: CreatorQuery = {}) => {
+      const p = new URLSearchParams();
+      if (q.q) p.set('q', q.q);
+      if (q.discipline) p.set('discipline', q.discipline);
+      if (q.skill) p.set('skill', q.skill);
+      if (q.tool) p.set('tool', q.tool);
+      if (q.department) p.set('department', q.department);
+      if (q.featured) p.set('featured', '1');
+      if (q.category) p.set('category', q.category);
+      if (q.sort) p.set('sort', q.sort);
+      if (q.limit) p.set('limit', String(q.limit));
+      if (q.offset) p.set('offset', String(q.offset));
+      const qs = p.toString();
+      return request<{ creators: CreatorCard[]; total: number; hasMore: boolean }>('GET', `/creators${qs ? `?${qs}` : ''}`);
+    },
+    facets: () => request<CreatorFacets>('GET', '/creators/facets'),
+    featured: () => request<{ creators: CreatorCard[] }>('GET', '/creators/featured'),
+    projects: (handle: string, offset = 0) =>
+      request<{ projects: CreatorProject[]; total: number; hasMore: boolean }>('GET', `/creators/${encodeURIComponent(handle)}/projects?limit=12&offset=${offset}`),
+    adminList: (q?: string, featuredOnly?: boolean) => {
+      const p = new URLSearchParams();
+      if (q) p.set('q', q);
+      if (featuredOnly) p.set('featured', '1');
+      const qs = p.toString();
+      return request<{ creators: CreatorAdminItem[]; featuredCount: number; max: number; available: boolean }>('GET', `/creators/admin/list${qs ? `?${qs}` : ''}`, { admin: true });
+    },
+    adminEditFeatured: (id: string, body: { displayOrder?: number | null; editorialNote?: string | null }) =>
+      request<{ displayOrder: number | null; editorialNote: string | null }>('PATCH', `/creators/admin/${id}/featured`, { admin: true, body }),
+    adminFeature: (id: string, featured: boolean) =>
+      request<{ featured: boolean; changed: boolean }>('PUT', `/creators/admin/${id}/featured`, { admin: true, body: { featured } }),
+  },
+  // PR #84's public profile contract (backend-only there; this milestone adds the UI).
+  designers: {
+    get: (handle: string) => request<DesignerProfile>('GET', `/designers/${encodeURIComponent(handle)}`),
+    works: (handle: string, cursor?: string) =>
+      request<{ items: DesignerWork[]; next: string | null }>('GET', `/designers/${encodeURIComponent(handle)}/works?limit=12${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),
+    // ── Owner (the signed-in student's own profile). Ownership comes from the token; no id is ever sent. ──
+    me: (roll: string) => request<OwnerProfile | null>('GET', '/designers/me', { roll }),
+    create: (roll: string, body: { handle: string; displayName: string; headline?: string; bio?: string; department?: string; showBatch?: boolean }) =>
+      request<OwnerProfile>('POST', '/designers/me', { roll, body }),
+    update: (roll: string, body: ProfileUpdate) => request<OwnerProfile>('PATCH', '/designers/me', { roll, body }),
+    setLinks: (roll: string, links: Array<{ kind: string; url: string }>) => request<{ links: Array<{ kind: string; url: string }> }>('PUT', '/designers/me/links', { roll, body: { links } }),
+    setDisciplines: (roll: string, domainIds: string[]) => request<{ domainIds: string[] }>('PUT', '/designers/me/disciplines', { roll, body: { domainIds } }),
+    setSkills: (roll: string, skills: string[]) => request<{ skills: string[] }>('PUT', '/designers/me/skills', { roll, body: { skills } }),
+    setTools: (roll: string, tools: string[]) => request<{ tools: string[] }>('PUT', '/designers/me/tools', { roll, body: { tools } }),
+    setVisibility: (roll: string, visibility: ProfileVisibility) => request<{ visibility: ProfileVisibility }>('PATCH', '/designers/me/visibility', { roll, body: { visibility } }),
+    preview: (roll: string) => request<ProfilePreview>('GET', '/designers/me/preview', { roll }),
+    handleAvailable: (roll: string, handle: string) =>
+      request<{ available: boolean; reason?: string }>('GET', `/designers/handle-available?handle=${encodeURIComponent(handle)}`, { roll }),
+    credits: (roll: string) => request<MyArtworkCredit[]>('GET', '/designers/me/credits', { roll }),
+    respondToCredit: (roll: string, creditId: string, accept: boolean) =>
+      request<{ id: string; status: string; changed: boolean }>('POST', `/designers/me/credits/${creditId}/respond`, { roll, body: { accept } }),
+    uploadAvatar: async (file: File): Promise<{ avatarUrl: string | null }> => {
+      const fd = new FormData();
+      fd.append('avatar', file);
+      const tok = getStudentToken();
+      const res = await sendUpload('/designers/me/avatar', { method: 'POST', headers: tok ? { Authorization: `Bearer ${tok}` } : {}, body: fd });
+      const data = await res.json().catch(() => ({})) as { avatarUrl?: string | null; error?: string };
+      if (res.status === 401) { clearStudentToken(); throw new Error('SESSION_EXPIRED'); }
+      if (!res.ok) throw new Error(data.error ?? 'Upload failed — please try again');
+      return { avatarUrl: data.avatarUrl ?? null };
+    },
+    removeAvatar: (roll: string) => request<{ avatarUrl: null }>('DELETE', '/designers/me/avatar', { roll }),
   },
   // Basic Notifications (Phase C) — mirrors backend/src/routes/notifications.ts.
   // No realtime channel: the panel refetches on open (see NotificationBell.tsx).

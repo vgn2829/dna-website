@@ -1,3 +1,7 @@
+import inspirationRouter from './routes/inspiration';
+import showcaseRouter from './routes/showcase';
+import showcaseCollabRouter from './routes/showcaseCollab';
+import creatorsRouter from './routes/creators';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -6,14 +10,19 @@ import path from 'path';
 import { authRouter }    from './routes/auth';
 import { eventsRouter }  from './routes/events';
 import { artworksRouter } from './routes/artworks';
+import { designersRouter } from './routes/designers';
 import { domainsRouter } from './routes/domains';
 import { studentsRouter } from './routes/students';
 import { teamRouter }    from './routes/team';
 import notifyRouter      from './routes/notify';
+import emailCentreRouter from './routes/emailCentre';
 import liveSessionsRouter from './routes/liveSessions';
 import boardsRouter from './routes/boards';
 import workspacesRouter from './routes/workspaces';
 import assetsRouter from './routes/assets';
+import assetCollectionsRouter from './routes/assetCollections';
+import projectsRouter from './routes/projects';
+import templatesRouter from './routes/templates';
 import notificationsRouter from './routes/notifications';
 import settingsRouter from './routes/settings';
 import coordinatorsRouter from './routes/coordinators';
@@ -24,6 +33,8 @@ import { createCommentsRouter } from './routes/comments';
 import type { VersionHistoryService } from './realtime/history/versionHistoryService';
 import type { RestoreService } from './realtime/history/restoreService';
 import type { CommentBroadcaster } from './realtime/comments/commentBroadcaster';
+import { DERIVED_ROOT, DERIVATIVE_CACHE_CONTROL } from './storage/derivatives';
+import { ASSET_ORIGINAL_CACHE_CONTROL } from './storage';
 
 // Generic over SessionMeta so this accepts whatever concrete
 // RoomManager<SessionMeta>-backed services server.ts actually constructed
@@ -70,15 +81,33 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    // Retry-After is not a CORS-safelisted response header: without this the
+    // cross-origin frontend can't read how long a 429 asks it to wait (the
+    // upload queue pauses for exactly that long, then resumes).
+    exposedHeaders: ['Retry-After'],
+    // Access-Control-Max-Age on preflight responses: lets the browser reuse
+    // a granted preflight for 10 minutes instead of re-sending OPTIONS
+    // before every authorized request (without it Chrome caches for ~5s).
+    // Conservative on purpose — a CORS config change still takes effect
+    // within 10 minutes. Affects preflight caching only, not what's allowed.
+    maxAge: 600,
   }));
 
   // Serve uploaded files for local dev storage.
   // Content-Disposition: attachment forces a download so uploaded PDFs / HTML
   // cannot execute script in this origin.
   app.use('/uploads',
-    (_req, res, next) => {
+    (req, res, next) => {
       res.setHeader('Content-Disposition', 'attachment');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      // Mirrors the cache policy Supabase stores with these objects.
+      // express.static keeps a Cache-Control that is already set; other
+      // uploads are untouched.
+      //   derived/ — image derivatives: a year (storage/derivatives.ts).
+      //   assets/  — library asset originals: a day (storage/index.ts
+      //              ASSET_ORIGINAL_CACHE_SECONDS says why).
+      if (req.path.startsWith(`/${DERIVED_ROOT}/`)) res.setHeader('Cache-Control', DERIVATIVE_CACHE_CONTROL);
+      else if (req.path.startsWith('/assets/')) res.setHeader('Cache-Control', ASSET_ORIGINAL_CACHE_CONTROL);
       next();
     },
     express.static(path.join(__dirname, '../uploads'))
@@ -104,6 +133,10 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
   // and silently drop the whole edit — worse than a slightly larger limit.
   app.use('/api/boards', express.json({ limit: '3mb' }));
   app.use('/api/notify', express.json({ limit: '1mb' }));
+  // Email Centre: the Resend webhook signature covers the exact request bytes, so
+  // that path gets a raw body parser; the rest carry rich-text documents + recipient lists.
+  app.use('/api/email/webhooks', express.raw({ type: '*/*', limit: '1mb' }));
+  app.use('/api/email', express.json({ limit: '2mb' }));
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({
     extended: true,
@@ -124,14 +157,23 @@ export function createApp<SessionMeta = unknown>(realtime?: RealtimeAppServices<
   app.use('/api/auth',     authRouter);
   app.use('/api/events',   eventsRouter);
   app.use('/api/artworks', artworksRouter);
+  app.use('/api/designers', designersRouter);
   app.use('/api/domains',  domainsRouter);
   app.use('/api/students', studentsRouter);
   app.use('/api/team',     teamRouter);
   app.use('/api/notify',        notifyRouter);
+  app.use('/api/email',         emailCentreRouter);
   app.use('/api/live-sessions', liveSessionsRouter);
   app.use('/api/boards',        boardsRouter);
   app.use('/api/workspaces',    workspacesRouter);
   app.use('/api/assets',        assetsRouter);
+  app.use('/api/asset-collections', assetCollectionsRouter);
+  app.use('/api/inspiration',   inspirationRouter);
+  app.use('/api/showcase/collab', showcaseCollabRouter);
+  app.use('/api/showcase',      showcaseRouter);
+  app.use('/api/creators',      creatorsRouter);
+  app.use('/api/projects',      projectsRouter);
+  app.use('/api/templates',     templatesRouter);
   app.use('/api/notifications', notificationsRouter);
   if (realtime) {
     app.use('/api/boards', createVersionsRouter(realtime));

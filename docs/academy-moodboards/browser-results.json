@@ -1,0 +1,1835 @@
+{
+  "results": [
+    {
+      "name": "first unfinished lesson selected",
+      "ok": true
+    },
+    {
+      "name": "continue reveals player",
+      "ok": true
+    },
+    {
+      "name": "selection never marks watched",
+      "ok": true
+    },
+    {
+      "name": "previous lesson",
+      "ok": true
+    },
+    {
+      "name": "lesson empty results",
+      "ok": true
+    },
+    {
+      "name": "watched toggle",
+      "ok": true
+    },
+    {
+      "name": "domain switching",
+      "ok": true
+    },
+    {
+      "name": "difficulty filter",
+      "ok": true
+    },
+    {
+      "name": "quiz error keeps selection",
+      "ok": true
+    },
+    {
+      "name": "academy 320 light no horizontal overflow",
+      "ok": true
+    },
+    {
+      "name": "moodboards 320 light no horizontal overflow",
+      "ok": true
+    },
+    {
+      "name": "academy 320 dark no horizontal overflow",
+      "ok": true
+    },
+    {
+      "name": "moodboards 320 dark no horizontal overflow",
+      "ok": true
+    },
+    {
+      "name": "academy 375 light no horizontal overflow",
+      "ok": true
+    },
+    {
+      "name": "moodboards 375 light no horizontal overflow",
+      "ok": true
+    },
+    {
+      "name": "academy 375 dark no horizontal overflow",
+      "ok": true
+    },
+    {
+      "name": "moodboards 375 dark no horizontal overflow",
+      "ok": true
+    },
+    {
+      "name": "academy 768 light no horizontal overflow",
+      "ok": true
+    },
+    {
+      "name": "moodboards 768 light no horizontal overflow",
+      "ok": true
+    },
+    {
+      "name": "academy 768 dark no horizontal overflow",
+      "ok": true
+    },
+    {
+      "name": "moodboards 768 dark no horizontal overflow",
+      "ok": true
+    },
+    {
+      "name": "academy 1440 light no horizontal overflow",
+      "ok": true
+    },
+    {
+      "name": "moodboards 1440 light no horizontal overflow",
+      "ok": true
+    },
+    {
+      "name": "academy 1440 dark no horizontal overflow",
+      "ok": true
+    },
+    {
+      "name": "moodboards 1440 dark no horizontal overflow",
+      "ok": true
+    },
+    {
+      "name": "favorite deduplicated",
+      "ok": true
+    },
+    {
+      "name": "rename dialog receives focus",
+      "ok": true
+    },
+    {
+      "name": "dialog traps backward Tab",
+      "ok": true
+    },
+    {
+      "name": "dialog traps forward Tab",
+      "ok": true
+    },
+    {
+      "name": "rename restores menu trigger focus",
+      "ok": true
+    },
+    {
+      "name": "board search empty results",
+      "ok": true
+    },
+    {
+      "name": "shared scope",
+      "ok": true
+    },
+    {
+      "name": "keyboard favorite stays in library",
+      "ok": true
+    },
+    {
+      "name": "menu keyboard focus",
+      "ok": true
+    },
+    {
+      "name": "create dialog Escape",
+      "ok": true
+    },
+    {
+      "name": "creation preserves workspace and project",
+      "ok": true
+    },
+    {
+      "name": "save error text unobscured",
+      "ok": true
+    },
+    {
+      "name": "canvas save retry",
+      "ok": true
+    },
+    {
+      "name": "canvas 320 light Share fits viewport",
+      "ok": true
+    },
+    {
+      "name": "canvas 320 dark Share fits viewport",
+      "ok": true
+    },
+    {
+      "name": "canvas 375 light Share fits viewport",
+      "ok": true
+    },
+    {
+      "name": "canvas 375 dark Share fits viewport",
+      "ok": true
+    },
+    {
+      "name": "canvas 768 light Share fits viewport",
+      "ok": true
+    },
+    {
+      "name": "canvas 768 dark Share fits viewport",
+      "ok": true
+    },
+    {
+      "name": "canvas 1440 light Share fits viewport",
+      "ok": true
+    },
+    {
+      "name": "canvas 1440 dark Share fits viewport",
+      "ok": true
+    },
+    {
+      "name": "canvas action discovery",
+      "ok": true
+    },
+    {
+      "name": "load failure not empty state",
+      "ok": true
+    },
+    {
+      "name": "board sort",
+      "ok": true
+    },
+    {
+      "name": "reduced motion lesson transition",
+      "ok": true
+    },
+    {
+      "name": "signed-out learning accessible",
+      "ok": true
+    },
+    {
+      "name": "no uncaught page errors",
+      "ok": true
+    }
+  ],
+  "errors": [],
+  "requests": [
+    {
+      "path": "/live-sessions/active",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/settings/public",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/coordinators/check",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/shared",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/live-sessions/active",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/settings/public",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/coordinators/check",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/students/fixture/progress/videos/uiux-2",
+      "method": "POST",
+      "body": null
+    },
+    {
+      "path": "/domains/uiux/quiz/submit",
+      "method": "POST",
+      "body": "{\"answers\":[0]}"
+    },
+    {
+      "path": "/domains/uiux/quiz/submit",
+      "method": "POST",
+      "body": "{\"answers\":[1]}"
+    },
+    {
+      "path": "/domains/uiux/quiz/submit",
+      "method": "POST",
+      "body": "{\"answers\":[1]}"
+    },
+    {
+      "path": "/live-sessions/active",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/settings/public",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/coordinators/check",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/shared",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/live-sessions/active",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/settings/public",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/coordinators/check",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/shared",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/live-sessions/active",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/settings/public",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/coordinators/check",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/shared",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/live-sessions/active",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/settings/public",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/coordinators/check",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/shared",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/live-sessions/active",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/settings/public",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/coordinators/check",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/shared",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/live-sessions/active",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/settings/public",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/coordinators/check",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/shared",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/live-sessions/active",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/settings/public",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/coordinators/check",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/shared",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/live-sessions/active",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/settings/public",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/coordinators/check",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/shared",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/shared",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b1",
+      "method": "PUT",
+      "body": "{\"name\":\"Renamed exploration\"}"
+    },
+    {
+      "path": "/boards/b1/favorite",
+      "method": "DELETE",
+      "body": null
+    },
+    {
+      "path": "/boards/b1/duplicate",
+      "method": "POST",
+      "body": null
+    },
+    {
+      "path": "/boards/b4",
+      "method": "PUT",
+      "body": "{\"is_archived\":true}"
+    },
+    {
+      "path": "/boards/archived",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b4",
+      "method": "PUT",
+      "body": "{\"is_archived\":false}"
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/shared",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/projects",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/projects",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards",
+      "method": "POST",
+      "body": "{\"name\":\"Fixture created board\",\"visibility\":\"private\",\"workspace_id\":\"ws\",\"project_id\":\"p1\"}"
+    },
+    {
+      "path": "/realtime/status",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments/read-state",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "PUT",
+      "body": "{\"canvas_data\":\"{\\\"document\\\":{\\\"store\\\":{\\\"document:document\\\":{\\\"gridSize\\\":10,\\\"name\\\":\\\"\\\",\\\"meta\\\":{},\\\"id\\\":\\\"document:document\\\",\\\"typeName\\\":\\\"document\\\"},\\\"page:page\\\":{\\\"meta\\\":{},\\\"id\\\":\\\"page:page\\\",\\\"name\\\":\\\"Page 1\\\",\\\"index\\\":\\\"a1\\\",\\\"typeName\\\":\\\"page\\\"},\\\"shape:s3F8Q2mdEH3ZQ79FSNujI\\\":{\\\"x\\\":120,\\\"y\\\":302,\\\"rotation\\\":0,\\\"isLocked\\\":false,\\\"opacity\\\":1,\\\"meta\\\":{},\\\"id\\\":\\\"shape:s3F8Q2mdEH3ZQ79FSNujI\\\",\\\"type\\\":\\\"geo\\\",\\\"props\\\":{\\\"w\\\":120,\\\"h\\\":120,\\\"geo\\\":\\\"rectangle\\\",\\\"color\\\":\\\"black\\\",\\\"labelColor\\\":\\\"black\\\",\\\"fill\\\":\\\"none\\\",\\\"dash\\\":\\\"draw\\\",\\\"size\\\":\\\"m\\\",\\\"font\\\":\\\"draw\\\",\\\"text\\\":\\\"\\\",\\\"align\\\":\\\"middle\\\",\\\"verticalAlign\\\":\\\"middle\\\",\\\"growY\\\":0,\\\"url\\\":\\\"\\\",\\\"scale\\\":1},\\\"parentId\\\":\\\"page:page\\\",\\\"index\\\":\\\"a1\\\",\\\"typeName\\\":\\\"shape\\\"}},\\\"schema\\\":{\\\"schemaVersion\\\":2,\\\"sequences\\\":{\\\"com.tldraw.store\\\":4,\\\"com.tldraw.asset\\\":1,\\\"com.tldraw.camera\\\":1,\\\"com.tldraw.document\\\":2,\\\"com.tldraw.instance\\\":25,\\\"com.tldraw.instance_page_state\\\":5,\\\"com.tldraw.page\\\":1,\\\"com.tldraw.instance_presence\\\":5,\\\"com.tldraw.pointer\\\":1,\\\"com.tldraw.shape\\\":4,\\\"com.tldraw.asset.bookmark\\\":2,\\\"com.tldraw.asset.image\\\":5,\\\"com.tldraw.asset.video\\\":5,\\\"com.tldraw.shape.group\\\":0,\\\"com.tldraw.shape.text\\\":2,\\\"com.tldraw.shape.bookmark\\\":2,\\\"com.tldraw.shape.draw\\\":2,\\\"com.tldraw.shape.geo\\\":9,\\\"com.tldraw.shape.note\\\":7,\\\"com.tldraw.shape.line\\\":5,\\\"com.tldraw.shape.frame\\\":0,\\\"com.tldraw.shape.arrow\\\":5,\\\"com.tldraw.shape.highlight\\\":1,\\\"com.tldraw.shape.embed\\\":4,\\\"com.tldraw.shape.image\\\":4,\\\"com.tldraw.shape.video\\\":2,\\\"com.tldraw.binding.arrow\\\":0}}},\\\"session\\\":{\\\"version\\\":0,\\\"currentPageId\\\":\\\"page:page\\\",\\\"exportBackground\\\":true,\\\"isFocusMode\\\":false,\\\"isDebugMode\\\":true,\\\"isToolLocked\\\":false,\\\"isGridMode\\\":false,\\\"pageStates\\\":[{\\\"pageId\\\":\\\"page:page\\\",\\\"camera\\\":{\\\"x\\\":-96.66666666666667,\\\"y\\\":-150.44444444444446,\\\"z\\\":2.25},\\\"selectedShapeIds\\\":[\\\"shape:s3F8Q2mdEH3ZQ79FSNujI\\\"],\\\"focusedGroupId\\\":null}]}}\"}"
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "PUT",
+      "body": "{\"canvas_data\":\"{\\\"document\\\":{\\\"store\\\":{\\\"document:document\\\":{\\\"gridSize\\\":10,\\\"name\\\":\\\"\\\",\\\"meta\\\":{},\\\"id\\\":\\\"document:document\\\",\\\"typeName\\\":\\\"document\\\"},\\\"page:page\\\":{\\\"meta\\\":{},\\\"id\\\":\\\"page:page\\\",\\\"name\\\":\\\"Page 1\\\",\\\"index\\\":\\\"a1\\\",\\\"typeName\\\":\\\"page\\\"},\\\"shape:s3F8Q2mdEH3ZQ79FSNujI\\\":{\\\"x\\\":120,\\\"y\\\":302,\\\"rotation\\\":0,\\\"isLocked\\\":false,\\\"opacity\\\":1,\\\"meta\\\":{},\\\"id\\\":\\\"shape:s3F8Q2mdEH3ZQ79FSNujI\\\",\\\"type\\\":\\\"geo\\\",\\\"props\\\":{\\\"w\\\":120,\\\"h\\\":120,\\\"geo\\\":\\\"rectangle\\\",\\\"color\\\":\\\"black\\\",\\\"labelColor\\\":\\\"black\\\",\\\"fill\\\":\\\"none\\\",\\\"dash\\\":\\\"draw\\\",\\\"size\\\":\\\"m\\\",\\\"font\\\":\\\"draw\\\",\\\"text\\\":\\\"\\\",\\\"align\\\":\\\"middle\\\",\\\"verticalAlign\\\":\\\"middle\\\",\\\"growY\\\":0,\\\"url\\\":\\\"\\\",\\\"scale\\\":1},\\\"parentId\\\":\\\"page:page\\\",\\\"index\\\":\\\"a1\\\",\\\"typeName\\\":\\\"shape\\\"}},\\\"schema\\\":{\\\"schemaVersion\\\":2,\\\"sequences\\\":{\\\"com.tldraw.store\\\":4,\\\"com.tldraw.asset\\\":1,\\\"com.tldraw.camera\\\":1,\\\"com.tldraw.document\\\":2,\\\"com.tldraw.instance\\\":25,\\\"com.tldraw.instance_page_state\\\":5,\\\"com.tldraw.page\\\":1,\\\"com.tldraw.instance_presence\\\":5,\\\"com.tldraw.pointer\\\":1,\\\"com.tldraw.shape\\\":4,\\\"com.tldraw.asset.bookmark\\\":2,\\\"com.tldraw.asset.image\\\":5,\\\"com.tldraw.asset.video\\\":5,\\\"com.tldraw.shape.group\\\":0,\\\"com.tldraw.shape.text\\\":2,\\\"com.tldraw.shape.bookmark\\\":2,\\\"com.tldraw.shape.draw\\\":2,\\\"com.tldraw.shape.geo\\\":9,\\\"com.tldraw.shape.note\\\":7,\\\"com.tldraw.shape.line\\\":5,\\\"com.tldraw.shape.frame\\\":0,\\\"com.tldraw.shape.arrow\\\":5,\\\"com.tldraw.shape.highlight\\\":1,\\\"com.tldraw.shape.embed\\\":4,\\\"com.tldraw.shape.image\\\":4,\\\"com.tldraw.shape.video\\\":2,\\\"com.tldraw.binding.arrow\\\":0}}},\\\"session\\\":{\\\"version\\\":0,\\\"currentPageId\\\":\\\"page:page\\\",\\\"exportBackground\\\":true,\\\"isFocusMode\\\":false,\\\"isDebugMode\\\":true,\\\"isToolLocked\\\":false,\\\"isGridMode\\\":false,\\\"pageStates\\\":[{\\\"pageId\\\":\\\"page:page\\\",\\\"camera\\\":{\\\"x\\\":-96.66666666666667,\\\"y\\\":-150.44444444444446,\\\"z\\\":2.25},\\\"selectedShapeIds\\\":[\\\"shape:s3F8Q2mdEH3ZQ79FSNujI\\\"],\\\"focusedGroupId\\\":null}]}}\"}"
+    },
+    {
+      "path": "/realtime/status",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments/read-state",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "PUT",
+      "body": "{\"canvas_data\":\"{\\\"document\\\":{\\\"store\\\":{\\\"document:document\\\":{\\\"gridSize\\\":10,\\\"name\\\":\\\"\\\",\\\"meta\\\":{},\\\"id\\\":\\\"document:document\\\",\\\"typeName\\\":\\\"document\\\"},\\\"page:page\\\":{\\\"meta\\\":{},\\\"id\\\":\\\"page:page\\\",\\\"name\\\":\\\"Page 1\\\",\\\"index\\\":\\\"a1\\\",\\\"typeName\\\":\\\"page\\\"}},\\\"schema\\\":{\\\"schemaVersion\\\":2,\\\"sequences\\\":{\\\"com.tldraw.store\\\":4,\\\"com.tldraw.asset\\\":1,\\\"com.tldraw.camera\\\":1,\\\"com.tldraw.document\\\":2,\\\"com.tldraw.instance\\\":25,\\\"com.tldraw.instance_page_state\\\":5,\\\"com.tldraw.page\\\":1,\\\"com.tldraw.instance_presence\\\":5,\\\"com.tldraw.pointer\\\":1,\\\"com.tldraw.shape\\\":4,\\\"com.tldraw.asset.bookmark\\\":2,\\\"com.tldraw.asset.image\\\":5,\\\"com.tldraw.asset.video\\\":5,\\\"com.tldraw.shape.group\\\":0,\\\"com.tldraw.shape.text\\\":2,\\\"com.tldraw.shape.bookmark\\\":2,\\\"com.tldraw.shape.draw\\\":2,\\\"com.tldraw.shape.geo\\\":9,\\\"com.tldraw.shape.note\\\":7,\\\"com.tldraw.shape.line\\\":5,\\\"com.tldraw.shape.frame\\\":0,\\\"com.tldraw.shape.arrow\\\":5,\\\"com.tldraw.shape.highlight\\\":1,\\\"com.tldraw.shape.embed\\\":4,\\\"com.tldraw.shape.image\\\":4,\\\"com.tldraw.shape.video\\\":2,\\\"com.tldraw.binding.arrow\\\":0}}},\\\"session\\\":{\\\"version\\\":0,\\\"currentPageId\\\":\\\"page:page\\\",\\\"exportBackground\\\":true,\\\"isFocusMode\\\":false,\\\"isDebugMode\\\":true,\\\"isToolLocked\\\":false,\\\"isGridMode\\\":false,\\\"pageStates\\\":[{\\\"pageId\\\":\\\"page:page\\\",\\\"camera\\\":{\\\"x\\\":0,\\\"y\\\":0,\\\"z\\\":1},\\\"selectedShapeIds\\\":[],\\\"focusedGroupId\\\":null}]}}\"}"
+    },
+    {
+      "path": "/realtime/status",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments/read-state",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "PUT",
+      "body": "{\"canvas_data\":\"{\\\"document\\\":{\\\"store\\\":{\\\"document:document\\\":{\\\"gridSize\\\":10,\\\"name\\\":\\\"\\\",\\\"meta\\\":{},\\\"id\\\":\\\"document:document\\\",\\\"typeName\\\":\\\"document\\\"},\\\"page:page\\\":{\\\"meta\\\":{},\\\"id\\\":\\\"page:page\\\",\\\"name\\\":\\\"Page 1\\\",\\\"index\\\":\\\"a1\\\",\\\"typeName\\\":\\\"page\\\"}},\\\"schema\\\":{\\\"schemaVersion\\\":2,\\\"sequences\\\":{\\\"com.tldraw.store\\\":4,\\\"com.tldraw.asset\\\":1,\\\"com.tldraw.camera\\\":1,\\\"com.tldraw.document\\\":2,\\\"com.tldraw.instance\\\":25,\\\"com.tldraw.instance_page_state\\\":5,\\\"com.tldraw.page\\\":1,\\\"com.tldraw.instance_presence\\\":5,\\\"com.tldraw.pointer\\\":1,\\\"com.tldraw.shape\\\":4,\\\"com.tldraw.asset.bookmark\\\":2,\\\"com.tldraw.asset.image\\\":5,\\\"com.tldraw.asset.video\\\":5,\\\"com.tldraw.shape.group\\\":0,\\\"com.tldraw.shape.text\\\":2,\\\"com.tldraw.shape.bookmark\\\":2,\\\"com.tldraw.shape.draw\\\":2,\\\"com.tldraw.shape.geo\\\":9,\\\"com.tldraw.shape.note\\\":7,\\\"com.tldraw.shape.line\\\":5,\\\"com.tldraw.shape.frame\\\":0,\\\"com.tldraw.shape.arrow\\\":5,\\\"com.tldraw.shape.highlight\\\":1,\\\"com.tldraw.shape.embed\\\":4,\\\"com.tldraw.shape.image\\\":4,\\\"com.tldraw.shape.video\\\":2,\\\"com.tldraw.binding.arrow\\\":0}}},\\\"session\\\":{\\\"version\\\":0,\\\"currentPageId\\\":\\\"page:page\\\",\\\"exportBackground\\\":true,\\\"isFocusMode\\\":false,\\\"isDebugMode\\\":true,\\\"isToolLocked\\\":false,\\\"isGridMode\\\":false,\\\"pageStates\\\":[{\\\"pageId\\\":\\\"page:page\\\",\\\"camera\\\":{\\\"x\\\":0,\\\"y\\\":0,\\\"z\\\":1},\\\"selectedShapeIds\\\":[],\\\"focusedGroupId\\\":null}]}}\"}"
+    },
+    {
+      "path": "/realtime/status",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments/read-state",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "PUT",
+      "body": "{\"canvas_data\":\"{\\\"document\\\":{\\\"store\\\":{\\\"document:document\\\":{\\\"gridSize\\\":10,\\\"name\\\":\\\"\\\",\\\"meta\\\":{},\\\"id\\\":\\\"document:document\\\",\\\"typeName\\\":\\\"document\\\"},\\\"page:page\\\":{\\\"meta\\\":{},\\\"id\\\":\\\"page:page\\\",\\\"name\\\":\\\"Page 1\\\",\\\"index\\\":\\\"a1\\\",\\\"typeName\\\":\\\"page\\\"}},\\\"schema\\\":{\\\"schemaVersion\\\":2,\\\"sequences\\\":{\\\"com.tldraw.store\\\":4,\\\"com.tldraw.asset\\\":1,\\\"com.tldraw.camera\\\":1,\\\"com.tldraw.document\\\":2,\\\"com.tldraw.instance\\\":25,\\\"com.tldraw.instance_page_state\\\":5,\\\"com.tldraw.page\\\":1,\\\"com.tldraw.instance_presence\\\":5,\\\"com.tldraw.pointer\\\":1,\\\"com.tldraw.shape\\\":4,\\\"com.tldraw.asset.bookmark\\\":2,\\\"com.tldraw.asset.image\\\":5,\\\"com.tldraw.asset.video\\\":5,\\\"com.tldraw.shape.group\\\":0,\\\"com.tldraw.shape.text\\\":2,\\\"com.tldraw.shape.bookmark\\\":2,\\\"com.tldraw.shape.draw\\\":2,\\\"com.tldraw.shape.geo\\\":9,\\\"com.tldraw.shape.note\\\":7,\\\"com.tldraw.shape.line\\\":5,\\\"com.tldraw.shape.frame\\\":0,\\\"com.tldraw.shape.arrow\\\":5,\\\"com.tldraw.shape.highlight\\\":1,\\\"com.tldraw.shape.embed\\\":4,\\\"com.tldraw.shape.image\\\":4,\\\"com.tldraw.shape.video\\\":2,\\\"com.tldraw.binding.arrow\\\":0}}},\\\"session\\\":{\\\"version\\\":0,\\\"currentPageId\\\":\\\"page:page\\\",\\\"exportBackground\\\":true,\\\"isFocusMode\\\":false,\\\"isDebugMode\\\":true,\\\"isToolLocked\\\":false,\\\"isGridMode\\\":false,\\\"pageStates\\\":[{\\\"pageId\\\":\\\"page:page\\\",\\\"camera\\\":{\\\"x\\\":0,\\\"y\\\":0,\\\"z\\\":1},\\\"selectedShapeIds\\\":[],\\\"focusedGroupId\\\":null}]}}\"}"
+    },
+    {
+      "path": "/realtime/status",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments/read-state",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "PUT",
+      "body": "{\"canvas_data\":\"{\\\"document\\\":{\\\"store\\\":{\\\"document:document\\\":{\\\"gridSize\\\":10,\\\"name\\\":\\\"\\\",\\\"meta\\\":{},\\\"id\\\":\\\"document:document\\\",\\\"typeName\\\":\\\"document\\\"},\\\"page:page\\\":{\\\"meta\\\":{},\\\"id\\\":\\\"page:page\\\",\\\"name\\\":\\\"Page 1\\\",\\\"index\\\":\\\"a1\\\",\\\"typeName\\\":\\\"page\\\"}},\\\"schema\\\":{\\\"schemaVersion\\\":2,\\\"sequences\\\":{\\\"com.tldraw.store\\\":4,\\\"com.tldraw.asset\\\":1,\\\"com.tldraw.camera\\\":1,\\\"com.tldraw.document\\\":2,\\\"com.tldraw.instance\\\":25,\\\"com.tldraw.instance_page_state\\\":5,\\\"com.tldraw.page\\\":1,\\\"com.tldraw.instance_presence\\\":5,\\\"com.tldraw.pointer\\\":1,\\\"com.tldraw.shape\\\":4,\\\"com.tldraw.asset.bookmark\\\":2,\\\"com.tldraw.asset.image\\\":5,\\\"com.tldraw.asset.video\\\":5,\\\"com.tldraw.shape.group\\\":0,\\\"com.tldraw.shape.text\\\":2,\\\"com.tldraw.shape.bookmark\\\":2,\\\"com.tldraw.shape.draw\\\":2,\\\"com.tldraw.shape.geo\\\":9,\\\"com.tldraw.shape.note\\\":7,\\\"com.tldraw.shape.line\\\":5,\\\"com.tldraw.shape.frame\\\":0,\\\"com.tldraw.shape.arrow\\\":5,\\\"com.tldraw.shape.highlight\\\":1,\\\"com.tldraw.shape.embed\\\":4,\\\"com.tldraw.shape.image\\\":4,\\\"com.tldraw.shape.video\\\":2,\\\"com.tldraw.binding.arrow\\\":0}}},\\\"session\\\":{\\\"version\\\":0,\\\"currentPageId\\\":\\\"page:page\\\",\\\"exportBackground\\\":true,\\\"isFocusMode\\\":false,\\\"isDebugMode\\\":true,\\\"isToolLocked\\\":false,\\\"isGridMode\\\":false,\\\"pageStates\\\":[{\\\"pageId\\\":\\\"page:page\\\",\\\"camera\\\":{\\\"x\\\":0,\\\"y\\\":0,\\\"z\\\":1},\\\"selectedShapeIds\\\":[],\\\"focusedGroupId\\\":null}]}}\"}"
+    },
+    {
+      "path": "/realtime/status",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments/read-state",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "PUT",
+      "body": "{\"canvas_data\":\"{\\\"document\\\":{\\\"store\\\":{\\\"document:document\\\":{\\\"gridSize\\\":10,\\\"name\\\":\\\"\\\",\\\"meta\\\":{},\\\"id\\\":\\\"document:document\\\",\\\"typeName\\\":\\\"document\\\"},\\\"page:page\\\":{\\\"meta\\\":{},\\\"id\\\":\\\"page:page\\\",\\\"name\\\":\\\"Page 1\\\",\\\"index\\\":\\\"a1\\\",\\\"typeName\\\":\\\"page\\\"}},\\\"schema\\\":{\\\"schemaVersion\\\":2,\\\"sequences\\\":{\\\"com.tldraw.store\\\":4,\\\"com.tldraw.asset\\\":1,\\\"com.tldraw.camera\\\":1,\\\"com.tldraw.document\\\":2,\\\"com.tldraw.instance\\\":25,\\\"com.tldraw.instance_page_state\\\":5,\\\"com.tldraw.page\\\":1,\\\"com.tldraw.instance_presence\\\":5,\\\"com.tldraw.pointer\\\":1,\\\"com.tldraw.shape\\\":4,\\\"com.tldraw.asset.bookmark\\\":2,\\\"com.tldraw.asset.image\\\":5,\\\"com.tldraw.asset.video\\\":5,\\\"com.tldraw.shape.group\\\":0,\\\"com.tldraw.shape.text\\\":2,\\\"com.tldraw.shape.bookmark\\\":2,\\\"com.tldraw.shape.draw\\\":2,\\\"com.tldraw.shape.geo\\\":9,\\\"com.tldraw.shape.note\\\":7,\\\"com.tldraw.shape.line\\\":5,\\\"com.tldraw.shape.frame\\\":0,\\\"com.tldraw.shape.arrow\\\":5,\\\"com.tldraw.shape.highlight\\\":1,\\\"com.tldraw.shape.embed\\\":4,\\\"com.tldraw.shape.image\\\":4,\\\"com.tldraw.shape.video\\\":2,\\\"com.tldraw.binding.arrow\\\":0}}},\\\"session\\\":{\\\"version\\\":0,\\\"currentPageId\\\":\\\"page:page\\\",\\\"exportBackground\\\":true,\\\"isFocusMode\\\":false,\\\"isDebugMode\\\":true,\\\"isToolLocked\\\":false,\\\"isGridMode\\\":false,\\\"pageStates\\\":[{\\\"pageId\\\":\\\"page:page\\\",\\\"camera\\\":{\\\"x\\\":0,\\\"y\\\":0,\\\"z\\\":1},\\\"selectedShapeIds\\\":[],\\\"focusedGroupId\\\":null}]}}\"}"
+    },
+    {
+      "path": "/realtime/status",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments/read-state",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "PUT",
+      "body": "{\"canvas_data\":\"{\\\"document\\\":{\\\"store\\\":{\\\"document:document\\\":{\\\"gridSize\\\":10,\\\"name\\\":\\\"\\\",\\\"meta\\\":{},\\\"id\\\":\\\"document:document\\\",\\\"typeName\\\":\\\"document\\\"},\\\"page:page\\\":{\\\"meta\\\":{},\\\"id\\\":\\\"page:page\\\",\\\"name\\\":\\\"Page 1\\\",\\\"index\\\":\\\"a1\\\",\\\"typeName\\\":\\\"page\\\"}},\\\"schema\\\":{\\\"schemaVersion\\\":2,\\\"sequences\\\":{\\\"com.tldraw.store\\\":4,\\\"com.tldraw.asset\\\":1,\\\"com.tldraw.camera\\\":1,\\\"com.tldraw.document\\\":2,\\\"com.tldraw.instance\\\":25,\\\"com.tldraw.instance_page_state\\\":5,\\\"com.tldraw.page\\\":1,\\\"com.tldraw.instance_presence\\\":5,\\\"com.tldraw.pointer\\\":1,\\\"com.tldraw.shape\\\":4,\\\"com.tldraw.asset.bookmark\\\":2,\\\"com.tldraw.asset.image\\\":5,\\\"com.tldraw.asset.video\\\":5,\\\"com.tldraw.shape.group\\\":0,\\\"com.tldraw.shape.text\\\":2,\\\"com.tldraw.shape.bookmark\\\":2,\\\"com.tldraw.shape.draw\\\":2,\\\"com.tldraw.shape.geo\\\":9,\\\"com.tldraw.shape.note\\\":7,\\\"com.tldraw.shape.line\\\":5,\\\"com.tldraw.shape.frame\\\":0,\\\"com.tldraw.shape.arrow\\\":5,\\\"com.tldraw.shape.highlight\\\":1,\\\"com.tldraw.shape.embed\\\":4,\\\"com.tldraw.shape.image\\\":4,\\\"com.tldraw.shape.video\\\":2,\\\"com.tldraw.binding.arrow\\\":0}}},\\\"session\\\":{\\\"version\\\":0,\\\"currentPageId\\\":\\\"page:page\\\",\\\"exportBackground\\\":true,\\\"isFocusMode\\\":false,\\\"isDebugMode\\\":true,\\\"isToolLocked\\\":false,\\\"isGridMode\\\":false,\\\"pageStates\\\":[{\\\"pageId\\\":\\\"page:page\\\",\\\"camera\\\":{\\\"x\\\":0,\\\"y\\\":0,\\\"z\\\":1},\\\"selectedShapeIds\\\":[],\\\"focusedGroupId\\\":null}]}}\"}"
+    },
+    {
+      "path": "/realtime/status",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments/read-state",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "PUT",
+      "body": "{\"canvas_data\":\"{\\\"document\\\":{\\\"store\\\":{\\\"document:document\\\":{\\\"gridSize\\\":10,\\\"name\\\":\\\"\\\",\\\"meta\\\":{},\\\"id\\\":\\\"document:document\\\",\\\"typeName\\\":\\\"document\\\"},\\\"page:page\\\":{\\\"meta\\\":{},\\\"id\\\":\\\"page:page\\\",\\\"name\\\":\\\"Page 1\\\",\\\"index\\\":\\\"a1\\\",\\\"typeName\\\":\\\"page\\\"}},\\\"schema\\\":{\\\"schemaVersion\\\":2,\\\"sequences\\\":{\\\"com.tldraw.store\\\":4,\\\"com.tldraw.asset\\\":1,\\\"com.tldraw.camera\\\":1,\\\"com.tldraw.document\\\":2,\\\"com.tldraw.instance\\\":25,\\\"com.tldraw.instance_page_state\\\":5,\\\"com.tldraw.page\\\":1,\\\"com.tldraw.instance_presence\\\":5,\\\"com.tldraw.pointer\\\":1,\\\"com.tldraw.shape\\\":4,\\\"com.tldraw.asset.bookmark\\\":2,\\\"com.tldraw.asset.image\\\":5,\\\"com.tldraw.asset.video\\\":5,\\\"com.tldraw.shape.group\\\":0,\\\"com.tldraw.shape.text\\\":2,\\\"com.tldraw.shape.bookmark\\\":2,\\\"com.tldraw.shape.draw\\\":2,\\\"com.tldraw.shape.geo\\\":9,\\\"com.tldraw.shape.note\\\":7,\\\"com.tldraw.shape.line\\\":5,\\\"com.tldraw.shape.frame\\\":0,\\\"com.tldraw.shape.arrow\\\":5,\\\"com.tldraw.shape.highlight\\\":1,\\\"com.tldraw.shape.embed\\\":4,\\\"com.tldraw.shape.image\\\":4,\\\"com.tldraw.shape.video\\\":2,\\\"com.tldraw.binding.arrow\\\":0}}},\\\"session\\\":{\\\"version\\\":0,\\\"currentPageId\\\":\\\"page:page\\\",\\\"exportBackground\\\":true,\\\"isFocusMode\\\":false,\\\"isDebugMode\\\":true,\\\"isToolLocked\\\":false,\\\"isGridMode\\\":false,\\\"pageStates\\\":[{\\\"pageId\\\":\\\"page:page\\\",\\\"camera\\\":{\\\"x\\\":0,\\\"y\\\":0,\\\"z\\\":1},\\\"selectedShapeIds\\\":[],\\\"focusedGroupId\\\":null}]}}\"}"
+    },
+    {
+      "path": "/realtime/status",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments/read-state",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "PUT",
+      "body": "{\"canvas_data\":\"{\\\"document\\\":{\\\"store\\\":{\\\"document:document\\\":{\\\"gridSize\\\":10,\\\"name\\\":\\\"\\\",\\\"meta\\\":{},\\\"id\\\":\\\"document:document\\\",\\\"typeName\\\":\\\"document\\\"},\\\"page:page\\\":{\\\"meta\\\":{},\\\"id\\\":\\\"page:page\\\",\\\"name\\\":\\\"Page 1\\\",\\\"index\\\":\\\"a1\\\",\\\"typeName\\\":\\\"page\\\"}},\\\"schema\\\":{\\\"schemaVersion\\\":2,\\\"sequences\\\":{\\\"com.tldraw.store\\\":4,\\\"com.tldraw.asset\\\":1,\\\"com.tldraw.camera\\\":1,\\\"com.tldraw.document\\\":2,\\\"com.tldraw.instance\\\":25,\\\"com.tldraw.instance_page_state\\\":5,\\\"com.tldraw.page\\\":1,\\\"com.tldraw.instance_presence\\\":5,\\\"com.tldraw.pointer\\\":1,\\\"com.tldraw.shape\\\":4,\\\"com.tldraw.asset.bookmark\\\":2,\\\"com.tldraw.asset.image\\\":5,\\\"com.tldraw.asset.video\\\":5,\\\"com.tldraw.shape.group\\\":0,\\\"com.tldraw.shape.text\\\":2,\\\"com.tldraw.shape.bookmark\\\":2,\\\"com.tldraw.shape.draw\\\":2,\\\"com.tldraw.shape.geo\\\":9,\\\"com.tldraw.shape.note\\\":7,\\\"com.tldraw.shape.line\\\":5,\\\"com.tldraw.shape.frame\\\":0,\\\"com.tldraw.shape.arrow\\\":5,\\\"com.tldraw.shape.highlight\\\":1,\\\"com.tldraw.shape.embed\\\":4,\\\"com.tldraw.shape.image\\\":4,\\\"com.tldraw.shape.video\\\":2,\\\"com.tldraw.binding.arrow\\\":0}}},\\\"session\\\":{\\\"version\\\":0,\\\"currentPageId\\\":\\\"page:page\\\",\\\"exportBackground\\\":true,\\\"isFocusMode\\\":false,\\\"isDebugMode\\\":true,\\\"isToolLocked\\\":false,\\\"isGridMode\\\":false,\\\"pageStates\\\":[{\\\"pageId\\\":\\\"page:page\\\",\\\"camera\\\":{\\\"x\\\":0,\\\"y\\\":0,\\\"z\\\":1},\\\"selectedShapeIds\\\":[],\\\"focusedGroupId\\\":null}]}}\"}"
+    },
+    {
+      "path": "/realtime/status",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments/read-state",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/comments",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/b5/canvas",
+      "method": "PUT",
+      "body": "{\"canvas_data\":\"{\\\"document\\\":{\\\"store\\\":{\\\"document:document\\\":{\\\"gridSize\\\":10,\\\"name\\\":\\\"\\\",\\\"meta\\\":{},\\\"id\\\":\\\"document:document\\\",\\\"typeName\\\":\\\"document\\\"},\\\"page:page\\\":{\\\"meta\\\":{},\\\"id\\\":\\\"page:page\\\",\\\"name\\\":\\\"Page 1\\\",\\\"index\\\":\\\"a1\\\",\\\"typeName\\\":\\\"page\\\"}},\\\"schema\\\":{\\\"schemaVersion\\\":2,\\\"sequences\\\":{\\\"com.tldraw.store\\\":4,\\\"com.tldraw.asset\\\":1,\\\"com.tldraw.camera\\\":1,\\\"com.tldraw.document\\\":2,\\\"com.tldraw.instance\\\":25,\\\"com.tldraw.instance_page_state\\\":5,\\\"com.tldraw.page\\\":1,\\\"com.tldraw.instance_presence\\\":5,\\\"com.tldraw.pointer\\\":1,\\\"com.tldraw.shape\\\":4,\\\"com.tldraw.asset.bookmark\\\":2,\\\"com.tldraw.asset.image\\\":5,\\\"com.tldraw.asset.video\\\":5,\\\"com.tldraw.shape.group\\\":0,\\\"com.tldraw.shape.text\\\":2,\\\"com.tldraw.shape.bookmark\\\":2,\\\"com.tldraw.shape.draw\\\":2,\\\"com.tldraw.shape.geo\\\":9,\\\"com.tldraw.shape.note\\\":7,\\\"com.tldraw.shape.line\\\":5,\\\"com.tldraw.shape.frame\\\":0,\\\"com.tldraw.shape.arrow\\\":5,\\\"com.tldraw.shape.highlight\\\":1,\\\"com.tldraw.shape.embed\\\":4,\\\"com.tldraw.shape.image\\\":4,\\\"com.tldraw.shape.video\\\":2,\\\"com.tldraw.binding.arrow\\\":0}}},\\\"session\\\":{\\\"version\\\":0,\\\"currentPageId\\\":\\\"page:page\\\",\\\"exportBackground\\\":true,\\\"isFocusMode\\\":false,\\\"isDebugMode\\\":true,\\\"isToolLocked\\\":false,\\\"isGridMode\\\":false,\\\"pageStates\\\":[{\\\"pageId\\\":\\\"page:page\\\",\\\"camera\\\":{\\\"x\\\":0,\\\"y\\\":0,\\\"z\\\":1},\\\"selectedShapeIds\\\":[],\\\"focusedGroupId\\\":null}]}}\"}"
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/shared",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/workspaces",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards/shared",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/boards",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/live-sessions/active",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/settings/public",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/coordinators/check",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/live-sessions/active",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/settings/public",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/domains",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/artworks",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/events",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "path": "/team",
+      "method": "GET",
+      "body": null
+    }
+  ]
+}

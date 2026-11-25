@@ -1,0 +1,131 @@
+[
+  {
+    "file": "converted.jpg",
+    "bytes": 35592,
+    "format": "JPEG",
+    "size": [
+      1191,
+      1684
+    ],
+    "mode": "RGB"
+  },
+  {
+    "file": "image.jpg",
+    "bytes": 6440,
+    "format": "JPEG",
+    "size": [
+      320,
+      240
+    ],
+    "mode": "RGB"
+  },
+  {
+    "file": "image.png",
+    "bytes": 5549,
+    "format": "PNG",
+    "size": [
+      320,
+      240
+    ],
+    "mode": "RGBA",
+    "alpha_range": [
+      255,
+      255
+    ]
+  },
+  {
+    "file": "halftone.png",
+    "bytes": 26274,
+    "format": "PNG",
+    "size": [
+      320,
+      240
+    ],
+    "mode": "RGBA",
+    "alpha_range": [
+      255,
+      255
+    ]
+  },
+  {
+    "file": "halftone-2.png",
+    "bytes": 22384,
+    "format": "PNG",
+    "size": [
+      320,
+      240
+    ],
+    "mode": "RGBA",
+    "alpha_range": [
+      255,
+      255
+    ]
+  },
+  {
+    "file": "halftone-3.png",
+    "bytes": 19714,
+    "format": "PNG",
+    "size": [
+      320,
+      240
+    ],
+    "mode": "RGBA",
+    "alpha_range": [
+      255,
+      255
+    ]
+  },
+  {
+    "file": "vector-trace-3.svg",
+    "bytes": 1154,
+    "viewBox": "0 0 320 240",
+    "width": "320",
+    "height": "240",
+    "shapes": 4
+  },
+  {
+    "file": "line-drawing-2.svg",
+    "bytes": 12480,
+    "viewBox": "0 0 320 240",
+    "width": "320",
+    "height": "240",
+    "shapes": 281
+  },
+  {
+    "file": "sample-nobg.png",
+    "bytes": 8452,
+    "format": "PNG",
+    "size": [
+      320,
+      240
+    ],
+    "mode": "RGBA",
+    "alpha_range": [
+      0,
+      255
+    ]
+  },
+  {
+    "file": "sample-nobg-2.png",
+    "bytes": 14058,
+    "format": "PNG",
+    "size": [
+      320,
+      240
+    ],
+    "mode": "RGBA",
+    "alpha_range": [
+      0,
+      255
+    ]
+  },
+  {
+    "file": "dna-palette.css",
+    "bytes": 1194,
+    "declarations": 36,
+    "selectors": [
+      ":root, [data-palette-theme=\"light\"] {",
+      "[data-palette-theme=\"dark\"] {"
+    ]
+  }
+]

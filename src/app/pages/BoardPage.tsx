@@ -1,17 +1,27 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { ArrowLeft, Home, MessageCircle, MoreHorizontal, Image as ImageIcon, History, LayoutTemplate, Trash2, Download, Grid2x2, Frame } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { startIndexFor, type LightboxImage } from '../lib/lightbox';
 import { useStudent } from '../context/StudentContext';
-import { api, type BoardDetail } from '../lib/api';
+import { api, type BoardDetail, type Workspace, type LibraryVisibility } from '../lib/api';
+import { useModalA11y } from '../components/hooks/useModalA11y';
+import { VisibilityPicker } from '../components/library/LibraryVisibility';
 import { clearBoardsCache } from './MoodboardsPage';
 import { rollToColor } from '../lib/utils';
 import { PresenceProvider } from '../context/PresenceProvider';
 import { useBoardComments } from '../components/hooks/useBoardComments';
 import { ShareBoardDialog } from '../components/ShareBoardDialog';
 import { AssetLibrary } from '../components/AssetLibrary';
+import { PortalContainerProvider } from '../components/PortalContainer';
+import { useScreenSize } from '../components/hooks/use-screen-size';
+import { boardCrumbs, isCompactBoardHeader, MOODBOARDS_HREF } from '../lib/boardNav';
 import type { Editor } from 'tldraw';
 import type { Asset } from '../lib/api';
+import { notifyAssetsChanged } from '../lib/assetRefresh';
+import { getStarterLayout } from '../lib/boardStarters';
 
 const TldrawCanvas = lazy(() =>
   import('./TldrawCanvas').then(m => ({ default: m.TldrawCanvas }))
@@ -20,6 +30,9 @@ const TldrawCanvas = lazy(() =>
 // TldrawCanvasSync.tsx's own architectural-decisions header comment.
 // Lazy-loaded the same way TldrawCanvas already is, so a board that never
 // uses realtime never pays for @tldraw/sync's bundle weight.
+const ExportBoardDialog = lazy(() => import('../components/ExportBoardDialog'));
+const ImageLightbox = lazy(() => import('../components/ImageLightbox').then(m => ({ default: m.ImageLightbox })));
+
 const TldrawCanvasSync = lazy(() =>
   import('./TldrawCanvasSync').then(m => ({ default: m.TldrawCanvasSync }))
 );
@@ -45,6 +58,17 @@ function getSiteTheme(): 'dark' | 'light' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
+// Board header link styles (see the compact header in BoardPage's render).
+const headerIconLink: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  width: 32, height: 32, borderRadius: 'var(--radius-pill)', textDecoration: 'none',
+};
+const crumbLink: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flexShrink: 1,
+  padding: '4px 8px', borderRadius: 'var(--radius-sm)', textDecoration: 'none',
+  fontSize: 13, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
+};
+
 export default function BoardPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -54,6 +78,7 @@ export default function BoardPage() {
   const [error, setError] = useState('');
   const [theme, setTheme] = useState<'dark' | 'light'>(getSiteTheme);
   const [canvasData, setCanvasData] = useState<unknown>(null);
+  const [imageThumbnails, setImageThumbnails] = useState<Record<string, string>>({});
   const [canvasLoading, setCanvasLoading] = useState(true);
   const [canvasReady, setCanvasReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -84,10 +109,55 @@ export default function BoardPage() {
   // is combined with board.realtime_enabled below to decide which canvas
   // component to render.
   const [realtimeGloballyEnabled, setRealtimeGloballyEnabled] = useState(false);
+  const [realtimeStatusKnown, setRealtimeStatusKnown] = useState(false);
   useEffect(() => {
     api.realtime.getStatus()
-      .then(res => setRealtimeGloballyEnabled(res.enabled))
-      .catch(() => setRealtimeGloballyEnabled(false));
+      .then(res => { setRealtimeGloballyEnabled(res.enabled); setRealtimeStatusKnown(true); })
+      .catch(() => { setRealtimeGloballyEnabled(false); setRealtimeStatusKnown(true); });
+  }, []);
+
+  // Fullscreen (V2.4 Phase 8/9 — Professional Canvas UX polish). The
+  // standard browser Fullscreen API, not a tldraw concept at all — tldraw
+  // has no "fullscreen" notion of its own (confirmed: no such action in
+  // its actions registry), so this is genuinely new, non-duplicate value,
+  // unlike zoom controls (tldraw's own ZoomMenu already has zoom-in/out/
+  // 100%/fit-to-content/fit-to-selection — verified by reading its source
+  // before building anything here, so nothing new was added for that).
+  // Targets the SAME full-screen canvas container this page already
+  // renders (see the outer <div style={{ position: 'fixed', inset: 0 }}>
+  // below) — requesting fullscreen on that element, not document.body,
+  // keeps this page's own top bar inside the fullscreen view rather than
+  // hiding it. Reflects the browser's actual fullscreen state (not just
+  // "did the user click the button") via the fullscreenchange event, so
+  // pressing the browser/OS Escape-to-exit-fullscreen gesture keeps the
+  // button's label/icon correct without this component doing anything
+  // special for that gesture itself.
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  // Same element as canvasContainerRef, as state: portalled overlays (the
+  // header's overflow menu, the asset library's dialogs/menus) mount into
+  // it via PortalContainerProvider so they stay visible in fullscreen,
+  // where only this element's subtree is rendered.
+  const [portalContainerEl, setPortalContainerEl] = useState<HTMLDivElement | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === canvasContainerRef.current);
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      canvasContainerRef.current?.requestFullscreen?.().catch(() => {
+        // Fullscreen can be denied (no user gesture, iframe without the
+        // allow="fullscreen" attribute, browser policy) — fails silently,
+        // same as every other best-effort browser-API call in this file
+        // (e.g. handleSave's own network-failure handling). The button
+        // simply stays in its non-fullscreen state.
+      });
+    }
   }, []);
 
   const [showShare, setShowShare] = useState(false);
@@ -99,11 +169,41 @@ export default function BoardPage() {
   // holds. A ref (not state) because it never needs to trigger a re-render
   // — only handleInsertAsset below ever reads it, on click.
   const editorRef = useRef<Editor | null>(null);
+  // Bumped each time a canvas hands up its editor, so effects that need the
+  // editor (starter layout) can wait for it without reading a ref in render.
+  // `realtime` records which kind of canvas produced the editor: while the
+  // realtime flag is still loading, a throwaway non-realtime canvas mounts and
+  // is then replaced by the synced one, so an editor only counts for the
+  // starter layout when its kind matches the board's final kind.
+  const realtimeCanvasRef = useRef(false);
+  const [readyEditor, setReadyEditor] = useState<{ editor: Editor; realtime: boolean } | null>(null);
+  const handleEditorReady = useCallback((editor: Editor) => {
+    editorRef.current = editor;
+    setReadyEditor({ editor, realtime: realtimeCanvasRef.current });
+  }, []);
+  const [showExport, setShowExport] = useState(false);
+  const [lightbox, setLightbox] = useState<{ items: LightboxImage[]; index: number } | null>(null);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  // Save as Template (V2.3 Phase 8) — uses the board's CURRENT PERSISTED
+  // canvas_data (read server-side from the DB row by POST /api/templates,
+  // never anything sent from this client) as the template's snapshot, the
+  // same guarantee POST /:id/duplicate's own canvas_data copy already
+  // relies on. No second canvas-save path is introduced here — this
+  // button only calls the templates API; it never reads editor.store
+  // directly or serializes anything client-side.
+  const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
+  // visibility (Shared Creative Library): Personal by default — publishing
+  // to the workspace's Community is always an explicit choice.
+  const [templateForm, setTemplateForm] = useState<{ name: string; description: string; visibility: LibraryVisibility }>({ name: '', description: '', visibility: 'personal' });
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateError, setTemplateError] = useState('');
+  const saveTemplateDialogRef = useModalA11y(showSaveAsTemplate, () => setShowSaveAsTemplate(false), {
+    initialFocus: () => document.getElementById('save-template-template-name'),
+  });
   // Shown briefly after a restore on a board with connected collaborators —
   // see restoreVersion's hadLiveRoom in api.ts and rooms.ts's own comment on
   // why a restore causes one clean, deliberate reconnect cycle for everyone
@@ -112,9 +212,31 @@ export default function BoardPage() {
   const [showReconnectHint, setShowReconnectHint] = useState(false);
 
   const isOwner = board?.owner_roll === studentSession?.rollNumber;
+
+  // Board header (compact below lg and in fullscreen — see lib/boardNav.ts).
+  const screenSize = useScreenSize();
+  const compactHeader = isCompactBoardHeader(screenSize.greaterThanOrEqual('lg'), isFullscreen);
+  // "← Moodboards" shows its text label from md up; below md it's an
+  // arrow-only pill (same destination, labelled for assistive tech) so the
+  // board name keeps room at phone widths.
+  const showBackLabel = screenSize.greaterThanOrEqual('md');
+  // The viewer's own workspaces — only used to NAME the board's workspace
+  // in the breadcrumb. Best-effort: on failure the crumb reads
+  // "Workspace" and still links to /home.
+  const [viewerWorkspaces, setViewerWorkspaces] = useState<Workspace[]>([]);
+  useEffect(() => {
+    const roll = studentSession?.rollNumber;
+    if (!roll) return;
+    let cancelled = false;
+    api.workspaces.list(roll)
+      .then(list => { if (!cancelled) setViewerWorkspaces(list); })
+      .catch(() => { /* breadcrumb falls back to "Workspace" */ });
+    return () => { cancelled = true; };
+  }, [studentSession?.rollNumber]);
   const isMember = board
     ? (isOwner || board.members.some(m => m.roll_number === studentSession?.rollNumber))
     : false;
+
 
   // The one decision point for realtime vs. manual persistence — everything
   // else about which component to render flows from this single boolean.
@@ -130,6 +252,38 @@ export default function BoardPage() {
   // flight, which is always safe/correct behavior, never just a fallback
   // for a slow network.
   const useRealtimeSync = Boolean(board?.realtime_enabled) && realtimeGloballyEnabled && Boolean(board?.room_id);
+  realtimeCanvasRef.current = useRealtimeSync;
+
+  // Starter layout (Milestone B). The create dialog on /moodboards navigates
+  // here with ?starter=<id>. It is applied once, to the owner's brand-new,
+  // still-empty board, after the canvas has mounted and synced; any other
+  // situation (existing board, unknown id, not the owner) just drops the
+  // param. The board is never touched if it already has content.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const starterParam = searchParams.get('starter');
+  useEffect(() => {
+    if (!starterParam) return;
+    const clearParam = () => setSearchParams(prev => { prev.delete('starter'); return prev; }, { replace: true });
+    const layout = getStarterLayout(starterParam);
+    if (!board) return;
+    // GET /boards/:id has no item_count (list endpoints only); canvas_preview
+    // is set for any board with drawable content, and pending gallery items
+    // are about to be placed on the canvas, so either one means "not empty".
+    const hasContent = !!board.canvas_preview || (board.items?.length ?? 0) > 0 || (board.item_count ?? 0) > 0;
+    if (!layout || !isOwner || hasContent) { clearParam(); return; }
+    if (!realtimeStatusKnown || !readyEditor || readyEditor.realtime !== useRealtimeSync) return;
+    const { editor } = readyEditor;
+    // Give a legacy (non-realtime) canvas a beat to load its snapshot first.
+    const timer = setTimeout(() => {
+      import('../lib/tldrawBoardTools')
+        .then(({ applyStarterLayout }) => {
+          if (!editor.getInstanceState().isReadonly) applyStarterLayout(editor, layout);
+        })
+        .catch(() => toast.error('Could not load the starter layout'))
+        .finally(clearParam);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [starterParam, board, isOwner, readyEditor, realtimeStatusKnown, useRealtimeSync, setSearchParams]);
 
   // Comments (Commit 6) — see components/hooks/useBoardComments.ts's own
   // header comment for why this is owned here (BoardPage) rather than
@@ -142,12 +296,63 @@ export default function BoardPage() {
   // tradeoff, same one the manual canvas path already accepts for
   // document content itself).
   const [commentMode, setCommentMode] = useState(false);
-  // "Unread" is a purely local, this-session concept — no read-receipt
-  // state is persisted server-side (out of scope: no notifications system
-  // per the spec). Reset to "now" whenever comment mode opens, so a pin
-  // is marked unread only if its thread got new activity since the LAST
-  // time this student actually looked, not since some absolute epoch.
-  const [lastSeenAt, setLastSeenAt] = useState(() => Date.now());
+  // PERSISTENT UNREAD WATERMARK (V2.6 Phase E).
+  //
+  // This used to be useState(() => Date.now()) — purely in-memory, so it
+  // reset on every mount: refreshing the page silently marked every thread
+  // read, and the state was per-tab rather than per-user. It is now backed
+  // by board_comment_reads (one row per board+user, not per comment) and
+  // read back on mount.
+  //
+  // 0 while loading means "nothing is read yet", so pins briefly show as
+  // unread rather than briefly showing as read — failing toward showing
+  // activity is the safer default for an unread indicator.
+  const [lastSeenAt, setLastSeenAt] = useState(0);
+
+  // Load this user's watermark for this board. A 403 (revoked) or any
+  // error leaves it at 0; the comment list itself is separately authorized,
+  // so a revoked user sees no comments to mark unread in the first place.
+  useEffect(() => {
+    const boardId = board?.id;
+    const roll = studentSession?.rollNumber;
+    if (!boardId || !roll) return;
+    let cancelled = false;
+    api.boards.getCommentReadState(boardId, roll)
+      .then(res => {
+        if (cancelled) return;
+        setLastSeenAt(res.lastSeenAt ? new Date(res.lastSeenAt).getTime() : 0);
+      })
+      .catch(() => { /* leave at 0 — see above */ });
+    return () => { cancelled = true; };
+  }, [board?.id, studentSession?.rollNumber]);
+
+  // Opening comment mode is "I am looking at these now": persist the
+  // watermark server-side and move the local one immediately, so the UI
+  // updates without waiting for the round-trip. The server stamps the
+  // authoritative time and only ever moves a watermark FORWARD.
+  // Mention candidates: the board's OWN owner + members. Using the list
+  // the page already loaded means the picker can never surface users from
+  // another workspace, and no user-search endpoint (an enumeration
+  // surface) has to exist. The server re-validates every mention anyway.
+  const mentionables = useMemo(() => {
+    if (!board) return [];
+    const out = [{ roll: board.owner_roll, name: board.owner_name ?? board.owner_roll }];
+    for (const m of board.members) {
+      if (m.roll_number === board.owner_roll) continue;
+      out.push({ roll: m.roll_number, name: m.name ?? m.roll_number });
+    }
+    return out;
+  }, [board]);
+
+  const markCommentsSeen = useCallback(() => {
+    const boardId = board?.id;
+    const roll = studentSession?.rollNumber;
+    setLastSeenAt(Date.now());
+    if (!boardId || !roll) return;
+    api.boards.markCommentsSeen(boardId, roll)
+      .then(res => setLastSeenAt(new Date(res.lastSeenAt).getTime()))
+      .catch(() => { /* local watermark already moved; retried on next open */ });
+  }, [board?.id, studentSession?.rollNumber]);
   const commentsApi = useBoardComments({
     boardId: board?.id ?? '',
     roll: studentSession?.rollNumber,
@@ -191,6 +396,7 @@ export default function BoardPage() {
           const canvasResult = await api.boards.loadCanvas(id, rollRef.current);
           if (canvasResult.canvas_data) {
             setCanvasData(JSON.parse(canvasResult.canvas_data));
+            setImageThumbnails(canvasResult.image_thumbnails ?? {});
           }
         } catch {
           // No saved canvas — start fresh
@@ -271,6 +477,72 @@ export default function BoardPage() {
     }
   };
 
+  const openSaveAsTemplate = () => {
+    if (!board) return;
+    setTemplateForm({ name: board.name, description: '', visibility: 'personal' });
+    setTemplateError('');
+    setShowSaveAsTemplate(true);
+  };
+
+  // POST /api/templates only ever needs source_board_id — it reads
+  // canvas_data itself, server-side, from the board's own DB row (see
+  // routes/templates.ts's own comment on why this is what guarantees the
+  // persisted server snapshot is used, never a stale client-only one,
+  // for a realtime-enabled board). This handler never touches the
+  // editor/canvas at all.
+  const handleSaveAsTemplate = async () => {
+    if (!id || !studentSession?.rollNumber || !templateForm.name.trim()) return;
+    setSavingTemplate(true);
+    setTemplateError('');
+    try {
+      await api.templates.create(studentSession.rollNumber, {
+        name: templateForm.name.trim(),
+        description: templateForm.description.trim() || undefined,
+        visibility: templateForm.visibility,
+        source_board_id: id,
+      });
+      setShowSaveAsTemplate(false);
+      toast.success(templateForm.visibility === 'community' ? 'Template saved and published to Community' : 'Template saved');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      setTemplateError(
+        message.includes('no saved canvas content')
+          ? 'This board has no saved canvas content yet — make an edit first, then try again.'
+          : 'Failed to save template'
+      );
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  // Organization tools (Milestone B). Tidy acts on a selection of 2+ items or
+  // else the whole page; wrap needs a selection. Both are one undo step and
+  // go through the normal editor store, so saving/sync behave as for any edit.
+  // Opens the full-size image viewer on every image on the board (desktop button and the
+  // compact-header menu share this). tldraw helpers load on demand, like the other board tools.
+  const openImageViewer = async () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const { collectBoardImages } = await import('../lib/tldrawBoardTools');
+    const items = collectBoardImages(editor);
+    if (items.length === 0) { toast('No images on this board yet'); return; }
+    setLightbox({ items, index: startIndexFor(items, editor.getSelectedShapeIds()) });
+  };
+
+  const runArrange = async (which: 'tidy' | 'frame') => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    if (editor.getInstanceState().isReadonly) { toast.error('You can view this board but not edit it'); return; }
+    try {
+      const tools = await import('../lib/tldrawBoardTools');
+      const result = which === 'tidy' ? tools.tidyIntoGrid(editor) : tools.wrapSelectionInFrame(editor);
+      if (result.ok) toast.success(which === 'tidy' ? `Tidied ${result.count} items` : `Wrapped ${result.count} items in a frame`);
+      else toast.error(result.reason);
+    } catch {
+      toast.error('Could not arrange the board');
+    }
+  };
+
   // Asset Manager (Phase B) — places the chosen library asset onto the
   // canvas at the viewport center via the SAME tldraw asset APIs the
   // existing gallery-injection path already uses (see
@@ -283,6 +555,9 @@ export default function BoardPage() {
   const handleInsertAsset = async (asset: Asset) => {
     const editor = editorRef.current;
     if (!editor) return;
+    // Only library images are canvas-insertable (files are downloads,
+    // links have no stored object/url); the picker only offers images.
+    if (asset.kind !== 'image' || !asset.url) return;
     try {
       // Dynamically imported — tldrawCanvasShared.ts pulls in the (heavy)
       // tldraw package at module scope, and BoardPage.tsx itself is NOT
@@ -290,8 +565,30 @@ export default function BoardPage() {
       // lazy() below), so a static import here would leak tldraw's bundle
       // weight into every page load, not just boards that actually insert
       // an asset.
-      const { insertImageAsset } = await import('./tldrawCanvasShared');
-      await insertImageAsset(editor, asset.url, asset.filename, asset.width, asset.height);
+      const { insertLibraryImages } = await import('../lib/tldrawBoardTools');
+      // V2.4 Phase 6 — asset.id is the source-of-truth Asset Manager
+      // record; passed through so the created tldraw asset's meta field
+      // can carry sourceAssetId (see insertImageAsset's own comment).
+      if (!studentSession || !board) return;
+      // New use is re-authorized against THIS board's workspace: the picker
+      // list may predate an unshare, unpublish or hide. Saved boards are
+      // unaffected — they keep the URL they already stored.
+      let fresh: Asset;
+      try {
+        fresh = await api.assets.get(studentSession.rollNumber, asset.id, board.workspace_id);
+      } catch {
+        notifyAssetsChanged();
+        toast.error('This asset is no longer available in this workspace');
+        return;
+      }
+      if (fresh.kind !== 'image' || !fresh.url) throw new Error('Asset unavailable');
+      if (editor.getInstanceState().isReadonly) {
+        toast.error('You can view this board but not edit it');
+        return;
+      }
+      await insertLibraryImages(editor, [
+        { id: fresh.id, url: fresh.url, name: fresh.filename, width: fresh.width, height: fresh.height },
+      ]);
       setShowAssetLibrary(false);
       toast.success('Asset added to board');
     } catch {
@@ -317,16 +614,12 @@ export default function BoardPage() {
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       gap: 16, background: 'var(--color-canvas)',
     }}>
-      <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--color-ink-muted)', margin: 0 }}>
+      <p className="type-body" style={{ color: 'var(--color-ink-muted)', margin: 0 }}>
         {error || 'Board not found.'}
       </p>
       <button
         onClick={() => navigate('/moodboards')}
-        style={{
-          padding: '10px 20px', background: 'var(--color-brand)', color: '#fff',
-          border: 'none', borderRadius: 'var(--radius-pill)', fontSize: 13,
-          fontFamily: 'var(--font-body)', cursor: 'pointer',
-        }}
+        className="btn-primary"
       >
         Back to Moodboards
       </button>
@@ -337,78 +630,129 @@ export default function BoardPage() {
   const textMuted  = theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
   const surfaceBg  = theme === 'dark' ? '#1a1a1a' : '#ffffff';
   const borderColor = theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+  const crumbs = boardCrumbs(board.name, board.workspace_id, viewerWorkspaces);
+  const boardWorkspace = viewerWorkspaces.find(w => w.id === board.workspace_id) ?? null;
 
   return (
     <>
       {/* Full-screen canvas */}
-      <div style={{ position: 'fixed', inset: 0, zIndex: 300 }}>
+      {/* Every overlay below — board dialogs included — renders INSIDE
+          this container (it closes at the very end of the component), and
+          portalled overlays target it too: while it's in browser
+          fullscreen, nothing outside its subtree is displayed. */}
+      <PortalContainerProvider value={portalContainerEl}>
+      <div
+        ref={el => { canvasContainerRef.current = el; setPortalContainerEl(el); }}
+        style={{ position: 'fixed', inset: 0, zIndex: 300, background: theme === 'dark' ? '#1a1a1a' : '#ffffff' }}
+      >
 
-        {/* Top bar */}
+        {/* Top bar — compact board header. Deterministic upward navigation
+            (workspace home → Moodboards → this board) via real links, never
+            browser history; see lib/boardNav.ts. Below 1024px and in
+            fullscreen (compactHeader) the breadcrumb collapses to back/home
+            icons and the secondary actions move into the "⋯" menu, so
+            nothing is ever pushed off-screen. Height stays 48px — the
+            canvas area below is laid out against it. */}
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0,
           height: 48, background: surfaceBg,
           borderBottom: `1px solid ${borderColor}`,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '0 16px', gap: 16, zIndex: 10,
+          padding: compactHeader ? '0 8px 0 4px' : '0 12px 0 8px', gap: compactHeader ? 8 : 16, zIndex: 10,
         }}>
-          {/* Left — back */}
-          <button
-            onClick={() => {
-              if (window.history.state?.idx > 0) navigate(-1);
-              else navigate('/moodboards');
-            }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              background: 'none', border: 'none', color: textMuted,
-              fontSize: 13, fontFamily: 'var(--font-body)',
-              cursor: 'pointer', padding: '4px 8px', borderRadius: 'var(--radius-sm)', whiteSpace: 'nowrap',
-            }}
-          >
-            ← Boards
-          </button>
-
-          {/* Center — name + visibility badge + save status */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <p style={{
-              margin: 0, fontSize: 14, fontWeight: 600, color: textColor,
-              fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
+          {/* Left — breadcrumb + board identity */}
+          <nav aria-label="Breadcrumb" style={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0, flex: '1 1 auto' }}>
+            {/* Primary exit: always /moodboards (a fixed destination, never
+                browser history), whether the board was opened from Home, a
+                project, a template, a shared link or a refresh. The only
+                back control in the header, in every mode incl. fullscreen. */}
+            <Link
+              to={MOODBOARDS_HREF}
+              className="board-back-link"
+              aria-label="Back to Moodboards"
+              title="Back to Moodboards"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexShrink: 0,
+                height: 30, minWidth: 30, padding: showBackLabel ? '0 12px 0 9px' : 0, marginRight: 6,
+                border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
+                color: textColor, textDecoration: 'none', whiteSpace: 'nowrap',
+                fontSize: 13, fontWeight: 500, fontFamily: 'var(--font-body)',
+              }}
+            >
+              <ArrowLeft size={15} aria-hidden="true" />
+              {showBackLabel && 'Moodboards'}
+            </Link>
+            {compactHeader ? (
+              <Link to={crumbs[0].href!} aria-label={`Workspace home — ${crumbs[0].label}`} title={`Workspace home — ${crumbs[0].label}`} style={{ ...headerIconLink, color: textMuted }}>
+                <Home size={15} />
+              </Link>
+            ) : (
+              <>
+                <Link to={crumbs[0].href!} title="Workspace home" style={{ ...crumbLink, color: textMuted }}>
+                  <Home size={14} style={{ flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 }}>{crumbs[0].label}</span>
+                </Link>
+                <span aria-hidden="true" style={{ color: textMuted, opacity: 0.6, fontSize: 13, padding: '0 2px' }}>/</span>
+              </>
+            )}
+            <p
+              aria-current="page"
+              title={board.name}
+              style={{
+                margin: '0 0 0 4px', minWidth: 0, fontSize: 14, fontWeight: 600, color: textColor,
+                fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}
+            >
               {board.name}
             </p>
-            <span style={{
-              fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-              padding: '2px 8px', borderRadius: 'var(--radius-pill)', flexShrink: 0, fontFamily: 'var(--font-body)',
-              background: board.visibility === 'shared'
-                ? 'rgba(233,30,140,0.15)'
-                : theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-              color: board.visibility === 'shared' ? 'var(--color-brand)' : textMuted,
-            }}>
-              {board.visibility}
-            </span>
+            {!compactHeader && (
+              <span style={{
+                marginLeft: 6,
+                fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+                padding: '2px 8px', borderRadius: 'var(--radius-pill)', flexShrink: 0, fontFamily: 'var(--font-body)',
+                background: board.visibility === 'shared'
+                  ? 'rgba(233,30,140,0.15)'
+                  : theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+                color: board.visibility === 'shared' ? 'var(--color-brand-text)' : textMuted,
+              }}>
+                {board.visibility}
+              </span>
+            )}
             {saveStatus === 'saving' && (
-              <span style={{ fontSize: 11, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', color: textMuted }}>
-                Saving...
+              <span style={{ marginLeft: 8, fontSize: 11, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', color: textMuted, flexShrink: 0 }}>
+                <span role="status" aria-label="Saving board">{compactHeader ? '…' : 'Saving...'}</span>
               </span>
             )}
             {saveStatus === 'saved' && (
-              <span style={{ fontSize: 11, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', color: 'var(--color-success)' }}>
-                Saved
+              <span style={{ marginLeft: 8, fontSize: 11, fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', color: 'var(--color-success)', flexShrink: 0 }}>
+                <span role="status" aria-label="Board saved">{compactHeader ? '✓' : 'Saved'}</span>
               </span>
             )}
-          </div>
+          </nav>
 
-          {/* Right — avatars + actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            {/* Member avatars */}
+          {/* Right — people + actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: compactHeader ? 6 : 8, flexShrink: 0 }}>
+            {/* Board MEMBERS (who has access) — deliberately distinct from
+                the live collaborator list rendered on the canvas itself,
+                which shows who is connected RIGHT NOW (see
+                CollaboratorList.tsx). These are static, come from REST, and
+                do not change as people join or leave, so the group is
+                labelled explicitly rather than leaving two visually
+                identical avatar rows for the user to tell apart. */}
             {(board.members.length > 0 || isOwner) && (
-              <div style={{ display: 'flex', alignItems: 'center' }}>
+              <div
+                role="group"
+                aria-label="People with access to this board"
+                style={{ display: 'flex', alignItems: 'center' }}
+              >
                 {[
                   { name: board.owner_name ?? board.owner_roll, roll: board.owner_roll },
-                  ...board.members.slice(0, 3).map(m => ({ name: m.name ?? m.roll_number, roll: m.roll_number })),
+                  ...board.members.slice(0, compactHeader ? 1 : 3).map(m => ({ name: m.name ?? m.roll_number, roll: m.roll_number })),
                 ].map((m, i) => (
                   <div
                     key={m.roll}
-                    title={m.name}
+                    title={`${m.name} — has access`}
+                    aria-label={`${m.name} — has access`}
                     style={{
                       width: 28, height: 28, borderRadius: 'var(--radius-full)',
                       background: rollToColor(m.roll),
@@ -426,6 +770,27 @@ export default function BoardPage() {
               </div>
             )}
 
+            {typeof document.exitFullscreen === 'function' && (
+              <button
+                onClick={toggleFullscreen}
+                title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Enter fullscreen'}
+                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                aria-pressed={isFullscreen}
+                className={`${isFullscreen ? 'btn-translucent' : 'btn-translucent btn-icon'} btn-sm touch-target`}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+                  {isFullscreen ? (
+                    <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+                  ) : (
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                  )}
+                </svg>
+                {/* Fullscreen hides everything but this header — keep the way
+                    out labelled, not just an icon. */}
+                {isFullscreen && 'Exit'}
+              </button>
+            )}
+
             <button
               onClick={() => {
                 setCommentMode(on => {
@@ -433,24 +798,18 @@ export default function BoardPage() {
                   // Opening comment mode is treated as "caught up" —
                   // clears the unread badge/dot state for pins, since the
                   // student is about to actually look at the board's
-                  // comments. See lastSeenAt's own declaration comment.
-                  if (next) setLastSeenAt(Date.now());
+                  // comments, and persists that server-side so it survives
+                  // a refresh. See lastSeenAt's own declaration comment.
+                  if (next) markCommentsSeen();
                   return next;
                 });
               }}
               title={commentMode ? 'Exit comment mode' : 'Comment mode — click the canvas to leave a comment'}
+              aria-label={compactHeader ? (commentMode ? 'Exit comment mode' : 'Comment') : undefined}
               aria-pressed={commentMode}
-              style={{
-                position: 'relative',
-                padding: '5px 12px',
-                background: commentMode ? 'var(--color-brand)' : 'none',
-                border: commentMode ? 'none' : `1px solid ${borderColor}`,
-                borderRadius: 'var(--radius-pill)',
-                color: commentMode ? '#fff' : textMuted, fontSize: 12,
-                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}
+              className={`btn-translucent ${compactHeader ? 'btn-icon ' : ''}btn-sm touch-target`}
             >
-              Comment
+              {compactHeader ? <MessageCircle size={14} /> : 'Comment'}
               {!commentMode && commentsApi.comments.some(
                 c => !c.parentCommentId && !c.resolvedAt && c.authorRoll !== studentSession?.rollNumber
                   && new Date(c.updatedAt).getTime() > lastSeenAt
@@ -466,56 +825,141 @@ export default function BoardPage() {
               )}
             </button>
 
-            <button
-              onClick={() => setShowAssetLibrary(true)}
-              title="Asset Library"
-              style={{
-                padding: '5px 12px', background: 'none',
-                border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
-                color: textMuted, fontSize: 12,
-                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}
-            >
-              Assets
-            </button>
+            {!compactHeader && (
+              <>
+                <button
+                  onClick={() => setShowAssetLibrary(true)}
+                  title="Asset Library"
+                  className="btn-translucent btn-sm touch-target"
+                >
+                  Assets
+                </button>
 
-            <button
-              onClick={() => setShowVersionHistory(true)}
-              title="Version History"
-              style={{
-                padding: '5px 12px', background: 'none',
-                border: `1px solid ${borderColor}`, borderRadius: 'var(--radius-pill)',
-                color: textMuted, fontSize: 12,
-                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}
-            >
-              History
-            </button>
+                {isMember && (
+                  <DropdownMenu.Root modal={false}>
+                    <DropdownMenu.Trigger title="Arrange items" className="btn-translucent btn-sm touch-target">
+                      Arrange
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Portal container={portalContainerEl ?? undefined}>
+                      <DropdownMenu.Content className="dna-menu" align="end" sideOffset={8} collisionPadding={8}>
+                        <DropdownMenu.Item className="dna-menu-item" onSelect={() => runArrange('tidy')}>
+                          <Grid2x2 size={15} /> Tidy into grid
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item className="dna-menu-item" onSelect={() => runArrange('frame')}>
+                          <Frame size={15} /> Wrap selection in frame
+                        </DropdownMenu.Item>
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Root>
+                )}
+
+                <button
+                  onClick={openImageViewer}
+                  title="View the images on this board full size"
+                  aria-label="View board images"
+                  className="btn-translucent btn-sm touch-target"
+                >
+                  Images
+                </button>
+
+                <button
+                  onClick={() => setShowExport(true)}
+                  title="Export as image"
+                  className="btn-translucent btn-sm touch-target"
+                >
+                  Export
+                </button>
+
+                <button
+                  onClick={() => setShowVersionHistory(true)}
+                  title="Version History"
+                  className="btn-translucent btn-sm touch-target"
+                >
+                  History
+                </button>
+
+                {isOwner && (
+                  <button
+                    onClick={openSaveAsTemplate}
+                    title="Save as Template"
+                    className="btn-translucent btn-sm touch-target"
+                  >
+                    Save as Template
+                  </button>
+                )}
+              </>
+            )}
 
             <button
               onClick={() => setShowShare(true)}
-              style={{
-                padding: '5px 12px', background: 'var(--color-brand)',
-                border: 'none', borderRadius: 'var(--radius-pill)',
-                color: '#fff', fontSize: 12, fontWeight: 600,
-                fontFamily: 'var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}
+              className="btn-primary btn-sm touch-target"
             >
               Share
             </button>
 
-            {isOwner && (
+            {!compactHeader && isOwner && (
               <button
                 onClick={() => setConfirmDelete(true)}
-                style={{
-                  padding: '5px 10px', background: 'none',
-                  border: '1px solid rgba(239,68,68,0.3)', borderRadius: 'var(--radius-pill)',
-                  color: 'var(--color-error)', fontSize: 11,
-                  fontFamily: 'var(--font-body)', cursor: 'pointer',
-                }}
+                aria-label="Delete board"
+                title="Delete board"
+                className="btn-translucent btn-icon btn-sm is-danger touch-target"
+                style={{ marginLeft: 8 }}
               >
-                Delete
+                <Trash2 size={14} />
               </button>
+            )}
+
+            {compactHeader && (
+              <DropdownMenu.Root modal={false}>
+                <DropdownMenu.Trigger
+                  aria-label="More board actions"
+                  title="More"
+                  className="btn-translucent btn-icon btn-sm touch-target"
+                >
+                  <MoreHorizontal size={15} />
+                </DropdownMenu.Trigger>
+                {/* Portalled into the canvas container (not body) so it's
+                    still visible while that container is fullscreen. */}
+                <DropdownMenu.Portal container={portalContainerEl ?? undefined}>
+                  <DropdownMenu.Content className="dna-menu" align="end" sideOffset={8} collisionPadding={8}>
+                    <DropdownMenu.Item className="dna-menu-item" onSelect={() => setShowAssetLibrary(true)}>
+                      <ImageIcon size={15} /> Insert from asset library
+                    </DropdownMenu.Item>
+                    {isMember && (
+                      <>
+                        <DropdownMenu.Item className="dna-menu-item" onSelect={() => runArrange('tidy')}>
+                          <Grid2x2 size={15} /> Tidy into grid
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item className="dna-menu-item" onSelect={() => runArrange('frame')}>
+                          <Frame size={15} /> Wrap selection in frame
+                        </DropdownMenu.Item>
+                      </>
+                    )}
+                    <DropdownMenu.Item className="dna-menu-item" onSelect={() => void openImageViewer()}>
+                      <ImageIcon size={15} /> View board images
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item className="dna-menu-item" onSelect={() => setShowExport(true)}>
+                      <Download size={15} /> Export as image
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item className="dna-menu-item" onSelect={() => setShowVersionHistory(true)}>
+                      <History size={15} /> View version history
+                    </DropdownMenu.Item>
+                    {isOwner && (
+                      <DropdownMenu.Item className="dna-menu-item" onSelect={openSaveAsTemplate}>
+                        <LayoutTemplate size={15} /> Save as Template
+                      </DropdownMenu.Item>
+                    )}
+                    {isOwner && (
+                      <>
+                        <DropdownMenu.Separator className="dna-menu-sep" />
+                        <DropdownMenu.Item className="dna-menu-item" data-danger="true" onSelect={() => setConfirmDelete(true)}>
+                          <Trash2 size={15} /> Delete board
+                        </DropdownMenu.Item>
+                      </>
+                    )}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
             )}
           </div>
         </div>
@@ -527,20 +971,20 @@ export default function BoardPage() {
             seconds is exactly how that goes unnoticed. Anchored just below
             the top bar (which is 48px tall), same as the canvas area. */}
         {saveStatus === 'error' && (
-          <div style={{
+          <div role="alert" style={{
             position: 'absolute', top: 48, left: 0, right: 0,
             padding: '8px 16px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
-            background: 'var(--color-error)', color: '#fff',
+            display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 12,
+            background: 'var(--color-error-fill)', color: '#fff',
             fontSize: 12, fontFamily: 'var(--font-body)', fontWeight: 500,
-            zIndex: 20,
+            zIndex: 1000,
           }}>
             <span>Save failed — your last change to this board hasn&apos;t been saved.</span>
             <button
               onClick={handleRetrySave}
               disabled={retryingSave}
               style={{
-                padding: '3px 10px', background: 'rgba(255,255,255,0.2)',
+                minHeight: 44, padding: '6px 12px', background: 'rgba(255,255,255,0.2)',
                 border: '1px solid rgba(255,255,255,0.4)', borderRadius: 'var(--radius-pill)',
                 color: '#fff', fontSize: 11, fontFamily: 'var(--font-body)', fontWeight: 600,
                 cursor: retryingSave ? 'default' : 'pointer', opacity: retryingSave ? 0.7 : 1,
@@ -551,7 +995,7 @@ export default function BoardPage() {
             <button
               onClick={handleDismissSaveError}
               style={{
-                padding: '3px 8px', background: 'none', border: 'none',
+                minHeight: 44, padding: '6px 12px', background: 'none', border: 'none',
                 color: 'rgba(255,255,255,0.85)', fontSize: 11, fontFamily: 'var(--font-body)',
                 cursor: 'pointer', textDecoration: 'underline',
               }}
@@ -609,7 +1053,7 @@ export default function BoardPage() {
                     roll={studentSession.rollNumber}
                     theme={theme}
                     pendingItems={board.items}
-                    onEditorReady={editor => { editorRef.current = editor; }}
+                    onEditorReady={handleEditorReady}
                     comments={{
                       commentsApi,
                       commentMode,
@@ -617,6 +1061,7 @@ export default function BoardPage() {
                       currentRoll: studentSession.rollNumber,
                       canModerate: canModerateComments,
                       lastSeenAt,
+                      mentionables,
                     }}
                   />
                 </PresenceProvider>
@@ -654,10 +1099,11 @@ export default function BoardPage() {
                 boardId={id!}
                 theme={theme}
                 initialData={canvasData}
+                imageThumbnails={imageThumbnails}
                 pendingItems={board.items}
                 onSave={handleSave}
                 readOnly={!isMember && board.edit_mode === 'members_only'}
-                onEditorReady={editor => { editorRef.current = editor; }}
+                onEditorReady={handleEditorReady}
                 comments={studentSession?.rollNumber ? {
                   commentsApi,
                   commentMode,
@@ -665,12 +1111,13 @@ export default function BoardPage() {
                   currentRoll: studentSession.rollNumber,
                   canModerate: canModerateComments,
                   lastSeenAt,
+                  mentionables,
                 } : undefined}
               />
             </Suspense>
           )}
         </div>
-      </div>
+      {/* (canvas container continues — board overlays below render inside it; closed at the end) */}
 
       {showShare && board && studentSession?.rollNumber && (
         <ShareBoardDialog
@@ -689,15 +1136,124 @@ export default function BoardPage() {
         />
       )}
 
+      {lightbox && (
+        <Suspense fallback={null}>
+          <ImageLightbox items={lightbox.items} index={lightbox.index} label={`${board?.name ?? 'Board'} images`}
+            onIndexChange={i => setLightbox(l => (l ? { ...l, index: i } : l))} onClose={() => setLightbox(null)} />
+        </Suspense>
+      )}
+
+      {showExport && board && editorRef.current && (
+        <Suspense fallback={null}>
+          <ExportBoardDialog editor={editorRef.current} boardName={board.name} onClose={() => setShowExport(false)} />
+        </Suspense>
+      )}
+
       {showAssetLibrary && board && studentSession?.rollNumber && (
         <AssetLibrary
           workspaceId={board.workspace_id}
-          workspaceName="Board's Workspace"
+          workspaceName={crumbs[0].label}
+          isPersonalWorkspace={!!boardWorkspace?.is_personal}
+          workspaceRole={boardWorkspace?.role ?? null}
           roll={studentSession.rollNumber}
           onClose={() => setShowAssetLibrary(false)}
           onSelect={handleInsertAsset}
         />
       )}
+
+      {/* Save as Template (V2.3 Phase 8) */}
+      <AnimatePresence>
+        {showSaveAsTemplate && board && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9999,
+              background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+            }}
+            onClick={() => setShowSaveAsTemplate(false)}
+          >
+            <motion.div
+              ref={saveTemplateDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Save as Template"
+              tabIndex={-1}
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: '100%', maxWidth: 400, maxHeight: 'calc(100dvh - 48px)', overflowY: 'auto',
+                background: 'var(--color-surface-1)',
+                border: '1px solid var(--color-hairline)',
+                borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', boxShadow: 'var(--shadow-level-2)',
+                display: 'flex', flexDirection: 'column', gap: 16, outline: 'none',
+              }}
+            >
+              <h3 className="type-headline" style={{ margin: 0 }}>
+                Save as Template
+              </h3>
+              <div>
+                <label htmlFor="save-template-template-name" className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
+                  Template Name
+                </label>
+                <input
+                  id="save-template-template-name"
+                  className="input-base"
+                  type="text"
+                  value={templateForm.name}
+                  onChange={e => setTemplateForm(prev => ({ ...prev, name: e.target.value }))}
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label htmlFor="save-template-description" className="type-caption" style={{ display: 'block', marginBottom: 6 }}>
+                  Description (optional)
+                </label>
+                <input
+                  id="save-template-description"
+                  className="input-base"
+                  type="text"
+                  placeholder="What is this template for?"
+                  value={templateForm.description}
+                  onChange={e => setTemplateForm(prev => ({ ...prev, description: e.target.value }))}
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+              <VisibilityPicker
+                value={templateForm.visibility}
+                onChange={visibility => setTemplateForm(prev => ({ ...prev, visibility }))}
+                kind="template"
+                workspaceName={boardWorkspace ? (boardWorkspace.is_personal ? 'your personal workspace' : boardWorkspace.name) : 'this workspace'}
+                isPersonalWorkspace={!!boardWorkspace?.is_personal}
+                disabled={savingTemplate}
+              />
+              <p className="type-micro" style={{ margin: 0 }}>
+                Saves this board's current canvas as a reusable template in this workspace. Editing this board later won't change the template.
+              </p>
+              {templateError && <p className="type-micro" style={{ margin: 0, color: 'var(--color-error)' }}>{templateError}</p>}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={handleSaveAsTemplate}
+                  disabled={savingTemplate || !templateForm.name.trim()}
+                  className="btn-primary"
+                  style={{ flex: 1 }}
+                >
+                  {savingTemplate ? 'Saving...' : 'Save Template'}
+                </button>
+                <button
+                  onClick={() => setShowSaveAsTemplate(false)}
+                  className="btn-translucent"
+                  style={{ flex: 1 }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Delete confirm */}
       <AnimatePresence>
@@ -720,45 +1276,29 @@ export default function BoardPage() {
                 width: '100%', maxWidth: 360,
                 background: 'var(--color-surface-1)',
                 border: '1px solid var(--color-hairline)',
-                borderRadius: 'var(--radius-xl)', padding: '28px 24px',
+                borderRadius: 'var(--radius-xl)', padding: 'var(--space-xl) var(--space-lg)', boxShadow: 'var(--shadow-level-2)',
                 display: 'flex', flexDirection: 'column', gap: 16,
               }}
             >
-              <h3 style={{
-                margin: 0, fontSize: 18, fontWeight: 700,
-                color: 'var(--color-ink)', fontFamily: 'var(--font-display)',
-              }}>
+              <h3 className="type-headline" style={{ margin: 0 }}>
                 Delete "{board.name}"?
               </h3>
-              <p style={{
-                margin: 0, fontSize: 13, color: 'var(--color-ink-muted)',
-                fontFamily: 'var(--font-body)', lineHeight: 1.5,
-              }}>
+              <p className="type-body" style={{ margin: 0, color: 'var(--color-ink-muted)' }}>
                 This will permanently delete the board and all its contents. Cannot be undone.
               </p>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={handleDeleteBoard}
                   disabled={deleting}
-                  style={{
-                    flex: 1, padding: '12px 20px',
-                    background: 'var(--color-error)', color: '#fff',
-                    border: 'none', borderRadius: 'var(--radius-pill)',
-                    fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)',
-                    cursor: deleting ? 'not-allowed' : 'pointer',
-                  }}
+                  className="btn-primary btn-danger"
+                  style={{ flex: 1 }}
                 >
                   {deleting ? 'Deleting...' : 'Delete'}
                 </button>
                 <button
                   onClick={() => setConfirmDelete(false)}
-                  style={{
-                    flex: 1, padding: '12px 20px',
-                    background: 'none', color: 'var(--color-ink-muted)',
-                    border: '1px solid var(--color-hairline)',
-                    borderRadius: 'var(--radius-pill)', fontSize: 13,
-                    fontFamily: 'var(--font-body)', cursor: 'pointer',
-                  }}
+                  className="btn-translucent"
+                  style={{ flex: 1 }}
                 >
                   Cancel
                 </button>
@@ -815,6 +1355,8 @@ export default function BoardPage() {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
+      </PortalContainerProvider>
     </>
   );
 }

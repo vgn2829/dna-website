@@ -1,0 +1,29 @@
+/* Academy and board library use the existing DNA tokens and primitives. */
+.academy-navigation { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:16px 20px; border-top:1px solid var(--color-border); }
+.academy-filters { display:grid; grid-template-columns:2fr 1fr 1fr; gap:12px; margin-bottom:16px; }
+.academy-filters label { display:grid; gap:8px; min-width:0; }
+.academy-filters input,.academy-filters select { width:100%; min-width:0; }
+.academy-lessons summary { cursor:pointer; padding:8px 0; }
+.academy-lesson p { white-space:normal; overflow-wrap:anywhere; }
+.academy-navigation button:disabled { opacity:.45; cursor:default; }
+.board-card-open { position:absolute; inset:0; width:100%; height:100%; z-index:1; border:0; background:transparent; border-radius:inherit; cursor:pointer; }
+.board-card-open:focus-visible { outline:3px solid var(--color-brand); outline-offset:-3px; }
+.board-card-menu { position:absolute; top:8px; right:8px; width:44px; height:44px; z-index:2; border:1px solid rgba(255,255,255,.15); border-radius:50%; background:rgba(0,0,0,.5); color:white; font-size:22px; cursor:pointer; }
+.moodboards-page .board-card-star { opacity:1; }
+.moodboards-page .segmented { flex-wrap:wrap; max-width:100%; }
+.moodboards-page .moodboards-toolbar > div { min-width:0; max-width:100%; }
+.moodboards-page .search-field { min-width:0; max-width:100%; }
+.moodboards-page .search-field button { min-width:32px; min-height:32px; }
+.moodboards-page .type-caption[role="status"] { margin:16px 0; }
+@media(max-width:600px) {
+  .academy-filters { grid-template-columns:1fr; }
+  .academy-lesson { flex-wrap:wrap; gap:10px; }
+  .academy-lesson > .flex-1 { flex-basis:calc(100% - 48px); }
+  .moodboards-page .moodboards-toolbar { gap:10px!important; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .board-card,.board-card-star,.academy-lesson { transition:none!important; }
+}
+@media(hover:hover) {
+  .board-card:hover { box-shadow:var(--shadow-level-1); }
+}

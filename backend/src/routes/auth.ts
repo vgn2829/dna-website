@@ -1,11 +1,12 @@
 import { Router } from 'express';
+import { randomInt } from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { query } from '../db/client';
-import { signStudentToken, signBypassStudentToken, requireStudent } from '../middleware/studentAuth';
+import { signStudentToken, signBypassStudentToken, requireVerifiedStudent } from '../middleware/studentAuth';
 import { sendOtpEmail, sendWelcomeEmail } from '../services/mailer';
 
 export const authRouter = Router();
@@ -36,6 +37,10 @@ authRouter.post('/admin/login', loginLimiter, async (req, res) => {
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
+
+// Login and email-change codes are credentials, so they come from the OS CSPRNG (crypto.randomInt is uniform
+// over the range — no modulo bias). The non-cryptographic JS generator is predictable and must never produce a code.
+export const newOtpCode = (): string => String(randomInt(100000, 1000000));
 
 const otpRequestLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -77,6 +82,19 @@ function maskEmail(email: string): string {
   return `${shown}${'*'.repeat(Math.max(1, user.length - 1))}@${domain}`;
 }
 
+// SEC-03: when an admin has loaded the club roster, a new registration must
+// match it. An empty roster keeps the previous behaviour. One generic message
+// for every mismatch so the response does not reveal which part was wrong.
+async function checkRoster(roll: string, email: string): Promise<{ ok: true; name: string | null } | { ok: false }> {
+  const count = await query<{ n: number }>('SELECT COUNT(*)::int AS n FROM student_roster');
+  if ((count[0]?.n ?? 0) === 0) return { ok: true, name: null };
+  const rows = await query<{ name: string; email: string | null }>('SELECT name, email FROM student_roster WHERE roll_number=$1', [roll]);
+  if (rows.length === 0) return { ok: false };
+  if (rows[0].email && rows[0].email.toLowerCase() !== email.toLowerCase()) return { ok: false };
+  return { ok: true, name: rows[0].name };
+}
+const ROSTER_MISMATCH = 'This roll number and email do not match the club roster — contact a coordinator';
+
 authRouter.post('/student/request-otp', otpRequestLimiter, async (req, res) => {
   const parsed = requestOtpSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid roll number or email' }); return; }
@@ -103,9 +121,12 @@ authRouter.post('/student/request-otp', otpRequestLimiter, async (req, res) => {
     }
     targetEmail = parsed.data.email;
     targetName = parsed.data.name;
+    const roster = await checkRoster(roll, targetEmail);
+    if (!roster.ok) { res.status(403).json({ error: ROSTER_MISMATCH }); return; }
+    if (roster.name) targetName = roster.name;
   }
 
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = newOtpCode();
   const codeHash = await bcrypt.hash(code, 10);
   const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString();
 
@@ -309,8 +330,9 @@ authRouter.post('/student/bypass-login', bypassLoginLimiter, async (req, res) =>
 });
 
 // ── Student email change (OTP-gated, sent to the NEW address) ─────────────────
-// Identity comes from the verified student JWT (requireStudent), never a
-// client-supplied roll number, so only the session owner can change the email.
+// Require an explicitly OTP-verified session on BOTH operations. Bypass and
+// legacy sessions must not replace the login mailbox, including by consuming
+// a challenge created before this guard existed.
 
 const changeEmailRequestLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -330,7 +352,7 @@ const changeEmailSchema = z.object({
     .transform(e => e.toLowerCase()),
 });
 
-authRouter.post('/student/change-email/request', changeEmailRequestLimiter, requireStudent, async (req, res) => {
+authRouter.post('/student/change-email/request', changeEmailRequestLimiter, requireVerifiedStudent, async (req, res) => {
   const roll = req.studentRoll!;
   const parsed = changeEmailSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Enter a valid @iitk.ac.in email' }); return; }
@@ -345,7 +367,7 @@ authRouter.post('/student/change-email/request', changeEmailRequestLimiter, requ
     return;
   }
 
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = newOtpCode();
   const codeHash = await bcrypt.hash(code, 10);
   const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString();
 
@@ -370,7 +392,7 @@ authRouter.post('/student/change-email/request', changeEmailRequestLimiter, requ
 
 const verifyChangeEmailSchema = z.object({ code: z.string().regex(/^[0-9]{6}$/, 'Invalid code') });
 
-authRouter.post('/student/change-email/verify', changeEmailVerifyLimiter, requireStudent, async (req, res) => {
+authRouter.post('/student/change-email/verify', changeEmailVerifyLimiter, requireVerifiedStudent, async (req, res) => {
   const roll = req.studentRoll!;
   const parsed = verifyChangeEmailSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid code' }); return; }

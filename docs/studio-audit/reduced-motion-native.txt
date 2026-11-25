@@ -1,0 +1,5 @@
+					631 pop up button (collapsed) Reduce motion, Value: On, Secondary Actions: Expand
+			636 text field (settable) Description: Width, Value: 320
+						658 heading Palette Studio, Value: 1
+						803 heading UI preview · dark, Value: 2
+							804 text UI preview · dark

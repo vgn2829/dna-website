@@ -1,0 +1,13 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+$ vitest run
+
+ RUN  v5.0.1 /private/tmp/dna-studio-release
+
+
+ Test Files  37 passed (37)
+      Tests  483 passed (483)
+   Start at  09:54:20
+   Duration  2.15s (tests 35%, environment 30%, transform 18%, import 16%, worker 1%)
+
+    Isolate  37 workers spawned · ~176ms startup each (spawn + environment, per file)
+             at least ~753ms faster with isolate: false — reuses workers across files instead of one per file
